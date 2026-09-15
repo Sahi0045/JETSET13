@@ -4,19 +4,13 @@ import { CheckCircle, Ship, Plane, Calendar, CreditCard, ArrowLeft, Clock, MapPi
 import Navbar from './Navbar';
 import { attentionMessage, refundStatus } from '../../utils/bookingStatus';
 import { isPaid } from '../../utils/eTicket';
+import { daysUntilDate, formatCalendarDate } from '../../utils/dateUtils';
 import { cancellationMessage } from '../../../../shared/cancellationOutcome';
 
-// Helper function to calculate days until trip
-const getDaysUntilTrip = (dateStr) => {
-  if (!dateStr) return null;
-  const tripDate = new Date(dateStr);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  tripDate.setHours(0, 0, 0, 0);
-  const diffTime = tripDate - today;
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  return diffDays;
-};
+// Days until the trip, from the calendar day the booking names. Parsing
+// "2026-11-15" with `new Date` made it UTC midnight - the evening before, in
+// the US - so the countdown was a day short and the date printed a day early.
+const getDaysUntilTrip = (dateStr) => daysUntilDate(dateStr);
 
 // Format duration from ISO format
 const formatDuration = (duration) => {
@@ -346,12 +340,7 @@ function BookingConfirmation() {
                       {isFlight ? 'Departure' : isHotel ? 'Check-in' : 'Start Date'}
                     </p>
                     <p className="text-sm font-bold text-gray-900">
-                      {new Date(getTravelDate()).toLocaleDateString('en-US', {
-                        weekday: 'short',
-                        month: 'short',
-                        day: 'numeric',
-                        year: 'numeric'
-                      })}
+                      {formatCalendarDate(getTravelDate())}
                     </p>
                   </div>
                 )}
@@ -363,12 +352,7 @@ function BookingConfirmation() {
                       {isFlight ? 'Return' : isHotel ? 'Check-out' : 'End Date'}
                     </p>
                     <p className="text-sm font-bold text-gray-900">
-                      {new Date(bookingData.returnDate || bookingData.checkoutDate || bookingData.packageEndDate).toLocaleDateString('en-US', {
-                        weekday: 'short',
-                        month: 'short',
-                        day: 'numeric',
-                        year: 'numeric'
-                      })}
+                      {formatCalendarDate(bookingData.returnDate || bookingData.checkoutDate || bookingData.packageEndDate)}
                     </p>
                   </div>
                 )}

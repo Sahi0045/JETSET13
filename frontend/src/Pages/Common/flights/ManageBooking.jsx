@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { formatIsoDuration } from '../../../utils/dateUtils';
+import { daysUntilDate, formatCalendarDate, formatIsoDuration } from '../../../utils/dateUtils';
 import {
   ArrowLeft, Plane, User, CreditCard,
   AlertCircle, AlertTriangle, CheckCircle, Info, Phone, Mail, Edit3,
@@ -472,7 +472,9 @@ function ManageBooking() {
             )}
 
             {bookingData?.status?.toUpperCase() !== 'CANCELLED' && 
-             (!bookingData?.departureDate || new Date(bookingData.departureDate) >= new Date(new Date().setHours(0,0,0,0))) && (
+             // From the calendar day the booking names. `new Date(departureDate)`
+             // was UTC midnight, so in the US Cancel vanished a day early.
+             (daysUntilDate(bookingData?.departureDate) ?? 0) >= 0 && (
               <>
                 {/* Changes are made by the support team; there is no
                     self-serve change flow. This button used to open an alert
@@ -564,7 +566,7 @@ function ManageBooking() {
                           {bookingData?.departureTime || bookingData?.flight?.departureTime || '--:--'}
                         </div>
                         <div className="text-xs text-gray-500">
-                          {bookingData?.departureDate ? new Date(bookingData.departureDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Date N/A'}
+                          {formatCalendarDate(bookingData?.departureDate, { month: 'short', day: 'numeric', year: 'numeric' }, 'Date N/A')}
                         </div>
                       </div>
 
@@ -598,9 +600,7 @@ function ManageBooking() {
                         <div className="text-xs text-gray-500">
                           {/* The arrival date. This printed the departure date,
                               wrong for every overnight flight. */}
-                          {(bookingData?.arrivalDate || bookingData?.arrival_date)
-                            ? new Date(bookingData.arrivalDate || bookingData.arrival_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-                            : 'Date N/A'}
+                          {formatCalendarDate(bookingData?.arrivalDate || bookingData?.arrival_date, { month: 'short', day: 'numeric', year: 'numeric' }, 'Date N/A')}
                         </div>
                       </div>
                     </div>

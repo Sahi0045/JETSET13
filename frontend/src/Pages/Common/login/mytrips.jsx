@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
-import { formatIsoDuration } from "../../../utils/dateUtils"
+import { daysUntilDate, formatCalendarDate, formatIsoDuration } from "../../../utils/dateUtils"
 import { bookingStatusBadge, needsAttention, cancellationMessage, refundStatus, attentionMessage } from "../../../utils/bookingStatus"
 import { resolveTickets, ticketState } from "../../../utils/eTicket"
 import { authHeaders } from "../../../utils/authHeaders"
@@ -83,14 +83,9 @@ const TYPE_NAME = {
 
 const getTypeName = (type) => TYPE_NAME[(type || '').toLowerCase()] || TYPE_NAME.default
 
-const fmtDate = (d, opts) => {
-  if (!d) return ''
-  try {
-    return new Date(d).toLocaleDateString('en-US', opts || { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
-  } catch {
-    return ''
-  }
-}
+// Travel dates are calendar days. `new Date('2026-11-15')` is UTC midnight -
+// the evening of the 14th in the US - so every trip here showed a day early.
+const fmtDate = (d, opts) => formatCalendarDate(d, opts || { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
 
 // Reusable eyebrow label
 const Eyebrow = ({ children, className = '' }) => (
@@ -576,12 +571,10 @@ export default function TravelDashboard() {
     const travelDate = getTravelDateFromBooking(booking);
     if (!travelDate) return false; // If no date, consider it upcoming
 
-    const tripDate = new Date(travelDate);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    tripDate.setHours(0, 0, 0, 0);
-
-    return tripDate < today;
+    // Past only once the departure day is over, where the customer is. Read as
+    // UTC, a US trip moved to Past on the morning it departed.
+    const days = daysUntilDate(travelDate);
+    return days !== null && days < 0;
   };
 
   // Filter bookings based on active tab and sidebar selection
@@ -676,15 +669,7 @@ export default function TravelDashboard() {
 
     // Calculate days until trip
     const travelDate = getTravelDateFromBooking(booking);
-    const getDaysUntil = () => {
-      if (!travelDate) return null;
-      const tripDate = new Date(travelDate);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      tripDate.setHours(0, 0, 0, 0);
-      const diffTime = tripDate - today;
-      return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    };
+    const getDaysUntil = () => daysUntilDate(travelDate);
     const daysUntilTrip = getDaysUntil();
     const normalizeStatus = (s) => (s || '').toUpperCase();
     const statusUp = normalizeStatus(booking.status);
@@ -1203,28 +1188,28 @@ export default function TravelDashboard() {
           {request.inquiry_type === 'flight' && (
             <div className="text-sm text-gray-700 space-y-1">
               <p><strong className="text-[#055B75]">Route:</strong> {request.flight_origin} → {request.flight_destination}</p>
-              {request.flight_departure_date && <p><strong className="text-[#055B75]">Departure:</strong> {new Date(request.flight_departure_date).toLocaleDateString()}</p>}
+              {request.flight_departure_date && <p><strong className="text-[#055B75]">Departure:</strong> {fmtDate(request.flight_departure_date, { month: 'short', day: 'numeric', year: 'numeric' })}</p>}
               {request.flight_passengers && <p><strong className="text-[#055B75]">Passengers:</strong> {request.flight_passengers}</p>}
             </div>
           )}
           {request.inquiry_type === 'hotel' && (
             <div className="text-sm text-gray-700 space-y-1">
               <p><strong className="text-[#055B75]">Destination:</strong> {request.hotel_destination}</p>
-              {request.hotel_checkin_date && <p><strong className="text-[#055B75]">Check-in:</strong> {new Date(request.hotel_checkin_date).toLocaleDateString()}</p>}
+              {request.hotel_checkin_date && <p><strong className="text-[#055B75]">Check-in:</strong> {fmtDate(request.hotel_checkin_date, { month: 'short', day: 'numeric', year: 'numeric' })}</p>}
               {request.hotel_rooms && <p><strong className="text-[#055B75]">Rooms:</strong> {request.hotel_rooms}</p>}
             </div>
           )}
           {request.inquiry_type === 'cruise' && (
             <div className="text-sm text-gray-700 space-y-1">
               <p><strong className="text-[#055B75]">Destination:</strong> {request.cruise_destination}</p>
-              {request.cruise_departure_date && <p><strong className="text-[#055B75]">Departure:</strong> {new Date(request.cruise_departure_date).toLocaleDateString()}</p>}
+              {request.cruise_departure_date && <p><strong className="text-[#055B75]">Departure:</strong> {fmtDate(request.cruise_departure_date, { month: 'short', day: 'numeric', year: 'numeric' })}</p>}
               {request.cruise_passengers && <p><strong className="text-[#055B75]">Passengers:</strong> {request.cruise_passengers}</p>}
             </div>
           )}
           {request.inquiry_type === 'package' && (
             <div className="text-sm text-gray-700 space-y-1">
               <p><strong className="text-[#055B75]">Destination:</strong> {request.package_destination}</p>
-              {request.package_start_date && <p><strong className="text-[#055B75]">Start:</strong> {new Date(request.package_start_date).toLocaleDateString()}</p>}
+              {request.package_start_date && <p><strong className="text-[#055B75]">Start:</strong> {fmtDate(request.package_start_date, { month: 'short', day: 'numeric', year: 'numeric' })}</p>}
               {request.package_travelers && <p><strong className="text-[#055B75]">Travelers:</strong> {request.package_travelers}</p>}
             </div>
           )}

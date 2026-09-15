@@ -18,14 +18,30 @@ import { REFUND_STUCK_ACTIONS, REFUND_DONE_ACTIONS, refundOutcome } from '../../
 const money = (amount, currency = 'USD') =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(Number(amount) || 0);
 
-const mediumDate = (d) =>
-  (d ? new Date(d).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }) : '');
+/**
+ * A date as a customer reads it, never a day early.
+ *
+ * `new Date('2026-11-15')` is UTC midnight, so a server running west of UTC
+ * printed every travel date in these emails as the day before. A date-only
+ * string - or an airport-local time with no zone, as Amadeus sends - is the
+ * calendar day written in it, and is formatted in UTC so the server's own zone
+ * cannot move it. A timestamp with a zone is the moment it names, as before.
+ */
+const formatDay = (d, options) => {
+  if (!d) return '';
+  const written = /^(\d{4})-(\d{2})-(\d{2})(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)?$/.exec(String(d).trim());
+  const date = written
+    ? new Date(Date.UTC(Number(written[1]), Number(written[2]) - 1, Number(written[3])))
+    : new Date(d);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleDateString('en-US', written ? { ...options, timeZone: 'UTC' } : options);
+};
 
-const longDate = (d) =>
-  (d ? new Date(d).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : 'TBD');
+const mediumDate = (d) => formatDay(d, { day: 'numeric', month: 'short', year: 'numeric' });
 
-const shortDate = (d) =>
-  (d ? new Date(d).toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' }) : '');
+const longDate = (d) => formatDay(d, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) || 'TBD';
+
+const shortDate = (d) => formatDay(d, { weekday: 'short', day: 'numeric', month: 'short' });
 
 const firstNameOf = (name, fallback = 'there') => String(name || '').trim().split(' ')[0] || fallback;
 

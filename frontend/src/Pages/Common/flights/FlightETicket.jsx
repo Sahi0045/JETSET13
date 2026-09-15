@@ -8,6 +8,7 @@ import {
     issueDate,
     isPaid,
 } from '../../../utils/eTicket';
+import { formatCalendarDate } from '../../../utils/dateUtils';
 
 /**
  * The travel document a customer downloads and may carry to an airport.
@@ -79,13 +80,11 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
     };
 
     // Format helpers
-    const formatDate = (dateString) => {
-        const date = dateString ? new Date(dateString) : null;
-        if (!date || Number.isNaN(date.getTime())) return '—';
-        return date.toLocaleDateString('en-US', {
-            weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
-        });
-    };
+    // The calendar day the booking names. `new Date('2026-11-15')` is UTC
+    // midnight, so a US customer's document printed the day before.
+    const formatDate = (dateString) => formatCalendarDate(dateString, {
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+    }, '—');
 
     /** What to print where a ticket number goes, for one passenger. */
     const ticketLabel = (traveler, index) => {
@@ -128,7 +127,7 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
                         {isCancelled
                             ? 'Cancelled — not valid for travel'
                             : issuedOn
-                                ? `Date of Issue: ${new Date(issuedOn).toLocaleDateString()}`
+                                ? `Date of Issue: ${formatCalendarDate(issuedOn, { month: 'short', day: 'numeric', year: 'numeric' }, issuedOn)}`
                                 : 'Ticket not yet issued'}
                     </span>
                     <span className={`font-bold uppercase px-3 py-1 rounded text-xs ${isCancelled ? 'bg-red-600' : isTicketed ? 'bg-green-500' : 'bg-amber-500'}`}>
