@@ -9,7 +9,7 @@ import { needsDateOfBirth, tripDates } from '../../shared/travellerDetails.js';
  */
 
 const domestic = { index: 1, international: false, travelDate: '2026-10-06' };
-const complete = { type: 'ADULT', firstName: 'Asha', lastName: 'Rao', gender: 'female', mobile: '9876543210' };
+const complete = { type: 'ADULT', firstName: 'Asha', lastName: 'Rao', gender: 'female', mobile: '9876543210', countryCode: '+91' };
 
 describe('needsDateOfBirth', () => {
   it('asks a domestic adult for none, and everyone else for one', () => {
@@ -85,6 +85,12 @@ describe('travellerProblems', () => {
   it('refuses a name the airline cannot print, and accepts one it can spell in Latin', () => {
     expect(travellerProblems({ ...complete, firstName: 'Иван' }, domestic)[0]).toMatch(/in Latin letters/);
     expect(travellerProblems({ ...complete, firstName: 'Łukasz', lastName: 'Øberg' }, domestic)).toEqual([]);
+  });
+
+  // Every phone went onto the booking as +1; the code is now asked for.
+  it("needs a country code with the lead traveller's mobile", () => {
+    expect(travellerProblems({ ...complete, countryCode: '' }, { ...domestic, index: 0 })).toContain('Select the country code for the mobile number.');
+    expect(travellerProblems({ ...complete, countryCode: '+91' }, { ...domestic, index: 0 })).toEqual([]);
   });
 
   it("needs the lead traveller's mobile, and a guest's email", () => {

@@ -28,7 +28,7 @@ import apiConfig from '@/config/api';
 import { computeFlightCharge, PASSENGER_TYPES, travellerTypesOf } from '../../../../../shared/flightCharge';
 import { describeGroup, groupFromOffer, travellerGroupProblem } from '../../../../../shared/travellerGroup';
 import { needsDateOfBirth, tripDates } from '../../../../../shared/travellerDetails';
-import { COUNTRIES } from '../../../../../shared/countries';
+import { CALLING_CODES, COUNTRIES, callingCodeDigits } from '../../../../../shared/countries';
 import { arcItineraries, returnLegOf } from '../../../utils/reviewTrip';
 import { findSameFare, rebuildTravellers, searchForGroup } from '../../../utils/travellerGroupChange';
 import { travellerProblems, travellerProgress } from '../../../utils/travellerChecks';
@@ -133,35 +133,23 @@ function FlightBookingConfirmation() {
     visaRequirements: true
   });
 
-  // Country code state
-  const [selectedCountryCode, setSelectedCountryCode] = useState(callingCode || '+91');
-  const [availableCountryCodes] = useState([
-    { code: '+91', country: 'India' },
-    { code: '+1', country: 'USA/Canada' },
-    { code: '+44', country: 'UK' },
-    { code: '+61', country: 'Australia' },
-    { code: '+81', country: 'Japan' },
-    { code: '+49', country: 'Germany' },
-    { code: '+33', country: 'France' },
-    { code: '+971', country: 'UAE' },
-    { code: '+65', country: 'Singapore' },
-    { code: '+60', country: 'Malaysia' },
-    { code: '+66', country: 'Thailand' },
-    { code: '+84', country: 'Vietnam' },
-    { code: '+62', country: 'Indonesia' },
-    // Add more as needed
-  ]);
+  // The visitor's own calling code, when their location is known: "+91". Never
+  // a made-up one. The country code was never sent at all, so every phone went
+  // onto the booking as +1, and the page's own default was India's.
+  const locatedCallingCode = callingCodeDigits(callingCode) ? `+${callingCodeDigits(callingCode)}` : '';
 
   // Date restrictions for DOB
   const today = new Date().toISOString().split('T')[0];
   const minDOB = '1920-01-01';
 
-  // Update selected country code when context changes
+  // The location often answers after the forms exist. Fill its calling code
+  // into any form still without one; a code someone chose is left alone.
   useEffect(() => {
-    if (callingCode) {
-      setSelectedCountryCode(callingCode);
-    }
-  }, [callingCode]);
+    if (!locatedCallingCode) return;
+    setPassengerData((current) => (current.some((t) => !t.countryCode)
+      ? current.map((t) => (t.countryCode ? t : { ...t, countryCode: locatedCallingCode }))
+      : current));
+  }, [locatedCallingCode]);
 
   // Helper to get city name from airport code
   const getCityName = (code) => {
@@ -192,7 +180,7 @@ function FlightBookingConfirmation() {
     nationality: "",
     passportNumber: "",
     passportExpiry: "",
-    countryCode: callingCode || '+91'
+    countryCode: locatedCallingCode
   });
 
   // What each traveller form still needs - one list for the payment check and
@@ -896,9 +884,12 @@ function FlightBookingConfirmation() {
         }])
       };
 
+      // The lead traveller's calling code, as digits, goes with their number:
+      // without it the booking wrote every phone as +1.
       const finalContact = {
         email: bookingDetails?.contact?.email || passengerData?.[0]?.email || "",
-        phone: bookingDetails?.contact?.phone || passengerData?.[0]?.mobile || ""
+        phone: bookingDetails?.contact?.phone || passengerData?.[0]?.mobile || "",
+        countryCode: callingCodeDigits(passengerData?.[0]?.countryCode)
       };
 
       const bookingDataForStorage = {
@@ -1566,12 +1557,14 @@ function FlightBookingConfirmation() {
                           <select
                             className="form-input"
                             style={{ width: '90px', minWidth: '90px', borderRadius: '6px 0 0 6px', borderRight: 'none', padding: '10px 4px', fontSize: '14px', appearance: 'none', backgroundImage: 'url("data:image/svg+xml,%3csvg xmlns=%27http://www.w3.org/2000/svg%27 fill=%27none%27 viewBox=%270 0 20 20%27%3e%3cpath stroke=%27%236b7280%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27 stroke-width=%271.5%27 d=%27M6 8l4 4 4-4%27/%3e%3c/svg%3e")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 2px center', backgroundSize: '16px' }}
-                            value={passenger.countryCode || selectedCountryCode}
+                            value={passenger.countryCode || ''}
                             onChange={(e) => handlePassengerChange(passenger.id, 'countryCode', e.target.value)}
                             disabled={!editMode}
+                            aria-label="Country code for the mobile number"
                           >
-                            {COUNTRIES.map(c => (
-                              <option key={c.code} value={`+${c.dial}`}>+{c.dial} {c.code}</option>
+                            <option value="">Code</option>
+                            {CALLING_CODES.map((code) => (
+                              <option key={code} value={code}>{code}</option>
                             ))}
                           </select>
                           <input
@@ -1716,30 +1709,16 @@ function FlightBookingConfirmation() {
                   <span className="bg-[#65B3CF] text-white text-xs px-2 py-0.5 rounded mr-2">INFO</span>
                   Your booking reference is sent to these contact details after payment, and your e-ticket once it is issued.
                 </p>
+                {/* The first traveller's number and code, filled in above. A
+                    second country-code selector sat here, changed nothing
+                    that was sent, and could disagree with the one above. */}
                 <div className="form-grid">
-                  <div className="form-group">
-                    <label>Country Code</label>
-                    <div className="relative">
-                      <select
-                        className="form-input appearance-none bg-white pr-8"
-                        value={selectedCountryCode}
-                        onChange={(e) => setSelectedCountryCode(e.target.value)}
-                      >
-                        {availableCountryCodes.map((cc) => (
-                          <option key={cc.code} value={cc.code}>
-                            {cc.country} ({cc.code})
-                          </option>
-                        ))}
-                      </select>
-                      <ChevronDown className="absolute right-3 top-3.5 h-4 w-4 text-gray-500 pointer-events-none" />
-                    </div>
-                  </div>
                   <div className="form-group">
                     <label>Mobile Number</label>
                     <input
                       type="text"
                       className="form-input bg-gray-50"
-                      value={bookingDetails?.contact?.phone || ""}
+                      value={bookingDetails?.contact?.phone ? `${passengerData?.[0]?.countryCode || ''} ${bookingDetails.contact.phone}`.trim() : ""}
                       readOnly
                     />
                   </div>
@@ -1760,7 +1739,7 @@ function FlightBookingConfirmation() {
                       <Check className="h-4 w-4 text-white" />
                     </div>
                     <span className="text-sm font-medium text-[#166534]">
-                      Booking alerts will be sent to {selectedCountryCode} {bookingDetails.contact.phone}
+                      Booking alerts will be sent to {`${passengerData?.[0]?.countryCode || ''} ${bookingDetails.contact.phone}`.trim()}
                     </span>
                   </div>
                 )}

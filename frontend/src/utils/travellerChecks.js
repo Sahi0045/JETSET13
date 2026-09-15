@@ -50,6 +50,11 @@ export function travellerProblems(traveller, {
   }
   if (!t.gender) add('Select a gender.');
   if (index === 0 && !t.mobile) add('Enter a mobile number for booking updates.');
+  // The number goes onto the booking with this code. There is no default to
+  // fall back on: the old one wrote every number as +1.
+  if (index === 0 && t.mobile && !String(t.countryCode ?? '').replace(/\D/g, '')) {
+    add('Select the country code for the mobile number.');
+  }
   // A guest's ticket goes to this address, and it is their only way back to the
   // booking - there is no account for it to appear under. Checkout refuses a
   // guest without one.

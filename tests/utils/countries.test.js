@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { COUNTRIES, countryByCode, toAlpha3 } from '../../shared/countries.js';
+import { CALLING_CODES, COUNTRIES, callingCodeDigits, countryByCode, toAlpha3 } from '../../shared/countries.js';
 
 /**
  * Every nationality, on the page and in the booking chain.
@@ -37,12 +37,47 @@ describe('the country list', () => {
   });
 });
 
+/**
+ * The phone's country code goes with the booking.
+ *
+ * The review page had two country-code selectors and sent neither, so every
+ * phone went onto the PNR as +1; its own default was India's +91.
+ */
+describe('calling codes', () => {
+  it('lists each code once, lowest first, so a shared +1 is not shown as one country', () => {
+    expect(CALLING_CODES.slice(0, 3)).toEqual(['+1', '+7', '+20']);
+    expect(new Set(CALLING_CODES).size).toBe(CALLING_CODES.length);
+    expect(CALLING_CODES).toContain('+91');
+  });
+
+  it('sends a code as digits only', () => {
+    expect(callingCodeDigits('+91')).toBe('91');
+    expect(callingCodeDigits('0044')).toBe('44');
+    expect(callingCodeDigits('')).toBe('');
+    expect(callingCodeDigits(undefined)).toBe('');
+  });
+});
+
+describe('the review page sends the lead traveller calling code', () => {
+  const review = readFileSync(path.resolve(process.cwd(), 'frontend/src/Pages/Common/flights/FlightBookingConfirmation.jsx'), 'utf8');
+
+  it('as contact.countryCode, digits only', () => {
+    expect(review).toMatch(/countryCode: callingCodeDigits\(passengerData\?\.\[0\]\?\.countryCode\)/);
+  });
+
+  it('from one selector, with no made-up default', () => {
+    expect(review).not.toMatch(/availableCountryCodes|selectedCountryCode/);
+    expect(review).not.toMatch(/callingCode \|\| '\+91'/);
+    expect(review).toMatch(/countryCode: locatedCallingCode/);
+  });
+});
+
 describe('the review page asks for nationality from the whole list', () => {
   // From the working directory: under jsdom, import.meta.url is not a file URL.
   const review = readFileSync(path.resolve(process.cwd(), 'frontend/src/Pages/Common/flights/FlightBookingConfirmation.jsx'), 'utf8');
 
   it('in a labelled native select, which the keyboard can operate', () => {
-    expect(review).toMatch(/import \{ COUNTRIES \} from '(\.\.\/){5}shared\/countries'/);
+    expect(review).toMatch(/import \{[^}]*\bCOUNTRIES\b[^}]*\} from '(\.\.\/){5}shared\/countries'/);
     expect(review).toMatch(/<label htmlFor=\{`traveller-\$\{passenger\.id\}-nationality`\}>Nationality/);
     expect(review).toMatch(/<select\s+id=\{`traveller-\$\{passenger\.id\}-nationality`\}/);
   });

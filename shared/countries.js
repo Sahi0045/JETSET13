@@ -271,6 +271,18 @@ export const COUNTRIES = Object.freeze(TABLE
   .map(([code, alpha3, name, dial]) => Object.freeze({ code, alpha3, name, dial }))
   .sort((a, b) => a.name.localeCompare(b.name, 'en')));
 
+/**
+ * Every calling code once, lowest first: "+1", "+7", "+20" ... The phone field
+ * offers codes, not countries, because several countries share one - a list of
+ * countries showed a US number's "+1" as whichever of them came first.
+ */
+export const CALLING_CODES = Object.freeze([...new Set(COUNTRIES.map((country) => country.dial))]
+  .sort((a, b) => Number(a) - Number(b))
+  .map((dial) => `+${dial}`));
+
+/** "+91", "91", "0091" -> "91": the digits a phone number's country code is sent as. */
+export const callingCodeDigits = (value) => String(value ?? '').replace(/\D/g, '').replace(/^00/, '');
+
 const BY_CODE = new Map(COUNTRIES.map((country) => [country.code, country]));
 const ALPHA3 = new Set(COUNTRIES.map((country) => country.alpha3));
 

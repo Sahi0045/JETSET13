@@ -14,6 +14,7 @@
  */
 
 import { needsDateOfBirth } from './travellerDetails.js';
+import { callingCodeDigits } from './countries.js';
 
 export const TRAVELLER_TYPES = ['ADULT', 'CHILD', 'HELD_INFANT', 'SEATED_INFANT'];
 
@@ -89,10 +90,14 @@ export function buildFlightOrderBody(orderData, { userId = null } = {}) {
     passengerDetails,
     fareBreakdown: orderData.calculatedFare || null,
     // Contact details go onto the PNR; an invented phone number is what the
-    // airline would call about a schedule change.
+    // airline would call about a schedule change. So is an invented country
+    // code: the review page never sent one and this defaulted to '1', so every
+    // phone was booked as a US number. The lead traveller's own code stands in
+    // for a booking saved before the page sent it.
     contactInfo: {
       email: orderData.bookingDetails?.contact?.email || orderData.customerEmail || passengerDetails[0]?.email || '',
-      countryCode: orderData.bookingDetails?.contact?.countryCode || '1',
+      countryCode: callingCodeDigits(orderData.bookingDetails?.contact?.countryCode)
+        || callingCodeDigits(orderData.passengerData?.[0]?.countryCode),
       phoneNumber: orderData.bookingDetails?.contact?.phone || passengerDetails[0]?.mobile || '',
     },
     userId,
