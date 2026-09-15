@@ -1,5 +1,5 @@
  
-import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Plane, Calendar, Users, ArrowRight, X, Search, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Clock, ArrowUpDown, MapPin, Luggage, Sun, Sunrise, Sunset, Moon, ShieldCheck, RefreshCw, Briefcase, AlertTriangle } from "lucide-react";
 import Navbar from '../Navbar';
@@ -721,7 +721,12 @@ function FlightSearchPage() {
   // Dynamically compute price range bounds from current flights
   const [priceRangeBounds, setPriceRangeBounds] = useState({ min: 0, max: 50000 });
 
-  useEffect(() => {
+  // A layout effect, so the price filter is settled in the same pass as the
+  // flights it is derived from, before anything is painted. As a plain effect
+  // it landed one render later, and that second filter change set off the
+  // back-to-page-1 reset below: whoever reached page 2 or 3 in that moment was
+  // thrown back to page 1. CI's slower runner hit it every time.
+  useLayoutEffect(() => {
     if (flights && flights.length > 0) {
       const prices = flights.map(f => getFlightPriceAmount(f)).filter(p => p > 0);
       if (prices.length > 0) {

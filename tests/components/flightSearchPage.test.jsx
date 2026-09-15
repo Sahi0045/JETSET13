@@ -208,9 +208,14 @@ describe('pages of results', () => {
     renderPage();
 
     await waitFor(() => expect(screen.getAllByTestId('flight-card')).toHaveLength(10));
+    // Let every update the arrival of results sets off finish first. Clicking
+    // the moment the first cards appear raced the page's own settling on CI's
+    // slower runner, which failed this test on main three times.
+    await act(async () => {});
     fireEvent.click(screen.getByRole('button', { name: '3' }));
     await waitFor(() => expect(screen.getAllByTestId('flight-card')).toHaveLength(5));
 
+    await act(async () => {});
     fireEvent.click(screen.getByRole('button', { name: 'Only non-stop' }));
 
     await waitFor(() => expect(screen.getAllByTestId('flight-card')).toHaveLength(10));
