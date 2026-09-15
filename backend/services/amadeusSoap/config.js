@@ -66,6 +66,12 @@ const readWsConfig = (env = process.env) => {
     // (confirmSeats in bookingChain.js). On by default; false turns it off
     // without a deploy if Amadeus asks us not to sell-and-release at checkout.
     seatCheckBeforePayment: isTrue(env.AMADEUS_WS_SEAT_CHECK_BEFORE_PAYMENT, true),
+    // In the seat check's session, the sold segments are also priced as the
+    // booking chain will price them, and a fare the airline will not give - or
+    // an adult fare higher than quoted - is refused before the charge
+    // (confirmFare in bookingChain.js). Runs only with the seat check. On by
+    // default; false turns it off without a deploy.
+    priceCheckBeforePayment: isTrue(env.AMADEUS_WS_PRICE_CHECK_BEFORE_PAYMENT, true),
     // The office's market (country) code, required by Ticket_CancelDocument to
     // identify whose ticket stock is being voided. US because settlement is
     // through ARC; confirm against the production office at cutover, as with
@@ -178,4 +184,5 @@ export const describeWsConfig = (env = process.env) => ({
   bookingEnabled: isTrue(env.AMADEUS_WS_BOOKING_ENABLED, false),
   autoTicket: isTrue(env.AMADEUS_WS_AUTO_TICKET, false),
   seatCheckBeforePayment: isTrue(env.AMADEUS_WS_SEAT_CHECK_BEFORE_PAYMENT, true),
+  priceCheckBeforePayment: isTrue(env.AMADEUS_WS_PRICE_CHECK_BEFORE_PAYMENT, true),
 });

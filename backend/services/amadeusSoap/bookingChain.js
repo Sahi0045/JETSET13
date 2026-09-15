@@ -592,15 +592,17 @@ export const runBookingChain = async (p) => {
  * UNS / 288 - after the customer had paid, so the booking was refunded. Checkout
  * calls this before the charge instead.
  *
- * One sell, then sign out. Nothing is named and nothing is committed, so the
+ * One sell, then - in the same session - a pricing of what was sold (see
+ * confirmFare), then sign out. Nothing is named and nothing is committed, so the
  * session ends with no PNR and the seats go back - the same as a booking chain
  * that fails before commit. It is never run after payment: the booking chain's
- * own sell is the real one.
+ * own sell and pricing are the real ones.
  *
  * @param {object} flightOffer an offer carrying `_ama`, as priced
- * @returns {Promise<{available: true, statuses: string[]}>}
- * @throws {AmadeusSoapError} code 409 when the airline refuses the seats, which
- *   checkout reads as FARE_UNAVAILABLE; any other failure keeps its own code
+ * @returns {Promise<{available: true, statuses: string[], fare: {adultTotal: number, currency: string} | null}>}
+ * @throws {AmadeusSoapError} code 409 when the airline refuses the seats or the
+ *   fare, or the adult fare rose, which checkout reads as FARE_UNAVAILABLE; any
+ *   other failure keeps its own code
  */
 export const confirmSeats = async (flightOffer) => {
   const config = getWsConfig();
@@ -633,7 +635,9 @@ export const confirmSeats = async (flightOffer) => {
     const sold = readAirSellReply(reply);
     if (sold.sold) {
       log.info({ flights, seats, statuses: sold.statuses }, 'seat check: the airline will sell these seats');
-      return { available: true, statuses: sold.statuses };
+      // Still in the session that holds them: price what was just sold.
+      const fare = config.priceCheckBeforePayment ? await confirmFare(ctx, { offer, config, flights }) : null;
+      return { available: true, statuses: sold.statuses, fare };
     }
 
     const inspected = inspectReply(reply, 'Air_SellFromRecommendation');
@@ -657,6 +661,84 @@ export const confirmSeats = async (flightOffer) => {
       operation: 'Air_SellFromRecommendation',
     });
   }, { config });
+};
+
+/**
+ * Price the segments the seat check just sold, as the booking chain will price
+ * them after payment.
+ *
+ * Search and informative pricing can quote a fare that PNR pricing will not
+ * give. On PDT, 15 Sep 2026: JetBlue B6 3982, 3988 and 3996/L JFK-LAX were
+ * quoted PI2QUOY1 at $193.40 by both, and Fare_PricePNRWithBookingClass answered
+ * NO FARE FOR BOOKING CODE - on a bare sell, with no names or elements - while
+ * B6 323/L on the same fare priced $193.40. Alaska AS83 and AS99 were refused
+ * the same way, and AS1306 and B6 3912 priced higher on the PNR. The chain's
+ * fare guard caught every one, but after the card was charged: each a refund.
+ *
+ * Nothing is named here, and without names Amadeus prices ONE adult (PA1, ADT)
+ * whatever was sold - two adults, an adult and a child, an adult and an infant
+ * alike (PDT, same day). So the adult fare is what can be compared, against the
+ * adult's total in the quote. Child and infant fares are left to the chain.
+ *
+ * Only the airline refusing the fare, or the adult fare rising beyond the
+ * tolerance, stops checkout. Pricing that fails for any other reason is logged
+ * and let through: the chain prices again after payment, as it always has, and
+ * an Amadeus hiccup should not cost a sale.
+ *
+ * @returns {Promise<{adultTotal: number, currency: string} | null>} null when
+ *   there was nothing to compare
+ */
+const confirmFare = async (ctx, { offer, config, flights }) => {
+  const operation = 'Fare_PricePNRWithBookingClass';
+  const validatingCarrier = offer.validatingAirlineCodes?.[0] ?? offer._ama.segments[0]?.marketingCarrier;
+
+  let reply;
+  try {
+    reply = replyOf(await ctx.call(operation, buildPricePnrBody({ currency: config.currency, validatingCarrier })));
+  } catch (error) {
+    log.warn({ flights, reason: error?.technicalError ?? error?.message }, 'price check: pricing failed; the booking chain prices after payment');
+    return null;
+  }
+
+  const status = inspectReply(reply, operation);
+  if (status.empty || [400, 409].includes(Number(status.error?.code))) {
+    const amadeusCode = status.error?.amadeusCode ?? null;
+    log.warn({ flights, amadeusCode, reason: status.error?.technicalError }, 'price check: the airline will not price this fare');
+    throw new AmadeusSoapError({
+      error: 'This fare can no longer be sold - please search again',
+      code: 409,
+      technicalError: `price check: ${status.error?.technicalError ?? 'no fare for these segments'}`,
+      operation,
+      amadeusCode,
+    });
+  }
+  if (status.error) {
+    log.warn({ flights, reason: status.error.technicalError }, 'price check: pricing failed; the booking chain prices after payment');
+    return null;
+  }
+
+  const adult = readPricePnrReply(reply).fares[0]?.amounts?.['712'];
+  const quoted = (offer.travelerPricings ?? []).find((t) => t.travelerType === 'ADULT')?.price?.total;
+  const quotedCurrency = offer.price?.currency ?? config.currency;
+  if (adult?.amount == null || quoted == null || adult.currency !== quotedCurrency) {
+    log.warn({ flights, priced: adult ?? null, quoted: quoted ?? null, quotedCurrency }, 'price check: nothing comparable to the quote; the booking chain prices after payment');
+    return null;
+  }
+
+  // In whole cents, and only a rise - the chain's own fare guard, applied early.
+  const riseCents = Math.round(adult.amount * 100) - Math.round(Number(quoted) * 100);
+  if (riseCents > Math.round(config.priceTolerance * 100)) {
+    log.warn({ flights, pricedAdult: adult.amount, quotedAdult: Number(quoted) }, 'price check: the adult fare prices higher than quoted');
+    throw new AmadeusSoapError({
+      error: 'The fare has changed - please search again',
+      code: 409,
+      technicalError: `price check: adult fare priced ${adult.amount} ${adult.currency}, quoted ${quoted}`,
+      operation,
+    });
+  }
+
+  log.info({ flights, pricedAdult: adult.amount, quotedAdult: Number(quoted) }, 'price check: the airline prices the fare as quoted');
+  return { adultTotal: adult.amount, currency: adult.currency };
 };
 
 /**
