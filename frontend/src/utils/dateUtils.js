@@ -55,6 +55,74 @@ export const formatDateToISO = (date) => {
 };
 
 /**
+ * A booking's date as the calendar day it names, in the viewer's own time zone.
+ *
+ * `new Date('2026-11-15')` is UTC midnight, which in New York is the evening of
+ * the 14th. The booking pages parsed departure dates that way, so a US customer
+ * saw their flight a day early, the trip moved to Past on the morning it left,
+ * the countdown was one day short, and Cancel disappeared a day too soon.
+ *
+ * A date-only string - or an airport-local time with no zone, which is how
+ * Amadeus sends departures - is the day written in it. A timestamp that carries
+ * a zone (`created_at`) is the local day of that moment.
+ *
+ * @param {string|Date|null|undefined} value
+ * @returns {Date|null} local midnight of that day, or null when unreadable
+ */
+export const parseCalendarDate = (value) => {
+    if (value === null || value === undefined || value === '') return null;
+    if (value instanceof Date) {
+        return Number.isNaN(value.getTime())
+            ? null
+            : new Date(value.getFullYear(), value.getMonth(), value.getDate());
+    }
+    const text = String(value).trim();
+    const written = /^(\d{4})-(\d{2})-(\d{2})(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)?$/.exec(text);
+    if (written) {
+        const [year, month, day] = [Number(written[1]), Number(written[2]), Number(written[3])];
+        const date = new Date(year, month - 1, day);
+        // 2026-02-31 would roll into March; it is not a date.
+        return date.getMonth() === month - 1 ? date : null;
+    }
+    const moment = new Date(text);
+    return Number.isNaN(moment.getTime())
+        ? null
+        : new Date(moment.getFullYear(), moment.getMonth(), moment.getDate());
+};
+
+/**
+ * A booking date for display, e.g. "Sun, Nov 15, 2026", read as a calendar day
+ * (see parseCalendarDate).
+ *
+ * @param {string|Date|null|undefined} value
+ * @param {Intl.DateTimeFormatOptions} [options]
+ * @param {string} [fallback=''] shown when there is no readable date
+ */
+export const formatCalendarDate = (
+    value,
+    options = { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' },
+    fallback = ''
+) => {
+    const date = parseCalendarDate(value);
+    return date ? date.toLocaleDateString('en-US', options) : fallback;
+};
+
+/**
+ * Whole days from today to a booking date: 0 today, 1 tomorrow, -1 yesterday.
+ * Null when there is no readable date. Rounded, because the day a clock change
+ * falls on is 23 or 25 hours long.
+ *
+ * @param {string|Date|null|undefined} value
+ * @param {Date} [now]
+ */
+export const daysUntilDate = (value, now = new Date()) => {
+    const date = parseCalendarDate(value);
+    if (!date) return null;
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    return Math.round((date.getTime() - today.getTime()) / 86400000);
+};
+
+/**
  * "PT11H10M" -> "11h 10m".
  *
  * Amadeus stores flight durations as ISO 8601 and they were rendered verbatim,

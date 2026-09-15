@@ -11,21 +11,38 @@
 import {
   renderBrandedEmail, detailCard, highlightBox, paragraph,
   figureBlock, routeStrip, statusPill, segmentCard, fareBreakdown, actionRow,
-  stepList, stayCard, dataGrid, progressSteps, BRAND,
+  stepList, stayCard, dataGrid, progressSteps, humanDuration, BRAND,
 } from '../emailTemplate.js';
 import { REFUND_STUCK_ACTIONS, REFUND_DONE_ACTIONS, refundOutcome } from '../../../shared/cancellationOutcome.js';
+import { clockTime, itinerariesFromOffer, layoverBetween, legLabel } from '../../../shared/bookingItineraries.js';
 
 const money = (amount, currency = 'USD') =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(Number(amount) || 0);
 
-const mediumDate = (d) =>
-  (d ? new Date(d).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }) : '');
+/**
+ * A date as a customer reads it, never a day early.
+ *
+ * `new Date('2026-11-15')` is UTC midnight, so a server running west of UTC
+ * printed every travel date in these emails as the day before. A date-only
+ * string - or an airport-local time with no zone, as Amadeus sends - is the
+ * calendar day written in it, and is formatted in UTC so the server's own zone
+ * cannot move it. A timestamp with a zone is the moment it names, as before.
+ */
+const formatDay = (d, options) => {
+  if (!d) return '';
+  const written = /^(\d{4})-(\d{2})-(\d{2})(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)?$/.exec(String(d).trim());
+  const date = written
+    ? new Date(Date.UTC(Number(written[1]), Number(written[2]) - 1, Number(written[3])))
+    : new Date(d);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleDateString('en-US', written ? { ...options, timeZone: 'UTC' } : options);
+};
 
-const longDate = (d) =>
-  (d ? new Date(d).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : 'TBD');
+const mediumDate = (d) => formatDay(d, { day: 'numeric', month: 'short', year: 'numeric' });
 
-const shortDate = (d) =>
-  (d ? new Date(d).toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' }) : '');
+const longDate = (d) => formatDay(d, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) || 'TBD';
+
+const shortDate = (d) => formatDay(d, { weekday: 'short', day: 'numeric', month: 'short' });
 
 const firstNameOf = (name, fallback = 'there') => String(name || '').trim().split(' ')[0] || fallback;
 
@@ -530,7 +547,37 @@ export function generateBookingConfirmationTemplate(data) {
   //
   // A flight gets the itinerary treatment every traveller already knows;
   // a hotel gets the stay card; anything else falls back to the route strip.
-  const journey = kind === 'flight' && d.origin && d.destination
+  // Every leg and flight of a flight booking. The card below draws one flight
+  // from the first leg's flat fields: no return flight, and a connection shown
+  // as its first flight number beside its last arrival. Legs are saved on the
+  // booking by the order route, or rebuilt from the offer stored on it.
+  const legs = kind === 'flight'
+    ? (Array.isArray(d.itineraries) && d.itineraries.length > 0 ? d.itineraries : itinerariesFromOffer(d.flightOffer))
+    : [];
+  const itineraryHtml = legs.map((leg, index) => {
+    const stopText = leg.stops === 0 ? 'Non-stop' : `${leg.stops} stop${leg.stops === 1 ? '' : 's'}`;
+    const heading = paragraph(`<strong>${legLabel(leg, index, legs.length)}</strong> &nbsp;·&nbsp; ${line([
+      `${leg.origin} → ${leg.destination}`, shortDate(leg.departureDate), humanDuration(leg.duration), stopText,
+    ], ' &nbsp;·&nbsp; ')}`);
+    const flights = leg.segments.map((segment, i) => {
+      const wait = i > 0 ? layoverBetween(leg.segments[i - 1], segment) : '';
+      const connection = i > 0
+        ? paragraph(line([`Connection in ${segment.origin}`, wait ? `${wait} between flights` : ''], ' · '))
+        : '';
+      return connection + segmentCard({
+        airline: segment.flightNumber,
+        flightNumber: segment.operatingCarrier ? `operated by ${segment.operatingCarrier}` : '',
+        cabin: segment.cabin ? segment.cabin.replace(/_/g, ' ').toLowerCase() : '',
+        depTime: clockTime(segment.departureTime), depCode: segment.origin, depDate: shortDate(segment.departureDate), depTerminal: segment.departureTerminal,
+        arrTime: clockTime(segment.arrivalTime), arrCode: segment.destination, arrDate: shortDate(segment.arrivalDate), arrTerminal: segment.arrivalTerminal,
+        // Amadeus gives a leg's elapsed time, not each flight's.
+        duration: leg.segments.length === 1 ? leg.duration : '',
+      });
+    }).join('');
+    return heading + flights;
+  }).join('');
+
+  const journey = itineraryHtml ? itineraryHtml : kind === 'flight' && d.origin && d.destination
     ? segmentCard({
       airline: d.Airline || d.airlineName || d.airline,
       flightNumber: d.Flight || d.flightNumber,
@@ -613,6 +660,68 @@ export function generateBookingConfirmationTemplate(data) {
     heading: unticketed ? 'Reservation Held' : 'Booking Confirmed!',
     subheading: 'Thank you for choosing Jetsetters',
     contentHtml: content,
+    cta: { text: 'View My Trips', url: `${process.env.FRONTEND_URL || BRAND.site}/my-trips` },
+  });
+}
+
+/**
+ * A reservation the airline holds, with a ticket our team has to finish.
+ *
+ * The order route answers 202 "needs review" when the PNR was committed and a
+ * later step - queueing, ticketing, the final save - failed. Those customers
+ * were emailed nothing, while the page told them a confirmation had been sent.
+ * This says what is true: the seats are held, the ticket is not issued yet, a
+ * person is finishing it, and the customer has nothing to do.
+ */
+export function generateReservationHeldTemplate(data = {}) {
+  const {
+    customerName, bookingReference, paymentAmount, currency = 'USD', bookingDetails, travelDate, passengers = 1,
+  } = data;
+  const details = bookingDetails || {};
+  const pnr = details.pnr || details.PNR || '';
+  const legs = Array.isArray(details.itineraries) && details.itineraries.length > 0
+    ? details.itineraries
+    : itinerariesFromOffer(details.flight_offer || details.flightOffer);
+  const route = legs.length > 0
+    ? legs.map((leg, index) => paragraph(`<strong>${legLabel(leg, index, legs.length)}</strong> &nbsp;·&nbsp; ${line([
+      `${leg.origin} → ${leg.destination}`,
+      shortDate(leg.departureDate),
+      leg.segments.map((segment) => segment.flightNumber).filter(Boolean).join(', '),
+    ], ' &nbsp;·&nbsp; ')}`)).join('')
+    : details.origin && details.destination
+      ? paragraph(line([`<strong>${details.origin} → ${details.destination}</strong>`, travelDate ? longDate(travelDate) : ''], ' &nbsp;·&nbsp; '))
+      : '';
+  const amount = Number(paymentAmount);
+
+  return renderBrandedEmail({
+    preheader: line(['Your seats are reserved', bookingReference, 'and our team is finishing your ticket'], ' '),
+    headerLabel: 'Reservation Held',
+    emoji: '✈️',
+    heading: 'Reservation Held',
+    subheading: 'Our team is finishing your ticket',
+    contentHtml: `
+      ${paragraph(`Hi <strong>${firstNameOf(customerName)}</strong>, your payment went through and the airline is holding your seats. Your ticket could not be issued automatically, so a member of our team is finishing it.`)}
+      ${route}
+      ${figureBlock([
+        { label: 'Booking reference', value: bookingReference || '—', mono: true, small: true, note: statusPill('Ticket pending', 'warning') },
+        pnr
+          ? { label: 'Airline reference', value: pnr, mono: true, small: true }
+          : { label: 'Travellers', value: String(passengers), small: true },
+      ])}
+      ${stepList('What happens next', [
+        ['We finish your ticket', 'Our team is working on it. You do not need to do anything.'],
+        ['We email your e-ticket', 'As soon as it is issued. Until then this is a reservation, not a ticket, so please do not travel on this email.'],
+        ['If anything stops it', `We will contact you before the airline's ticketing deadline. You can also call ${BRAND.supportPhone} with your booking reference.`],
+      ])}
+      ${Number.isFinite(amount) && amount > 0 ? fareBreakdown([], { total: money(amount, currency), currency, label: 'Total paid' }) : ''}
+      ${actionRow([
+        {
+          text: 'Manage booking',
+          url: bookingReference ? `${BRAND.site}/manage-booking/${encodeURIComponent(bookingReference)}` : `${BRAND.site}/my-trips`,
+        },
+        { text: 'My trips', url: `${BRAND.site}/my-trips` },
+      ])}
+    `,
     cta: { text: 'View My Trips', url: `${process.env.FRONTEND_URL || BRAND.site}/my-trips` },
   });
 }

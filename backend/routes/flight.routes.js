@@ -20,6 +20,7 @@ import { CHAIN_CLAIM_TTL_MS, MAX_QUEUE_ATTEMPTS } from '../utils/bookingChainCla
 import { queueEnvironment } from '../utils/queueEnvironment.js';
 import { unchangedSince } from '../utils/bookingDetailsGuard.js';
 import { UNTICKETED_REVIEW_REASON } from '../jobs/needsReviewAlert.job.js';
+import { itinerariesFromOffer, returnDateOf } from '../../shared/bookingItineraries.js';
 import { flightsKey, travellerNamesKey } from '../utils/tripMatch.js';
 import { needsDateOfBirth } from '../../shared/travellerDetails.js';
 import { statusChangeRefusal } from '../../shared/bookingStatusChange.js';
@@ -814,17 +815,48 @@ const EMAILED_REVIEW_REASONS = new Set(['ticket_numbers_not_retrieved', UNTICKET
  * That answer used to send nothing, so a booking whose first email was skipped
  * for want of an address, or failed, never got one. It is owed only what the
  * success path would have sent for the booking as it is now: nothing once it
- * is cancelled or its money returned, nothing for one flagged for review. The
- * email itself says reservation or confirmation from the row
- * (isUnticketedFlight), exactly as it does on the success path.
+ * is cancelled or its money returned, nothing for one a human is sorting out
+ * for some other reason. The email itself says reservation or confirmation
+ * from the row (isUnticketedFlight), exactly as it does on the success path.
+ *
+ * A booking the order route held for staff after its PNR was committed is owed
+ * an email too - the "held" one, see confirmationEmailKind.
  */
 export function confirmationEmailOwed(booking) {
+  return confirmationEmailKind(booking) !== null;
+}
+
+/**
+ * The review flags the order route's two 202 "needs review" answers write: the
+ * airline holds the seats, and a later step - queueing, ticketing, the final
+ * save - failed. Those answers sent no email at all, while the page said one
+ * had been sent.
+ */
+const HELD_REVIEW_REASON_PREFIXES = ['chain failed after commit at ', 'order route failed after commit'];
+
+/**
+ * Which email a booking still owes its customer.
+ *
+ *  - 'confirmation': what the success path sends (reservation or confirmation);
+ *  - 'held': "your reservation is held, our team is finishing your ticket", for
+ *    a booking the order route held for staff after committing its PNR;
+ *  - null: nothing - no booking yet, cancelled, money returned, already sent, or
+ *    flagged for a reason a person is handling (a cancellation, say).
+ *
+ * Both are sent through the one claim in sendConfirmationOnce, so a booking gets
+ * one of them, once.
+ *
+ * @returns {'confirmation'|'held'|null}
+ */
+export function confirmationEmailKind(booking) {
   const details = booking?.booking_details || {};
-  if (!details.pnr) return false;
-  if (booking.status === 'cancelled' || ['refunded', 'partially_refunded'].includes(booking.payment_status)) return false;
-  if (details.confirmation_email?.state === 'sent') return false;
+  if (!details.pnr) return null;
+  if (booking.status === 'cancelled' || ['refunded', 'partially_refunded'].includes(booking.payment_status)) return null;
+  if (details.confirmation_email?.state === 'sent') return null;
   const review = details.needs_review;
-  return !review || EMAILED_REVIEW_REASONS.has(review.reason);
+  if (!review || EMAILED_REVIEW_REASONS.has(review.reason)) return 'confirmation';
+  const reason = String(review.reason || '');
+  return HELD_REVIEW_REASON_PREFIXES.some((prefix) => reason.startsWith(prefix)) ? 'held' : null;
 }
 
 /**
@@ -933,6 +965,25 @@ export async function sendConfirmationOnce(bookingReference, emailData, { failOp
     return { sent };
   } catch (error) {
     console.error('❌ Confirmation email step failed:', error.message);
+    return { sent: false, reason: 'error' };
+  }
+}
+
+/**
+ * Email the customer of a booking the order route has just held for staff.
+ *
+ * Read back from the row, so the email says what was recorded, and sent through
+ * the confirmation's own claim, so a retry or the queue cannot send a second.
+ * It is the booking's first chance to email, so it fails open like the success
+ * path's first send. Never throws.
+ */
+async function sendHeldForReviewEmail(bookingReference, body) {
+  try {
+    const row = await findExistingBooking(bookingReference);
+    if (confirmationEmailKind(row) !== 'held') return { sent: false, reason: 'not-owed' };
+    return await sendConfirmationOnce(row.booking_reference, confirmationEmailFromRow(row, body), { failOpen: true });
+  } catch (error) {
+    console.error('❌ Held-booking email step failed:', error.message);
     return { sent: false, reason: 'error' };
   }
 }
@@ -1089,6 +1140,9 @@ function confirmationEmailFromRow(booking, body = {}) {
     customerName: name || 'Valued Customer',
     bookingReference: booking.booking_reference,
     bookingType: 'flight',
+    // Held for staff: the email says the ticket is being finished by a person,
+    // not that the booking is confirmed.
+    heldForReview: confirmationEmailKind(booking) === 'held',
     paymentAmount: booking.total_amount || offer?.price?.total || '0',
     currency: details.currency || offer?.price?.currency || 'USD',
     travelDate: details.departure_date_full || firstSegment.departure?.at?.split('T')[0],
@@ -1098,6 +1152,12 @@ function confirmationEmailFromRow(booking, body = {}) {
       origin: details.origin || firstSegment.departure?.iataCode,
       destination: details.destination || lastSegment.arrival?.iataCode,
       airline: details.airline_name || offer?.validatingAirlineCodes?.[0],
+      // Every leg and flight, so the email shows the return flight and each
+      // connection. A booking saved before legs were kept has them rebuilt
+      // from its offer.
+      itineraries: Array.isArray(details.itineraries) && details.itineraries.length > 0
+        ? details.itineraries
+        : itinerariesFromOffer(offer),
     },
   };
 }
@@ -1173,6 +1233,11 @@ export function buildBookingRow(bookingData, userId) {
       origin_city: bookingData.originCity || cityNameFor(bookingData.origin),
       destination_city: bookingData.destinationCity || cityNameFor(bookingData.destination),
       departure_date_full: bookingData.departureDateFull || '',
+      // Every leg and every flight (shared/bookingItineraries.js). The flat
+      // fields above describe the first leg only, so a round trip's return
+      // flight was saved nowhere, and a connection only as its first flight
+      // number and its last arrival. They stay for the clients that read them.
+      itineraries: Array.isArray(bookingData.itineraries) ? bookingData.itineraries : [],
       arrival_date: bookingData.arrivalDate || '',
       price_base: bookingData.priceBase || null,
       price_grand_total: bookingData.priceGrandTotal || null,
@@ -2633,6 +2698,8 @@ router.post('/order', optionalProtect, async (req, res) => {
           ticketed: providerError.ticketed,
           bookingReference: req.body.bookingReference
         });
+        // This answer promises an email; it used to send none.
+        await sendHeldForReviewEmail(req.body.bookingReference, req.body);
         return res.status(202).json({
           success: true,
           data: { id: providerError.pnr, pnr: providerError.pnr, status: 'PENDING_CONFIRMATION' },
@@ -2808,6 +2875,9 @@ router.post('/order', optionalProtect, async (req, res) => {
         gender: t.gender
       })),
       flightOffer: firstOffer,
+      // Every leg and flight of the offer booked, return and connections
+      // included - the fields above read only the first leg.
+      itineraries: itinerariesFromOffer(firstOffer),
       // What the GDS actually did, for reconciliation and for the ticket
       // numbers the customer's document prints.
       gds: orderResponse.gds || null,
@@ -2945,6 +3015,8 @@ router.post('/order', optionalProtect, async (req, res) => {
           reason: `order route failed after commit: ${String(error.message || error).slice(0, 200)}`,
           ticketed: row.booking_details?.gds?.ticketed === true
         });
+        // This answer promises an email; it used to send none.
+        await sendHeldForReviewEmail(ref, req.body);
         return res.status(202).json({
           success: true,
           data: { id: pnr, pnr, status: 'PENDING_CONFIRMATION', bookingReference: ref },
@@ -3325,6 +3397,49 @@ function clientTravellers(list, { showPassports = false } = {}) {
   });
 }
 
+/**
+ * A flight checkout the customer opened and never paid for: still `pending`, no
+ * payment recorded, nothing sent to the airline, and nobody working on it.
+ *
+ * Hosted checkout creates the booking row before the customer reaches the
+ * payment page, so every abandoned payment page left a row, and My Trips listed
+ * each one as a trip. A row with any sign of life - a payment, a PNR, a queued
+ * order, a review flag, a cancellation - is kept. A payment captured but not yet
+ * reconciled reads as unpaid until the abandoned-checkout job asks the gateway,
+ * and shows from then.
+ */
+export function isAbandonedCheckout(booking) {
+  if (booking?.travel_type !== 'flight' || String(booking?.status || '').toLowerCase() !== 'pending') return false;
+  const payment = String(booking?.payment_status || '').toLowerCase();
+  if (['paid', 'completed', 'partial', 'refunded', 'partially_refunded'].includes(payment)) return false;
+  const details = booking.booking_details || {};
+  return !details.pnr && !details.queued_order && !details.needs_review && !details.cancellation;
+}
+
+/**
+ * What checkout charged for a flight, as a receipt shows it: the airline's
+ * fare, the service fee, any coupon discount, and the total, in USD (ARC Pay
+ * settles only in USD). Null when checkout recorded no verified charge.
+ *
+ * The confirmation page printed "Base Fare" as the total less taxes, which
+ * folded the fee and the discount into the fare. The rest of `verified_charge`
+ * - the fee workings per traveller type, the coupon record, when the fare was
+ * priced - stays in the database.
+ */
+function chargeBreakdownOf(charge) {
+  const total = Number(charge?.total);
+  if (!charge || !Number.isFinite(total)) return null;
+  const figure = (value) => (Number.isFinite(Number(value)) ? Number(value) : 0);
+  return {
+    fare: figure(charge.fare ?? charge.pricedFare?.total),
+    serviceFee: figure(charge.serviceFee),
+    discount: figure(charge.discount),
+    total,
+    currency: 'USD',
+    couponCode: charge.coupon?.code || null,
+  };
+}
+
 // Get all bookings from database (for My Trips page)
 /**
  * A bookings row as My Trips and Manage Booking consume it.
@@ -3346,6 +3461,15 @@ export function toClientBooking(booking, { showPassports = false } = {}) {
     booking.booking_details?.amount ||
     booking.booking_details?.flight_offer?.price?.total ||
     0;
+
+  // Every leg and flight of a flight booking. One saved before legs were kept
+  // has them rebuilt from its stored offer - the airline's segments only, no
+  // traveller data - so its return flight shows too.
+  const savedLegs = booking.booking_details?.itineraries;
+  const legs = booking.travel_type !== 'flight' ? []
+    : Array.isArray(savedLegs) && savedLegs.length > 0 ? savedLegs
+      : itinerariesFromOffer(booking.booking_details?.flight_offer
+        || booking.booking_details?.pending_booking_data?.bookingData?.originalOffer);
 
   return {
     id: booking.id,
@@ -3394,6 +3518,12 @@ export function toClientBooking(booking, { showPassports = false } = {}) {
     priceGrandTotal: booking.booking_details?.price_grand_total || null,
     priceFees: booking.booking_details?.price_fees || [],
     fareBreakdown: booking.booking_details?.fare_breakdown || null,
+    // What checkout verified and charged, by name - see chargeBreakdownOf.
+    chargeBreakdown: chargeBreakdownOf(booking.booking_details?.verified_charge),
+    // Every leg and flight - see `legs` above. The flat fields describe the
+    // first leg only and stay for the clients that read them.
+    itineraries: legs,
+    returnDate: returnDateOf(legs) || null,
     // Travelers, cut down to what a page renders; passports masked for all but staff.
     travelers: clientTravellers(booking.passenger_details, { showPassports }),
     // Cruise-specific fields
@@ -3489,7 +3619,10 @@ router.get('/bookings', protect, async (req, res) => {
       });
     }
 
-    const transformedBookings = (data || []).map(toClientBooking);
+    // A checkout opened and never paid for is not a trip (isAbandonedCheckout).
+    const transformedBookings = (data || [])
+      .filter((row) => !isAbandonedCheckout(row))
+      .map((row) => toClientBooking(row));
 
     console.log(`✅ Fetched ${transformedBookings.length} bookings from database`);
 

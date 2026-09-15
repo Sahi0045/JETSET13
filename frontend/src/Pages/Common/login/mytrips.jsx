@@ -2,9 +2,12 @@
 
 import React, { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
-import { formatIsoDuration } from "../../../utils/dateUtils"
-import { bookingStatusBadge, needsAttention, cancellationMessage, refundStatus, attentionMessage } from "../../../utils/bookingStatus"
+import { daysUntilDate, formatCalendarDate, formatIsoDuration } from "../../../utils/dateUtils"
+import { bookingStatusBadge, needsAttention, cancellationMessage, refundStatus, attentionMessage, isCompletedTrip } from "../../../utils/bookingStatus"
 import { resolveTickets, ticketState } from "../../../utils/eTicket"
+import { bookingItineraries } from "../../../../../shared/bookingItineraries"
+import BookingItinerary from "../flights/BookingItinerary"
+import { formatUsd } from "../../../utils/bookingCharge"
 import { authHeaders } from "../../../utils/authHeaders"
 import {
   FaPlane, FaShip, FaHotel, FaSuitcaseRolling, FaClipboardList,
@@ -18,7 +21,6 @@ import Navbar from '../Navbar'
 import Footer from '../Footer'
 import { useSupabaseAuth } from '../../../contexts/SupabaseAuthContext'
 import ArcPayService from '../../../Services/ArcPayService'
-import Price from '../../../Components/Price'
 
 // ----- Icon helpers (react-icons replace emoji) -----
 /**
@@ -83,14 +85,9 @@ const TYPE_NAME = {
 
 const getTypeName = (type) => TYPE_NAME[(type || '').toLowerCase()] || TYPE_NAME.default
 
-const fmtDate = (d, opts) => {
-  if (!d) return ''
-  try {
-    return new Date(d).toLocaleDateString('en-US', opts || { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
-  } catch {
-    return ''
-  }
-}
+// Travel dates are calendar days. `new Date('2026-11-15')` is UTC midnight -
+// the evening of the 14th in the US - so every trip here showed a day early.
+const fmtDate = (d, opts) => formatCalendarDate(d, opts || { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
 
 // Reusable eyebrow label
 const Eyebrow = ({ children, className = '' }) => (
@@ -576,12 +573,10 @@ export default function TravelDashboard() {
     const travelDate = getTravelDateFromBooking(booking);
     if (!travelDate) return false; // If no date, consider it upcoming
 
-    const tripDate = new Date(travelDate);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    tripDate.setHours(0, 0, 0, 0);
-
-    return tripDate < today;
+    // Past only once the departure day is over, where the customer is. Read as
+    // UTC, a US trip moved to Past on the morning it departed.
+    const days = daysUntilDate(travelDate);
+    return days !== null && days < 0;
   };
 
   // Filter bookings based on active tab and sidebar selection
@@ -661,6 +656,8 @@ export default function TravelDashboard() {
     const isCruiseBooking = booking.type === 'cruise'
     const isHotelBooking = booking.type === 'hotel'
     const isPackageBooking = booking.type === 'package'
+    // Every leg and flight: a round trip's return flight was not on the card.
+    const legs = isFlightBooking ? bookingItineraries(booking) : []
 
     const getBookingTitle = () => {
       if (booking.title) return booking.title
@@ -676,15 +673,7 @@ export default function TravelDashboard() {
 
     // Calculate days until trip
     const travelDate = getTravelDateFromBooking(booking);
-    const getDaysUntil = () => {
-      if (!travelDate) return null;
-      const tripDate = new Date(travelDate);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      tripDate.setHours(0, 0, 0, 0);
-      const diffTime = tripDate - today;
-      return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    };
+    const getDaysUntil = () => daysUntilDate(travelDate);
     const daysUntilTrip = getDaysUntil();
     const normalizeStatus = (s) => (s || '').toUpperCase();
     const statusUp = normalizeStatus(booking.status);
@@ -744,11 +733,18 @@ export default function TravelDashboard() {
                     `${daysUntilTrip} days to go`}
               </div>
             )}
-            {daysUntilTrip !== null && daysUntilTrip < 0 && (
+            {/* "Trip Completed" only for a trip that could have been taken
+                (isCompletedTrip). It was shown under every past date - for a
+                reservation never ticketed, too. */}
+            {daysUntilTrip !== null && daysUntilTrip < 0 && (isCompletedTrip(booking) ? (
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold mt-3 bg-gray-50 text-gray-500 border border-gray-200">
                 <FaCheckCircle className="w-3 h-3" /> Trip Completed
               </div>
-            )}
+            ) : (
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold mt-3 bg-gray-50 text-gray-500 border border-gray-200">
+                <FaCalendarAlt className="w-3 h-3" /> Travel date passed
+              </div>
+            ))}
           </div>
 
           <div className="flex flex-col items-start sm:items-end gap-2">
@@ -787,7 +783,7 @@ export default function TravelDashboard() {
               <>
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                   {(booking.origin || booking.destination) && (
-                    <DetailCell label="Route">{booking.origin || 'N/A'} → {booking.destination || 'N/A'}</DetailCell>
+                    <DetailCell label="Route">{booking.origin || 'N/A'} {legs.length === 2 ? '⇄' : '→'} {booking.destination || 'N/A'}</DetailCell>
                   )}
                   {booking.departureDate && <DetailCell label="Departure">{fmtDate(booking.departureDate)}</DetailCell>}
                   {booking.returnDate && <DetailCell label="Return">{fmtDate(booking.returnDate)}</DetailCell>}
@@ -800,8 +796,13 @@ export default function TravelDashboard() {
                   )}
                 </div>
 
-                {/* Enriched Flight Details */}
-                {(booking.airlineName || booking.flightNumber || booking.departureTime || booking.duration || booking.pnr) && (
+                {/* Every flight, leg by leg, with its number, times and terminals.
+                    The grid below is for a booking that recorded none: it shows
+                    the first flight number beside the last arrival, which read
+                    as one non-stop flight. */}
+                {legs.length > 0 ? (
+                  <BookingItinerary legs={legs} variant="compact" className="mt-3" />
+                ) : (booking.airlineName || booking.flightNumber || booking.departureTime || booking.duration || booking.pnr) && (
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-3">
                     {(booking.airlineName || booking.flightNumber) && (
                       <DetailCell label="Airline / Flight">
@@ -915,7 +916,9 @@ export default function TravelDashboard() {
             <p className="text-base font-bold text-[#055B75]">
               {(() => {
                 const amt = parseFloat(booking.totalAmount || booking.total_amount || booking.amount || 0);
-                return amt > 0 ? <Price amount={amt} /> : <span className="text-gray-400 font-semibold text-sm">On request</span>;
+                // What was charged, in USD. <Price> converted it into the
+                // visitor's chosen currency, which is not what the card paid.
+                return amt > 0 ? formatUsd(amt) : <span className="text-gray-400 font-semibold text-sm">On request</span>;
               })()}
             </p>
           </div>
@@ -1029,13 +1032,10 @@ export default function TravelDashboard() {
                         const isFlight = (booking.type || '').toLowerCase() === 'flight'
                         let result
                         if (isFlight) {
-                          // Flight: cancel the real Amadeus order + ARC Pay refund + DB status
-                          const resp = await fetch(getApiUrl(`flights/order/${encodeURIComponent(ref)}`), {
-                            method: 'DELETE',
-                            headers: await authHeaders({ 'Content-Type': 'application/json' }),
-                            credentials: 'include'
-                          })
-                          result = await resp.json()
+                          // The same cancel Manage Booking makes, on the flights host
+                          // that reaches the airline: a minute to answer, and
+                          // plain-language errors instead of a raw response.
+                          result = await ArcPayService.cancelFlightBooking(ref, userEmail, 'Customer request')
                         } else {
                           // Non-flight: existing ARC Pay refund + DB status flow
                           result = await ArcPayService.cancelBooking(ref, userEmail, 'Customer request')
@@ -1054,6 +1054,9 @@ export default function TravelDashboard() {
                           loadBookings()
                         } else {
                           alert(result.error || result.message || 'Failed to cancel booking. Please try again.')
+                          // No answer in time: the cancel may have gone through.
+                          // The list shows what the booking says now.
+                          if (result.timedOut) loadBookings()
                         }
                       } catch (err) {
                         console.error('Cancel error:', err)
@@ -1203,28 +1206,28 @@ export default function TravelDashboard() {
           {request.inquiry_type === 'flight' && (
             <div className="text-sm text-gray-700 space-y-1">
               <p><strong className="text-[#055B75]">Route:</strong> {request.flight_origin} → {request.flight_destination}</p>
-              {request.flight_departure_date && <p><strong className="text-[#055B75]">Departure:</strong> {new Date(request.flight_departure_date).toLocaleDateString()}</p>}
+              {request.flight_departure_date && <p><strong className="text-[#055B75]">Departure:</strong> {fmtDate(request.flight_departure_date, { month: 'short', day: 'numeric', year: 'numeric' })}</p>}
               {request.flight_passengers && <p><strong className="text-[#055B75]">Passengers:</strong> {request.flight_passengers}</p>}
             </div>
           )}
           {request.inquiry_type === 'hotel' && (
             <div className="text-sm text-gray-700 space-y-1">
               <p><strong className="text-[#055B75]">Destination:</strong> {request.hotel_destination}</p>
-              {request.hotel_checkin_date && <p><strong className="text-[#055B75]">Check-in:</strong> {new Date(request.hotel_checkin_date).toLocaleDateString()}</p>}
+              {request.hotel_checkin_date && <p><strong className="text-[#055B75]">Check-in:</strong> {fmtDate(request.hotel_checkin_date, { month: 'short', day: 'numeric', year: 'numeric' })}</p>}
               {request.hotel_rooms && <p><strong className="text-[#055B75]">Rooms:</strong> {request.hotel_rooms}</p>}
             </div>
           )}
           {request.inquiry_type === 'cruise' && (
             <div className="text-sm text-gray-700 space-y-1">
               <p><strong className="text-[#055B75]">Destination:</strong> {request.cruise_destination}</p>
-              {request.cruise_departure_date && <p><strong className="text-[#055B75]">Departure:</strong> {new Date(request.cruise_departure_date).toLocaleDateString()}</p>}
+              {request.cruise_departure_date && <p><strong className="text-[#055B75]">Departure:</strong> {fmtDate(request.cruise_departure_date, { month: 'short', day: 'numeric', year: 'numeric' })}</p>}
               {request.cruise_passengers && <p><strong className="text-[#055B75]">Passengers:</strong> {request.cruise_passengers}</p>}
             </div>
           )}
           {request.inquiry_type === 'package' && (
             <div className="text-sm text-gray-700 space-y-1">
               <p><strong className="text-[#055B75]">Destination:</strong> {request.package_destination}</p>
-              {request.package_start_date && <p><strong className="text-[#055B75]">Start:</strong> {new Date(request.package_start_date).toLocaleDateString()}</p>}
+              {request.package_start_date && <p><strong className="text-[#055B75]">Start:</strong> {fmtDate(request.package_start_date, { month: 'short', day: 'numeric', year: 'numeric' })}</p>}
               {request.package_travelers && <p><strong className="text-[#055B75]">Travelers:</strong> {request.package_travelers}</p>}
             </div>
           )}

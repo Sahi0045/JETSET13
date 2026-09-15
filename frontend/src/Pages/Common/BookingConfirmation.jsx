@@ -4,19 +4,16 @@ import { CheckCircle, Ship, Plane, Calendar, CreditCard, ArrowLeft, Clock, MapPi
 import Navbar from './Navbar';
 import { attentionMessage, refundStatus } from '../../utils/bookingStatus';
 import { isPaid } from '../../utils/eTicket';
+import { daysUntilDate, formatCalendarDate } from '../../utils/dateUtils';
 import { cancellationMessage } from '../../../../shared/cancellationOutcome';
+import { bookingItineraries, returnDateOf } from '../../../../shared/bookingItineraries';
+import BookingItinerary from './flights/BookingItinerary';
+import { bookingChargeLines, formatUsd } from '../../utils/bookingCharge';
 
-// Helper function to calculate days until trip
-const getDaysUntilTrip = (dateStr) => {
-  if (!dateStr) return null;
-  const tripDate = new Date(dateStr);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  tripDate.setHours(0, 0, 0, 0);
-  const diffTime = tripDate - today;
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  return diffDays;
-};
+// Days until the trip, from the calendar day the booking names. Parsing
+// "2026-11-15" with `new Date` made it UTC midnight - the evening before, in
+// the US - so the countdown was a day short and the date printed a day early.
+const getDaysUntilTrip = (dateStr) => daysUntilDate(dateStr);
 
 // Format duration from ISO format
 const formatDuration = (duration) => {
@@ -82,6 +79,11 @@ function BookingConfirmation() {
   const isFlight = bookingData.type === 'flight';
   const isPackage = bookingData.type === 'package';
 
+  // Every leg and flight. This page read a `returnDate` nothing set and the
+  // first leg's flat fields, so a round trip's return flight was nowhere on it.
+  const legs = isFlight ? bookingItineraries(bookingData) : [];
+  const endDate = bookingData.returnDate || (isFlight ? returnDateOf(legs) : '') || bookingData.checkoutDate || bookingData.packageEndDate;
+
   // Get travel date for countdown
   const getTravelDate = () => {
     if (isFlight) return bookingData.departureDate || bookingData.flightData?.departureDate;
@@ -104,6 +106,9 @@ function BookingConfirmation() {
   // before those flags existed carries only `status`; no ticket has ever been
   // issued through this flow, so "held" is the honest reading for it too.
   // Non-flight bookings keep their original copy.
+  // Held for staff after a later booking step failed. The order page saved this
+  // as `needsReview` and this page read `needs_review`, so it never knew.
+  const heldForReview = Boolean(bookingData.needs_review || bookingData.needsReview);
   const statusUpper = String(bookingData.status || '').toUpperCase();
   const hasTickets = Array.isArray(bookingData.tickets) && bookingData.tickets.length > 0;
   // A flight row still `pending` with no PNR never reached the airline. My
@@ -128,7 +133,8 @@ function BookingConfirmation() {
       title: 'Booking Confirmed! 🎉',
       lead: 'Your flight is booked and your ticket has been issued.',
       badgeText: 'Ticketed',
-      mail: 'A confirmation email with your ticket details has been sent.',
+      // Not "has been sent": this page cannot know that an email went out.
+      mail: 'We email your ticket details to the address you booked with.',
     },
     held: {
       Icon: Clock,
@@ -137,7 +143,11 @@ function BookingConfirmation() {
       title: 'Reservation Held',
       lead: 'Your seats are reserved with the airline. Your ticket is being issued and is not ready yet.',
       badgeText: 'Ticket pending',
-      mail: 'A confirmation email has been sent. Your e-ticket will follow by email once it is issued; until then this reference is your proof of booking.',
+      // A booking held for staff was emailed nothing while this said "A
+      // confirmation email has been sent".
+      mail: heldForReview
+        ? 'Our team is finishing your ticket and will email you as soon as it is issued. Until then, this reference is your proof of booking.'
+        : 'We email your e-ticket to the address you booked with once it is issued. Until then, this reference is your proof of booking.',
     },
     queued: {
       Icon: Clock,
@@ -205,6 +215,8 @@ function BookingConfirmation() {
   // as "Total Paid USD 0.00" beside a green success tick.
   const paidAmount = parseFloat(bookingData.amount ?? bookingData.totalAmount);
   const hasAmount = Number.isFinite(paidAmount) && paidAmount > 0;
+  // Fare, service fee, discount: what checkout charged, line by line.
+  const charge = isFlight ? bookingChargeLines(bookingData) : null;
 
   // What the money did, not a constant: a cancelled booking said "Payment
   // received" beside a refund made - or one that failed - and so did one never
@@ -346,29 +358,19 @@ function BookingConfirmation() {
                       {isFlight ? 'Departure' : isHotel ? 'Check-in' : 'Start Date'}
                     </p>
                     <p className="text-sm font-bold text-gray-900">
-                      {new Date(getTravelDate()).toLocaleDateString('en-US', {
-                        weekday: 'short',
-                        month: 'short',
-                        day: 'numeric',
-                        year: 'numeric'
-                      })}
+                      {formatCalendarDate(getTravelDate())}
                     </p>
                   </div>
                 )}
 
                 {/* Return/End Date */}
-                {(bookingData.returnDate || bookingData.checkoutDate || bookingData.packageEndDate) && (
+                {endDate && (
                   <div className="bg-purple-50 rounded-xl p-4 border border-purple-100">
                     <p className="text-xs font-semibold text-purple-600 uppercase tracking-wider mb-1">
                       {isFlight ? 'Return' : isHotel ? 'Check-out' : 'End Date'}
                     </p>
                     <p className="text-sm font-bold text-gray-900">
-                      {new Date(bookingData.returnDate || bookingData.checkoutDate || bookingData.packageEndDate).toLocaleDateString('en-US', {
-                        weekday: 'short',
-                        month: 'short',
-                        day: 'numeric',
-                        year: 'numeric'
-                      })}
+                      {formatCalendarDate(endDate)}
                     </p>
                   </div>
                 )}
@@ -404,17 +406,29 @@ function BookingConfirmation() {
                 )}
 
                 {/* Class/Cabin Type */}
-                {(bookingData.travelClass || bookingData.cabinType || bookingData.roomType) && (
+                {/* The flight flow records `cabinClass`; only the other names were read. */}
+                {(bookingData.cabinClass || bookingData.travelClass || bookingData.cabinType || bookingData.roomType) && (
                   <div className="bg-amber-50 rounded-xl p-4 border border-amber-100">
                     <p className="text-xs font-semibold text-amber-600 uppercase tracking-wider mb-1">
                       {isFlight ? 'Class' : isHotel ? 'Room Type' : 'Cabin'}
                     </p>
                     <p className="text-sm font-bold text-gray-900 capitalize">
-                      {(bookingData.travelClass || bookingData.cabinType || bookingData.roomType || 'Standard').replace('_', ' ')}
+                      {String(bookingData.cabinClass || bookingData.travelClass || bookingData.cabinType || bookingData.roomType).toLowerCase().replace(/_/g, ' ')}
                     </p>
                   </div>
                 )}
               </div>
+
+              {/* Every leg and flight, with flight numbers, times and terminals. */}
+              {isFlight && legs.length > 0 && (
+                <div className="mb-6">
+                  <h4 className="text-md font-bold text-gray-900 mb-3 flex items-center gap-2">
+                    <Plane className="w-4 h-4 text-blue-600" />
+                    Your Flights
+                  </h4>
+                  <BookingItinerary legs={legs} />
+                </div>
+              )}
 
               {/* Booking Reference Section */}
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 mb-6 p-5 bg-gray-50 rounded-xl">
@@ -497,43 +511,19 @@ function BookingConfirmation() {
                   Payment Summary
                 </h4>
                 <div className="mb-4">
-                  {bookingData.fareBreakdown && (
+                  {/* What checkout charged, line by line. "Base Fare" was the
+                      total less taxes, which folded the service fee and any
+                      coupon discount into the fare. */}
+                  {charge && (
                     <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-4 text-sm">
-                      <div className="flex justify-between text-gray-600 mb-2">
-                        <span>Base Fare</span>
-                        <span>{bookingData.currency || 'USD'} {(() => {
-                          const fb = bookingData.fareBreakdown || {};
-                          const total = parseFloat(bookingData.amount || bookingData.totalAmount || 0);
-                          const taxes = parseFloat(fb.totalTax || 0);
-                          const addons = parseFloat(fb.addonsTotal || 0);
-                          const vip = parseFloat(fb.vipServiceFee || 0);
-                          const storedBase = parseFloat(fb.baseFare || 0);
-                          // Keep the breakdown consistent with the amount actually charged:
-                          // if base + taxes (+ extras) doesn't equal the total, derive base from the total.
-                          let base = storedBase;
-                          if (total > 0 && Math.abs((storedBase + taxes + addons + vip) - total) > 0.01) {
-                            const derived = total - taxes - addons - vip;
-                            if (derived >= 0) base = derived;
-                          }
-                          return base.toFixed(2);
-                        })()}</span>
-                      </div>
-                      <div className="flex justify-between text-gray-600 mb-2">
-                        <span>Taxes & Fees</span>
-                        <span>{bookingData.currency || 'USD'} {parseFloat(bookingData.fareBreakdown.totalTax || 0).toFixed(2)}</span>
-                      </div>
-                      {bookingData.fareBreakdown.addonsTotal > 0 && (
-                        <div className="flex justify-between text-gray-600 mb-2">
-                          <span>Add-ons</span>
-                          <span>{bookingData.currency || 'USD'} {parseFloat(bookingData.fareBreakdown.addonsTotal).toFixed(2)}</span>
+                      {charge.lines.map((line) => (
+                        <div key={line.label} className="flex justify-between gap-3 text-gray-600 mb-2">
+                          <span>{line.label}</span>
+                          <span className={line.amount < 0 ? 'text-emerald-700 whitespace-nowrap' : 'whitespace-nowrap'}>
+                            {line.amount < 0 ? `- ${formatUsd(-line.amount)}` : formatUsd(line.amount)}
+                          </span>
                         </div>
-                      )}
-                      {bookingData.fareBreakdown.vipServiceFee > 0 && (
-                        <div className="flex justify-between text-gray-600 mb-2">
-                          <span>VIP Services</span>
-                          <span>{bookingData.currency || 'USD'} {parseFloat(bookingData.fareBreakdown.vipServiceFee).toFixed(2)}</span>
-                        </div>
-                      )}
+                      ))}
                       <div className="border-t border-gray-300 my-2"></div>
                     </div>
                   )}

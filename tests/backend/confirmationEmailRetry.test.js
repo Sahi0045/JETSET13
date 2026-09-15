@@ -139,12 +139,15 @@ describe('which bookings are still owed their confirmation email', () => {
     expect(await owed(bookedRow({ payment_status: 'partially_refunded' }))).toBe(false);
   });
 
-  // The success path sends nothing for a booking the chain failed on after the
-  // PNR - "we will email you as soon as it is issued" is a human's promise.
-  it('owes a booking flagged for review nothing, unless the flag describes the booking as confirmed', async () => {
+  // A booking a person is sorting out for some other reason - a cancellation the
+  // airline refused, say - is owed nothing. One the order route held for staff
+  // after committing its PNR is owed the "held" email: see
+  // heldForReviewEmail.test.js.
+  it('owes a booking flagged for review nothing, unless the flag describes the booking as confirmed or held', async () => {
     const { UNTICKETED_REVIEW_REASON } = await import('../../backend/jobs/needsReviewAlert.job.js');
 
-    expect(await owed(bookedRow({ booking_details: { needs_review: { reason: 'chain failed after commit at issueTicket' } } }))).toBe(false);
+    expect(await owed(bookedRow({ booking_details: { needs_review: { reason: 'GDS cancellation failed; refund withheld to avoid paying out against a live booking' } } }))).toBe(false);
+    expect(await owed(bookedRow({ booking_details: { needs_review: { reason: 'chain failed after commit at issueTicket' } } }))).toBe(true);
     expect(await owed(bookedRow({ booking_details: { needs_review: { reason: 'ticket_numbers_not_retrieved' } } }))).toBe(true);
     expect(await owed(bookedRow({ booking_details: { needs_review: { reason: UNTICKETED_REVIEW_REASON, alerted_at: 'x' } } }))).toBe(true);
   });
@@ -237,7 +240,7 @@ describe('a retried order for a booking that is already made', () => {
   });
 
   it('sends nothing for a booking a human is sorting out', async () => {
-    const { app } = await appWith([bookedRow({ booking_details: { needs_review: { reason: 'chain failed after commit at issueTicket' } } })]);
+    const { app } = await appWith([bookedRow({ booking_details: { needs_review: { reason: 'GDS cancellation failed; refund withheld to avoid paying out against a live booking' } } })]);
 
     const res = await retry(app);
     await settle();

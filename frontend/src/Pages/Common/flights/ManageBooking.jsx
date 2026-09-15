@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { formatIsoDuration } from '../../../utils/dateUtils';
+import { daysUntilDate, formatCalendarDate, formatIsoDuration } from '../../../utils/dateUtils';
 import {
   ArrowLeft, Plane, User, CreditCard,
   AlertCircle, AlertTriangle, CheckCircle, Info, Phone, Mail, Edit3,
@@ -9,7 +9,10 @@ import {
 import Navbar from '../Navbar';
 import Footer from '../Footer';
 import FlightETicket from './FlightETicket';
-import { isPaid, ticketState } from '../../../utils/eTicket';
+import BookingItinerary from './BookingItinerary';
+import { bookingItineraries } from '../../../../../shared/bookingItineraries';
+import { formatUsd } from '../../../utils/bookingCharge';
+import { canDownloadDocument, isPaid, ticketState } from '../../../utils/eTicket';
 import { attentionMessage, bookingStatusBadge, cancellationMessage, refundStatus } from '../../../utils/bookingStatus';
 import { refundOutcome } from '../../../../../shared/cancellationOutcome';
 import ArcPayService from '../../../Services/ArcPayService';
@@ -30,21 +33,26 @@ function ManageBooking() {
   // "Failed to cancel booking. Please contact support."
   const [cancelledLocally, setCancelledLocally] = useState(false);
 
-  // If live data was passed from My Trips routing, use it; otherwise fetch via hook.
+  // What My Trips handed over is a snapshot from when its list loaded, and only
+  // a placeholder: the booking is always fetched by reference, and the fetched
+  // record replaces it. This page used to prefer the snapshot and not fetch at
+  // all, so a booking cancelled, ticketed or refunded since showed what it had
+  // been, even after a reload.
   const passedData = (location.state?.bookingData?.source !== 'localStorage') ? location.state?.bookingData : null;
   // A guest has no account to own the booking. They prove it is theirs with
   // the email it was made with - the reference alone is not enough. Without
   // this a guest's confirmation email linked to a page they could never open.
   const [lookupEmail, setLookupEmail] = useState('');
   const [submittedEmail, setSubmittedEmail] = useState(null);
-  const { data: fetchedBooking, isLoading: queryLoading, error: queryError } = useFlightBooking(bookingId, {
-    enabled: !passedData && !!bookingId,
+  const { data: fetchedBooking, isLoading: queryLoading, error: queryError, refetch } = useFlightBooking(bookingId, {
+    enabled: !!bookingId,
     email: submittedEmail,
+    placeholderData: passedData || undefined,
   });
   // What the cancel API said happened, once it has answered.
   const [cancelResult, setCancelResult] = useState(null);
   const bookingData = useMemo(() => {
-    const base = passedData || fetchedBooking || null;
+    const base = fetchedBooking || passedData || null;
     // The page's copy takes the cancellation record the server just returned,
     // so the tracker reads the same outcome as the banner - not an older
     // record, or none.
@@ -54,14 +62,52 @@ function ManageBooking() {
   }, [passedData, fetchedBooking, cancelledLocally, cancelResult]);
   const loading = !passedData && queryLoading;
   const error = !passedData && queryError ? queryError.message : (!bookingId && !passedData ? 'No booking ID provided' : null);
+  // The fetch failed but there is a snapshot to show: say it may be out of date.
+  const refreshFailed = Boolean(queryError && passedData);
 
   const [activeTab, setActiveTab] = useState('details');
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [cancelReason, setCancelReason] = useState('Change of plans');
 
+  // The cancel pop-up is a dialog: announced as one, focus kept inside it while
+  // open, Escape closes it, and focus goes back to the button that opened it.
+  // It was a plain overlay a keyboard or screen-reader user could tab straight
+  // out of.
+  const cancelDialogRef = React.useRef(null);
+  const cancelTriggerRef = React.useRef(null);
+
   const handleCancelBooking = () => {
+    cancelTriggerRef.current = document.activeElement;
     setShowCancelModal(true);
+  };
+
+  const closeCancelDialog = () => {
+    if (cancelling) return;
+    setShowCancelModal(false);
+    cancelTriggerRef.current?.focus?.();
+  };
+
+  const handleCancelDialogKeyDown = (event) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeCancelDialog();
+      return;
+    }
+    if (event.key !== 'Tab') return;
+    const focusable = Array.from(
+      cancelDialogRef.current?.querySelectorAll('button:not([disabled]), select:not([disabled]), a[href]') || []
+    );
+    if (focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
   };
 
   const confirmCancelBooking = async () => {
@@ -69,16 +115,41 @@ function ManageBooking() {
 
     setCancelling(true);
     try {
-      const bookingRef = bookingData.orderId || bookingData.bookingReference || bookingData.bookingDetails?.bookingId;
+      const bookingRef = bookingData.bookingReference || bookingData.orderId || bookingData.bookingDetails?.bookingId;
 
-      // Call the cancel-booking API
-      const result = await ArcPayService.cancelBooking(
+      // On the flights host, which can reach the airline (flightCancelPath).
+      // The payments endpoint this used cannot, and refuses a flight with a PNR.
+      const result = await ArcPayService.cancelFlightBooking(
         bookingRef,
         // The email the guest proved the booking with, first. A signed-in owner
         // needs none: the server takes them from the session.
         submittedEmail || bookingData.email || bookingData.bookingDetails?.contact?.email || null,
         cancelReason
       );
+
+      if (result.timedOut) {
+        // No answer in time is not a failed cancel: it may well have gone
+        // through. This used to show the raw "timeout of 10000ms exceeded"
+        // while the booking was being cancelled. Say we are checking, reload
+        // the booking, and show what it says now.
+        setShowCancelModal(false);
+        setCancelResult({ checking: true });
+        const refreshed = await refetch();
+        const now = refreshed?.isError ? null : refreshed?.data;
+        if (String(now?.status || '').toUpperCase() === 'CANCELLED') {
+          setCancelledLocally(true);
+          setCancelResult({ success: true, cancellation: now.cancellation || {} });
+        } else {
+          setCancelResult({
+            success: false,
+            unconfirmed: true,
+            error: now
+              ? 'We could not confirm the cancellation in time, and your booking still shows as active. It may still be going through: please check again in a few minutes, or call (877) 538-7380, before trying again.'
+              : 'We could not confirm the cancellation in time, or reload your booking. Please refresh this page in a few minutes, or call (877) 538-7380, before trying again.'
+          });
+        }
+        return;
+      }
 
       if (result.success) {
         // The server did it: the seat is released and the reversal, if any,
@@ -119,9 +190,29 @@ function ManageBooking() {
 
   const ticketRef = React.useRef(null);
 
+  // The cancel's outcome takes focus and scrolls into view when it arrives. It
+  // rendered at the bottom of the page - below the fold on a phone - so the
+  // pop-up closed and the customer saw nothing happen.
+  const cancelResultRef = React.useRef(null);
+  useEffect(() => {
+    if (!cancelResult) return;
+    cancelResultRef.current?.focus();
+    cancelResultRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+  }, [cancelResult]);
+
+  // Opening the dialog puts focus on its safe choice, "Keep Booking".
+  useEffect(() => {
+    if (showCancelModal) cancelDialogRef.current?.querySelector('[data-autofocus]')?.focus();
+  }, [showCancelModal]);
+
+  // Every leg and flight. The route card below shows the first leg's ends
+  // only; a round trip's return flight and each connection were nowhere here.
+  const itineraryLegs = bookingItineraries(bookingData);
+
   const downloadETicket = async () => {
-    // A cancelled booking has no document to hand out.
-    if (String(bookingData?.status || '').toUpperCase() === 'CANCELLED') return;
+    // Only a booking the airline holds has a document to hand out: not a
+    // cancelled one, and not one with no PNR (see canDownloadDocument).
+    if (!canDownloadDocument(bookingData)) return;
     if (!ticketRef.current) {
       alert("Ticket template not ready. Please wait and try again.");
       return;
@@ -229,6 +320,47 @@ function ManageBooking() {
     danger: { box: 'bg-red-50 border border-red-200', text: 'text-red-800', icon: 'text-red-600' },
     warning: { box: 'bg-amber-50 border border-amber-200', text: 'text-amber-900', icon: 'text-amber-600' },
     neutral: { box: 'bg-[#F0FAFC] border border-[#B9D0DC]', text: 'text-[#034457]', icon: 'text-[#055B75]' },
+  };
+
+  // Cancellation result. Worded by cancellationMessage, like the tracker below
+  // and the email, so one outcome reads the same everywhere. It was a green
+  // success banner whatever the refund did, and its own branches promised a
+  // shorter wait than the email did.
+  const RESULT_TONES = {
+    danger: 'bg-red-50 border border-red-200 text-red-800',
+    warning: 'bg-amber-50 border border-amber-200 text-amber-900',
+    success: 'bg-green-50 border border-green-200 text-green-800',
+    neutral: 'bg-[#F0FAFC] border border-[#B9D0DC] text-[#034457]',
+  };
+  const renderCancelResult = () => {
+    if (!cancelResult) return null;
+    const box = (tone, Icon, title, text) => (
+      <div
+        ref={cancelResultRef}
+        tabIndex={-1}
+        role={tone === 'danger' ? 'alert' : 'status'}
+        className={`mb-6 p-4 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[#055B75]/40 ${RESULT_TONES[tone]}`}
+      >
+        <div className="flex items-start gap-3">
+          <Icon className="w-5 h-5 mt-0.5 flex-shrink-0" />
+          <div>
+            <h2 className="font-semibold">{title}</h2>
+            <p className="text-sm mt-1">{text}</p>
+          </div>
+        </div>
+      </div>
+    );
+
+    if (cancelResult.checking) {
+      return box('neutral', Info, 'Checking your booking', 'We did not get an answer in time, so we are checking whether your booking was cancelled.');
+    }
+    if (!cancelResult.success) {
+      return box('danger', AlertCircle, cancelResult.unconfirmed ? 'Cancellation Not Confirmed' : 'Cancellation Error', cancelResult.error);
+    }
+    const outcome = refundOutcome(cancelResult.cancellation || {});
+    const tone = outcome === 'stuck' ? 'danger' : ['review', 'unknown'].includes(outcome) ? 'warning' : 'success';
+    return box(tone, outcome === 'stuck' ? AlertCircle : CheckCircle, 'Booking Cancelled',
+      cancellationMessage({ cancellation: cancelResult.cancellation }));
   };
 
   const renderStatusBanner = () => {
@@ -450,6 +582,15 @@ function ManageBooking() {
             </div>
           </div>
 
+          {refreshFailed && (
+            <p className="mb-4 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3">
+              We could not refresh this booking, so what you see may be out of date. Reload the page to try again.
+            </p>
+          )}
+
+          {/* What the cancel did, first thing on the page. */}
+          {renderCancelResult()}
+
           {/* Status Banner / Cancellation Tracker */}
           {renderStatusBanner()}
 
@@ -457,8 +598,11 @@ function ManageBooking() {
           <div className="flex flex-wrap gap-3 mb-6">
             {/* A cancelled booking offers no document. Its tickets were voided
                 or refunded with the airline, and a PDF of them is a travel
-                document for a flight the customer no longer holds. */}
-            {bookingData?.status?.toUpperCase() !== 'CANCELLED' && (
+                document for a flight the customer no longer holds. Nor does a
+                booking with no PNR - queued, never booked, held as a second
+                payment, or unpaid - whose "PNR: N/A" document said a seat was
+                held. */}
+            {canDownloadDocument(bookingData) && (
               <button
                 onClick={downloadETicket}
                 className="flex items-center bg-[#055B75] text-white px-4 py-2 rounded-lg hover:bg-[#034457] transition"
@@ -472,7 +616,9 @@ function ManageBooking() {
             )}
 
             {bookingData?.status?.toUpperCase() !== 'CANCELLED' && 
-             (!bookingData?.departureDate || new Date(bookingData.departureDate) >= new Date(new Date().setHours(0,0,0,0))) && (
+             // From the calendar day the booking names. `new Date(departureDate)`
+             // was UTC midnight, so in the US Cancel vanished a day early.
+             (daysUntilDate(bookingData?.departureDate) ?? 0) >= 0 && (
               <>
                 {/* Changes are made by the support team; there is no
                     self-serve change flow. This button used to open an alert
@@ -540,7 +686,8 @@ function ManageBooking() {
                     </div>
                     <div className="border-r-0 md:border-r border-gray-200 pr-0 md:pr-4">
                       <label className="text-sm font-medium text-gray-500 block mb-1">Amount Paid</label>
-                      <p className="text-lg font-semibold">{bookingData?.currency || 'USD'} {bookingData?.amount || 'N/A'}</p>
+                      {/* "USD 512.4" was the raw number beside a currency code. */}
+                      <p className="text-lg font-semibold">{Number(bookingData?.amount) > 0 ? formatUsd(bookingData.amount) : 'Not recorded'}</p>
                     </div>
                     <div>
                       <label className="text-sm font-medium text-gray-500 block mb-1">Transaction ID</label>
@@ -564,7 +711,7 @@ function ManageBooking() {
                           {bookingData?.departureTime || bookingData?.flight?.departureTime || '--:--'}
                         </div>
                         <div className="text-xs text-gray-500">
-                          {bookingData?.departureDate ? new Date(bookingData.departureDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Date N/A'}
+                          {formatCalendarDate(bookingData?.departureDate, { month: 'short', day: 'numeric', year: 'numeric' }, 'Date N/A')}
                         </div>
                       </div>
 
@@ -598,9 +745,7 @@ function ManageBooking() {
                         <div className="text-xs text-gray-500">
                           {/* The arrival date. This printed the departure date,
                               wrong for every overnight flight. */}
-                          {(bookingData?.arrivalDate || bookingData?.arrival_date)
-                            ? new Date(bookingData.arrivalDate || bookingData.arrival_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-                            : 'Date N/A'}
+                          {formatCalendarDate(bookingData?.arrivalDate || bookingData?.arrival_date, { month: 'short', day: 'numeric', year: 'numeric' }, 'Date N/A')}
                         </div>
                       </div>
                     </div>
@@ -647,6 +792,8 @@ function ManageBooking() {
                       </div>
                     )}
                   </div>
+
+                  <BookingItinerary legs={itineraryLegs} />
                 </div>
               </div>
             )}
@@ -728,7 +875,7 @@ function ManageBooking() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="text-sm font-medium text-gray-500">Total Amount</label>
-                      <p className="text-xl font-bold text-green-600">{bookingData?.currency || 'USD'} {bookingData?.amount || 'N/A'}</p>
+                      <p className="text-xl font-bold text-green-600">{Number(bookingData?.amount) > 0 ? formatUsd(bookingData.amount) : 'Not recorded'}</p>
                     </div>
                     <div>
                       <label className="text-sm font-medium text-gray-500">Payment Status</label>
@@ -788,48 +935,22 @@ function ManageBooking() {
         </div>
       </div>
 
-      {/* Cancellation result. Worded by cancellationMessage, like the tracker
-          above and the email, so one outcome reads the same everywhere. It was
-          a green success banner whatever the refund did, and its own branches
-          promised a shorter wait than the email did. */}
-      {cancelResult && (() => {
-        if (!cancelResult.success) {
-          return (
-            <div className="mx-4 sm:mx-8 mb-6 p-4 rounded-lg bg-red-50 border border-red-200">
-              <div className="flex items-start gap-3">
-                <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
-                <div>
-                  <h4 className="font-semibold text-red-800">Cancellation Error</h4>
-                  <p className="text-red-700 text-sm mt-1">{cancelResult.error}</p>
-                </div>
-              </div>
-            </div>
-          );
-        }
-        const outcome = refundOutcome(cancelResult.cancellation || {});
-        const tone = outcome === 'stuck' ? 'bg-red-50 border border-red-200 text-red-800'
-          : ['review', 'unknown'].includes(outcome) ? 'bg-amber-50 border border-amber-200 text-amber-900'
-            : 'bg-green-50 border border-green-200 text-green-800';
-        return (
-          <div className={`mx-4 sm:mx-8 mb-6 p-4 rounded-lg ${tone}`}>
-            <div className="flex items-start gap-3">
-              {outcome === 'stuck'
-                ? <AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0" />
-                : <CheckCircle className="w-5 h-5 mt-0.5 flex-shrink-0" />}
-              <div>
-                <h4 className="font-semibold">Booking Cancelled</h4>
-                <p className="text-sm mt-1">{cancellationMessage({ cancellation: cancelResult.cancellation })}</p>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
-
       {/* Cancel Booking Modal */}
       {showCancelModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold mb-4">Cancel Booking</h3>
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          onMouseDown={(event) => { if (event.target === event.currentTarget) closeCancelDialog(); }}
+        >
+          <div
+            ref={cancelDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cancel-booking-title"
+            aria-describedby="cancel-booking-description"
+            onKeyDown={handleCancelDialogKeyDown}
+            className="bg-white rounded-lg p-6 max-w-md w-full max-h-[90vh] overflow-y-auto"
+          >
+            <h3 id="cancel-booking-title" className="text-lg font-semibold mb-4">Cancel Booking</h3>
 
             {/* Cancellation Fee Warning */}
             <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
@@ -854,14 +975,15 @@ function ManageBooking() {
               </div>
             </div>
 
-            <p className="text-gray-600 mb-4">
+            <p id="cancel-booking-description" className="text-gray-600 mb-4">
               Are you sure you want to cancel this booking? This action cannot be undone.
             </p>
 
             {/* Cancel Reason */}
             <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Reason for cancellation</label>
+              <label htmlFor="cancel-booking-reason" className="block text-sm font-medium text-gray-700 mb-2">Reason for cancellation</label>
               <select
+                id="cancel-booking-reason"
                 value={cancelReason}
                 onChange={(e) => setCancelReason(e.target.value)}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#0890BC] focus:border-[#0890BC]"
@@ -877,7 +999,8 @@ function ManageBooking() {
 
             <div className="flex gap-3">
               <button
-                onClick={() => setShowCancelModal(false)}
+                data-autofocus
+                onClick={closeCancelDialog}
                 disabled={cancelling}
                 className="flex-1 bg-gray-200 text-gray-800 py-2 px-4 rounded-lg hover:bg-gray-300 transition disabled:opacity-50"
               >
@@ -895,6 +1018,10 @@ function ManageBooking() {
                 )}
               </button>
             </div>
+            {/* Cancelling with the airline and refunding can take a while. */}
+            {cancelling && (
+              <p className="text-xs text-gray-500 mt-3">This can take up to a minute. Please keep this page open.</p>
+            )}
           </div>
         </div>
       )}

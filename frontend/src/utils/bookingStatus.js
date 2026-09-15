@@ -168,3 +168,22 @@ export function bookingStatusBadge(booking) {
     tone: 'neutral',
   };
 }
+
+/**
+ * Whether a trip whose date has passed may be called completed.
+ *
+ * My Trips said "Trip Completed" under every past travel date, including a
+ * reservation never ticketed, a booking still queued and a checkout never paid
+ * for. A flight booked here is completed only once a ticket was issued; a trip
+ * our team booked from a quote, or any other kind of booking, only once it was
+ * confirmed or paid. A cancelled booking never is.
+ */
+export function isCompletedTrip(booking) {
+  const status = String(booking?.status || '').toLowerCase();
+  if (status === 'cancelled') return false;
+  const type = String(booking?.type ?? booking?.travel_type ?? '').toLowerCase();
+  if (type === 'flight' && !booking?.quoteId && !booking?.inquiryId) {
+    return ['issued', 'pending'].includes(ticketState(booking));
+  }
+  return ['confirmed', 'paid'].includes(status);
+}

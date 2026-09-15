@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { makeOrderRef } from '../../../utils/orderRef';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Lock, CheckCircle, Loader, AlertCircle, Check, Clock
@@ -11,6 +10,8 @@ import withPageElements from '../PageWrapper';
 import { endpoints } from '@/config/api';
 import { useSupabaseAuth } from '../../../contexts/SupabaseAuthContext';
 import { buildFlightOrderBody } from '../../../../../shared/flightOrderBody';
+import { itinerariesFromOffer, returnDateOf } from '../../../../../shared/bookingItineraries';
+import { clearStoredBookings } from '../../../utils/bookingStorage';
 
 /**
  * Failures where the reference the user is holding can never be completed: the
@@ -30,7 +31,34 @@ const TERMINAL_ERROR_CODES = new Set([
   'PASSENGER_COUNT_MISMATCH', // more travellers than the fare was priced for
   'PAYER_NOT_VERIFIED',   // this browser cannot prove it made the payment
   'ORDER_FAILED',         // an unexpected error; the payment was reversed or flagged
+  'BOOKING_FAILED',       // the booking failed after payment; the payment was reversed or is being refunded
+  'BOOKING_NEEDS_REVIEW', // the booking failed and our team is sorting out the payment by hand
 ]);
+
+/**
+ * BOOKING_IN_PROGRESS means another request - an earlier tab, a double click,
+ * the booking queue - holds this booking and is confirming it now. It showed a
+ * red "Booking Failed". The page asks again this many times, this far apart,
+ * then says the booking is still being confirmed.
+ */
+const IN_PROGRESS_RETRIES = 4;
+const IN_PROGRESS_RETRY_MS = 8000;
+
+/**
+ * PAYMENT_NOT_CAPTURED with `retryable: true` means the server could not reach
+ * the payment gateway to check, not that the payment failed. The page asks
+ * again this many times, this far apart, before offering to check again.
+ */
+const PAYMENT_CHECK_RETRIES = 3;
+const PAYMENT_CHECK_RETRY_MS = 15000;
+
+/**
+ * BOOKING_UNAVAILABLE with `retryable: true`: the booking could not be started
+ * just then - the database or the queue did not answer - and nothing was sold.
+ * Asked again this many times, this far apart, before offering "Try again".
+ */
+const UNAVAILABLE_RETRIES = 3;
+const UNAVAILABLE_RETRY_MS = 15000;
 
 /**
  * What the server actually did with the order. Drives every word on this
@@ -49,6 +77,15 @@ function outcomeOf(body) {
   return 'held';
 }
 
+/** The payment reference checkout left in this browser, if any. */
+function storedPaymentReference() {
+  try {
+    return JSON.parse(localStorage.getItem('pendingPaymentSession') || 'null')?.orderId || null;
+  } catch {
+    return null;
+  }
+}
+
 function FlightCreateOrders() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -62,8 +99,36 @@ function FlightCreateOrders() {
   // problem from a terminal one. Sending someone back to a payment they already
   // made - and that was already refunded - can only fail again.
   const [errorCode, setErrorCode] = useState(null);
+  // Set when the server tried to reverse the payment because the booking failed
+  // (`bookingFailed: true`), with whether the reversal went through. Several of
+  // those answers carry no `code`, so this screen offered "Try again" on a
+  // payment that had already been reversed.
+  const [refundAttempt, setRefundAttempt] = useState(null);
+  // The payment reference this page is booking, for any screen that has to
+  // name it before the server has answered with one.
+  const [orderReference, setOrderReference] = useState('');
+  // Set while another request confirms this booking (BOOKING_IN_PROGRESS):
+  // { gaveUp, cancelling }. The same order is sent again, which the server
+  // answers once whichever request gets there first.
+  const [stillConfirming, setStillConfirming] = useState(null);
+  // Set when the server found no captured payment (PAYMENT_NOT_CAPTURED or
+  // PAYMENT_NOT_FOUND): { retryable, gaveUp }.
+  const [paymentProblem, setPaymentProblem] = useState(null);
+  const paymentCheckAttempts = useRef(0);
+  // Set when this page has nothing to book: { reference } - the payment
+  // reference, when one survived.
+  const [missingOrder, setMissingOrder] = useState(null);
+  // Waiting to try a BOOKING_UNAVAILABLE order again.
+  const [retryingUnavailable, setRetryingUnavailable] = useState(false);
+  const unavailableAttempts = useRef(0);
+  const orderDataRef = useRef(null);
+  const inProgressAttempts = useRef(0);
+  const retryTimer = useRef(null);
+  useEffect(() => () => clearTimeout(retryTimer.current), []);
   const [bookingReference, setBookingReference] = useState('');
   const [pnr, setPnr] = useState('');
+  // Held for staff: the airline took the booking, then a later step failed.
+  const [heldForReview, setHeldForReview] = useState(false);
   const [pageLoaded, setPageLoaded] = useState(false);
 
   // Ref guard to prevent duplicate order processing (React StrictMode can cause double renders)
@@ -112,7 +177,9 @@ function FlightCreateOrders() {
             // verifies the payment against ARC Pay itself, so the old
             // client-side "verified" flag proved nothing and is gone.
             transactionId: orderData?.transactionId || sessionData?.sessionId || null,
-            orderId: orderData?.orderId || sessionData?.orderId || makeOrderRef('FLT'),
+            // Never invented. A made-up reference matches no payment, so the
+            // order was refused and the customer's real payment was not named.
+            orderId: orderData?.orderId || sessionData?.orderId || null,
             amount: bookingData?.amount || orderData?.amount || sessionData?.amount || null,
 
             // Flight data from localStorage
@@ -134,18 +201,21 @@ function FlightCreateOrders() {
       }
     }
 
-    // Final check - if we still don't have critical data, redirect
+    // Final check. With nothing to book - the page opened again after the tab
+    // lost its state, from a link, or with storage cleared - this said "Booking
+    // data not found. Please start your booking again" and sent the customer to
+    // search, whether or not they had just paid. Say what is known instead: the
+    // payment reference, if one survived, and what happens next.
     const finalHasCriticalData = orderData?.selectedFlight || orderData?.originalOffer || orderData?.passengerData;
 
-    if (orderData && finalHasCriticalData) {
+    if (orderData && finalHasCriticalData && orderData.orderId) {
       console.log('📝 Processing order with data:', orderData);
       // Mark as processed to prevent duplicate calls (React StrictMode / re-renders)
       orderProcessedRef.current = true;
       processFlightOrder(orderData);
     } else {
-      console.log('❌ No valid order data found - redirecting to flights page');
-      setError('Booking data not found. Please start your booking again.');
-      setTimeout(() => navigate('/flights'), 3000);
+      console.log('❌ No order to confirm on this page');
+      setMissingOrder({ reference: orderData?.orderId || storedPaymentReference() });
     }
     setLoading(false);
     const timer = setTimeout(() => setPageLoaded(true), 100);
@@ -158,6 +228,9 @@ function FlightCreateOrders() {
     setProcessingOrder(true);
     setError(null);
     setErrorCode(null);
+    setRefundAttempt(null);
+    setOrderReference(orderData?.orderId || '');
+    orderDataRef.current = orderData;
 
     try {
       // The same builder the abandoned-checkout job uses to finish a booking
@@ -223,6 +296,13 @@ function FlightCreateOrders() {
         setOrderSuccess(true);
         setBookingReference(reference);
         setPnr(pnrValue);
+        setHeldForReview(needsReview);
+        setStillConfirming(null);
+        inProgressAttempts.current = 0;
+        setPaymentProblem(null);
+        paymentCheckAttempts.current = 0;
+        setRetryingUnavailable(false);
+        unavailableAttempts.current = 0;
 
         const orderDetails = {
           reference,
@@ -240,6 +320,12 @@ function FlightCreateOrders() {
         const itinerary = flightData.itineraries?.[0] || orderData.originalOffer?.itineraries?.[0] || {};
         const firstSegment = itinerary.segments?.[0] || {};
         const lastSegment = itinerary.segments?.[itinerary.segments?.length - 1] || firstSegment;
+
+        // Every leg and flight of the offer booked. The fields below read only
+        // `itineraries[0]`, so the confirmation page never showed a round
+        // trip's return flight, and showed a connection as its first flight
+        // number beside its last arrival.
+        const legs = itinerariesFromOffer(orderData.originalOffer || flightData.originalOffer || flightData);
 
         // Format travelers properly for display
         const formattedTravelers = (orderDetails.travelers || orderData.passengerData || []).map(traveler => {
@@ -269,6 +355,10 @@ function FlightCreateOrders() {
           ticketed: result === 'ticketed',
           tickets: Array.isArray(body.tickets) ? body.tickets : [],
           needsReview,
+          // The name the confirmation page and bookingStatus read. Saving only
+          // `needsReview` meant the "our team is finishing your ticket" line
+          // never showed there.
+          needs_review: needsReview ? { reason: null } : null,
           mode: body.mode || null,
           message: body.message || '',
           // Include formatted travelers
@@ -292,43 +382,17 @@ function FlightCreateOrders() {
           passengers: formattedTravelers.length || 1,
           passengerData: passengerDetails, // Store full passenger details
           fareBreakdown: fareBreakdown,    // Store fare breakdown for confirmation page
-          contact: orderData.bookingDetails?.contact // Store contact info
+          contact: orderData.bookingDetails?.contact, // Store contact info
+          itineraries: legs,
+          returnDate: returnDateOf(legs)
         };
 
-        console.log('📝 Saving completed flight booking:', completedFlightBooking);
-        // Store as array so previous bookings are not overwritten
-        let existingBookings = [];
-        try {
-          const raw = localStorage.getItem('completedFlightBookings');
-          if (raw) {
-            const parsed = JSON.parse(raw);
-            existingBookings = Array.isArray(parsed) ? parsed : [parsed];
-          } else {
-            // Migrate legacy single-booking key if it exists
-            const legacy = localStorage.getItem('completedFlightBooking');
-            if (legacy) {
-              const legacyParsed = JSON.parse(legacy);
-              existingBookings = Array.isArray(legacyParsed) ? legacyParsed : [legacyParsed];
-            }
-          }
-        } catch (e) { /* ignore parse errors */ }
-        // Avoid duplicates by booking reference
-        // A queued booking has no PNR yet; null === null must not make two
-        // different queued bookings look like one.
-        const isDuplicate = existingBookings.some(b =>
-          b.bookingReference === completedFlightBooking.bookingReference ||
-          (completedFlightBooking.pnr && b.pnr === completedFlightBooking.pnr)
-        );
-        if (!isDuplicate) {
-          existingBookings.push(completedFlightBooking);
-        }
-        // Keep last 50 bookings max to avoid localStorage bloat
-        if (existingBookings.length > 50) {
-          existingBookings = existingBookings.slice(-50);
-        }
-        localStorage.setItem('completedFlightBookings', JSON.stringify(existingBookings));
-        // Also keep legacy key for backward compat (latest booking)
-        localStorage.setItem('completedFlightBooking', JSON.stringify(completedFlightBooking));
+        // Nothing is kept in this browser. `completedFlightBookings` and
+        // `completedFlightBooking` held every traveller's passport number and
+        // date of birth, for every booking, and no page read them. The review
+        // page's draft is removed too, now the order has an answer; the
+        // booking itself is on the server and in router state below.
+        clearStoredBookings();
 
         // Hand the booking over in router state. The confirmation page used
         // to re-read localStorage, which is shared across tabs and could
@@ -344,10 +408,73 @@ function FlightCreateOrders() {
       console.error('Error response data:', error.response?.data);
       console.error('Error status:', error.response?.status);
 
+      // The server answered, so the draft with the travellers' documents has
+      // done its job: any retry from here resends what this page holds in
+      // memory. Kept only when no answer came, as a dropped connection is
+      // retried by reloading this page.
+      if (error.response) clearStoredBookings();
+
+      if (error.response?.data?.code === 'BOOKING_IN_PROGRESS') {
+        // Not a failure: the request holding this booking is confirming it.
+        // Ask again shortly, a few times. A booking being cancelled will not
+        // become confirmed, so that one is said once and not asked again.
+        const cancelling = /cancel/i.test(error.response.data.error || '');
+        inProgressAttempts.current += 1;
+        const gaveUp = cancelling || inProgressAttempts.current > IN_PROGRESS_RETRIES;
+        setErrorCode('BOOKING_IN_PROGRESS');
+        setError(error.response.data.error || null);
+        setStillConfirming({ gaveUp, cancelling });
+        if (!gaveUp) {
+          retryTimer.current = setTimeout(() => processFlightOrder(orderDataRef.current), IN_PROGRESS_RETRY_MS);
+        }
+        return;
+      }
+      setStillConfirming(null);
+
+      const failureCode = error.response?.data?.code;
+      if (failureCode === 'PAYMENT_NOT_CAPTURED' || failureCode === 'PAYMENT_NOT_FOUND') {
+        // Nothing was booked because no captured payment was found. That is not
+        // a failed booking, and "Try again" reloaded the same refusal for ever.
+        // When the gateway could not be reached (`retryable`), ask again after
+        // a short wait; otherwise the payment did not complete.
+        const retryable = error.response.data.retryable === true;
+        setErrorCode(failureCode);
+        setError(error.response.data.error || null);
+        if (retryable) {
+          paymentCheckAttempts.current += 1;
+          const gaveUp = paymentCheckAttempts.current > PAYMENT_CHECK_RETRIES;
+          setPaymentProblem({ retryable: true, gaveUp });
+          if (!gaveUp) {
+            retryTimer.current = setTimeout(() => processFlightOrder(orderDataRef.current), PAYMENT_CHECK_RETRY_MS);
+          }
+        } else {
+          setPaymentProblem({ retryable: false, gaveUp: true });
+        }
+        return;
+      }
+      setPaymentProblem(null);
+
+      if (failureCode === 'BOOKING_UNAVAILABLE' && error.response.data.retryable === true) {
+        // Nothing was sold and nothing is wrong with the payment: the booking
+        // could not be started just then. Try again shortly, a few times,
+        // before leaving it to the customer's own "Try again".
+        unavailableAttempts.current += 1;
+        if (unavailableAttempts.current <= UNAVAILABLE_RETRIES) {
+          setErrorCode(failureCode);
+          setError(error.response.data.error || null);
+          setRetryingUnavailable(true);
+          retryTimer.current = setTimeout(() => processFlightOrder(orderDataRef.current), UNAVAILABLE_RETRY_MS);
+          return;
+        }
+      }
+      setRetryingUnavailable(false);
+
       // Extract more detailed error message with priority order
       let errorMessage = 'Failed to process order';
 
       setErrorCode(error.response?.data?.code || error.code || null);
+      const failure = error.response?.data;
+      setRefundAttempt(failure?.bookingFailed === true ? { refunded: failure.refunded === true } : null);
 
       if (error.response?.data) {
         // Backend returned structured error
@@ -474,7 +601,7 @@ function FlightCreateOrders() {
           <div className="max-w-2xl mx-auto">
             <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 sm:p-8">
               <div className="text-center">
-                {processingOrder ? (
+                {processingOrder && !stillConfirming && !paymentProblem && !retryingUnavailable ? (
                   <div className="space-y-4">
                     <div className="mx-auto w-16 h-16 rounded-full border-4 border-blue-50 flex items-center justify-center">
                       <Loader className="w-8 h-8 text-blue-600 animate-spin" />
@@ -521,7 +648,12 @@ function FlightCreateOrders() {
                         </div>
                         <h2 className="text-xl font-semibold text-gray-800">Reservation Held</h2>
                         <p className="text-gray-600">
-                          Your seats are reserved with the airline and your ticket is being issued. We'll email your e-ticket as soon as it is ready.
+                          {heldForReview
+                            // A later step failed after the airline took the
+                            // booking. "Your ticket is being issued" was not
+                            // true of it.
+                            ? 'Your seats are reserved with the airline, but your ticket could not be issued automatically. Our team is finishing it and will email you when it is done.'
+                            : 'Your seats are reserved with the airline. Your ticket has not been issued yet; we will email it to you once it is.'}
                         </p>
                       </>
                     )}
@@ -545,6 +677,150 @@ function FlightCreateOrders() {
                       <p className="text-sm text-gray-600">
                         Redirecting to your booking confirmation...
                       </p>
+                    </div>
+                  </div>
+                ) : stillConfirming ? (
+                  // BOOKING_IN_PROGRESS: another request is confirming this
+                  // booking now. This was a red "Booking Failed".
+                  <div className="space-y-4" role="status">
+                    <div className="mx-auto w-16 h-16 rounded-full bg-blue-50 flex items-center justify-center">
+                      {stillConfirming.gaveUp
+                        ? <Clock className="w-8 h-8 text-blue-600" />
+                        : <Loader className="w-8 h-8 text-blue-600 animate-spin" />}
+                    </div>
+                    <h2 className="text-xl font-semibold text-gray-800">
+                      {stillConfirming.cancelling ? 'This booking is being cancelled'
+                        : stillConfirming.gaveUp ? 'Your booking is still being confirmed'
+                          : 'Still confirming your booking'}
+                    </h2>
+                    <p className="text-gray-600">
+                      {stillConfirming.cancelling
+                        ? (error || 'This booking is being cancelled, so it cannot be confirmed.')
+                        : stillConfirming.gaveUp
+                          ? "It is taking longer than usual. You don't need to pay or try again: we will email you as soon as the airline confirms it, and it will show in My Trips."
+                          : 'Your booking is already being confirmed with the airline, perhaps from an earlier attempt. We will check on it again in a few seconds.'}
+                    </p>
+                    {orderReference && (
+                      <p className="text-sm text-gray-500">
+                        Booking reference: <span className="font-semibold text-gray-800">{orderReference}</span>
+                      </p>
+                    )}
+                    {stillConfirming.gaveUp && (
+                      <div className="pt-2">
+                        <button
+                          onClick={() => navigate(authUser ? '/my-trips' : '/')}
+                          className="w-full py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+                        >
+                          {authUser ? 'Go to My Trips' : 'Back to home'}
+                        </button>
+                        <p className="text-sm text-gray-500 mt-3">Questions? Call (877) 538-7380.</p>
+                      </div>
+                    )}
+                  </div>
+                ) : paymentProblem ? (
+                  // No captured payment was found, so nothing was booked. This
+                  // was "Booking Failed" with a "Try again" that reloaded the
+                  // same refusal for ever.
+                  <div className="space-y-4" role="status">
+                    <div className="mx-auto w-16 h-16 rounded-full bg-amber-50 flex items-center justify-center">
+                      {paymentProblem.retryable && !paymentProblem.gaveUp
+                        ? <Loader className="w-8 h-8 text-amber-600 animate-spin" />
+                        : <AlertCircle className="w-8 h-8 text-amber-600" />}
+                    </div>
+                    <h2 className="text-xl font-semibold text-gray-800">
+                      {!paymentProblem.retryable ? 'Payment not completed'
+                        : paymentProblem.gaveUp ? 'We could not check your payment'
+                          : 'Checking your payment'}
+                    </h2>
+                    <p className="text-gray-600">
+                      {!paymentProblem.retryable
+                        ? 'Your payment did not go through, so nothing has been booked. You can go back to your trip and pay again, or start a new search.'
+                        : paymentProblem.gaveUp
+                          ? 'The payment gateway is not answering right now, so we could not confirm your payment or book your flight. If your card was charged, we will confirm your booking or refund you by email. You can also check again in a few minutes.'
+                          : 'We could not reach the payment gateway to confirm your payment. We will check again in a few seconds; please keep this page open.'}
+                    </p>
+                    {orderReference && (
+                      <p className="text-sm text-gray-500">
+                        Payment reference: <span className="font-semibold text-gray-800">{orderReference}</span>
+                      </p>
+                    )}
+                    {paymentProblem.gaveUp && (
+                      <div className="pt-2 space-y-3">
+                        {paymentProblem.retryable ? (
+                          <button
+                            onClick={() => {
+                              paymentCheckAttempts.current = 0;
+                              setPaymentProblem(null);
+                              processFlightOrder(orderDataRef.current);
+                            }}
+                            className="w-full py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+                          >
+                            Check again
+                          </button>
+                        ) : (orderDataRef.current?.selectedFlight || orderDataRef.current?.flightData) && (
+                          // The review page, with the flight they were paying
+                          // for: checkout prices it again and takes a new payment.
+                          <button
+                            onClick={() => navigate('/flights/booking-confirmation', {
+                              state: { flightData: orderDataRef.current.selectedFlight || orderDataRef.current.flightData },
+                            })}
+                            className="w-full py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+                          >
+                            Back to your trip
+                          </button>
+                        )}
+                        <button
+                          onClick={() => navigate('/flights')}
+                          className="w-full py-3 bg-white text-blue-700 border border-blue-200 rounded-lg font-semibold hover:bg-blue-50 transition-colors"
+                        >
+                          Search flights
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ) : retryingUnavailable ? (
+                  // BOOKING_UNAVAILABLE: nothing sold, payment safe; trying again.
+                  <div className="space-y-4" role="status">
+                    <div className="mx-auto w-16 h-16 rounded-full bg-blue-50 flex items-center justify-center">
+                      <Loader className="w-8 h-8 text-blue-600 animate-spin" />
+                    </div>
+                    <h2 className="text-xl font-semibold text-gray-800">Starting your booking</h2>
+                    <p className="text-gray-600">
+                      We could not start your booking just now. Your payment is safe, and we will try again in a few seconds; please keep this page open.
+                    </p>
+                    {orderReference && (
+                      <p className="text-sm text-gray-500">
+                        Booking reference: <span className="font-semibold text-gray-800">{orderReference}</span>
+                      </p>
+                    )}
+                  </div>
+                ) : missingOrder ? (
+                  // Nothing to book on this page. Never "start your booking
+                  // again": this customer may have just paid.
+                  <div className="space-y-4" role="status">
+                    <div className="mx-auto w-16 h-16 rounded-full bg-amber-50 flex items-center justify-center">
+                      <Clock className="w-8 h-8 text-amber-600" />
+                    </div>
+                    <h2 className="text-xl font-semibold text-gray-800">
+                      {missingOrder.reference ? 'We received your payment reference' : 'No booking in progress on this page'}
+                    </h2>
+                    <p className="text-gray-600">
+                      {missingOrder.reference
+                        ? `Your payment reference is ${missingOrder.reference}. We could not load your booking details on this page, but you do not need to book again: we will confirm your booking or refund you by email.`
+                        : 'We could not find a booking in progress on this page. If you completed a payment, we will email you about it, and your booking will appear in My Trips.'}
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      Questions? Call <a href="tel:+18775387380" className="font-semibold text-blue-700">(877) 538-7380</a> or email{' '}
+                      <a href="mailto:support@jetsetterss.com" className="font-semibold text-blue-700 break-all">support@jetsetterss.com</a>
+                      {missingOrder.reference ? ' with this reference.' : '.'}
+                    </p>
+                    <div className="pt-2">
+                      <button
+                        onClick={() => navigate(authUser ? '/my-trips' : '/')}
+                        className="w-full py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+                      >
+                        {authUser ? 'Go to My Trips' : 'Back to home'}
+                      </button>
                     </div>
                   </div>
                 ) : errorCode === 'DUPLICATE_PAYMENT' ? (
@@ -574,15 +850,25 @@ function FlightCreateOrders() {
                     <div className="mx-auto w-16 h-16 rounded-full bg-red-50 flex items-center justify-center">
                       <AlertCircle className="w-8 h-8 text-red-600" />
                     </div>
-                    <h2 className="text-xl font-semibold text-gray-800">Booking Failed</h2>
+                    <h2 className="text-xl font-semibold text-gray-800">{refundAttempt ? 'Booking Not Completed' : 'Booking Failed'}</h2>
                     <p className="text-gray-600">
                       We encountered an issue while creating your flight booking.
                     </p>
                     <div className="bg-red-50 text-red-700 p-4 rounded-lg text-sm">
                       {error || "An unexpected error occurred. Please try again."}
                     </div>
+                    {refundAttempt && (
+                      // What happened to the money, on its own line, as the
+                      // server reported it.
+                      <p className={`text-sm font-medium ${refundAttempt.refunded ? 'text-green-700' : 'text-amber-800'}`}>
+                        {refundAttempt.refunded
+                          ? 'Your payment has been reversed. You do not need to do anything.'
+                          : 'Your payment has not been reversed yet. Our team has been alerted and will refund you.'}
+                        {orderReference ? ` Booking reference: ${orderReference}.` : ''}
+                      </p>
+                    )}
                     <div className="pt-2">
-                      {TERMINAL_ERROR_CODES.has(errorCode) ? (
+                      {TERMINAL_ERROR_CODES.has(errorCode) || refundAttempt ? (
                         // The payment behind this reference is gone - refunded,
                         // refused, or spent on a booking that was cancelled.
                         // Returning to it just hits the same guard again, so

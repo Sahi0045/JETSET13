@@ -1,5 +1,54 @@
 import axios from 'axios';
 
+/**
+ * How a booking is cancelled, and how long the page waits for the answer.
+ *
+ * One request cancels with the supplier, refunds the payment and writes the
+ * booking, and it can take far longer than the 10 seconds every other call here
+ * allows. The page gave up at 10 seconds while the cancel carried on, and told
+ * the customer "timeout of 10000ms exceeded" about a booking that was, in fact,
+ * cancelled. Flights cancel on the flights host (flightCancelPath, below); any
+ * other booking at this path on the payments endpoint, through the service's
+ * own client like every other payments call.
+ */
+export const CANCEL_BOOKING_PATH = '?action=cancel-booking';
+export const CANCEL_TIMEOUT_MS = 60000;
+
+/**
+ * Where a flight booking is cancelled: the flights host, which can reach the
+ * airline. The payments endpoint runs where Amadeus cannot be reached, and
+ * refuses a flight with a PNR (409 CANCEL_VIA_FLIGHTS_API).
+ */
+export const flightCancelPath = (bookingReference) => `flights/order/${encodeURIComponent(bookingReference)}/cancel`;
+
+/**
+ * A cancel that did not succeed, as the page shows it.
+ *
+ * No answer in time is not a failed cancel: the server may have finished it,
+ * so the page reloads the booking to find out. Otherwise the server's own words
+ * and its code - never the raw network message ("Failed to fetch"), which
+ * tells a customer nothing.
+ */
+function cancelFailure(error) {
+    if (error?.code === 'ECONNABORTED') {
+        return {
+            success: false,
+            timedOut: true,
+            error: 'We did not get an answer in time, so we are checking whether your booking was cancelled.'
+        };
+    }
+    const data = error?.response?.data && typeof error.response.data === 'object' ? error.response.data : {};
+    return {
+        success: false,
+        code: data.code || null,
+        retryable: data.retryable === true,
+        needsReview: data.needsReview === true,
+        error: data.error || data.message
+            || 'We could not reach our servers to cancel this booking. Please check your connection and try again, or call (877) 538-7380.',
+        details: data.details
+    };
+}
+
 // Use the API endpoints for ARC Pay integration - use relative URLs to go through Vite proxy
 class ArcPayService {
     constructor() {
@@ -195,10 +244,12 @@ class ArcPayService {
         try {
             console.log('🚫 Cancelling booking:', bookingReference);
 
-            const response = await this.api.post('?action=cancel-booking', {
+            const response = await this.api.post(CANCEL_BOOKING_PATH, {
                 bookingReference,
                 email,
                 reason
+            }, {
+                timeout: CANCEL_TIMEOUT_MS
             });
 
             return {
@@ -209,11 +260,41 @@ class ArcPayService {
             };
         } catch (error) {
             console.error('Cancel booking failed:', error);
+            return cancelFailure(error);
+        }
+    }
+
+    // Cancel a flight booking on the flights host (see flightCancelPath). A
+    // signed-in owner is known from the session; a guest proves the booking is
+    // theirs with its email. The same 60-second wait and the same answers as
+    // cancelBooking. authHeaders is loaded here, not at the top, so pages that
+    // only take payments do not load the Supabase client for it.
+    async cancelFlightBooking(bookingReference, email = null, reason = 'Customer request') {
+        try {
+            console.log('🚫 Cancelling flight booking:', bookingReference);
+            const [{ getApiUrl }, { authHeaders }] = await Promise.all([
+                import('../utils/apiHelper'),
+                import('../utils/authHeaders')
+            ]);
+
+            const response = await axios.post(getApiUrl(flightCancelPath(bookingReference)), {
+                ...(email ? { email } : {}),
+                reason
+            }, {
+                headers: await authHeaders({ 'Content-Type': 'application/json' }),
+                withCredentials: true,
+                timeout: CANCEL_TIMEOUT_MS
+            });
+
             return {
-                success: false,
-                error: error.response?.data?.error || error.message,
-                details: error.response?.data?.details
+                success: response.data.success,
+                message: response.data.message,
+                cancellation: response.data.cancellation,
+                booking: response.data.booking
             };
+        } catch (error) {
+            console.error('Cancel flight booking failed:', error);
+            return cancelFailure(error);
         }
     }
 

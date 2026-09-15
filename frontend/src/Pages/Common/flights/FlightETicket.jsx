@@ -1,13 +1,19 @@
 import React, { forwardRef } from 'react';
 import { Plane, User } from 'lucide-react';
-import Price from '../../../Components/Price';
+import { formatUsd } from '../../../utils/bookingCharge';
+import { bookingStatusBadge } from '../../../utils/bookingStatus';
 import {
     resolveTickets,
     ticketState,
     ticketForTraveler,
     issueDate,
     isPaid,
+    documentState,
+    pnrOf,
 } from '../../../utils/eTicket';
+import { formatCalendarDate } from '../../../utils/dateUtils';
+import { bookingItineraries } from '../../../../../shared/bookingItineraries';
+import BookingItinerary from './BookingItinerary';
 
 /**
  * The travel document a customer downloads and may carry to an airport.
@@ -35,6 +41,10 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
 
     // What the booking can actually prove about ticketing.
     const tickets = resolveTickets(bookingData);
+    // Every leg and flight. The document printed the first leg only, as one
+    // flight from its first departure to its last arrival - no return flight,
+    // and a connection drawn as a non-stop.
+    const legs = bookingItineraries(bookingData);
     const state = ticketState(bookingData);
     const issuedOn = issueDate(tickets);
     const paid = isPaid(bookingData) || isPaid(bookingDetails);
@@ -43,9 +53,41 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
     // A cancelled booking's tickets were voided or refunded with the airline.
     // Its document still downloaded headed "E-Ticket", with every number on it.
     const isCancelled = state === 'cancelled';
-    // "E-Ticket" is a claim. Only make it once a ticket exists, and never for a
-    // booking that no longer holds one.
-    const documentTitle = isCancelled ? 'Cancelled Booking' : isTicketed ? 'E-Ticket' : 'Booking Confirmation';
+    const hasPnr = Boolean(pnrOf(bookingData));
+    // "E-Ticket" is a claim, and so is "Booking Confirmation": the first needs a
+    // ticket, the second a PNR. Neither is made for a booking that holds none.
+    const documentTitle = isCancelled ? 'Cancelled Booking'
+        : isTicketed ? 'E-Ticket'
+            : hasPnr ? 'Booking Confirmation'
+                : 'Booking Summary';
+
+    // Worded from what is true of the booking. "Your seat is held under the PNR
+    // below" was printed whenever no ticket existed, over "PNR: N/A" for a
+    // booking still queued, never sent to the airline, or never paid for.
+    const NOTICES = {
+        ticket_pending: {
+            title: 'Your ticket has been issued. The ticket number is still being confirmed.',
+            body: 'We will email your ticket number shortly. Your booking reference and PNR below are valid.',
+        },
+        held: {
+            title: 'This is a confirmed reservation, not a ticket.',
+            body: 'Your seat is held under the PNR below. We will email your e-ticket once it is issued. Please do not travel on this document alone.',
+        },
+        queued: {
+            title: 'Your booking is being confirmed with the airline.',
+            body: 'Your payment is received, but no seat is held yet, so this is not a reservation or a ticket. We will email you once the airline confirms it.',
+        },
+        not_booked: paid
+            ? {
+                title: 'This booking has not been confirmed with the airline.',
+                body: 'Your payment is received, but no seat is held, so this is not a reservation or a ticket. We will confirm your booking or refund you by email.',
+            }
+            : {
+                title: 'This booking has not been paid for.',
+                body: 'Nothing is held with the airline, so this is not a reservation or a ticket.',
+            },
+    };
+    const notice = NOTICES[documentState(bookingData)] || null;
 
     // Get flight data - handle both nested and direct structures. Identifiers
     // fall back to a visible placeholder rather than a plausible-looking
@@ -73,19 +115,17 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
     const safeBookingDetails = {
         bookingId: bookingDetails?.bookingId || bookingData.orderId || bookingData.bookingReference || 'N/A',
         status: bookingDetails?.status || bookingData.status || 'PENDING',
-        pnr: bookingDetails?.pnr || bookingData.pnr || 'N/A',
+        pnr: pnrOf(bookingData) || 'Not yet assigned',
         // Never an invented allowance on a travel document.
         baggage: bookingDetails?.baggage || null
     };
 
     // Format helpers
-    const formatDate = (dateString) => {
-        const date = dateString ? new Date(dateString) : null;
-        if (!date || Number.isNaN(date.getTime())) return '—';
-        return date.toLocaleDateString('en-US', {
-            weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
-        });
-    };
+    // The calendar day the booking names. `new Date('2026-11-15')` is UTC
+    // midnight, so a US customer's document printed the day before.
+    const formatDate = (dateString) => formatCalendarDate(dateString, {
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+    }, '—');
 
     /** What to print where a ticket number goes, for one passenger. */
     const ticketLabel = (traveler, index) => {
@@ -128,11 +168,13 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
                         {isCancelled
                             ? 'Cancelled — not valid for travel'
                             : issuedOn
-                                ? `Date of Issue: ${new Date(issuedOn).toLocaleDateString()}`
-                                : 'Ticket not yet issued'}
+                                ? `Date of Issue: ${formatCalendarDate(issuedOn, { month: 'short', day: 'numeric', year: 'numeric' }, issuedOn)}`
+                                : hasPnr ? 'Ticket not yet issued' : 'Not yet confirmed with the airline'}
                     </span>
                     <span className={`font-bold uppercase px-3 py-1 rounded text-xs ${isCancelled ? 'bg-red-600' : isTicketed ? 'bg-green-500' : 'bg-amber-500'}`}>
-                        {safeBookingDetails.status}
+                        {/* The status in words. The raw database value
+                            ("pending_ticketing") was printed here. */}
+                        {bookingStatusBadge(bookingData).label}
                     </span>
                 </div>
 
@@ -147,18 +189,10 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
                             </p>
                         </div>
                     )}
-                    {!isTicketed && !isCancelled && (
+                    {notice && (
                         <div className="mb-6 border border-amber-300 bg-amber-50 rounded-lg px-5 py-4">
-                            <p className="font-bold text-amber-900 text-sm">
-                                {state === 'pending'
-                                    ? 'Your ticket has been issued. The ticket number is still being confirmed.'
-                                    : 'This is a confirmed reservation, not a ticket.'}
-                            </p>
-                            <p className="text-xs text-amber-800 mt-1">
-                                {state === 'pending'
-                                    ? 'We will email your ticket number shortly. Your booking reference and PNR below are valid.'
-                                    : 'Your seat is held under the PNR below. We will email your e-ticket once it is issued. Please do not travel on this document alone.'}
-                            </p>
+                            <p className="font-bold text-amber-900 text-sm">{notice.title}</p>
+                            <p className="text-xs text-amber-800 mt-1">{notice.body}</p>
                         </div>
                     )}
 
@@ -181,7 +215,10 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
                                     <div>
                                         <h3 className="text-xl font-bold text-gray-900">{flight.airline}</h3>
                                         <p className="text-gray-500">{flight.flightNumber} • {flight.stops === 0 ? 'Non-stop' : `${flight.stops} Stop(s)`}</p>
-                                        <p className="text-xs text-gray-400 mt-1">{flight.cabin} Class</p>
+                                        {/* " Class" with nothing before it when the fare named no cabin. */}
+                                        <p className="text-xs text-gray-400 mt-1 capitalize">
+                                            {flight.cabin ? `${String(flight.cabin).toLowerCase().replace(/_/g, ' ')} class` : 'Cabin not recorded'}
+                                        </p>
                                     </div>
                                 </div>
                                 <div className="text-right">
@@ -191,6 +228,9 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
                             </div>
 
                             {/* Route Visual */}
+                            {legs.length > 0 ? (
+                                <BookingItinerary legs={legs} dateOptions={{ weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }} />
+                            ) : (
                             <div className="flex justify-between items-start relative">
                                 {/* Departure */}
                                 <div className="flex-1">
@@ -219,6 +259,7 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
                                     {flight.arrivalTerminal && <div className="text-xs text-[#055B75] mt-1 font-medium">Terminal {flight.arrivalTerminal}</div>}
                                 </div>
                             </div>
+                            )}
                         </div>
                     </div>
 
@@ -248,7 +289,11 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
                                         </div>
                                         <div className="text-right">
                                             <span className="block text-xs text-gray-400 uppercase">Baggage</span>
-                                            <span className="font-medium text-gray-800">{safeBookingDetails.baggage?.checkIn || 'As per fare rules'}</span>
+                                            {/* The booking stores baggage as text ("23kg"); reading
+                                                `.checkIn` off it always fell back. */}
+                                            <span className="font-medium text-gray-800">
+                                                {(typeof safeBookingDetails.baggage === 'string' ? safeBookingDetails.baggage : safeBookingDetails.baggage?.checkIn) || 'As per fare rules'}
+                                            </span>
                                         </div>
                                     </div>
                                 </div>
@@ -272,7 +317,9 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
                         <div className="text-right">
                             <div className="inline-block text-left">
                                 <p className="text-xs text-gray-400 uppercase mb-1">Total Amount</p>
-                                <p className="text-3xl font-bold text-[#055B75]"><Price amount={calculatedFare.totalAmount} /></p>
+                                {/* What was charged, in USD. <Price> converted it into the
+                                    visitor's currency, which is not what the card paid. */}
+                                <p className="text-3xl font-bold text-[#055B75]">{formatUsd(calculatedFare.totalAmount)}</p>
                                 {/* Only claimed when the booking says so. */}
                                 {paid && !isCancelled && <p className="text-xs text-green-600 mt-1 font-medium">Payment Confirmed ✅</p>}
                             </div>
