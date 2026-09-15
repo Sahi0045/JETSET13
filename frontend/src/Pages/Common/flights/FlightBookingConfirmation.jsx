@@ -108,6 +108,10 @@ function FlightBookingConfirmation() {
   // not exist. They stay off the page until each is a real, fulfilled product.
   const { data: priceConfig, error: priceConfigError, refetch: refetchPriceConfig } = usePriceConfig('all');
   const [appliedCoupon, setAppliedCoupon] = useState(null); // { couponId, code, discountAmount, finalTotal }
+  // Why a coupon was not applied here, and a count that remounts the coupon
+  // box so it stops showing a coupon this page refused as applied.
+  const [couponProblem, setCouponProblem] = useState(null);
+  const [couponInputRound, setCouponInputRound] = useState(0);
   // The total a coupon's discount was computed on, so a changed total drops it.
   const couponBase = React.useRef(null);
   // The airline's price for this offer, checked on arrival and again by the
@@ -1097,7 +1101,10 @@ function FlightBookingConfirmation() {
         tone: 'error',
         title: 'We could not start the payment',
         // The dialog says nothing was charged itself; some server messages do too.
-        message: String(refusal.error || 'Please try again in a moment.').replace(/\s*Nothing has been charged\.?/i, ''),
+        // Checkout's words only when the refusal carries a code - those are
+        // written for customers. Anything else is its own business, and read
+        // "Missing required fields: amount and orderId are required".
+        message: String((refusal.code && refusal.error) || 'Please try again in a moment.').replace(/\s*Nothing has been charged\.?/i, ''),
         reassure: true,
       });
     } catch (error) {
@@ -2008,13 +2015,29 @@ function FlightBookingConfirmation() {
                   {/* Keyed on the total, so a changed total also resets the
                       input's own "applied" display along with the coupon. */}
                   <CouponInput
-                    key={calculatedFare.totalAmount}
+                    key={`${calculatedFare.totalAmount}-${couponInputRound}`}
                     orderTotal={calculatedFare.totalAmount}
                     bookingType="flights"
                     formatAmount={formatUsd}
-                    onApply={(coupon) => { couponBase.current = calculatedFare.totalAmount; setAppliedCoupon(coupon); }}
+                    onApply={(coupon) => {
+                      // A coupon worth the whole booking leaves nothing to pay,
+                      // and no payment page opens for $0.00: Pay then ended in
+                      // "Missing required fields: amount and orderId are
+                      // required". Refused here, when it is applied.
+                      if (!(Number(coupon?.finalTotal) > 0)) {
+                        setCouponProblem('This coupon covers the whole fare, and a booking cannot be paid for at $0.00 online. Please call (877) 538-7380 to use it.');
+                        setCouponInputRound((round) => round + 1);
+                        return;
+                      }
+                      setCouponProblem(null);
+                      couponBase.current = calculatedFare.totalAmount;
+                      setAppliedCoupon(coupon);
+                    }}
                     onRemove={() => { couponBase.current = null; setAppliedCoupon(null); }}
                   />
+                  {couponProblem && (
+                    <p className="mt-1.5 text-xs text-red-600" role="alert">{couponProblem}</p>
+                  )}
                 </div>
 
                 <div className="fare-row total">

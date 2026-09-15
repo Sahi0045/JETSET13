@@ -222,6 +222,16 @@ export async function verifyFlightCharge({
   }
 
   const charge = computeFlightCharge({ fareTotal, travellerTypes, config, discount });
+
+  // A coupon worth the whole booking leaves nothing to charge, and a payment
+  // page cannot be opened for $0.00. The page sent 0, and checkout answered
+  // with its own internal "Missing required fields" message.
+  if (coupon && charge.total <= 0) {
+    return refuse(409, 'COUPON_INVALID',
+      'This coupon covers the whole fare, and a booking cannot be paid for at $0.00 online. Please call (877) 538-7380 to use it.',
+      { pricedFare });
+  }
+
   const requested = roundMoney(amount);
 
   if (Math.abs(requested - charge.total) > 0.01) {

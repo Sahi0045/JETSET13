@@ -157,6 +157,18 @@ describe('verifyFlightCharge', () => {
     expect(result.coupon.code).toBe('FLY10');
   });
 
+  // A payment page cannot be opened for $0.00. The page sent 0 and was answered
+  // "Missing required fields: amount and orderId are required".
+  it('refuses a coupon that leaves nothing to charge, and says why', async () => {
+    rows.coupons = { id: 'c1', code: 'FREE', discount_type: 'percentage', discount_value: 100, min_order_value: 0, max_uses: null, applicable_to: 'all', is_active: true };
+
+    const result = await verify({ amount: 0, bookingData: bookingFor(1), couponCode: 'FREE', priceOffer: pricedAt(400) });
+
+    expect(result.code).toBe('COUPON_INVALID');
+    expect(result.message).toMatch(/covers the whole fare/);
+    expect(result.message).toMatch(/\$0\.00/);
+  });
+
   it('refuses a coupon that does not exist', async () => {
     rows.coupons = null;
     const result = await verify({ amount: 361.8, bookingData: bookingFor(2), couponCode: 'NOPE', priceOffer: pricedAt(400) });
@@ -336,6 +348,16 @@ describe('hosted checkout for a flight', () => {
     const { res } = await run({ ok: false, status: 409, code: 'PRICE_CHANGED', message: 'The total is 402.00 USD.', charge: { total: 402 } });
 
     expect(res.statusCode).toBe(409);
+    expect(axios.post).not.toHaveBeenCalled();
+  });
+
+  it('answers a request with nothing to charge in words for the customer, not its field names', async () => {
+    const { res, verifyFlightCharge } = await run({ ok: true, charge: { total: 402 } }, { body: { amount: 0 } });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.code).toBe('CHECKOUT_INCOMPLETE');
+    expect(res.body.error).not.toMatch(/Missing required fields|orderId/);
+    expect(verifyFlightCharge).not.toHaveBeenCalled();
     expect(axios.post).not.toHaveBeenCalled();
   });
 

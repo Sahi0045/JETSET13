@@ -379,11 +379,14 @@ export async function handleHostedCheckout(req, res) {
             flightData
         } = req.body;
 
-        // Validate required fields
+        // Validate required fields. Said in words for the customer: the page
+        // shows this text, and "Missing required fields: amount and orderId are
+        // required" is what it showed when a coupon took the total to $0.
         if (!amount || !orderId) {
             return res.status(400).json({
                 success: false,
-                error: 'Missing required fields: amount and orderId are required'
+                code: 'CHECKOUT_INCOMPLETE',
+                error: 'We could not start the payment for this booking. Please go back to the flight and try again. Nothing has been charged.'
             });
         }
 
