@@ -210,6 +210,18 @@ describe('picking dates', () => {
       .toEqual({ departDate: '2026-10-12', returnDate: '' });
   });
 
+  // /date-prices prices one-way fares, so on a round trip every figure on the
+  // strip priced a different journey from the one searched.
+  it('shows no one-way fares on a round trip strip', async () => {
+    searchAnswer = () => answer(200, { success: true, data: [card('round-trip')] });
+    renderPage(`from=DEL&to=BOM&date=${D1}&returnDate=${addDays(D1, 5)}`);
+    await screen.findByText('round-trip');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next week' }));
+
+    expect(datePriceBodies).toHaveLength(0);
+  });
+
   it('moves the strip a week without searching, and marks no date in it as searched', async () => {
     searchAnswer = () => answer(200, { success: true, data: [card('first-date')] });
     renderPage();

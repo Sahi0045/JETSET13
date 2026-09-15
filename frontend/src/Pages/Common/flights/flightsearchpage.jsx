@@ -873,6 +873,14 @@ function FlightSearchPage() {
   const datePricesRequest = useRef(0);
   const loadDatePrices = useCallback(async (sp, isoDates) => {
     if (!sp || !Array.isArray(isoDates) || isoDates.length === 0) return;
+    // A round trip's strip shows no prices. /date-prices prices one-way fares
+    // from the origin, so every figure on a round trip's strip was the price of
+    // a different journey. Counted as a request, so a one-way answer still on
+    // its way cannot land on the round trip's strip.
+    if (sp.returnDate) {
+      datePricesRequest.current += 1;
+      return;
+    }
     const { from, to, adults, children, infants, travelClass } = buildSearchPayload(sp);
     if (!from || !to) return;
     const requestId = ++datePricesRequest.current;

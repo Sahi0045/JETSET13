@@ -545,8 +545,11 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
               ) : <p className="text-sm text-gray-400 mt-2">Select date</p>}
               {showDepartCalendar && (
                 <div onClick={(e) => e.stopPropagation()}>
+                  {/* One-way fares, so none on a round trip: they are not what
+                      the trip being searched costs. */}
                   <CustomFlightCalendar
                     selectedDate={formData.departDate} minDate={new Date()}
+                    showPrices={formData.tripType !== 'roundTrip'}
                     originCode={calendarCode(formData.from, formData.fromCode)}
                     destinationCode={calendarCode(formData.to, formData.toCode)}
                     adults={adults} children={children} infants={infants} travelClass={formData.travelClass}
