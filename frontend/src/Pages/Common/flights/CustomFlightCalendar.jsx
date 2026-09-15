@@ -7,6 +7,7 @@ import apiConfig from '@/config/api'
 import Price from '../../../Components/Price'
 import { getTodayDate } from '../../../utils/dateUtils'
 import { stripDates } from './searchResults'
+import { moveDayFocus } from './calendarKeys'
 
 /**
  * The search form's date picker.
@@ -54,6 +55,13 @@ export default function CustomFlightCalendar({
 
     const today = getTodayDate()
     const centerDate = selectedDate && selectedDate >= today ? selectedDate : today
+
+    // One day in the grid is reached with Tab - the chosen day when it is on
+    // screen, else the first day that can be chosen - and the arrow keys move
+    // from there (calendarKeys.js).
+    const inView = (key) => [format(currentMonth, 'yyyy-MM'), format(nextMonth, 'yyyy-MM')].includes(key.slice(0, 7))
+    const firstChoosable = [format(startOfMonth(currentMonth), 'yyyy-MM-dd'), format(minDate, 'yyyy-MM-dd'), today].sort().at(-1)
+    const tabbableDate = inView(centerDate) ? centerDate : firstChoosable
 
     // The lowest fare is marked only when there are at least two to compare.
     const lowestPrice = useMemo(() => {
@@ -171,18 +179,26 @@ export default function CustomFlightCalendar({
             const isSelected = selectedDate && isSameDay(day, new Date(selectedDate));
             const isLowest = lowestPrice !== null && price === lowestPrice;
 
+            // A button: Enter and Space choose it, the arrow keys move between
+            // days. It was a div only a mouse could press.
             cells.push(
-                <div
+                <button
+                    type="button"
                     key={dateKey}
                     data-date={dateKey}
-                    onClick={() => !isPast && onSelect(dateKey)}
-                    className={`relative h-11 flex flex-col items-center justify-center transition-all
+                    disabled={isPast}
+                    aria-pressed={Boolean(isSelected)}
+                    tabIndex={dateKey === tabbableDate ? 0 : -1}
+                    onClick={() => onSelect(dateKey)}
+                    onKeyDown={moveDayFocus}
+                    className={`relative h-11 w-full flex flex-col items-center justify-center transition-all rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[#055B75]/50
                         ${isPast ? 'text-gray-300 cursor-not-allowed bg-gray-50/30' : ''}
                         ${!isPast && !isSelected ? 'cursor-pointer hover:bg-[#055B75]/5' : ''}
                         ${isSelected ? 'bg-[#055B75] text-white rounded-lg shadow-md cursor-pointer' : ''}
                     `}
                 >
-                    <span className={`text-[13px] font-semibold leading-tight ${isSelected ? 'text-white' : (isPast ? 'text-gray-300' : 'text-gray-700')}`}>
+                    <span className="sr-only">{format(day, 'EEEE d MMMM yyyy')}</span>
+                    <span aria-hidden="true" className={`text-[13px] font-semibold leading-tight ${isSelected ? 'text-white' : (isPast ? 'text-gray-300' : 'text-gray-700')}`}>
                         {i}
                     </span>
                     {!isPast && price !== undefined && (
@@ -190,7 +206,7 @@ export default function CustomFlightCalendar({
                             <Price amount={{ amount: price, currency }} />
                         </span>
                     )}
-                </div>
+                </button>
             );
         }
 
@@ -229,6 +245,9 @@ export default function CustomFlightCalendar({
 
     return (
         <div
+            data-calendar-grid=""
+            role="dialog"
+            aria-label="Choose a date"
             className={`absolute top-full left-0 mt-4 z-[100] bg-white shadow-2xl rounded-xl border border-gray-200 w-[calc(100vw-2rem)] max-w-[360px] sm:max-w-none sm:w-[640px] overflow-hidden animate-in fade-in zoom-in-95 duration-200 ${isDragging ? 'cursor-grabbing select-none' : ''}`}
             style={{
                 transform: `translate(${position.x}px, ${position.y}px)`,
@@ -239,6 +258,8 @@ export default function CustomFlightCalendar({
                 className="flex items-center justify-between p-3 bg-gray-50 border-b border-gray-200 cursor-grab"
             >
                 <button
+                    type="button"
+                    aria-label="Previous month"
                     onClick={() => setCurrentMonth(addMonths(currentMonth, -1))}
                     className="p-1.5 hover:bg-white hover:shadow-sm rounded-full transition-all border border-transparent hover:border-gray-200"
                 >
@@ -251,6 +272,8 @@ export default function CustomFlightCalendar({
                     </span>
                 </div>
                 <button
+                    type="button"
+                    aria-label="Next month"
                     onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
                     className="p-1.5 hover:bg-white hover:shadow-sm rounded-full transition-all border border-transparent hover:border-gray-200"
                 >
@@ -279,6 +302,7 @@ export default function CustomFlightCalendar({
                     )}
                 </div>
                 <button
+                    type="button"
                     onClick={onClose}
                     className="px-5 py-1.5 text-xs font-bold text-white bg-[#055B75] hover:bg-[#034457] rounded-lg transition-all shadow-md active:scale-95"
                 >

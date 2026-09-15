@@ -1596,8 +1596,11 @@ function FlightBookingConfirmation() {
 
                     <div className="form-grid" style={{ display: isExpanded ? undefined : 'none' }}>
                       <div className="form-group">
-                        <label>First Name <span className="required">*</span></label>
+                        {/* Every label names its field: none was tied to its input,
+                            and the date fields had no accessible name at all. */}
+                        <label htmlFor={`traveller-${passenger.id}-firstName`}>First Name <span className="required">*</span></label>
                         <input
+                          id={`traveller-${passenger.id}-firstName`}
                           type="text"
                           className="form-input"
                           placeholder="Given Name"
@@ -1608,8 +1611,9 @@ function FlightBookingConfirmation() {
                         />
                       </div>
                       <div className="form-group">
-                        <label>Last Name <span className="required">*</span></label>
+                        <label htmlFor={`traveller-${passenger.id}-lastName`}>Last Name <span className="required">*</span></label>
                         <input
+                          id={`traveller-${passenger.id}-lastName`}
                           type="text"
                           className="form-input"
                           placeholder="Surname"
@@ -1623,9 +1627,10 @@ function FlightBookingConfirmation() {
                         {/* Needed for a child or infant, and for anyone crossing a border
                             (shared/travellerDetails.js); a domestic adult may leave it out. */}
                         {needsDateOfBirth({ type: passenger.type, international: Boolean(bookingDetails?.isInternational) })
-                          ? <label>Date of Birth <span className="required">*</span></label>
-                          : <label>Date of Birth <span className="text-xs font-normal text-gray-400">(optional)</span></label>}
+                          ? <label htmlFor={`traveller-${passenger.id}-dateOfBirth`}>Date of Birth <span className="required">*</span></label>
+                          : <label htmlFor={`traveller-${passenger.id}-dateOfBirth`}>Date of Birth <span className="text-xs font-normal text-gray-400">(optional)</span></label>}
                         <input
+                          id={`traveller-${passenger.id}-dateOfBirth`}
                           type="date"
                           className="form-input"
                           value={passenger.dateOfBirth}
@@ -1637,9 +1642,13 @@ function FlightBookingConfirmation() {
                         />
                       </div>
                       <div className="form-group">
-                        <label>Gender <span className="required">*</span></label>
-                        <div className="gender-toggle">
+                        {/* Two toggle buttons that say which is chosen, as a
+                            group named by its label. Only their colour said so. */}
+                        <label id={`traveller-${passenger.id}-gender`}>Gender <span className="required">*</span></label>
+                        <div className="gender-toggle" role="group" aria-labelledby={`traveller-${passenger.id}-gender`}>
                           <button
+                            type="button"
+                            aria-pressed={passenger.gender === 'male'}
                             onClick={() => handlePassengerChange(passenger.id, 'gender', 'male')}
                             className={`gender-btn ${passenger.gender === 'male' ? 'active' : ''}`}
                             disabled={!editMode}
@@ -1647,6 +1656,8 @@ function FlightBookingConfirmation() {
                             Male
                           </button>
                           <button
+                            type="button"
+                            aria-pressed={passenger.gender === 'female'}
                             onClick={() => handlePassengerChange(passenger.id, 'gender', 'female')}
                             className={`gender-btn ${passenger.gender === 'female' ? 'active' : ''}`}
                             disabled={!editMode}
@@ -1658,7 +1669,7 @@ function FlightBookingConfirmation() {
 
                       {/* New Row */}
                       <div className="form-group">
-                        <label>Mobile No {index === 0 ? <span className="required">*</span> : <span className="text-xs font-normal text-gray-400">(optional)</span>}</label>
+                        <label htmlFor={`traveller-${passenger.id}-mobile`}>Mobile No {index === 0 ? <span className="required">*</span> : <span className="text-xs font-normal text-gray-400">(optional)</span>}</label>
                         <div style={{ display: 'flex', gap: '0' }}>
                           <select
                             className="form-input"
@@ -1674,6 +1685,7 @@ function FlightBookingConfirmation() {
                             ))}
                           </select>
                           <input
+                            id={`traveller-${passenger.id}-mobile`}
                             type="tel"
                             className="form-input"
                             style={{ borderRadius: '0 6px 6px 0', flex: 1 }}
@@ -1688,9 +1700,10 @@ function FlightBookingConfirmation() {
                       <div className="form-group">
                         {/* A guest's lead traveller email is where the ticket goes, and how they find the booking again. */}
                         {index === 0 && bookingAsGuest
-                          ? <label>Email <span className="required">*</span></label>
-                          : <label>Email (Optional)</label>}
+                          ? <label htmlFor={`traveller-${passenger.id}-email`}>Email <span className="required">*</span></label>
+                          : <label htmlFor={`traveller-${passenger.id}-email`}>Email (Optional)</label>}
                         <input
+                          id={`traveller-${passenger.id}-email`}
                           type="email"
                           className="form-input"
                           placeholder="email@example.com"
@@ -1723,8 +1736,9 @@ function FlightBookingConfirmation() {
                         </select>
                       </div>
                       <div className="form-group">
-                        <label>Passport Number <span className="required">*</span></label>
+                        <label htmlFor={`traveller-${passenger.id}-passportNumber`}>Passport Number <span className="required">*</span></label>
                         <input
+                          id={`traveller-${passenger.id}-passportNumber`}
                           type="text"
                           className="form-input"
                           placeholder="e.g. P12345678"
@@ -1734,8 +1748,9 @@ function FlightBookingConfirmation() {
                         />
                       </div>
                       <div className="form-group">
-                        <label>Passport Expiry Date <span className="required">*</span></label>
+                        <label htmlFor={`traveller-${passenger.id}-passportExpiry`}>Passport Expiry Date <span className="required">*</span></label>
                         <input
+                          id={`traveller-${passenger.id}-passportExpiry`}
                           type="date"
                           className="form-input"
                           value={passenger.passportExpiry || ''}

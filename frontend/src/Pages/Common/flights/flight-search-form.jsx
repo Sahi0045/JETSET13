@@ -544,7 +544,9 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
                 </>
               ) : <p className="text-sm text-gray-400 mt-2">Select date</p>}
               {showDepartCalendar && (
-                <div onClick={(e) => e.stopPropagation()}>
+                // Keys stop here too: Enter on a day would otherwise reach the
+                // field's own Enter handler and close the calendar unchosen.
+                <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
                   {/* One-way fares, so none on a round trip: they are not what
                       the trip being searched costs. */}
                   <CustomFlightCalendar
@@ -580,7 +582,7 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
                 </>
               ) : <p className="text-xs text-gray-400 mt-1 leading-snug max-w-[150px]">Tap to add a return date for bigger discounts</p>}
               {showReturnCalendar && (
-                <div onClick={(e) => e.stopPropagation()}>
+                <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
                   <CustomFlightCalendar
                     selectedDate={formData.returnDate} minDate={formData.departDate ? parseISO(formData.departDate) : new Date()}
                     showPrices={false}

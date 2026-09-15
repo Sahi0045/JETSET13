@@ -42,6 +42,20 @@ describe("the departure calendar's fares", () => {
   });
 });
 
+// The departure field is itself a button that opens and closes on Enter. A key
+// pressed on a day reached it too, and closed the calendar without choosing.
+describe('the calendar from the keyboard', () => {
+  it('stays open for a key pressed on one of its days', () => {
+    const { container } = renderForm({ initialData: { from: '', to: '', departDate: '2026-10-01', tripType: 'oneWay', returnDate: '' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Select departure date' }));
+    const firstDay = container.querySelector('[data-date]:not([disabled])');
+
+    fireEvent.keyDown(firstDay, { key: 'Enter' });
+
+    expect(screen.getByRole('dialog', { name: 'Choose a date' })).toBeTruthy();
+  });
+});
+
 // The URL spelled a round trip 'round-trip' and the form looked for
 // 'roundTrip', so after a refresh Modify showed it as one way.
 describe('a round trip read back from the URL', () => {
