@@ -261,6 +261,15 @@ describe('name sanitising', () => {
   it('keeps hyphens, which are legal in a name', () => {
     expect(sanitizeName('Anne-Marie')).toBe('ANNE-MARIE');
   });
+
+  // NFD cannot decompose these, so they were dropped: UKASZ, YVIND.
+  it('spells letters that have no decomposition in Latin, with the rule checkout uses', () => {
+    expect(sanitizeName('Łukasz')).toBe('LUKASZ');
+    expect(sanitizeName('Øyvind')).toBe('OYVIND');
+    expect(sanitizeName('Æsa')).toBe('AESA');
+    expect(sanitizeName('Groß')).toBe('GROSS');
+    expect(sanitizeName('Đoković')).toBe('DOKOVIC');
+  });
 });
 
 describe('Fare_PricePNRWithBookingClass', () => {

@@ -1,6 +1,7 @@
 import { passengerAgeProblem } from '../../../shared/flightCharge';
 import { isUsableEmail } from '../../../shared/email';
 import { needsDateOfBirth } from '../../../shared/travellerDetails';
+import { travellerNameProblem } from '../../../shared/passengerName';
 
 /**
  * What a traveller form still needs before payment, in words the customer can
@@ -28,7 +29,11 @@ export function travellerProblems(traveller, {
   const problems = [];
   const add = (text) => problems.push(text);
 
-  if (!t.firstName?.trim() || !t.lastName?.trim()) add('Enter the first and last name exactly as on the ID.');
+  // Present, and printable on the ticket: the rule the PNR writes names by
+  // (shared/passengerName.js). A name in another script, or with a letter the
+  // airline cannot print, was booked short or refunded after payment.
+  const nameProblem = travellerNameProblem(t);
+  if (nameProblem) add(nameProblem);
   if (!t.dateOfBirth) {
     if (needsDateOfBirth({ type: t.type, international })) add('Enter the date of birth.');
   } else {

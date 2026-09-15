@@ -80,6 +80,13 @@ describe('travellerProblems', () => {
     ]));
   });
 
+  // The PNR prints A-Z only. A name it would lose letters from is refused here,
+  // before payment, rather than booked short or refunded afterwards.
+  it('refuses a name the airline cannot print, and accepts one it can spell in Latin', () => {
+    expect(travellerProblems({ ...complete, firstName: 'Иван' }, domestic)[0]).toMatch(/in Latin letters/);
+    expect(travellerProblems({ ...complete, firstName: 'Łukasz', lastName: 'Øberg' }, domestic)).toEqual([]);
+  });
+
   it("needs the lead traveller's mobile, and a guest's email", () => {
     const lead = { ...complete, mobile: '' };
     expect(travellerProblems(lead, { ...domestic, index: 0 })).toContain('Enter a mobile number for booking updates.');

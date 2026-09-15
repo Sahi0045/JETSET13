@@ -88,6 +88,29 @@ describe('verifyFlightCharge', () => {
     expect(result.code).toBe('PASSENGER_COUNT_MISMATCH');
   });
 
+  // The PNR prints A-Z only: a name in another script was refused by the chain
+  // after payment and refunded. Refused here before the fare is priced.
+  it('refuses a name the airline cannot print, before pricing', async () => {
+    const booking = bookingFor(2);
+    booking.passengerData[1] = { ...booking.passengerData[1], firstName: 'Иван' };
+    const priceOffer = pricedAt(400);
+
+    const result = await verify({ amount: 402, bookingData: booking, priceOffer });
+
+    expect(result.code).toBe('PASSENGER_NAME_UNUSABLE');
+    expect(result.message).toMatch(/^Traveller 2: .*Latin letters/);
+    expect(priceOffer).not.toHaveBeenCalled();
+  });
+
+  it('accepts a name it can spell in Latin letters', async () => {
+    const booking = bookingFor(1);
+    booking.passengerData[0] = { ...booking.passengerData[0], firstName: 'Łukasz', lastName: 'Øberg' };
+
+    const result = await verify({ amount: 401, bookingData: booking, priceOffer: pricedAt(400) });
+
+    expect(result.ok).toBe(true);
+  });
+
   it('refuses without an offer to price', async () => {
     const result = await verify({ amount: 401, bookingData: {}, priceOffer: pricedAt(400) });
     expect(result.code).toBe('OFFER_MISSING');

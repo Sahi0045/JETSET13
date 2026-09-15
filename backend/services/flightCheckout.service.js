@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { computeFlightCharge, roundMoney, travellerTypesOf } from '../../shared/flightCharge.js';
 import { needsDateOfBirth } from '../../shared/travellerDetails.js';
+import { NAME_MISSING, travellerNameProblem } from '../../shared/passengerName.js';
 import { DEFAULT_PRICE_SETTINGS } from '../config/priceDefaults.js';
 import { evaluateCoupon } from './coupon.service.js';
 
@@ -104,6 +105,20 @@ export async function verifyFlightCharge({
   if (passengers.length !== pricedFor) {
     return refuse(400, 'PASSENGER_COUNT_MISMATCH',
       `This fare is for ${pricedFor} traveller${pricedFor === 1 ? '' : 's'}. Please search again for the number travelling.`);
+  }
+
+  // A name the airline cannot print, refused before the fare is even priced.
+  // The PNR keeps only A-Z, spaces and hyphens: a name in another script was
+  // refused by the booking chain after payment and refunded, and one with a
+  // letter like Ł was booked short. Same rule as the page and the PNR
+  // (shared/passengerName.js); a missing name is left to the check below.
+  const unprintable = passengers.findIndex((p) => {
+    const problem = travellerNameProblem(p);
+    return Boolean(problem) && problem !== NAME_MISSING;
+  });
+  if (unprintable !== -1) {
+    return refuse(400, 'PASSENGER_NAME_UNUSABLE',
+      `Traveller ${unprintable + 1}: ${travellerNameProblem(passengers[unprintable])} Nothing has been charged.`);
   }
 
   let priced;

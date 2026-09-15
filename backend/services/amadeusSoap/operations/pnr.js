@@ -1,3 +1,4 @@
+import { toPnrName } from '../../../../shared/passengerName.js';
 import { OPERATIONS } from '../codes.js';
 import { each, el, wrap } from '../xml.js';
 import { buildDocsFreetext, toDDMMMYY } from './travelDocs.js';
@@ -27,14 +28,13 @@ const PTC_TO_CODE = Object.freeze({ ADULT: 'ADT', CHILD: 'CHD', HELD_INFANT: 'IN
  * Anything else - an accent, an apostrophe in O'BRIEN, a comma - is rejected or
  * silently mangled into a name that will not match the passenger's passport at
  * check-in. Decomposing first keeps É as E rather than dropping the letter.
+ *
+ * The rule is shared with the review page and checkout (shared/passengerName.js),
+ * which refuse before payment a name this would still lose letters from. Letters
+ * that do not decompose are spelled in Latin first: "Łukasz" was written here as
+ * "UKASZ" and "Øyvind" as "YVIND".
  */
-export const sanitizeName = (value) => String(value ?? '')
-  .normalize('NFD')
-  .replace(/[\u0300-\u036f]/g, '')
-  .toUpperCase()
-  .replace(/[^A-Z \-]/g, '')
-  .replace(/\s+/g, ' ')
-  .trim();
+export const sanitizeName = toPnrName;
 
 /** MR/MS/MSTR/MISS ride in the first-name field, which is how Amadeus stores them. */
 const titleFor = (traveler, ptc) => {

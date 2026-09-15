@@ -6,6 +6,7 @@ import { isGuestFlightBookingEnabled, isUsableEmail } from '../../services/guest
 import { getCaller } from './agents.handlers.js';
 import { safeReturnUrl } from '../../utils/returnUrl.js';
 import { checkoutKey } from '../../utils/tripMatch.js';
+import { toPnrName } from '../../../shared/passengerName.js';
 
 const sanitizeRef = (v) => String(v ?? '').replace(/[^A-Za-z0-9_-]/g, '') || '__none__';
 
@@ -624,7 +625,9 @@ export async function handleHostedCheckout(req, res) {
 
                 // Real names only. A traveller with no usable name is left out
                 // rather than sent to the card network as "TEST TRAVELER".
-                const cleanName = (v) => String(v || '').toUpperCase().replace(/[^A-Z\s]/g, '').trim().substring(0, 20);
+                // Spelled as the PNR spells it (shared/passengerName.js), so
+                // "Łukasz" reaches the card network as LUKASZ, not UKASZ.
+                const cleanName = (v) => toPnrName(v).replace(/[^A-Z\s]/g, '').trim().substring(0, 20);
                 const passengers = bookingData?.passengerData || bookingData?.travelers || [];
                 const passengerList = passengers
                     .map(p => ({
