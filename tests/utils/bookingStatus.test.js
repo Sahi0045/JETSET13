@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { attentionMessage, bookingStatusBadge, cancellationMessage, needsAttention, refundStatus } from '../../frontend/src/utils/bookingStatus';
+import { attentionMessage, bookingStatusBadge, cancellationMessage, needsAttention, needsManualRefund, refundStatus } from '../../frontend/src/utils/bookingStatus';
 
 /**
  * What My Trips tells a customer about their booking.
@@ -146,5 +146,32 @@ describe('badges for a flight the airline has not got yet', () => {
   it('tells a paid checkout that was never booked from one never paid for', () => {
     expect(bookingStatusBadge({ type: 'flight', status: 'pending', payment_status: 'paid' }).label).toBe('Paid, not booked yet');
     expect(bookingStatusBadge({ type: 'flight', status: 'pending', payment_status: 'unpaid' }).label).toBe('Awaiting payment');
+  });
+});
+
+describe('needsManualRefund', () => {
+  // The admin panel's "Finish refund" is for a cancelled flight whose refund did
+  // not happen - and for nothing else.
+  it('is offered only for a cancelled flight whose refund failed, is under review, or never ran', () => {
+    const cancelled = (cancellation, extra = {}) => ({
+      type: 'flight', status: 'cancelled', paymentStatus: 'paid', bookingDetails: { cancellation }, ...extra,
+    });
+    expect(needsManualRefund(cancelled({ paymentAction: 'REFUND_FAILED' }))).toBe(true);
+    expect(needsManualRefund(cancelled({ paymentAction: 'REFUND_UNDER_REVIEW' }))).toBe(true);
+    expect(needsManualRefund(cancelled(undefined))).toBe(true);
+
+    expect(needsManualRefund(cancelled({ paymentAction: 'FULL_REFUND', refundAmount: 291 }))).toBe(false);
+    expect(needsManualRefund(cancelled({ paymentAction: 'NOTHING_TO_REFUND' }))).toBe(false);
+    expect(needsManualRefund({ type: 'flight', status: 'confirmed', paymentStatus: 'paid' })).toBe(false);
+    expect(needsManualRefund(cancelled({ paymentAction: 'REFUND_FAILED' }, { type: 'hotel' }))).toBe(false);
+  });
+
+  it('reads the refund the desk finished as refunded', () => {
+    const finished = {
+      type: 'flight', status: 'cancelled', paymentStatus: 'partially_refunded',
+      bookingDetails: { cancellation: { paymentAction: 'PARTIAL_REFUND', refundAmount: 241, cancellationFee: 50, currency: 'USD' } },
+    };
+    expect(refundStatus(finished)).toMatchObject({ key: 'refunded', label: 'Refunded $241.00' });
+    expect(needsManualRefund(finished)).toBe(false);
   });
 });

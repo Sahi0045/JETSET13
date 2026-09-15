@@ -8,7 +8,7 @@ import { resolveBookingUserId } from '../../utils/bookingOwner.js';
 import { emailIsBookers, hasBookingOwner, isBookingOwner } from '../../utils/bookingAccess.js';
 import { liveChainState } from '../../utils/bookingChainClaim.js';
 import { DEFAULT_PRICE_SETTINGS } from '../../config/priceDefaults.js';
-import { cancellationMessage } from '../../../shared/cancellationOutcome.js';
+import { cancellationMessage, refundOutcome } from '../../../shared/cancellationOutcome.js';
 import { reconcileBookingPayment } from './checkout.handlers.js';
 
 const sanitizeRef = (v) => String(v ?? '').replace(/[^A-Za-z0-9_-]/g, '') || '__none__';
@@ -1411,6 +1411,146 @@ export async function handlePaymentRetrieve(req, res) {
         console.error('❌ Payment retrieve error:', error);
         return res.status(500).json({ success: false, error: 'Failed to retrieve payment', details: error.message });
     }
+}
+
+const roundCents = (value) => Math.round(Number(value) * 100) / 100;
+
+/** REFUND exactly `amount` on an ARC order. Never throws. */
+async function refundArcAmount(orderId, { amount, currency = 'USD', reason = 'Admin refund' }) {
+    const transactionId = `refund-admin-${Date.now()}`;
+    try {
+        const url = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${orderId}/transaction/${transactionId}`;
+        const resp = await axios.put(url, {
+            apiOperation: 'REFUND',
+            transaction: { amount: amount.toFixed(2), currency, reference: String(reason).substring(0, 40) },
+        }, { headers: getArcPayAuthConfig().headers, validateStatus: () => true });
+        return { ok: arcSucceeded(resp), transactionId, httpStatus: resp?.status ?? null };
+    } catch (error) {
+        console.error('❌ Admin ARC refund error:', error.message);
+        return { ok: false, transactionId, httpStatus: null };
+    }
+}
+
+/**
+ * Finish the refund of a cancelled flight booking by hand, and make the booking
+ * say what actually happened.
+ *
+ * A cancellation whose automatic refund failed, or was held for review, reads
+ * "Refund not processed" or "Refund under review" in My Trips and Manage
+ * Booking, and pages the payment-failure alert. The desk then refunds the card
+ * - in the ARC portal, or nowhere the site could see - and the booking kept
+ * saying the refund never happened. The only refund button in the admin panel
+ * was for quote payments, and never touched a flight booking.
+ *
+ * Two modes, and the gateway is the record either way:
+ *  - `sync`: the refund was made outside the site. Ask ARC what it refunded and
+ *    record that; nothing is moved.
+ *  - `refund`: refund `amount` now, never more than ARC still holds, then ask
+ *    ARC again and record what it shows.
+ * The amounts written come from ARC, never from the admin's typing.
+ *
+ * @returns {Promise<{ status: number, body: object }>}
+ */
+export async function settleManualFlightRefund(booking, { mode = 'sync', amount, reason = 'Admin refund', adminId = null } = {}) {
+    const answer = (status, body) => ({ status, body });
+    if (!booking) return answer(404, { success: false, error: 'Booking not found' });
+    if (booking.travel_type !== 'flight' || booking.status !== 'cancelled') {
+        return answer(409, {
+            success: false,
+            code: 'NOT_A_CANCELLED_FLIGHT',
+            error: 'Only a cancelled flight booking can have its refund finished here.',
+        });
+    }
+
+    const before = await reconcileBookingPayment(booking, { fresh: true });
+    if (before.gatewayUnavailable && !before.gatewayStatus) {
+        return answer(503, { success: false, code: 'GATEWAY_UNAVAILABLE', error: 'Could not reach ARC Pay. Nothing was refunded or changed.' });
+    }
+    if (!before.everCaptured) {
+        return answer(409, { success: false, code: 'NOTHING_CAPTURED', error: 'ARC Pay shows no payment for this booking, so there is nothing to refund.' });
+    }
+
+    const details = booking.booking_details || {};
+    const currency = details.arc_captured_currency || details.currency || 'USD';
+    let manual = { mode, reason, by: adminId, at: new Date().toISOString() };
+
+    if (mode === 'refund') {
+        const wanted = roundCents(amount);
+        const held = roundCents(before.heldAmount ?? 0);
+        if (!Number.isFinite(wanted) || wanted <= 0) {
+            return answer(400, { success: false, code: 'INVALID_AMOUNT', error: 'Enter the amount to refund.' });
+        }
+        if (wanted > held + 0.001) {
+            return answer(400, {
+                success: false,
+                code: 'AMOUNT_OVER_HELD',
+                error: `ARC Pay holds ${held.toFixed(2)} ${currency} for this booking; a refund cannot be more than that.`,
+            });
+        }
+        const orderId = details.order_id || booking.booking_reference;
+        const refund = await refundArcAmount(orderId, { amount: wanted, currency, reason });
+        if (!refund.ok) {
+            return answer(502, { success: false, code: 'REFUND_REFUSED', error: 'ARC Pay did not accept the refund. Nothing was recorded; try again or refund in the ARC portal and then sync.' });
+        }
+        manual = { ...manual, amount: wanted, transactionId: refund.transactionId };
+    }
+
+    // What the gateway shows now is what gets recorded.
+    const after = await reconcileBookingPayment(booking, { fresh: true });
+    const confirmed = Number.isFinite(Number(after.refundedTotal));
+    const refundedTotal = roundCents(confirmed ? after.refundedTotal : (before.refundedTotal ?? 0) + (manual.amount ?? 0));
+    const held = roundCents(confirmed ? (after.heldAmount ?? 0) : Math.max(0, (before.heldAmount ?? 0) - (manual.amount ?? 0)));
+    if (!confirmed) manual = { ...manual, unconfirmed: 'ARC Pay could not be asked again after the refund; recorded from the refund it accepted' };
+
+    if (refundedTotal <= 0) {
+        return answer(409, {
+            success: false,
+            code: 'NO_REFUND_FOUND',
+            error: 'ARC Pay shows no refund for this booking yet. Refund it first, here or in the ARC portal.',
+        });
+    }
+
+    // Re-read: reconcile writes the row too, and this must not undo that.
+    const { data: latest } = await supabase.from('bookings').select('*').eq('id', booking.id).single();
+    const currentDetails = (latest || booking).booking_details || {};
+    const previous = currentDetails.cancellation || {};
+    const fullyReturned = held <= 0.009;
+    const cancellation = {
+        ...previous,
+        paymentAction: fullyReturned ? 'FULL_REFUND' : 'PARTIAL_REFUND',
+        refundAmount: refundedTotal,
+        cancellationFee: fullyReturned ? 0 : held,
+        currency,
+        manualRefund: { ...manual, previousPaymentAction: previous.paymentAction ?? null },
+    };
+    const review = currentDetails.needs_review
+        ? { ...currentDetails.needs_review, resolved_at: manual.at, resolution: 'refund finished by the desk' }
+        : undefined;
+    const paymentStatus = fullyReturned ? 'refunded' : 'partially_refunded';
+
+    const { error: updateError } = await supabase.from('bookings').update({
+        payment_status: paymentStatus,
+        booking_details: { ...currentDetails, cancellation, ...(review ? { needs_review: review } : {}) },
+        updated_at: manual.at,
+    }).eq('id', booking.id);
+    if (updateError) {
+        console.error('❌ Could not record the manual refund:', updateError.message);
+        return answer(500, {
+            success: false,
+            code: 'RECORD_FAILED',
+            error: mode === 'refund'
+                ? 'The refund went through at ARC Pay, but the booking could not be updated. Use Sync to record it.'
+                : 'The booking could not be updated. Try again.',
+        });
+    }
+
+    console.log('💵 Manual refund recorded', { bookingReference: booking.booking_reference, mode, refundedTotal, held });
+    return answer(200, {
+        success: true,
+        message: cancellationMessage({ cancellation }),
+        paymentStatus,
+        cancellation,
+    });
 }
 
 // Reverse a captured ARC payment for an order — used when fulfillment fails AFTER the

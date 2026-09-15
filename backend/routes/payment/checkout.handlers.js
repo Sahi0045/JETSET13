@@ -1330,7 +1330,7 @@ export async function handleGetPaymentDetails(req, res) {
  * held NOW: an admin refund or an earlier reversal since the row was reconciled
  * leaves `arc_captured_amount` describing money that has already gone back.
  * Every answer the gateway gave carries `heldAmount` - captured, less refunded,
- * nothing once voided - and `everCaptured`; an order it would not return
+ * nothing once voided - `refundedTotal` and `everCaptured`; an order it would not return
  * carries the HTTP status it answered with, as `gatewayStatus`.
  */
 export async function reconcileBookingPayment(booking, { fresh = false } = {}) {
@@ -1416,6 +1416,7 @@ export async function reconcileBookingPayment(booking, { fresh = false } = {}) {
             orderStatus: orderData.status || null,
             heldAmount: 0,
             everCaptured: capturedTotal > 0,
+            refundedTotal: Math.round(refundedTotal * 100) / 100,
             ...(alreadyPaid ? { error: 'gateway shows no captured transaction for a row marked paid' } : {}),
         });
     }
@@ -1433,6 +1434,7 @@ export async function reconcileBookingPayment(booking, { fresh = false } = {}) {
             capturedAmount: netCaptured,
             heldAmount: netCaptured,
             everCaptured: true,
+            refundedTotal: Math.round(refundedTotal * 100) / 100,
             error: `gateway holds ${netCaptured.toFixed(2)}, less than the ${sessionAmount.toFixed(2)} charged at checkout`,
         });
     }
@@ -1470,6 +1472,7 @@ export async function reconcileBookingPayment(booking, { fresh = false } = {}) {
             orderStatus: orderData.status || 'CAPTURED',
             heldAmount: netCaptured,
             everCaptured: true,
+            refundedTotal: Math.round(refundedTotal * 100) / 100,
             error: `Failed to record payment on booking: ${updateErr.message}`,
         };
     }
@@ -1477,7 +1480,7 @@ export async function reconcileBookingPayment(booking, { fresh = false } = {}) {
     console.log('✅ [reconcile] Booking marked paid from gateway:', booking.booking_reference);
     return {
         paid: true, capturedAmount, capturedCurrency, arcTransactionId, orderStatus: orderData.status || 'CAPTURED',
-        heldAmount: netCaptured, everCaptured: true,
+        heldAmount: netCaptured, everCaptured: true, refundedTotal: Math.round(refundedTotal * 100) / 100,
     };
 }
 
