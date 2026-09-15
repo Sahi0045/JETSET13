@@ -233,7 +233,7 @@ async function readCancellationFee() {
  * PostgREST rejects arrow paths inside `or` on an UPDATE, and a claim that
  * errors is a claim nobody holds.
  */
-async function claimCancellation(booking) {
+async function claimCancellation(booking, { requireNoReservation = false } = {}) {
     const details = booking.booking_details || {};
     const prior = details.gds_chain || null;
     const priorStamp = prior?.startedAt ?? null;
@@ -250,6 +250,11 @@ async function claimCancellation(booking) {
     update = priorStamp === null
         ? update.is('booking_details->gds_chain->>startedAt', null)
         : update.eq('booking_details->gds_chain->>startedAt', priorStamp);
+    // A payment void releases nothing at the airline, so it may only take a
+    // booking that still has no reservation. A chain that committed a PNR since
+    // the booking was read leaves no stamp behind (persistCommittedPnr), which
+    // the stamp condition alone would take for "never claimed".
+    if (requireNoReservation) update = update.is('booking_details->>pnr', null);
 
     const { data, error } = await update.select('id');
     if (error) {
@@ -1187,6 +1192,17 @@ export async function handlePaymentVoid(req, res) {
     // handlePaymentRefund — the `?action=` router applies no auth middleware.
     if (!(await requireAdmin(req, res))) return;
 
+    // The claim this void holds on a flight booking, when it took one. Handed
+    // back on every way out that does not void, so a refused or failed void
+    // leaves the booking exactly as it found it.
+    let claim = null;
+    let claimedBooking = null;
+    const giveBack = async () => {
+        const held = claim;
+        claim = null;
+        if (held?.claimed) await releaseCancellation(claimedBooking, held);
+    };
+
     try {
         console.log('🚫 Handling PAYMENT-VOID operation');
         // The admin UI sends `paymentId` = ARC order id (CRZ.../HTL.../FLT...) or booking reference.
@@ -1226,11 +1242,48 @@ export async function handlePaymentVoid(req, res) {
             });
         }
 
+        // A flight's payment pays for seats. Voiding it released nothing at the
+        // airline: on a booking with a PNR the reservation stayed live with
+        // nothing paying for it, and the row was written cancelled and refunded,
+        // so the paid-not-ticketed alarm and the failed-refund alarm both
+        // skipped it. A flight with a reservation is cancelled with Cancel &
+        // Refund, which releases the seats before any money moves; one being
+        // booked, queued or cancelled right now waits.
+        if (booking && (booking.travel_type === 'flight' || booking.travel_type == null)) {
+            const details = booking.booking_details || {};
+            const reservation = details.pnr || details.amadeus_order_id;
+            if (reservation) {
+                return refuse(res, 409, 'USE_CANCEL_AND_REFUND',
+                    `This flight has an airline reservation (${reservation}). Voiding the payment would leave that reservation live `
+                    + 'with nothing paying for it. Use Cancel & Refund, which releases the seats first. Nothing has been changed.',
+                    { bookingReference: booking.booking_reference });
+            }
+            const busyText = 'This booking is being confirmed with the airline or cancelled right now, so its payment cannot be voided. '
+                + 'Nothing has been changed. Refresh it in a few minutes and check it before trying again.';
+            if (liveChainState(details.gds_chain) || details.queued_order) {
+                return refuse(res, 409, 'BOOKING_BUSY', busyText, { bookingReference: booking.booking_reference });
+            }
+            // Taken the way a cancellation takes it, so the chain cannot start
+            // selling seats against the payment while ARC voids it, and a PNR
+            // committed since the row was read makes the claim match nothing.
+            const taken = await claimCancellation(booking, { requireNoReservation: true });
+            if (taken.error) {
+                return refuse(res, 503, 'VOID_UNAVAILABLE', 'We could not start the void just now. Nothing has been changed. Try again in a minute.',
+                    { bookingReference: booking.booking_reference, retryable: true });
+            }
+            if (!taken.claimed) {
+                return refuse(res, 409, 'BOOKING_BUSY', busyText, { bookingReference: booking.booking_reference });
+            }
+            claim = taken;
+            claimedBooking = booking;
+        }
+
         const arcOrderId = booking?.booking_details?.order_id || payment?.arc_order_id || booking?.booking_reference || ref;
         const authConfig = getArcPayAuthConfig();
 
         // 2. RETRIEVE_ORDER to (a) verify the order is still voidable and (b) find the target transaction id
         let targetTxnId = payment?.arc_transaction_id || booking?.booking_details?.transaction_id || null;
+        let voidedAmount = null;
         let orderStatus = null;
         try {
             const orderUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${arcOrderId}`;
@@ -1242,6 +1295,7 @@ export async function handlePaymentVoid(req, res) {
                 // Already voided/cancelled on the gateway?
                 const hasVoid = txns.some(t => t.transaction?.type === 'VOID' && (t.result === 'SUCCESS'));
                 if (orderStatus === 'CANCELLED' || hasVoid) {
+                    await giveBack();
                     return res.status(400).json({ success: false, error: 'The payment is already voided on the gateway', orderStatus });
                 }
 
@@ -1253,6 +1307,7 @@ export async function handlePaymentVoid(req, res) {
                 });
                 if (candidates.length) {
                     targetTxnId = candidates[candidates.length - 1].transaction.id;
+                    voidedAmount = Number(candidates[candidates.length - 1].transaction.amount) || null;
                 }
                 console.log('🔍 RETRIEVE_ORDER status:', orderStatus, '| target txn:', targetTxnId);
             } else {
@@ -1263,6 +1318,7 @@ export async function handlePaymentVoid(req, res) {
         }
 
         if (!targetTxnId) {
+            await giveBack();
             return res.status(400).json({
                 success: false,
                 error: 'Could not determine the transaction to void. If the payment has settled, use Cancel & Refund instead.'
@@ -1282,11 +1338,12 @@ export async function handlePaymentVoid(req, res) {
             }
         }, { headers: authConfig.headers, validateStatus: () => true });
 
-        const voidOk = (voidResponse.status >= 200 && voidResponse.status < 300) &&
-            (voidResponse.data?.result === 'SUCCESS' || !voidResponse.data?.result);
-
-        if (!voidOk) {
+        // `|| !voidResponse.data?.result` used to sit here: a reply with no
+        // result at all counted as a successful void, and the booking was
+        // written cancelled and refunded on it. Only SUCCESS is a void.
+        if (!arcSucceeded(voidResponse)) {
             console.error('❌ ARC Pay VOID failed:', voidResponse.status, JSON.stringify(voidResponse.data));
+            await giveBack();
             return res.status(400).json({
                 success: false,
                 error: 'Failed to void payment. It may have already settled — use Cancel & Refund instead.',
@@ -1300,11 +1357,18 @@ export async function handlePaymentVoid(req, res) {
 
         // 4a. Update the booking (DB payment_status constraint allows 'refunded' — funds fully returned by void)
         if (booking) {
-            const { error: bErr } = await supabase.from('bookings').update({
+            // Read back rather than spread the row this request started with:
+            // reconcile, a chain or a cancellation may have written since, and
+            // writing the old copy of the whole column undid them.
+            const current = (await readBookingDetails(booking.id)) || claim?.details || booking.booking_details || {};
+            let update = supabase.from('bookings').update({
                 status: 'cancelled',
                 payment_status: 'refunded',
                 booking_details: {
-                    ...booking.booking_details,
+                    ...current,
+                    // Left finished, as a cancellation leaves it, so a late order
+                    // attempt is refused rather than booked against a void.
+                    ...(claim ? { gds_chain: { ...(claim.prior || {}), state: 'cancelled', startedAt: claim.stamp, cancelledAt: voidedAt } } : {}),
                     void: {
                         voidTransactionId: voidTxnId,
                         targetTransactionId: targetTxnId,
@@ -1312,16 +1376,22 @@ export async function handlePaymentVoid(req, res) {
                         voidedAt
                     },
                     cancellation: {
-                        ...(booking.booking_details?.cancellation || {}),
+                        ...(current.cancellation || {}),
                         cancelledAt: voidedAt,
                         reason,
                         paymentAction: 'VOID',
-                        refundAmount: parseFloat(booking.total_amount) || 0,
+                        refundAmount: voidedAmount ?? (parseFloat(booking.total_amount) || 0),
                         cancellationFee: 0
                     }
-                }
+                },
+                updated_at: voidedAt
             }).eq('id', booking.id);
+            // Still this void's booking: nothing may have taken it while ARC answered.
+            if (claim) update = update.eq('booking_details->gds_chain->>startedAt', claim.stamp);
+            const { data: written, error: bErr } = await update.select('id');
             if (bErr) console.error('⚠️ Booking void-update failed:', bErr.message);
+            else if (!written?.length) console.error('⚠️ Payment voided, but the booking changed hands before it was recorded', { bookingReference: booking.booking_reference });
+            claim = null;
         }
 
         // 4b. Update the legacy payments row if one exists (store void info in metadata JSON — no schema change).
@@ -1352,6 +1422,7 @@ export async function handlePaymentVoid(req, res) {
         });
     } catch (error) {
         console.error('❌ Payment void error:', error);
+        await giveBack().catch(() => {});
         return res.status(500).json({ success: false, error: 'Failed to void payment', details: error.message });
     }
 }

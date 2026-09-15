@@ -3785,6 +3785,10 @@ function normalizeBookingRow(b) {
     service,
     bookingDetails: d, passengerDetails: b.passenger_details, isPackage: false,
     arcOrderId: d.arc_order_id || d.order_id || b.booking_reference,
+    // Being booked, waiting in the queue, or being cancelled right now
+    // (utils/bookingChainClaim.js). The panel hides Void for such a booking, as
+    // the server refuses it; worked out here, where the claim's lifetime is known.
+    bookingBusy: Boolean(liveChainState(d.gds_chain)) || Boolean(d.queued_order && !d.pnr),
   };
 }
 

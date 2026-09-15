@@ -6,6 +6,7 @@ import { useRegisterRefresh } from './shell/RefreshContext';
 import './AdminPanel.css';
 import { adminFetch, readAdminResponse } from '../../utils/adminAuth';
 import { needsManualRefund } from '../../utils/bookingStatus';
+import { canVoidPayment } from '../../utils/adminBookingActions';
 
 const BookingsList = () => {
     const [searchParams] = useSearchParams();
@@ -640,7 +641,7 @@ const BookingsList = () => {
                                                                 title="Cancel & Refund"
                                                                 style={actionBtnStyle('#dc2626')}
                                                             >❌</button>
-                                                            {booking.paymentStatus === 'paid' && (
+                                                            {canVoidPayment(booking) && (
                                                                 <button
                                                                     onClick={() => setVoidModal(booking)}
                                                                     title="Void Payment (reverse before settlement)"
