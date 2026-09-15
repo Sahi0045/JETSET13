@@ -246,3 +246,52 @@ describe('a payment the server found no capture for', () => {
     expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 });
+
+/**
+ * The order page opened with nothing to book.
+ *
+ * It said "Booking data not found. Please start your booking again." and sent
+ * the customer to the flights page - a customer who had just paid included.
+ */
+describe('the order page with nothing to book', () => {
+  it('names the payment reference checkout left, and says we will confirm or refund by email', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    localStorage.setItem('pendingPaymentSession', JSON.stringify({ orderId: 'FLT9', sessionId: 'SESSION-1' }));
+    const { container } = renderOrderPage(null);
+
+    await waitFor(() => expect(container.textContent).toMatch(/We received your payment reference/));
+    expect(container.textContent).toMatch(/Your payment reference is FLT9/);
+    expect(container.textContent).toMatch(/confirm your booking or refund you by email/);
+    expect(container.textContent).toMatch(/\(877\) 538-7380/);
+    expect(container.textContent).not.toMatch(/start your booking again|Booking data not found/);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('uses the reference the payment page handed over when nothing else survived', async () => {
+    vi.stubGlobal('fetch', vi.fn());
+    const { container } = renderOrderPage({ orderId: 'FLT7', transactionId: 'SI-7' });
+
+    await waitFor(() => expect(container.textContent).toMatch(/Your payment reference is FLT7/));
+  });
+
+  it('with no reference at all, says where a paid booking will appear, and never to start again', async () => {
+    vi.stubGlobal('fetch', vi.fn());
+    const { container } = renderOrderPage(null);
+
+    await waitFor(() => expect(container.textContent).toMatch(/No booking in progress on this page/));
+    expect(container.textContent).toMatch(/appear in My Trips/);
+    expect(container.textContent).not.toMatch(/start your booking again/);
+  });
+
+  it('never books under an invented reference', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const { orderId: _reference, ...withoutReference } = orderData;
+    localStorage.setItem('pendingFlightBooking', JSON.stringify(withoutReference));
+    const { container } = renderOrderPage(null);
+
+    await waitFor(() => expect(container.textContent).toMatch(/No booking in progress on this page/));
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});

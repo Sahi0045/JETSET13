@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { makeOrderRef } from '../../../utils/orderRef';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Lock, CheckCircle, Loader, AlertCircle, Check, Clock
@@ -67,6 +66,15 @@ function outcomeOf(body) {
   return 'held';
 }
 
+/** The payment reference checkout left in this browser, if any. */
+function storedPaymentReference() {
+  try {
+    return JSON.parse(localStorage.getItem('pendingPaymentSession') || 'null')?.orderId || null;
+  } catch {
+    return null;
+  }
+}
+
 function FlightCreateOrders() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -96,6 +104,9 @@ function FlightCreateOrders() {
   // PAYMENT_NOT_FOUND): { retryable, gaveUp }.
   const [paymentProblem, setPaymentProblem] = useState(null);
   const paymentCheckAttempts = useRef(0);
+  // Set when this page has nothing to book: { reference } - the payment
+  // reference, when one survived.
+  const [missingOrder, setMissingOrder] = useState(null);
   const orderDataRef = useRef(null);
   const inProgressAttempts = useRef(0);
   const retryTimer = useRef(null);
@@ -152,7 +163,9 @@ function FlightCreateOrders() {
             // verifies the payment against ARC Pay itself, so the old
             // client-side "verified" flag proved nothing and is gone.
             transactionId: orderData?.transactionId || sessionData?.sessionId || null,
-            orderId: orderData?.orderId || sessionData?.orderId || makeOrderRef('FLT'),
+            // Never invented. A made-up reference matches no payment, so the
+            // order was refused and the customer's real payment was not named.
+            orderId: orderData?.orderId || sessionData?.orderId || null,
             amount: bookingData?.amount || orderData?.amount || sessionData?.amount || null,
 
             // Flight data from localStorage
@@ -174,18 +187,21 @@ function FlightCreateOrders() {
       }
     }
 
-    // Final check - if we still don't have critical data, redirect
+    // Final check. With nothing to book - the page opened again after the tab
+    // lost its state, from a link, or with storage cleared - this said "Booking
+    // data not found. Please start your booking again" and sent the customer to
+    // search, whether or not they had just paid. Say what is known instead: the
+    // payment reference, if one survived, and what happens next.
     const finalHasCriticalData = orderData?.selectedFlight || orderData?.originalOffer || orderData?.passengerData;
 
-    if (orderData && finalHasCriticalData) {
+    if (orderData && finalHasCriticalData && orderData.orderId) {
       console.log('📝 Processing order with data:', orderData);
       // Mark as processed to prevent duplicate calls (React StrictMode / re-renders)
       orderProcessedRef.current = true;
       processFlightOrder(orderData);
     } else {
-      console.log('❌ No valid order data found - redirecting to flights page');
-      setError('Booking data not found. Please start your booking again.');
-      setTimeout(() => navigate('/flights'), 3000);
+      console.log('❌ No order to confirm on this page');
+      setMissingOrder({ reference: orderData?.orderId || storedPaymentReference() });
     }
     setLoading(false);
     const timer = setTimeout(() => setPageLoaded(true), 100);
@@ -752,6 +768,35 @@ function FlightCreateOrders() {
                         </button>
                       </div>
                     )}
+                  </div>
+                ) : missingOrder ? (
+                  // Nothing to book on this page. Never "start your booking
+                  // again": this customer may have just paid.
+                  <div className="space-y-4" role="status">
+                    <div className="mx-auto w-16 h-16 rounded-full bg-amber-50 flex items-center justify-center">
+                      <Clock className="w-8 h-8 text-amber-600" />
+                    </div>
+                    <h2 className="text-xl font-semibold text-gray-800">
+                      {missingOrder.reference ? 'We received your payment reference' : 'No booking in progress on this page'}
+                    </h2>
+                    <p className="text-gray-600">
+                      {missingOrder.reference
+                        ? `Your payment reference is ${missingOrder.reference}. We could not load your booking details on this page, but you do not need to book again: we will confirm your booking or refund you by email.`
+                        : 'We could not find a booking in progress on this page. If you completed a payment, we will email you about it, and your booking will appear in My Trips.'}
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      Questions? Call <a href="tel:+18775387380" className="font-semibold text-blue-700">(877) 538-7380</a> or email{' '}
+                      <a href="mailto:support@jetsetterss.com" className="font-semibold text-blue-700 break-all">support@jetsetterss.com</a>
+                      {missingOrder.reference ? ' with this reference.' : '.'}
+                    </p>
+                    <div className="pt-2">
+                      <button
+                        onClick={() => navigate(authUser ? '/my-trips' : '/')}
+                        className="w-full py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+                      >
+                        {authUser ? 'Go to My Trips' : 'Back to home'}
+                      </button>
+                    </div>
                   </div>
                 ) : errorCode === 'DUPLICATE_PAYMENT' ? (
                   // A second payment for a trip already booked, or being booked,
