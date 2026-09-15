@@ -164,7 +164,7 @@ export async function handleGetPaymentLink(req, res) {
         return res.json({ success: true, paymentLink });
     } catch (error) {
         console.error('❌ Get payment link error:', error);
-        return res.status(500).json({ success: false, error: 'Failed to get payment link', details: error.message });
+        return res.status(500).json({ success: false, error: 'Failed to get payment link' });
     }
 }
 
@@ -332,8 +332,7 @@ export async function handleProcessPaymentLink(req, res) {
         console.error('❌ Process payment link error:', error);
         return res.status(500).json({
             success: false,
-            error: 'Failed to process payment',
-            details: error.response?.data || error.message
+            error: 'Failed to process payment'
         });
     }
 }

@@ -270,6 +270,39 @@ describe('failing before the PNR is committed', () => {
 // otherwise buy this full-price ticket. paidAmount is read server-side from
 // the booking row by the route, so the shortfall is caught here, before the
 // PNR is committed, and the route reverses the charge.
+describe('a chain that no longer holds its booking', () => {
+  // A chain slower than its claim, or one whose heartbeat failed, could be
+  // taken over by a retry or the queue - and both committed a PNR against one
+  // payment. The route is asked just before the commit.
+  it('stops before committing when the claim was taken over', async () => {
+    const { runBookingChain } = await loadChain();
+    queueReplies(sellOk, addOk, priceOk, tstOk, fopOk, commitOk);
+    const beforeCommit = vi.fn().mockResolvedValue('lost');
+
+    await expect(runBookingChain({ offer: offer(), travelers, expectedTotal: 76, beforeCommit }))
+      .rejects.toMatchObject({ step: 'claim', committed: false, code: 409, claimLost: true });
+    expect(beforeCommit).toHaveBeenCalledTimes(1);
+    const sent = axios.post.mock.calls.map(([, body]) => String(body));
+    expect(sent.some((body) => body.includes('PNR_AddMultiElements') && body.includes('<optionCode>11'))).toBe(false);
+  });
+
+  it('stops too when the database cannot say who holds it', async () => {
+    const { runBookingChain } = await loadChain();
+    queueReplies(sellOk, addOk, priceOk, tstOk, fopOk, commitOk);
+
+    await expect(runBookingChain({ offer: offer(), travelers, expectedTotal: 76, beforeCommit: async () => 'unavailable' }))
+      .rejects.toMatchObject({ step: 'claim', committed: false, claimUnavailable: true });
+  });
+
+  it('commits as before while the claim is held', async () => {
+    const { runBookingChain } = await loadChain();
+    queueReplies(sellOk, addOk, priceOk, tstOk, fopOk, commitOk);
+
+    const result = await runBookingChain({ offer: offer(), travelers, expectedTotal: 76, beforeCommit: async () => 'held' });
+    expect(result.pnr).toBe('ABC123');
+  });
+});
+
 describe('the payment-coverage guard', () => {
   // Unset is the case that matters: a guard that is only on when someone
   // remembers to configure it is off in practice.

@@ -18,6 +18,19 @@ const sanitizeRef = (v) => String(v ?? '').replace(/[^A-Za-z0-9_-]/g, '') || '__
 // CANCEL BOOKING - Orchestrated cancellation
 // (Kept in sync with /api/payments.js per PAYMENT_SYSTEM_ARCHITECTURE.txt)
 // ============================================
+/**
+ * One answer for a signed-out caller who may not cancel: no such booking, a
+ * guest booking with another email, or a booking that belongs to an account.
+ * Those used to answer 404, 403 and LOGIN_REQUIRED - so a reference alone told
+ * a stranger whether a booking existed, and whether it was a guest's. The guest
+ * lookup limiter counts each of these as a failed attempt.
+ */
+const refuseSignedOutCaller = (res) => res.status(404).json({
+    success: false,
+    code: 'BOOKING_NOT_FOUND',
+    error: 'We could not find a booking with that reference and email. If you booked while logged in, please log in and try again.',
+});
+
 export async function handleCancelBookingAction(req, res) {
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Method not allowed' });
@@ -72,11 +85,8 @@ export async function handleCancelBookingAction(req, res) {
         }
 
         if (!booking) {
-            return res.status(404).json({
-                success: false,
-                error: 'Booking not found',
-                details: `No booking found with reference: ${bookingReference}`
-            });
+            if (!resolveBookingUserId(req)) return refuseSignedOutCaller(res);
+            return res.status(404).json({ success: false, error: 'Booking not found' });
         }
 
         // AUTHORIZATION, before anything about the booking is disclosed. Cancelling
@@ -103,15 +113,13 @@ export async function handleCancelBookingAction(req, res) {
             const owned = hasBookingOwner(booking);
             const allowed = owned ? isBookingOwner(sessionUserId, booking) : emailIsBookers(email, booking);
             if (!allowed) {
-                const mustSignIn = owned && !sessionUserId;
+                if (!sessionUserId) return refuseSignedOutCaller(res);
                 return res.status(403).json({
                     success: false,
-                    code: mustSignIn ? 'LOGIN_REQUIRED' : 'NOT_AUTHORIZED',
-                    error: mustSignIn
-                        ? 'Please log in to the account this booking was made with to cancel it.'
-                        : owned
-                            ? 'Not authorized to cancel this booking'
-                            : 'To cancel a booking made without an account, use the email address it was booked with.'
+                    code: 'NOT_AUTHORIZED',
+                    error: owned
+                        ? 'Not authorized to cancel this booking'
+                        : 'To cancel a booking made without an account, use the email address it was booked with.'
                 });
             }
         }
@@ -135,7 +143,7 @@ export async function handleCancelBookingAction(req, res) {
         return await cancelOtherBooking(res, booking, { reason, email });
     } catch (error) {
         console.error('❌ Cancel booking error:', error);
-        return res.status(500).json({ success: false, error: 'Failed to cancel booking', details: error.message });
+        return res.status(500).json({ success: false, error: 'Failed to cancel booking' });
     }
 }
 
@@ -624,7 +632,7 @@ async function cancelFlightBooking(res, booking, { reason, email }) {
         });
         const text = 'Your cancellation was processed, but we could not save it. Please do not try again - '
             + 'call (877) 538-7380 and we will confirm what happened to your payment.';
-        return res.status(500).json({ success: false, error: text, message: text, details: updateError.message, cancellation: cancellationResult });
+        return res.status(500).json({ success: false, error: text, message: text, cancellation: cancellationResult });
     }
 
     await sendCancellationEmail(booking, email, cancellationResult);
@@ -942,7 +950,8 @@ async function cancelOtherBooking(res, booking, { reason, email }) {
         .eq('id', booking.id);
 
     if (updateError) {
-        return res.status(500).json({ success: false, error: 'Failed to update booking status', details: updateError.message });
+        console.error('❌ Could not update the cancelled booking:', updateError.message);
+        return res.status(500).json({ success: false, error: 'Failed to update booking status' });
     }
 
     await sendCancellationEmail(booking, email, cancellationResult);

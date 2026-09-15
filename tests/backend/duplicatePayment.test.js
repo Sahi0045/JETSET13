@@ -284,3 +284,20 @@ describe("the booking queue's email about a held payment", () => {
     expect(copy).not.toMatch(/reversed/);
   });
 });
+
+describe('a guest paying twice', () => {
+  // Checkout stores the address as typed. The lookup matched it exactly, so the
+  // same guest typing "Jane@" once and "jane@" the next time was not found, and
+  // the second payment was booked.
+  it('is held even when the email was typed in a different letter case', async () => {
+    const { place } = await appWith([
+      bookedFirst({ user_id: null, booking_details: { customer_email: 'Jane@Example.com' } }),
+      paidCheckout(SECOND, { user_id: null, booking_details: { customer_email: 'jane@example.com' } }),
+    ]);
+
+    const res = await place(orderFor(SECOND));
+
+    expect(res.body.code).toBe('DUPLICATE_PAYMENT');
+    expect(createFlightOrder).not.toHaveBeenCalled();
+  });
+});

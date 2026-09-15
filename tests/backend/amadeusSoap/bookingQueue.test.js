@@ -317,3 +317,23 @@ describe('the queue worker', () => {
     expect(picked).toEqual(['Q', 'STALE', 'DONE']);
   });
 });
+
+describe('the proof a queued order carries', () => {
+  // A replay has no session. An order whose payer was proved by the signed-in
+  // account carried no indicator, so its replay was refused as not the payer.
+  it("adds the booking row's own indicator to an order that carried none", async () => {
+    const { orderWithPayerProof } = await import('../../../backend/routes/flight.routes.js');
+    expect(orderWithPayerProof({ bookingReference: 'FLTQ1' }, { success_indicator: 'SI-Q' }))
+      .toEqual({ bookingReference: 'FLTQ1', resultIndicator: 'SI-Q' });
+  });
+
+  it('keeps the proof an order already carries, and adds none the row does not have', async () => {
+    const { orderWithPayerProof } = await import('../../../backend/routes/flight.routes.js');
+    const withTransaction = { bookingReference: 'FLTQ1', transactionId: 'SI-Q' };
+    const withIndicator = { bookingReference: 'FLTQ1', resultIndicator: 'SI-Q' };
+    const bare = { bookingReference: 'FLTQ1' };
+    expect(orderWithPayerProof(withTransaction, { success_indicator: 'SI-OTHER' })).toBe(withTransaction);
+    expect(orderWithPayerProof(withIndicator, { success_indicator: 'SI-OTHER' })).toBe(withIndicator);
+    expect(orderWithPayerProof(bare, {})).toBe(bare);
+  });
+});

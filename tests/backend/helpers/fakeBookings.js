@@ -8,8 +8,11 @@
  * compare-and-set claim really can be lost, and a test can read back what the
  * route wrote.
  *
- * Deliberately small: `or`, `order`, `limit`, `gte`, `lte` and `ilike` are
- * accepted and ignored, and `insert` / `upsert` write nothing (routes that
+ * `ilike` without wildcards is a case-insensitive equality, the way the routes
+ * use it for email addresses (escaped `\%`, `\_` and `\\` are unescaped).
+ *
+ * Deliberately small: `or`, `order`, `limit`, `gte` and `lte` are accepted and
+ * ignored, and `insert` / `upsert` write nothing (routes that
  * insert fall back to updating the row checkout created, which is what these
  * tests exercise).
  *
@@ -33,6 +36,8 @@ const passes = (row, [op, column, expected]) => {
     case 'eq': return actual !== undefined && actual !== null && String(actual) === String(expected);
     case 'neq': return String(actual) !== String(expected);
     case 'is': return expected === null ? actual === null || actual === undefined : actual === expected;
+    case 'ilike': return actual !== undefined && actual !== null
+      && String(actual).toLowerCase() === String(expected).replace(/\\([\\%_])/g, '$1').toLowerCase();
     default: return true;
   }
 };
@@ -60,10 +65,10 @@ export function fakeBookingsTable(rows = [], { tables = {}, fail } = {}) {
     };
 
     const chain = {};
-    for (const op of ['eq', 'neq', 'is']) {
+    for (const op of ['eq', 'neq', 'is', 'ilike']) {
       chain[op] = (column, value) => { filters.push([op, column, value]); return chain; };
     }
-    for (const ignored of ['select', 'or', 'order', 'limit', 'insert', 'upsert', 'delete', 'gte', 'lte', 'ilike']) {
+    for (const ignored of ['select', 'or', 'order', 'limit', 'insert', 'upsert', 'delete', 'gte', 'lte']) {
       chain[ignored] = () => chain;
     }
     chain.update = (value) => { patch = value; return chain; };

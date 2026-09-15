@@ -532,6 +532,21 @@ const MAX_QUEUE_ATTEMPTS = 10;
  *
  * Returns false when the booking cannot be queued, and the caller refunds.
  */
+/**
+ * The order to queue, carrying proof of the payer for its replay.
+ *
+ * The replay runs with no session. A request that proved the payer by its
+ * signed-in account carried no success indicator, so its replay was refused as
+ * not the payer, and a paid booking waited in the queue for nothing. Every
+ * caller has already proved the payer; the proof added here is the booking
+ * row's own indicator, never anything the client sent.
+ */
+export function orderWithPayerProof(orderBody, details = {}) {
+  const proof = details?.success_indicator;
+  if (!proof || orderBody?.resultIndicator || orderBody?.transactionId) return orderBody;
+  return { ...orderBody, resultIndicator: proof };
+}
+
 async function queueBookingForRetry(bookingReference, orderBody) {
   if (!supabase || !bookingReference) return false;
 
@@ -546,6 +561,8 @@ async function queueBookingForRetry(bookingReference, orderBody) {
 
   const details = row.booking_details || {};
   const queueAttempts = Number(details.gds_chain?.queueAttempts || 0) + 1;
+
+  const order = orderWithPayerProof(orderBody, details);
   if (queueAttempts > MAX_QUEUE_ATTEMPTS) return false;
 
   const queuedAt = new Date().toISOString();
@@ -554,7 +571,7 @@ async function queueBookingForRetry(bookingReference, orderBody) {
     .update({
       booking_details: {
         ...details,
-        queued_order: orderBody,
+        queued_order: order,
         // Local dev and production share one database. Only a worker in the
         // environment that queued a booking may run it - a laptop must never
         // replay a customer's booking, and production must never book a test.
@@ -663,6 +680,49 @@ async function refreshChainClaim(bookingReference) {
     .eq('booking_details->gds_chain->>startedAt', chain.startedAt)
     .select('booking_reference');
   return Boolean(data?.length);
+}
+
+/**
+ * Does this request still hold the booking it claimed? Asked by the booking
+ * chain just before it commits the PNR.
+ *
+ * The heartbeat renews a running chain's claim, but its failures were
+ * swallowed, and a chain slower than the claim's life looks abandoned either
+ * way. A retry, the booking queue or a cancel could then take the booking over
+ * while this chain carried on - and both committed a PNR against one payment.
+ *
+ * Held means the claim is still this request's (same attempt, still in
+ * progress), and it is renewed here with a compare-and-set, so nothing can take
+ * it over during the commit itself. Lost means someone else has it: don't
+ * commit. Unavailable means the database could not say: don't commit either.
+ *
+ * @returns {Promise<'held'|'lost'|'unavailable'>}
+ */
+export async function holdChainClaim(bookingReference, attempt) {
+  if (!supabase || !bookingReference) return 'held';
+  const { data: row, error: readError } = await supabase
+    .from('bookings')
+    .select('booking_details')
+    .eq('booking_reference', bookingReference)
+    .single();
+  if (readError && readError.code !== 'PGRST116') return 'unavailable';
+  if (!row) return 'lost';
+
+  const details = row.booking_details || {};
+  const chain = details.gds_chain;
+  if (chain?.state !== 'in_progress' || !chain.startedAt) return 'lost';
+  if (attempt != null && Number(chain.attempt) !== Number(attempt)) return 'lost';
+
+  const renewedAt = new Date().toISOString();
+  const { data, error } = await supabase
+    .from('bookings')
+    .update({ booking_details: { ...details, gds_chain: { ...chain, startedAt: renewedAt } }, updated_at: renewedAt })
+    .eq('booking_reference', bookingReference)
+    .eq('booking_details->gds_chain->>state', 'in_progress')
+    .eq('booking_details->gds_chain->>startedAt', chain.startedAt)
+    .select('booking_reference');
+  if (error) return 'unavailable';
+  return data?.length ? 'held' : 'lost';
 }
 
 /**
@@ -861,15 +921,17 @@ async function findDuplicateBooking(booking, { travellers, offer, claimedAt, now
 
   const lookups = [
     ...(booking.user_id ? [['user_id', booking.user_id]] : []),
-    ...(email ? [['booking_details->>customer_email', email]] : []),
+    // In any letter case: checkout stores the address as typed, and the same
+    // guest typing "Jane@" once and "jane@" the next time is the same guest.
+    // ilike with its wildcards escaped - `_` is common in addresses.
+    ...(email ? [['booking_details->>customer_email', email.replace(/[\\%_]/g, (c) => `\\${c}`), 'ilike']] : []),
   ];
   const candidates = new Map();
-  for (const [column, value] of lookups) {
+  for (const [column, value, op = 'eq'] of lookups) {
     const { data, error } = await supabase
       .from('bookings')
       .select('booking_reference, user_id, status, payment_status, created_at, booking_details, passenger_details')
-      .eq('travel_type', 'flight')
-      .eq(column, value)
+      .eq('travel_type', 'flight')[op](column, value)
       .order('created_at', { ascending: false })
       .limit(50);
     if (error) {
@@ -2322,7 +2384,11 @@ router.post('/order', optionalProtect, async (req, res) => {
     let orderResponse;
     // Keep the claim fresh while the chain runs - see refreshChainClaim.
     const heartbeat = setInterval(() => {
-      refreshChainClaim(req.body.bookingReference).catch(() => {});
+      // No longer silent. A renewal that fails is not fatal on its own -
+      // holdChainClaim checks again before the commit - but it is worth seeing.
+      refreshChainClaim(req.body.bookingReference)
+        .then((renewed) => { if (!renewed) console.warn('⚠️ Chain claim not renewed', { bookingReference: req.body.bookingReference }); })
+        .catch((error) => console.warn('⚠️ Chain claim renewal failed', { bookingReference: req.body.bookingReference, error: error.message }));
     }, CHAIN_HEARTBEAT_MS);
     heartbeat.unref?.();
     try {
@@ -2339,6 +2405,9 @@ router.post('/order', optionalProtect, async (req, res) => {
         // What checkout charged for that fare - with the fee, less any coupon.
         // The payment must cover exactly this.
         verifiedChargeTotal: Number.isFinite(Number(verifiedCharge.total)) ? Number(verifiedCharge.total) : undefined,
+        // Asked just before the PNR is committed, so a chain that lost its
+        // claim stops without selling a second PNR - see holdChainClaim.
+        beforeCommit: () => holdChainClaim(req.body.bookingReference, claim.attempt),
         // What ARC actually captured, read back from the gateway by the
         // reconcile above - NOT from this request body, and NOT from the row's
         // total_amount, which is what the client asked to be charged before
@@ -2368,6 +2437,32 @@ router.post('/order', optionalProtect, async (req, res) => {
         code: providerError?.code,
         reason: providerError?.technicalError ?? providerError?.message
       });
+
+      // Stopped just before the commit because this request no longer holds
+      // the booking. Nothing was sold. Another request may be booking it right
+      // now, so this one neither refunds nor releases a claim that is not its
+      // own.
+      if (providerError?.claimLost) {
+        return res.status(409).json({
+          success: false,
+          error: 'This booking is already being confirmed. Please wait a moment before trying again.',
+          code: 'BOOKING_IN_PROGRESS'
+        });
+      }
+      // The database could not say who holds it. Queueing is safe even if
+      // another request does: every commit asks holdChainClaim first, and the
+      // queued state is not "in progress", so only one of them can commit.
+      if (providerError?.claimUnavailable) {
+        if (await queueBookingForRetry(req.body.bookingReference, req.body)) {
+          return respondQueued(res, req.body.bookingReference);
+        }
+        return res.status(503).json({
+          success: false,
+          error: 'We could not start your booking just now. Your payment is safe - please try again in a minute.',
+          code: 'BOOKING_UNAVAILABLE',
+          retryable: true
+        });
+      }
 
       // A committed PNR means the airline holds a real booking. Refunding it
       // would leave the customer with a flight they are no longer paying for -
@@ -2899,7 +2994,7 @@ router.delete('/order/:orderId', protect, async (req, res) => {
     console.error('❌ Cancel order error:', error);
     res.status(500).json({
       success: false,
-      error: error.message || 'Failed to cancel flight order'
+      error: 'Failed to cancel flight order'
     });
   }
 });
@@ -3218,7 +3313,7 @@ router.get('/bookings', protect, async (req, res) => {
       console.error('❌ Error fetching bookings:', error);
       return res.status(500).json({
         success: false,
-        error: error.message
+        error: 'Failed to fetch bookings'
       });
     }
 
@@ -3236,7 +3331,7 @@ router.get('/bookings', protect, async (req, res) => {
     console.error('❌ Error fetching bookings:', error);
     res.status(500).json({
       success: false,
-      error: error.message || 'Failed to fetch bookings'
+      error: 'Failed to fetch bookings'
     });
   }
 });
@@ -3262,7 +3357,7 @@ router.get('/analytics/booked', async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Analytics error:', error);
-    res.json({ success: true, data: [], fallback: true, error: error.message });
+    res.json({ success: true, data: [], fallback: true });
   }
 });
 
@@ -3285,7 +3380,7 @@ router.get('/analytics/traveled', async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Analytics error:', error);
-    res.json({ success: true, data: [], fallback: true, error: error.message });
+    res.json({ success: true, data: [], fallback: true });
   }
 });
 
@@ -3308,7 +3403,7 @@ router.get('/analytics/busiest', async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Analytics error:', error);
-    res.json({ success: true, data: [], fallback: true, error: error.message });
+    res.json({ success: true, data: [], fallback: true });
   }
 });
 
@@ -3345,7 +3440,7 @@ router.get('/cheapest-dates', async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Cheapest dates error:', error);
-    res.json({ success: true, data: [], fallback: true, error: error.message });
+    res.json({ success: true, data: [], fallback: true });
   }
 });
 
@@ -3394,7 +3489,7 @@ router.get('/status', async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Flight status error:', error);
-    res.json({ success: true, data: [], fallback: true, error: error.message });
+    res.json({ success: true, data: [], fallback: true });
   }
 });
 
@@ -3418,7 +3513,7 @@ router.post('/availabilities', async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Availabilities error:', error);
-    res.json({ success: true, data: [], fallback: true, error: error.message });
+    res.json({ success: true, data: [], fallback: true });
   }
 });
 
@@ -3447,7 +3542,7 @@ router.get('/airports/search', async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Airport search error:', error);
-    res.json({ success: false, data: [], error: error.message });
+    res.json({ success: false, data: [], error: 'This information is not available right now.' });
   }
 });
 
@@ -3486,7 +3581,7 @@ router.get('/inspiration', async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Inspiration search error:', error);
-    res.json({ success: false, data: [], error: error.message });
+    res.json({ success: false, data: [], error: 'This information is not available right now.' });
   }
 });
 
@@ -3519,7 +3614,7 @@ router.get('/price-analysis', async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Price analysis error:', error);
-    res.json({ success: false, data: [], error: error.message });
+    res.json({ success: false, data: [], error: 'This information is not available right now.' });
   }
 });
 
