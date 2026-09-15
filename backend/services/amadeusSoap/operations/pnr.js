@@ -225,13 +225,16 @@ const docsElement = ({ number, paxNumber, freetext }) => wrap('dataElementsIndiv
  * Per the XSD the indicator codeset is `M, C, P, CR, PR`; `P` marks the value
  * as a percentage, which is what `commissionInfo/percentage` carries.
  */
-const commissionElement = ({ number, percentage }) => wrap('dataElementsIndiv', [
+const commissionElement = ({ number, percentage, passengerType = 'PAX' }) => wrap('dataElementsIndiv', [
   wrap('elementManagementData', [
     wrap('reference', [el('qualifier', 'OT'), el('number', String(number))]),
     el('segmentName', 'FM'),
   ]),
   wrap('commission', [
-    el('passengerType', 'PAX'),
+    // PAX covers the passengers holding seats; an infant on a lap is INF and
+    // needs its own FM (PNR_AddMultiElements_22_1_1A.xsd: "PAX for Passenger,
+    // INF for Infant not occupying a seat").
+    el('passengerType', passengerType),
     el('indicator', 'P'),
     wrap('commissionInfo', el('percentage', String(percentage))),
   ]),
@@ -290,6 +293,12 @@ export const buildAddElementsBody = (p) => {
     bookingReference ? remarkElement({ number: ++number, text: `ARC ${bookingReference}` }) : '',
     // FM - commission. Ticketing is refused without it (374 NEED COMMISSION).
     commissionElement({ number: ++number, percentage: commissionPercent }),
+    // The PAX FM does not reach an infant's ticket: with only that one, every
+    // booking with a lap infant was refused at issuance with 374 NEED COMMISSION
+    // (PDT, 15 Sep 2026), after the customer had paid.
+    travelers.some(isInfant)
+      ? commissionElement({ number: ++number, percentage: commissionPercent, passengerType: 'INF' })
+      : '',
     // SSR DOCS per traveller who supplied a usable document. An international
     // ticket cannot be issued without it; a domestic one generally can, so a
     // traveller with no passport is skipped rather than failed.

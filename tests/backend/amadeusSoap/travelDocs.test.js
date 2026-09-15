@@ -183,4 +183,26 @@ describe('the commission element', () => {
 
     expect(paid).toContain('<percentage>5</percentage>');
   });
+
+  // The PAX FM does not cover a lap infant's ticket. With only that one, every
+  // booking with an infant was refused at issuance: 374 NEED COMMISSION.
+  it('adds an infant FM when a lap infant travels', () => {
+    const family = buildAddElementsBody({
+      travelers: [
+        { firstName: 'A', lastName: 'B', gender: 'FEMALE', ptc: 'ADULT' },
+        { firstName: 'C', lastName: 'B', gender: 'MALE', ptc: 'HELD_INFANT', dateOfBirth: '2026-01-10' },
+      ],
+      contact: {}, officeId: 'SCK1S2400',
+    });
+
+    expect(family).toContain('<commission><passengerType>PAX</passengerType><indicator>P</indicator>'
+      + '<commissionInfo><percentage>0</percentage></commissionInfo></commission>');
+    expect(family).toContain('<commission><passengerType>INF</passengerType><indicator>P</indicator>'
+      + '<commissionInfo><percentage>0</percentage></commissionInfo></commission>');
+  });
+
+  it('adds no infant FM when nobody travels on a lap', () => {
+    expect(xml).not.toContain('<passengerType>INF</passengerType>');
+    expect(xml.match(/<segmentName>FM<\/segmentName>/g)).toHaveLength(1);
+  });
 });
