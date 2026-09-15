@@ -1,5 +1,18 @@
 import axios from 'axios';
 
+/**
+ * Where a booking is cancelled, and how long the page waits for the answer.
+ *
+ * One request cancels with the airline, refunds the payment and writes the
+ * booking, and it can take far longer than the 10 seconds every other call here
+ * allows. The page gave up at 10 seconds while the cancel carried on, and told
+ * the customer "timeout of 10000ms exceeded" about a booking that was, in fact,
+ * cancelled. The endpoint is this one constant, so moving cancel to another
+ * host is a one-line change.
+ */
+export const CANCEL_BOOKING_URL = '/api/payments?action=cancel-booking';
+export const CANCEL_TIMEOUT_MS = 60000;
+
 // Use the API endpoints for ARC Pay integration - use relative URLs to go through Vite proxy
 class ArcPayService {
     constructor() {
@@ -195,10 +208,13 @@ class ArcPayService {
         try {
             console.log('🚫 Cancelling booking:', bookingReference);
 
-            const response = await this.api.post('?action=cancel-booking', {
+            const response = await axios.post(CANCEL_BOOKING_URL, {
                 bookingReference,
                 email,
                 reason
+            }, {
+                headers: { 'Content-Type': 'application/json' },
+                timeout: CANCEL_TIMEOUT_MS
             });
 
             return {
@@ -209,9 +225,21 @@ class ArcPayService {
             };
         } catch (error) {
             console.error('Cancel booking failed:', error);
+            // No answer in time is not a failed cancel: the server may have
+            // finished it. The page reloads the booking to find out.
+            if (error?.code === 'ECONNABORTED') {
+                return {
+                    success: false,
+                    timedOut: true,
+                    error: 'We did not get an answer in time, so we are checking whether your booking was cancelled.'
+                };
+            }
             return {
                 success: false,
-                error: error.response?.data?.error || error.message,
+                // The server's own words when it answered. Never the raw network
+                // message ("Failed to fetch"), which tells a customer nothing.
+                error: error.response?.data?.error
+                    || 'We could not reach our servers to cancel this booking. Please check your connection and try again, or call (877) 538-7380.',
                 details: error.response?.data?.details
             };
         }

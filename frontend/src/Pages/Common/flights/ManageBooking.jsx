@@ -39,7 +39,7 @@ function ManageBooking() {
   // this a guest's confirmation email linked to a page they could never open.
   const [lookupEmail, setLookupEmail] = useState('');
   const [submittedEmail, setSubmittedEmail] = useState(null);
-  const { data: fetchedBooking, isLoading: queryLoading, error: queryError } = useFlightBooking(bookingId, {
+  const { data: fetchedBooking, isLoading: queryLoading, error: queryError, refetch } = useFlightBooking(bookingId, {
     enabled: !passedData && !!bookingId,
     email: submittedEmail,
   });
@@ -82,6 +82,30 @@ function ManageBooking() {
         cancelReason
       );
 
+      if (result.timedOut) {
+        // No answer in time is not a failed cancel: it may well have gone
+        // through. This used to show the raw "timeout of 10000ms exceeded"
+        // while the booking was being cancelled. Say we are checking, reload
+        // the booking, and show what it says now.
+        setShowCancelModal(false);
+        setCancelResult({ checking: true });
+        const refreshed = await refetch();
+        const now = refreshed?.isError ? null : refreshed?.data;
+        if (String(now?.status || '').toUpperCase() === 'CANCELLED') {
+          setCancelledLocally(true);
+          setCancelResult({ success: true, cancellation: now.cancellation || {} });
+        } else {
+          setCancelResult({
+            success: false,
+            unconfirmed: true,
+            error: now
+              ? 'We could not confirm the cancellation in time, and your booking still shows as active. It may still be going through: please check again in a few minutes, or call (877) 538-7380, before trying again.'
+              : 'We could not confirm the cancellation in time, or reload your booking. Please refresh this page in a few minutes, or call (877) 538-7380, before trying again.'
+          });
+        }
+        return;
+      }
+
       if (result.success) {
         // The server did it: the seat is released and the reversal, if any,
         // has run. The amounts come back on `cancellation` (the handler's
@@ -120,6 +144,16 @@ function ManageBooking() {
   };
 
   const ticketRef = React.useRef(null);
+
+  // The cancel's outcome takes focus and scrolls into view when it arrives. It
+  // rendered at the bottom of the page - below the fold on a phone - so the
+  // pop-up closed and the customer saw nothing happen.
+  const cancelResultRef = React.useRef(null);
+  useEffect(() => {
+    if (!cancelResult) return;
+    cancelResultRef.current?.focus();
+    cancelResultRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+  }, [cancelResult]);
 
   // Every leg and flight. The route card below shows the first leg's ends
   // only; a round trip's return flight and each connection were nowhere here.
@@ -236,6 +270,47 @@ function ManageBooking() {
     danger: { box: 'bg-red-50 border border-red-200', text: 'text-red-800', icon: 'text-red-600' },
     warning: { box: 'bg-amber-50 border border-amber-200', text: 'text-amber-900', icon: 'text-amber-600' },
     neutral: { box: 'bg-[#F0FAFC] border border-[#B9D0DC]', text: 'text-[#034457]', icon: 'text-[#055B75]' },
+  };
+
+  // Cancellation result. Worded by cancellationMessage, like the tracker below
+  // and the email, so one outcome reads the same everywhere. It was a green
+  // success banner whatever the refund did, and its own branches promised a
+  // shorter wait than the email did.
+  const RESULT_TONES = {
+    danger: 'bg-red-50 border border-red-200 text-red-800',
+    warning: 'bg-amber-50 border border-amber-200 text-amber-900',
+    success: 'bg-green-50 border border-green-200 text-green-800',
+    neutral: 'bg-[#F0FAFC] border border-[#B9D0DC] text-[#034457]',
+  };
+  const renderCancelResult = () => {
+    if (!cancelResult) return null;
+    const box = (tone, Icon, title, text) => (
+      <div
+        ref={cancelResultRef}
+        tabIndex={-1}
+        role={tone === 'danger' ? 'alert' : 'status'}
+        className={`mb-6 p-4 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[#055B75]/40 ${RESULT_TONES[tone]}`}
+      >
+        <div className="flex items-start gap-3">
+          <Icon className="w-5 h-5 mt-0.5 flex-shrink-0" />
+          <div>
+            <h2 className="font-semibold">{title}</h2>
+            <p className="text-sm mt-1">{text}</p>
+          </div>
+        </div>
+      </div>
+    );
+
+    if (cancelResult.checking) {
+      return box('neutral', Info, 'Checking your booking', 'We did not get an answer in time, so we are checking whether your booking was cancelled.');
+    }
+    if (!cancelResult.success) {
+      return box('danger', AlertCircle, cancelResult.unconfirmed ? 'Cancellation Not Confirmed' : 'Cancellation Error', cancelResult.error);
+    }
+    const outcome = refundOutcome(cancelResult.cancellation || {});
+    const tone = outcome === 'stuck' ? 'danger' : ['review', 'unknown'].includes(outcome) ? 'warning' : 'success';
+    return box(tone, outcome === 'stuck' ? AlertCircle : CheckCircle, 'Booking Cancelled',
+      cancellationMessage({ cancellation: cancelResult.cancellation }));
   };
 
   const renderStatusBanner = () => {
@@ -456,6 +531,9 @@ function ManageBooking() {
               <p className="text-gray-600">Booking Reference: {bookingData?.orderId || bookingData?.bookingReference}</p>
             </div>
           </div>
+
+          {/* What the cancel did, first thing on the page. */}
+          {renderCancelResult()}
 
           {/* Status Banner / Cancellation Tracker */}
           {renderStatusBanner()}
@@ -800,43 +878,6 @@ function ManageBooking() {
         </div>
       </div>
 
-      {/* Cancellation result. Worded by cancellationMessage, like the tracker
-          above and the email, so one outcome reads the same everywhere. It was
-          a green success banner whatever the refund did, and its own branches
-          promised a shorter wait than the email did. */}
-      {cancelResult && (() => {
-        if (!cancelResult.success) {
-          return (
-            <div className="mx-4 sm:mx-8 mb-6 p-4 rounded-lg bg-red-50 border border-red-200">
-              <div className="flex items-start gap-3">
-                <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
-                <div>
-                  <h4 className="font-semibold text-red-800">Cancellation Error</h4>
-                  <p className="text-red-700 text-sm mt-1">{cancelResult.error}</p>
-                </div>
-              </div>
-            </div>
-          );
-        }
-        const outcome = refundOutcome(cancelResult.cancellation || {});
-        const tone = outcome === 'stuck' ? 'bg-red-50 border border-red-200 text-red-800'
-          : ['review', 'unknown'].includes(outcome) ? 'bg-amber-50 border border-amber-200 text-amber-900'
-            : 'bg-green-50 border border-green-200 text-green-800';
-        return (
-          <div className={`mx-4 sm:mx-8 mb-6 p-4 rounded-lg ${tone}`}>
-            <div className="flex items-start gap-3">
-              {outcome === 'stuck'
-                ? <AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0" />
-                : <CheckCircle className="w-5 h-5 mt-0.5 flex-shrink-0" />}
-              <div>
-                <h4 className="font-semibold">Booking Cancelled</h4>
-                <p className="text-sm mt-1">{cancellationMessage({ cancellation: cancelResult.cancellation })}</p>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
-
       {/* Cancel Booking Modal */}
       {showCancelModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -907,6 +948,10 @@ function ManageBooking() {
                 )}
               </button>
             </div>
+            {/* Cancelling with the airline and refunding can take a while. */}
+            {cancelling && (
+              <p className="text-xs text-gray-500 mt-3">This can take up to a minute. Please keep this page open.</p>
+            )}
           </div>
         </div>
       )}
