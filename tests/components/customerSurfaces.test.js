@@ -318,7 +318,9 @@ describe('a cancelled booking has no usable ticket and one account of its refund
   const confirmation = commonPage('BookingConfirmation.jsx');
 
   it('Manage Booking offers no download for a cancelled booking', () => {
-    expect(manage).toMatch(/\{bookingData\?\.status\?\.toUpperCase\(\) !== 'CANCELLED' && \(\s*<button\s+onClick=\{downloadETicket\}/);
+    // Offered only for a booking the airline holds, which a cancelled one does
+    // not (canDownloadDocument, tests/utils/eTicketDocument.test.js).
+    expect(manage).toMatch(/\{canDownloadDocument\(bookingData\) && \(\s*<button\s+onClick=\{downloadETicket\}/);
   });
 
   it('Manage Booking promises no fee or timescale the cancellation does not keep', () => {

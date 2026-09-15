@@ -7,6 +7,8 @@ import {
     ticketForTraveler,
     issueDate,
     isPaid,
+    documentState,
+    pnrOf,
 } from '../../../utils/eTicket';
 import { formatCalendarDate } from '../../../utils/dateUtils';
 import { bookingItineraries } from '../../../../../shared/bookingItineraries';
@@ -50,9 +52,41 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
     // A cancelled booking's tickets were voided or refunded with the airline.
     // Its document still downloaded headed "E-Ticket", with every number on it.
     const isCancelled = state === 'cancelled';
-    // "E-Ticket" is a claim. Only make it once a ticket exists, and never for a
-    // booking that no longer holds one.
-    const documentTitle = isCancelled ? 'Cancelled Booking' : isTicketed ? 'E-Ticket' : 'Booking Confirmation';
+    const hasPnr = Boolean(pnrOf(bookingData));
+    // "E-Ticket" is a claim, and so is "Booking Confirmation": the first needs a
+    // ticket, the second a PNR. Neither is made for a booking that holds none.
+    const documentTitle = isCancelled ? 'Cancelled Booking'
+        : isTicketed ? 'E-Ticket'
+            : hasPnr ? 'Booking Confirmation'
+                : 'Booking Summary';
+
+    // Worded from what is true of the booking. "Your seat is held under the PNR
+    // below" was printed whenever no ticket existed, over "PNR: N/A" for a
+    // booking still queued, never sent to the airline, or never paid for.
+    const NOTICES = {
+        ticket_pending: {
+            title: 'Your ticket has been issued. The ticket number is still being confirmed.',
+            body: 'We will email your ticket number shortly. Your booking reference and PNR below are valid.',
+        },
+        held: {
+            title: 'This is a confirmed reservation, not a ticket.',
+            body: 'Your seat is held under the PNR below. We will email your e-ticket once it is issued. Please do not travel on this document alone.',
+        },
+        queued: {
+            title: 'Your booking is being confirmed with the airline.',
+            body: 'Your payment is received, but no seat is held yet, so this is not a reservation or a ticket. We will email you once the airline confirms it.',
+        },
+        not_booked: paid
+            ? {
+                title: 'This booking has not been confirmed with the airline.',
+                body: 'Your payment is received, but no seat is held, so this is not a reservation or a ticket. We will confirm your booking or refund you by email.',
+            }
+            : {
+                title: 'This booking has not been paid for.',
+                body: 'Nothing is held with the airline, so this is not a reservation or a ticket.',
+            },
+    };
+    const notice = NOTICES[documentState(bookingData)] || null;
 
     // Get flight data - handle both nested and direct structures. Identifiers
     // fall back to a visible placeholder rather than a plausible-looking
@@ -80,7 +114,7 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
     const safeBookingDetails = {
         bookingId: bookingDetails?.bookingId || bookingData.orderId || bookingData.bookingReference || 'N/A',
         status: bookingDetails?.status || bookingData.status || 'PENDING',
-        pnr: bookingDetails?.pnr || bookingData.pnr || 'N/A',
+        pnr: pnrOf(bookingData) || 'Not yet assigned',
         // Never an invented allowance on a travel document.
         baggage: bookingDetails?.baggage || null
     };
@@ -134,7 +168,7 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
                             ? 'Cancelled — not valid for travel'
                             : issuedOn
                                 ? `Date of Issue: ${formatCalendarDate(issuedOn, { month: 'short', day: 'numeric', year: 'numeric' }, issuedOn)}`
-                                : 'Ticket not yet issued'}
+                                : hasPnr ? 'Ticket not yet issued' : 'Not yet confirmed with the airline'}
                     </span>
                     <span className={`font-bold uppercase px-3 py-1 rounded text-xs ${isCancelled ? 'bg-red-600' : isTicketed ? 'bg-green-500' : 'bg-amber-500'}`}>
                         {safeBookingDetails.status}
@@ -152,18 +186,10 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
                             </p>
                         </div>
                     )}
-                    {!isTicketed && !isCancelled && (
+                    {notice && (
                         <div className="mb-6 border border-amber-300 bg-amber-50 rounded-lg px-5 py-4">
-                            <p className="font-bold text-amber-900 text-sm">
-                                {state === 'pending'
-                                    ? 'Your ticket has been issued. The ticket number is still being confirmed.'
-                                    : 'This is a confirmed reservation, not a ticket.'}
-                            </p>
-                            <p className="text-xs text-amber-800 mt-1">
-                                {state === 'pending'
-                                    ? 'We will email your ticket number shortly. Your booking reference and PNR below are valid.'
-                                    : 'Your seat is held under the PNR below. We will email your e-ticket once it is issued. Please do not travel on this document alone.'}
-                            </p>
+                            <p className="font-bold text-amber-900 text-sm">{notice.title}</p>
+                            <p className="text-xs text-amber-800 mt-1">{notice.body}</p>
                         </div>
                     )}
 

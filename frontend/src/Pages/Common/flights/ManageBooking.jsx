@@ -11,7 +11,7 @@ import Footer from '../Footer';
 import FlightETicket from './FlightETicket';
 import BookingItinerary from './BookingItinerary';
 import { bookingItineraries } from '../../../../../shared/bookingItineraries';
-import { isPaid, ticketState } from '../../../utils/eTicket';
+import { canDownloadDocument, isPaid, ticketState } from '../../../utils/eTicket';
 import { attentionMessage, bookingStatusBadge, cancellationMessage, refundStatus } from '../../../utils/bookingStatus';
 import { refundOutcome } from '../../../../../shared/cancellationOutcome';
 import ArcPayService from '../../../Services/ArcPayService';
@@ -126,8 +126,9 @@ function ManageBooking() {
   const itineraryLegs = bookingItineraries(bookingData);
 
   const downloadETicket = async () => {
-    // A cancelled booking has no document to hand out.
-    if (String(bookingData?.status || '').toUpperCase() === 'CANCELLED') return;
+    // Only a booking the airline holds has a document to hand out: not a
+    // cancelled one, and not one with no PNR (see canDownloadDocument).
+    if (!canDownloadDocument(bookingData)) return;
     if (!ticketRef.current) {
       alert("Ticket template not ready. Please wait and try again.");
       return;
@@ -463,8 +464,11 @@ function ManageBooking() {
           <div className="flex flex-wrap gap-3 mb-6">
             {/* A cancelled booking offers no document. Its tickets were voided
                 or refunded with the airline, and a PDF of them is a travel
-                document for a flight the customer no longer holds. */}
-            {bookingData?.status?.toUpperCase() !== 'CANCELLED' && (
+                document for a flight the customer no longer holds. Nor does a
+                booking with no PNR - queued, never booked, held as a second
+                payment, or unpaid - whose "PNR: N/A" document said a seat was
+                held. */}
+            {canDownloadDocument(bookingData) && (
               <button
                 onClick={downloadETicket}
                 className="flex items-center bg-[#055B75] text-white px-4 py-2 rounded-lg hover:bg-[#034457] transition"

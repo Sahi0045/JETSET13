@@ -123,6 +123,39 @@ export function issueDate(tickets) {
   return tickets.find((t) => t?.issuedOn)?.issuedOn ?? null;
 }
 
+/** The airline reference (PNR), from whichever shape the booking arrived in. */
+export function pnrOf(bookingData) {
+  return bookingData?.pnr || bookingData?.booking_details?.pnr || bookingData?.bookingDetails?.pnr || null;
+}
+
+/**
+ * What the downloadable document may truthfully call this booking.
+ *
+ * The document said "Your seat is held under the PNR below" whenever no ticket
+ * existed - over "PNR: N/A" for a booking still in the queue, one never sent to
+ * the airline, one held back as a second payment, and one never paid for. Only
+ * a PNR holds a seat.
+ *
+ * @returns {'cancelled'|'ticketed'|'ticket_pending'|'held'|'queued'|'not_booked'}
+ */
+export function documentState(bookingData) {
+  const tickets = ticketState(bookingData);
+  if (tickets === 'cancelled') return 'cancelled';
+  if (tickets === 'issued') return 'ticketed';
+  if (pnrOf(bookingData)) return tickets === 'pending' ? 'ticket_pending' : 'held';
+  const status = String(bookingData?.status ?? '').toLowerCase();
+  return bookingData?.queued === true || status === 'pending_confirmation' ? 'queued' : 'not_booked';
+}
+
+/**
+ * Whether Manage Booking offers the document at all: only for a booking the
+ * airline holds. Without a PNR there is nothing to carry - no ticket and no
+ * reservation - and a PDF headed "Booking Confirmation" says otherwise.
+ */
+export function canDownloadDocument(bookingData) {
+  return ['ticketed', 'ticket_pending', 'held'].includes(documentState(bookingData));
+}
+
 /** Whether the money is actually confirmed, rather than assumed. */
 export function isPaid(bookingData) {
   const status = String(
