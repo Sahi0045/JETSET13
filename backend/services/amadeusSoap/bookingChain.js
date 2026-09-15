@@ -625,33 +625,36 @@ export const cancelBooking = async (recordLocator) => {
 
     if (voidable.length > 0) {
       try {
-        const voidReply = await callStep(ctx, {
-          step: 'voidTicket',
-          operation: 'Ticket_CancelDocument',
-          bodyXml: buildVoidTicketBody({
+        let voidReply;
+        try {
+          voidReply = replyOf(await ctx.call('Ticket_CancelDocument', buildVoidTicketBody({
             documentNumbers: voidable.map((t) => t.number.replace('-', '')),
             marketIataCode: config.marketIataCode,
             targetOffice: config.officeId,
-          }),
-          pnr: recordLocator,
-          committed: true,
-          ticketed: true,
-        });
+          })));
+        } catch (cause) {
+          throw new BookingChainError({ step: 'voidTicket', pnr: recordLocator, committed: true, ticketed: true, cause, code: cause?.code ?? 502 });
+        }
 
-        // Confirm rather than assume. The reply says whether the ticket was
-        // actually voided (responseType X); treating "it parsed" as "it was
-        // voided" would let the itinerary be cancelled out from under a live
-        // ticket.
+        // Confirm rather than assume, per document (readVoidTicketReply). The
+        // documents are read before the reply's error group: a ticket an earlier
+        // attempt already voided answers 6150 DOCUMENT ALREADY CANCELLED in that
+        // group, and treated as a failure it stopped every retry here - a cancel
+        // whose PNR_Cancel had failed could never finish, and the booking stayed
+        // live with its tickets voided (PDT, 15 Sep 2026).
         const result = readVoidTicketReply(voidReply);
         if (!result.voided) {
+          const inspected = inspectReply(voidReply, 'Ticket_CancelDocument');
           throw new BookingChainError({
             step: 'voidTicket',
             pnr: recordLocator,
             committed: true,
             ticketed: true,
+            cause: inspected.error ?? undefined,
             error: 'We could not void the ticket',
             code: 502,
-            technicalError: `Ticket_CancelDocument responseType ${result.responseType || 'absent'}`,
+            technicalError: inspected.error?.technicalError
+              ?? `Ticket_CancelDocument responseType ${result.responseType || 'absent'} status ${result.status || 'absent'}`,
           });
         }
         voided = true;
@@ -665,14 +668,31 @@ export const cancelBooking = async (recordLocator) => {
       }
     }
 
-    await callStep(ctx, {
-      step: 'cancel',
-      operation: 'PNR_Cancel',
-      bodyXml: buildCancelBody(recordLocator),
-      pnr: recordLocator,
-      committed: true,
-      ticketed: tickets.length > 0,
-    });
+    // 8111 SIMULTANEOUS CHANGES TO PNR - USE WRA/RT TO PRINT OR IGNORE. Right
+    // after ticketing the airline's own updates are still landing on the PNR,
+    // and a cancel then is refused - on PDT an Etihad and an Air Canada booking
+    // were both left live this way. It is not a refusal to cancel: Amadeus says
+    // to redisplay the PNR and try again, which is what this does, twice.
+    for (let attempt = 1; ; attempt += 1) {
+      try {
+        await callStep(ctx, {
+          step: 'cancel',
+          operation: 'PNR_Cancel',
+          bodyXml: buildCancelBody(recordLocator),
+          pnr: recordLocator,
+          committed: true,
+          ticketed: tickets.length > 0,
+        });
+        break;
+      } catch (cause) {
+        const simultaneous = String(cause?.amadeusCode ?? '') === '8111'
+          || /SIMULTANEOUS CHANGES/i.test(String(cause?.technicalError ?? ''));
+        if (!simultaneous || attempt >= 3) throw cause;
+        log.warn({ pnr: recordLocator, attempt }, 'PNR_Cancel met simultaneous changes; redisplaying and retrying');
+        await sleep(config.cancelRetryDelayMs);
+        await callStep(ctx, { step: 'retrieve', operation: 'PNR_Retrieve', bodyXml: buildRetrieveBody(recordLocator), pnr: recordLocator, committed: true });
+      }
+    }
 
     log.info({
       pnr: recordLocator, hadTickets: tickets.length, voided, unvoidable: unvoidable.length,

@@ -372,3 +372,26 @@ describe('baggage units', () => {
       .toEqual({ weight: 20, weightUnit: 'KG' });
   });
 });
+
+describe('booking class', () => {
+  // Virgin Atlantic, Delta and JetBlue (PDT, 15 Sep 2026) send two cabinProducts
+  // per flight: the fare's own class, then another carrying a bookingModifier.
+  // VS26 priced in the first (T) at the search's $294.50 and in the second (O) at
+  // $394.50. Read as one object, the pair gave no class and the offer could not
+  // be priced or sold (477 Booking Class not specified).
+  it("takes the fare's own class when a flight has a class pair", () => {
+    const original = readFileSync(new URL('../../fixtures/amadeus/mptbs-oneway-jfk-lhr.xml', import.meta.url), 'utf8');
+    const paired = original.replace(/<cabinProduct>[\s\S]*?<\/cabinProduct>/g,
+      '<cabinProduct><rbd>T</rbd><cabin>M</cabin><avlStatus>9</avlStatus></cabinProduct>'
+      + '<cabinProduct><rbd>O</rbd><bookingModifier>T</bookingModifier><cabin>M</cabin><avlStatus>9</avlStatus></cabinProduct>');
+    expect(paired).not.toBe(original);
+    const { body } = unwrapEnvelope(parseSoap(paired));
+    const { offers } = mapMasterPricerReply(body[Object.keys(body).find((k) => k !== 'Fault')], { config, searchSignature: 'test' });
+
+    expect(offers.length).toBeGreaterThan(0);
+    for (const offer of offers) {
+      for (const segment of offer._ama.segments) expect(segment.rbd).toBe('T');
+      for (const detail of offer.travelerPricings[0].fareDetailsBySegment) expect(detail.class).toBe('T');
+    }
+  });
+});

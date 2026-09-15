@@ -207,6 +207,85 @@ describe('cancelling', () => {
     expect(didCancel()).toBe(false);
   });
 
+  // A cancel whose PNR_Cancel failed has already voided the tickets. Retried,
+  // the void answers 6150 DOCUMENT ALREADY CANCELLED - which stopped every
+  // retry at the void, and the booking stayed live with its tickets voided.
+  it('finishes a cancel whose tickets an earlier attempt already voided', async () => {
+    const { cancelBooking } = await loadChain();
+    const alreadyVoided = envelope('Ticket_CancelDocumentReply',
+      '<transactionResults><responseDetails><responseType>X</responseType><statusCode>N</statusCode></responseDetails>'
+      + '<errorGroup><errorOrWarningCodeDetails><errorDetails><errorCode>6150</errorCode></errorDetails></errorOrWarningCodeDetails>'
+      + '<errorWarningDescription><freeText>REJECTED - DOCUMENT ALREADY CANCELLED</freeText></errorWarningDescription></errorGroup></transactionResults>', true);
+    axios.post
+      .mockResolvedValueOnce(reply(retrievedWithTicket(todayDDMMMYY())))
+      .mockResolvedValueOnce(reply(alreadyVoided))
+      .mockResolvedValueOnce(reply(ok('PNR_Reply')))
+      .mockResolvedValue(reply(ok('Security_SignOutReply')));
+
+    const result = await cancelBooking('ABC123');
+
+    expect(didCancel()).toBe(true);
+    expect(result.voided).toBe(true);
+  });
+
+  it('does not cancel when the void is refused for any other reason', async () => {
+    const { cancelBooking } = await loadChain();
+    const refusedVoid = envelope('Ticket_CancelDocumentReply',
+      '<transactionResults><responseDetails><responseType>X</responseType><statusCode>N</statusCode></responseDetails>'
+      + '<errorGroup><errorOrWarningCodeDetails><errorDetails><errorCode>1234</errorCode></errorDetails></errorOrWarningCodeDetails>'
+      + '<errorWarningDescription><freeText>VOID NOT PERMITTED</freeText></errorWarningDescription></errorGroup></transactionResults>', true);
+    axios.post
+      .mockResolvedValueOnce(reply(retrievedWithTicket(todayDDMMMYY())))
+      .mockResolvedValueOnce(reply(refusedVoid))
+      .mockResolvedValue(reply(ok('Security_SignOutReply')));
+
+    await expect(cancelBooking('ABC123')).rejects.toMatchObject({ step: 'voidTicket' });
+    expect(didCancel()).toBe(false);
+  });
+
+  describe('a PNR still being updated', () => {
+    const simultaneous = envelope('PNR_Reply',
+      '<generalErrorInfo><errorOrWarningCodeDetails><errorDetails><errorCode>8111</errorCode></errorDetails></errorOrWarningCodeDetails>'
+      + '<errorFreeText>SIMULTANEOUS CHANGES TO PNR - USE WRA/RT TO PRINT OR IGNORE</errorFreeText></generalErrorInfo>', true);
+    const cancelCalls = () => actionsSent().filter((a) => a.includes('PNRXCL')).length;
+
+    beforeEach(() => {
+      vi.stubEnv('AMADEUS_WS_CANCEL_RETRY_DELAY_MS', '0');
+    });
+
+    // Right after ticketing the airline's updates are still landing on the PNR;
+    // an Etihad and an Air Canada booking were left live on PDT this way.
+    it('redisplays the PNR and cancels again after 8111', async () => {
+      const { cancelBooking } = await loadChain();
+      axios.post
+        .mockResolvedValueOnce(reply(retrievedNoTicket))
+        .mockResolvedValueOnce(reply(simultaneous))
+        .mockResolvedValueOnce(reply(retrievedNoTicket))
+        .mockResolvedValueOnce(reply(ok('PNR_Reply')))
+        .mockResolvedValue(reply(ok('Security_SignOutReply')));
+
+      const result = await cancelBooking('ABC123');
+
+      expect(result.cancelled).toBe(true);
+      expect(cancelCalls()).toBe(2);
+    });
+
+    it('gives up after three attempts', async () => {
+      const { cancelBooking } = await loadChain();
+      axios.post
+        .mockResolvedValueOnce(reply(retrievedNoTicket))
+        .mockResolvedValueOnce(reply(simultaneous))
+        .mockResolvedValueOnce(reply(retrievedNoTicket))
+        .mockResolvedValueOnce(reply(simultaneous))
+        .mockResolvedValueOnce(reply(retrievedNoTicket))
+        .mockResolvedValueOnce(reply(simultaneous))
+        .mockResolvedValue(reply(ok('Security_SignOutReply')));
+
+      await expect(cancelBooking('ABC123')).rejects.toMatchObject({ step: 'cancel' });
+      expect(cancelCalls()).toBe(3);
+    });
+  });
+
   it('identifies the stock by market code, which is what the schema holds', async () => {
     const { cancelBooking } = await loadChain();
     axios.post

@@ -141,6 +141,9 @@ const readWsConfig = (env = process.env) => {
     // reference flow's "already retried 3 times?" gate.
     ticketRetrieveRetries: asInt(env.AMADEUS_WS_TICKET_RETRIEVE_RETRIES, 2),
     ticketRetrieveDelayMs: asInt(env.AMADEUS_WS_TICKET_RETRIEVE_DELAY_MS, 1000),
+    // PNR_Cancel answering 8111 SIMULTANEOUS CHANGES TO PNR is retried after
+    // redisplaying the PNR; this is the pause before each retry.
+    cancelRetryDelayMs: asInt(env.AMADEUS_WS_CANCEL_RETRY_DELAY_MS, 1500),
     logEnvelopes: isTrue(env.AMADEUS_WS_LOG_ENVELOPES, false) && env.NODE_ENV !== 'production',
   });
 };
