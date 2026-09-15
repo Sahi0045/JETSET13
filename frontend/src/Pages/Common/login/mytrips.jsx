@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { daysUntilDate, formatCalendarDate, formatIsoDuration } from "../../../utils/dateUtils"
-import { bookingStatusBadge, needsAttention, cancellationMessage, refundStatus, attentionMessage } from "../../../utils/bookingStatus"
+import { bookingStatusBadge, needsAttention, cancellationMessage, refundStatus, attentionMessage, isCompletedTrip } from "../../../utils/bookingStatus"
 import { resolveTickets, ticketState } from "../../../utils/eTicket"
 import { bookingItineraries } from "../../../../../shared/bookingItineraries"
 import BookingItinerary from "../flights/BookingItinerary"
@@ -733,11 +733,18 @@ export default function TravelDashboard() {
                     `${daysUntilTrip} days to go`}
               </div>
             )}
-            {daysUntilTrip !== null && daysUntilTrip < 0 && (
+            {/* "Trip Completed" only for a trip that could have been taken
+                (isCompletedTrip). It was shown under every past date - for a
+                reservation never ticketed, too. */}
+            {daysUntilTrip !== null && daysUntilTrip < 0 && (isCompletedTrip(booking) ? (
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold mt-3 bg-gray-50 text-gray-500 border border-gray-200">
                 <FaCheckCircle className="w-3 h-3" /> Trip Completed
               </div>
-            )}
+            ) : (
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold mt-3 bg-gray-50 text-gray-500 border border-gray-200">
+                <FaCalendarAlt className="w-3 h-3" /> Travel date passed
+              </div>
+            ))}
           </div>
 
           <div className="flex flex-col items-start sm:items-end gap-2">

@@ -3226,6 +3226,25 @@ function clientTravellers(list, { showPassports = false } = {}) {
 }
 
 /**
+ * A flight checkout the customer opened and never paid for: still `pending`, no
+ * payment recorded, nothing sent to the airline, and nobody working on it.
+ *
+ * Hosted checkout creates the booking row before the customer reaches the
+ * payment page, so every abandoned payment page left a row, and My Trips listed
+ * each one as a trip. A row with any sign of life - a payment, a PNR, a queued
+ * order, a review flag, a cancellation - is kept. A payment captured but not yet
+ * reconciled reads as unpaid until the abandoned-checkout job asks the gateway,
+ * and shows from then.
+ */
+export function isAbandonedCheckout(booking) {
+  if (booking?.travel_type !== 'flight' || String(booking?.status || '').toLowerCase() !== 'pending') return false;
+  const payment = String(booking?.payment_status || '').toLowerCase();
+  if (['paid', 'completed', 'partial', 'refunded', 'partially_refunded'].includes(payment)) return false;
+  const details = booking.booking_details || {};
+  return !details.pnr && !details.queued_order && !details.needs_review && !details.cancellation;
+}
+
+/**
  * What checkout charged for a flight, as a receipt shows it: the airline's
  * fare, the service fee, any coupon discount, and the total, in USD (ARC Pay
  * settles only in USD). Null when checkout recorded no verified charge.
@@ -3428,7 +3447,10 @@ router.get('/bookings', protect, async (req, res) => {
       });
     }
 
-    const transformedBookings = (data || []).map(toClientBooking);
+    // A checkout opened and never paid for is not a trip (isAbandonedCheckout).
+    const transformedBookings = (data || [])
+      .filter((row) => !isAbandonedCheckout(row))
+      .map((row) => toClientBooking(row));
 
     console.log(`✅ Fetched ${transformedBookings.length} bookings from database`);
 
