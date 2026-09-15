@@ -213,11 +213,13 @@ describe('ArcPayService', () => {
       expect(result.success).toBe(true);
       expect(result.cancellation.amadeus).toBe(true);
       expect(result.cancellation.arcPay).toBe(true);
+      // A minute, not the client's 10 seconds: cancelling and refunding takes
+      // longer, and the page used to give up while the cancel went through.
       expect(mockAxiosInstance.post).toHaveBeenCalledWith('?action=cancel-booking', {
         bookingReference: 'BK-001',
         email: 'user@test.com',
         reason: 'Test reason'
-      });
+      }, expect.objectContaining({ timeout: 60000 }));
     });
 
     it('handles cancel failure', async () => {

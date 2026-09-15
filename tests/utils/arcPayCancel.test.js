@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import ArcPayService, { CANCEL_BOOKING_URL, CANCEL_TIMEOUT_MS, flightCancelPath } from '../../frontend/src/Services/ArcPayService.js';
+import ArcPayService, { CANCEL_BOOKING_PATH, CANCEL_TIMEOUT_MS, flightCancelPath } from '../../frontend/src/Services/ArcPayService.js';
 
 // The session's own headers, as authHeaders builds them for a signed-in owner.
 vi.mock('../../frontend/src/utils/authHeaders', () => ({
@@ -57,7 +57,7 @@ describe('cancelBooking', () => {
 
     const result = await ArcPayService.cancelBooking('FLT1', 'jane@example.com', 'Other');
 
-    expect(fetchMock.mock.calls[0][0]).toBe(CANCEL_BOOKING_URL);
+    expect(fetchMock.mock.calls[0][0]).toBe(`/api/payments/${CANCEL_BOOKING_PATH}`);
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ bookingReference: 'FLT1', email: 'jane@example.com', reason: 'Other' });
     expect(result).toMatchObject({ success: true, cancellation: { paymentAction: 'REFUND', refundAmount: 291 } });
   });

@@ -1,16 +1,17 @@
 import axios from 'axios';
 
 /**
- * Where a booking is cancelled, and how long the page waits for the answer.
+ * How a booking is cancelled, and how long the page waits for the answer.
  *
- * One request cancels with the airline, refunds the payment and writes the
+ * One request cancels with the supplier, refunds the payment and writes the
  * booking, and it can take far longer than the 10 seconds every other call here
  * allows. The page gave up at 10 seconds while the cancel carried on, and told
  * the customer "timeout of 10000ms exceeded" about a booking that was, in fact,
- * cancelled. The endpoint is this one constant, so moving cancel to another
- * host is a one-line change.
+ * cancelled. Flights cancel on the flights host (flightCancelPath, below); any
+ * other booking at this path on the payments endpoint, through the service's
+ * own client like every other payments call.
  */
-export const CANCEL_BOOKING_URL = '/api/payments?action=cancel-booking';
+export const CANCEL_BOOKING_PATH = '?action=cancel-booking';
 export const CANCEL_TIMEOUT_MS = 60000;
 
 /**
@@ -243,12 +244,11 @@ class ArcPayService {
         try {
             console.log('🚫 Cancelling booking:', bookingReference);
 
-            const response = await axios.post(CANCEL_BOOKING_URL, {
+            const response = await this.api.post(CANCEL_BOOKING_PATH, {
                 bookingReference,
                 email,
                 reason
             }, {
-                headers: { 'Content-Type': 'application/json' },
                 timeout: CANCEL_TIMEOUT_MS
             });
 
