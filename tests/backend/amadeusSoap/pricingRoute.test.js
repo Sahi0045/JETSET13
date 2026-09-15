@@ -90,6 +90,75 @@ describe('POST /api/flights/price', () => {
     expect(res.body.code).toBeUndefined();
   });
 
+  // Checkout asks for the seats to be confirmed before the charge. The review
+  // page prices through this route on every load and must not sell each time.
+  describe('confirming the seats', () => {
+    const session = '<awsse:Session TransactionStatusCode="InSeries"><awsse:SessionId>S1</awsse:SessionId><awsse:SequenceNumber>1</awsse:SequenceNumber><awsse:SecurityToken>T</awsse:SecurityToken></awsse:Session>';
+    const sellReply = (...statuses) => `<?xml version="1.0" encoding="UTF-8"?><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:awsse="http://xml.amadeus.com/2010/06/Session_v3"><soap:Header>${session}</soap:Header><soap:Body><Air_SellFromRecommendationReply>`
+      + `<itineraryDetails>${statuses.map((s) => `<segmentInformation><actionDetails><quantity>1</quantity><statusCode>${s}</statusCode></actionDetails></segmentInformation>`).join('')}</itineraryDetails>`
+      + '</Air_SellFromRecommendationReply></soap:Body></soap:Envelope>';
+    const signOut = '<?xml version="1.0" encoding="UTF-8"?><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Header/><soap:Body><Security_SignOutReply/></soap:Body></soap:Envelope>';
+    const sells = () => axios.post.mock.calls.filter(([, body]) => String(body).includes('<Air_SellFromRecommendation'));
+
+    beforeEach(() => {
+      vi.stubEnv('AMADEUS_WS_WSAP', '1ASIWJETJEC');
+    });
+
+    it('does not sell when the request does not ask', async () => {
+      axios.post.mockReset();
+      axios.post.mockResolvedValue(reply(fixture('informative-pricing')));
+      const app = await makeApp();
+
+      const res = await request(app).post('/api/flights/price').send({ flightOffer: await offerFrom('mptbs-oneway-jfk-lhr') });
+
+      expect(res.status).toBe(200);
+      expect(res.body.meta.seatsConfirmed).toBe(false);
+      expect(sells()).toHaveLength(0);
+    });
+
+    it('prices, then confirms the seats, when checkout asks', async () => {
+      axios.post.mockReset();
+      axios.post
+        .mockResolvedValueOnce(reply(fixture('informative-pricing')))
+        .mockResolvedValueOnce(reply(sellReply('OK')))
+        .mockResolvedValue(reply(signOut));
+      const app = await makeApp();
+
+      const res = await request(app).post('/api/flights/price').send({ flightOffer: await offerFrom('mptbs-oneway-jfk-lhr'), confirmSeats: true });
+
+      expect(res.status).toBe(200);
+      expect(res.body.meta.seatsConfirmed).toBe(true);
+      expect(sells()).toHaveLength(1);
+    });
+
+    it('answers seats the airline will not sell as FARE_UNAVAILABLE', async () => {
+      axios.post.mockReset();
+      axios.post
+        .mockResolvedValueOnce(reply(fixture('informative-pricing')))
+        .mockResolvedValueOnce(reply(sellReply('UNS')))
+        .mockResolvedValue(reply(signOut));
+      const app = await makeApp();
+
+      const res = await request(app).post('/api/flights/price').send({ flightOffer: await offerFrom('mptbs-oneway-jfk-lhr'), confirmSeats: true });
+
+      expect(res.status).toBe(409);
+      expect(res.body.code).toBe('FARE_UNAVAILABLE');
+    });
+
+    it('skips the check when it is switched off', async () => {
+      vi.stubEnv('AMADEUS_WS_SEAT_CHECK_BEFORE_PAYMENT', 'false');
+      axios.post.mockReset();
+      axios.post.mockResolvedValue(reply(fixture('informative-pricing')));
+      const app = await makeApp();
+
+      const res = await request(app).post('/api/flights/price').send({ flightOffer: await offerFrom('mptbs-oneway-jfk-lhr'), confirmSeats: true });
+
+      expect(res.status).toBe(200);
+      expect(res.body.meta.seatsConfirmed).toBe(false);
+      expect(sells()).toHaveLength(0);
+    });
+  });
+
   it('requires a flightOffer', async () => {
     const app = await makeApp();
     const res = await request(app).post('/api/flights/price').send({});

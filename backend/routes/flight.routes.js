@@ -1758,13 +1758,26 @@ router.post('/price', async (req, res) => {
       throw new Error(pricingResponse.error);
     }
 
+    // Checkout asks for the seats to be confirmed before the charge, and only
+    // checkout: the review page prices through this route on every load, and a
+    // sell for every page view would be a sell for every look. A refusal is a
+    // 409, answered below as FARE_UNAVAILABLE, like a fare the airline will not
+    // price. See confirmSeats in services/amadeusSoap/bookingChain.js.
+    const seatsChecked = req.body.confirmSeats === true && providerStatus().seatCheckBeforePayment;
+    if (seatsChecked) {
+      await FlightProvider.confirmSeats(pricingResponse.data?.flightOffers?.[0] ?? flightOffer);
+    }
+
     res.json({
       success: true,
       data: pricingResponse.data,
       // Whether the trip crosses a border, from this server's airport index -
       // the one the order route decides a date of birth from. Checkout runs on
       // Vercel, which has no airport index, and asks here instead.
-      meta: { international: crossesBorder(pricingResponse.data?.flightOffers?.[0] ?? flightOffer) },
+      meta: {
+        international: crossesBorder(pricingResponse.data?.flightOffers?.[0] ?? flightOffer),
+        seatsConfirmed: seatsChecked,
+      },
       message: 'Flight priced successfully'
     });
 
