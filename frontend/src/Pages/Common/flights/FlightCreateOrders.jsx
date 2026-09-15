@@ -63,6 +63,14 @@ function FlightCreateOrders() {
   // problem from a terminal one. Sending someone back to a payment they already
   // made - and that was already refunded - can only fail again.
   const [errorCode, setErrorCode] = useState(null);
+  // Set when the server tried to reverse the payment because the booking failed
+  // (`bookingFailed: true`), with whether the reversal went through. Several of
+  // those answers carry no `code`, so this screen offered "Try again" on a
+  // payment that had already been reversed.
+  const [refundAttempt, setRefundAttempt] = useState(null);
+  // The payment reference this page is booking, for any screen that has to
+  // name it before the server has answered with one.
+  const [orderReference, setOrderReference] = useState('');
   const [bookingReference, setBookingReference] = useState('');
   const [pnr, setPnr] = useState('');
   // Held for staff: the airline took the booking, then a later step failed.
@@ -161,6 +169,8 @@ function FlightCreateOrders() {
     setProcessingOrder(true);
     setError(null);
     setErrorCode(null);
+    setRefundAttempt(null);
+    setOrderReference(orderData?.orderId || '');
 
     try {
       // The same builder the abandoned-checkout job uses to finish a booking
@@ -364,6 +374,8 @@ function FlightCreateOrders() {
       let errorMessage = 'Failed to process order';
 
       setErrorCode(error.response?.data?.code || error.code || null);
+      const failure = error.response?.data;
+      setRefundAttempt(failure?.bookingFailed === true ? { refunded: failure.refunded === true } : null);
 
       if (error.response?.data) {
         // Backend returned structured error
@@ -595,15 +607,25 @@ function FlightCreateOrders() {
                     <div className="mx-auto w-16 h-16 rounded-full bg-red-50 flex items-center justify-center">
                       <AlertCircle className="w-8 h-8 text-red-600" />
                     </div>
-                    <h2 className="text-xl font-semibold text-gray-800">Booking Failed</h2>
+                    <h2 className="text-xl font-semibold text-gray-800">{refundAttempt ? 'Booking Not Completed' : 'Booking Failed'}</h2>
                     <p className="text-gray-600">
                       We encountered an issue while creating your flight booking.
                     </p>
                     <div className="bg-red-50 text-red-700 p-4 rounded-lg text-sm">
                       {error || "An unexpected error occurred. Please try again."}
                     </div>
+                    {refundAttempt && (
+                      // What happened to the money, on its own line, as the
+                      // server reported it.
+                      <p className={`text-sm font-medium ${refundAttempt.refunded ? 'text-green-700' : 'text-amber-800'}`}>
+                        {refundAttempt.refunded
+                          ? 'Your payment has been reversed. You do not need to do anything.'
+                          : 'Your payment has not been reversed yet. Our team has been alerted and will refund you.'}
+                        {orderReference ? ` Booking reference: ${orderReference}.` : ''}
+                      </p>
+                    )}
                     <div className="pt-2">
-                      {TERMINAL_ERROR_CODES.has(errorCode) ? (
+                      {TERMINAL_ERROR_CODES.has(errorCode) || refundAttempt ? (
                         // The payment behind this reference is gone - refunded,
                         // refused, or spent on a booking that was cancelled.
                         // Returning to it just hits the same guard again, so
