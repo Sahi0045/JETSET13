@@ -671,6 +671,16 @@ function FlightBookingConfirmation() {
         const flightPrice = reviewState?.flightData?.price;
         const searched = Number(flightPrice?.amount || flightPrice?.grandTotal || flightPrice?.total || offer?.price?.total || 0);
         setPricedFare({ total, base: Number(price.base) || null, currency: price.currency || null });
+        // Whether the trip crosses a border, as the server decides it from its
+        // full airport index - the answer checkout holds travellers to. The
+        // page's own shorter airport list could call a trip domestic and hide
+        // the passport fields that checkout then refused the booking without.
+        const serverInternational = body?.meta?.international;
+        if (typeof serverInternational === 'boolean') {
+          setBookingDetails((details) => (details && details.isInternational !== serverInternational
+            ? { ...details, isInternational: serverInternational }
+            : details));
+        }
         if (Math.abs(total - searched) > 0.01) {
           // Both figures in the one currency, the one the summary below uses.
           // This printed "USD 501.75" against a bare search figure, beside a

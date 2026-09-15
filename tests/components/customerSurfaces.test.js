@@ -335,7 +335,7 @@ describe('a cancelled booking has no usable ticket and one account of its refund
 
   it('My Trips adds nothing to the outcome, shows no ticket for a cancelled booking, and words attention by case', () => {
     expect(trips).not.toMatch(/airline cancellation is still being processed/);
-    expect(trips).toMatch(/alert\(cancellationMessage\(result\)\)/);
+    expect(trips).toMatch(/setCancelOutcome\(\{ tone: 'success', text: cancellationMessage\(result\) \}\)/);
     expect(trips).toMatch(/if \(statusUp === 'CANCELLED'\) return 'Cancelled'/);
     expect(trips).toMatch(/attentionMessage\(booking\)/);
     expect(trips).toMatch(/refundStatus\(booking\)/);

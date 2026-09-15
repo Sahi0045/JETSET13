@@ -195,6 +195,20 @@ describe('DELETE /flights/order/:ref when the orchestrator cannot be reached', (
     expect(res.body.mode).toBe('FALLBACK_CANCELLATION');
   });
 
+  // It used to mark the row cancelled and nothing else: no record of what
+  // happened to the money, no refund owed for the desk, and Finish refund
+  // refused it as not cancelled with the airline.
+  it('records the cancellation, with the refund left for the desk', async () => {
+    orchestrator.mockRejectedValue(new Error('module failed to load'));
+    await request(await makeApp()).delete('/api/flights/order/FLT123').set(as({ id: OWNER }));
+
+    const recorded = updates.find((u) => u?.booking_details?.cancellation);
+    expect(recorded.booking_details.cancellation).toMatchObject({
+      paymentAction: 'REFUND_UNDER_REVIEW', amadeusCancelled: true, refundAmount: 0, source: 'fallback',
+    });
+    expect(updates.some((u) => u?.status === 'cancelled')).toBe(true);
+  });
+
   it('falls back when it gave no answer at all', async () => {
     orchestrator.mockResolvedValue(undefined);
     const res = await request(await makeApp()).delete('/api/flights/order/FLT123').set(as({ id: OWNER }));

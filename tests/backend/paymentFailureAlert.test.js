@@ -117,6 +117,7 @@ describe('running the check once', () => {
       not: vi.fn().mockReturnThis(),
       order: vi.fn().mockReturnThis(),
       update: vi.fn().mockReturnThis(),
+      is: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
       limit: vi.fn().mockResolvedValue({ data: rows, error: null }),
     };

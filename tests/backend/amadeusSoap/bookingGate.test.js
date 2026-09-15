@@ -1212,6 +1212,21 @@ describe('the fare the customer paid for', () => {
     expect(res.body.refundAction).toBeUndefined();
   });
 
+  // The calling code as chosen; there is no '1' to fall back on. A phone sent
+  // without one became a US number on the PNR.
+  it('puts the chosen calling code on the PNR phone, and invents none', async () => {
+    const createFlightOrder = provider({ pricedTotal: '291.00' });
+    let app = await claimable(paidRow());
+    await request(app).post('/api/flights/order').send({ ...orderBody, contactInfo: { email: 'jane@example.com', countryCode: '+91', phoneNumber: '9876543210' } });
+    expect(createFlightOrder.mock.calls[0][0].data.contacts[0].phones[0]).toMatchObject({ countryCallingCode: '91', number: '9876543210' });
+
+    vi.resetModules();
+    const again = provider({ pricedTotal: '291.00' });
+    app = await claimable(paidRow());
+    await request(app).post('/api/flights/order').send({ ...orderBody, contactInfo: { email: 'jane@example.com', phoneNumber: '9876543210' } });
+    expect(again.mock.calls[0][0].data.contacts[0].phones[0].countryCallingCode).toBeUndefined();
+  });
+
   it('counts nothing when the booking is refused', async () => {
     const recordCouponUse = vi.fn();
     vi.doMock('../../../backend/services/coupon.service.js', () => ({ recordCouponUse }));

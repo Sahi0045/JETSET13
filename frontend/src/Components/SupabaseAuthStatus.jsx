@@ -146,7 +146,7 @@ const SupabaseAuthStatus = () => {
         </div>
       </div>
 
-      <style jsx>{`
+      <style>{`
         .auth-status-container {
           max-width: 800px;
           margin: 40px auto;

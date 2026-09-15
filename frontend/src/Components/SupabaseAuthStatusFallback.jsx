@@ -8,7 +8,7 @@ const SupabaseAuthStatusFallback = ({ message = 'Loading...' }) => {
         <p>{message}</p>
       </div>
 
-      <style jsx>{`
+      <style>{`
         .auth-status-fallback {
           display: flex;
           justify-content: center;
