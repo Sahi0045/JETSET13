@@ -722,7 +722,7 @@ const CHAIN_HEARTBEAT_MS = 30_000;
  * against one payment. A compare-and-set on the state and the stamp just read,
  * so a renewal can never undo a commit or a release that landed in between.
  */
-async function refreshChainClaim(bookingReference) {
+export async function refreshChainClaim(bookingReference) {
   if (!supabase || !bookingReference) return false;
   const { data: row } = await supabase
     .from('bookings')
@@ -731,14 +731,30 @@ async function refreshChainClaim(bookingReference) {
     .single();
   const details = row?.booking_details || {};
   const chain = details.gds_chain;
-  if (chain?.state !== 'in_progress' || !chain.startedAt) return false;
+
+  // A committed chain is renewed too, on its own stamp.
+  //
+  // The commit used to renew nothing: the claim was measured from `committedAt`
+  // and expired CHAIN_CLAIM_TTL_MS later, on the assumption that what follows a
+  // commit takes seconds. Since the airline-locator patience of #132 it can take
+  // minutes - issuance retries in fresh sessions until the carrier sends its
+  // record locator, up to AMADEUS_WS_AIRLINE_LOCATOR_MAX_WAIT_MS (180 s by
+  // default) plus the issue retries. From the TTL to the end of that work the
+  // booking read as held by nobody, so a cancel arriving in the gap found no
+  // tickets yet, refunded in full with no fee, and the chain issued the ticket
+  // seconds afterwards: a live ticket and the money given back.
+  //
+  // The heartbeat is cleared in a `finally`, so a chain that ends - either way -
+  // stops renewing and the claim ages out exactly as before.
+  const stamp = chain?.state === 'committed' ? 'committedAt' : 'startedAt';
+  if ((chain?.state !== 'in_progress' && chain?.state !== 'committed') || !chain[stamp]) return false;
 
   const { data } = await supabase
     .from('bookings')
-    .update({ booking_details: { ...details, gds_chain: { ...chain, startedAt: new Date().toISOString() } } })
+    .update({ booking_details: { ...details, gds_chain: { ...chain, [stamp]: new Date().toISOString() } } })
     .eq('booking_reference', bookingReference)
-    .eq('booking_details->gds_chain->>state', 'in_progress')
-    .eq('booking_details->gds_chain->>startedAt', chain.startedAt)
+    .eq('booking_details->gds_chain->>state', chain.state)
+    .eq(`booking_details->gds_chain->>${stamp}`, chain[stamp])
     .select('booking_reference');
   return Boolean(data?.length);
 }

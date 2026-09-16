@@ -207,13 +207,15 @@ const getFiledFareRules = async (flightOffer, { sections = DEFAULT_RULE_SECTIONS
     }));
 
     const { reply: pricedReply } = soapReply(pricing);
-    const priced = inspectReply(pricedReply, 'Fare_InformativePricingWithoutPNR');
-    if (priced.error) {
-      reportIfAlerting(priced.error);
-      throw priced.error;
+    const status = inspectReply(pricedReply, 'Fare_InformativePricingWithoutPNR');
+    if (status.error) {
+      reportIfAlerting(status.error);
+      throw status.error;
     }
+    if (status.empty) throw noFareFound('Fare_InformativePricingWithoutPNR');
 
-    const { offer: pricedOffer, text } = applyPricingToOffer(pricedReply, offer);
+    const { offer: pricedOffer, text, priced } = applyPricingToOffer(pricedReply, offer);
+    if (!priced) throw noFareFound('Fare_InformativePricingWithoutPNR');
     const filed = [];
 
     for (const section of sections) {
@@ -257,6 +259,27 @@ const getFiledFareRules = async (flightOffer, { sections = DEFAULT_RULE_SECTIONS
   });
 };
 
+/**
+ * Amadeus priced nothing.
+ *
+ * `inspectReply` reads 931 "no fare found" as an empty *search* - one that
+ * succeeded and found nothing - which is right for Master Pricer and wrong
+ * here. It carries no `error`, so pricing threw nothing, `applyPricingToOffer`
+ * found no pricing group and handed back the untouched search offer, and the
+ * customer was shown the price they had searched with as though the airline
+ * had confirmed it. Checkout accepted it too, and the order route's pre-sell
+ * guard then compared that price against itself and passed.
+ *
+ * A 409, so checkout reads it as a fare refusal (isFareRefusal) and answers
+ * FARE_UNAVAILABLE before the card is charged, rather than "try again".
+ */
+const noFareFound = (operation) => new AmadeusSoapError({
+  error: 'This fare is no longer available - please search again',
+  code: 409,
+  technicalError: 'pricing returned no fare for the requested itinerary',
+  operation,
+});
+
 const priceFlightOffer = async (flightOffer) => {
   const config = getWsConfig();
   const offer = flightOffer?.originalOffer ?? flightOffer;
@@ -294,8 +317,10 @@ const priceFlightOffer = async (flightOffer) => {
     reportIfAlerting(status.error);
     throw status.error;
   }
+  if (status.empty) throw noFareFound('Fare_InformativePricingWithoutPNR');
 
-  const { offer: pricedOffer, text } = applyPricingToOffer(reply, offer);
+  const { offer: pricedOffer, text, priced } = applyPricingToOffer(reply, offer);
+  if (!priced) throw noFareFound('Fare_InformativePricingWithoutPNR');
 
   return {
     success: true,
