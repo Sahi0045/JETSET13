@@ -203,7 +203,9 @@ class VisaApplication {
       const { data, error } = await supabase
         .from("visa_applications")
         .select("*")
-        .ilike("application_ref", ref.trim())
+        // Same wildcards, same problem: `?ref=VISA-2026-0000_1` probed which
+        // references exist and returned that applicant's record.
+        .ilike("application_ref", ref.trim().replace(/[\\%_]/g, (c) => `\\${c}`))
         .maybeSingle();
 
       if (error) throw new Error(error.message);
@@ -241,7 +243,11 @@ class VisaApplication {
       const { data, error } = await supabase
         .from("visa_applications")
         .select("*")
-        .ilike("personal_info->>email", email.trim())
+        // `%` and `_` are LIKE wildcards. Unescaped, `?email=%` matched EVERY
+        // application - a one-request dump of every applicant's passport
+        // number through a public tracking endpoint. An exact address is what
+        // was ever meant here; `ilike` is only for case.
+        .ilike("personal_info->>email", email.trim().replace(/[\\%_]/g, (c) => `\\${c}`))
         .order("created_at", { ascending: false });
 
       if (error) throw new Error(error.message);

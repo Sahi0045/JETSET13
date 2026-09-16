@@ -493,18 +493,20 @@ export const trackApplication = async (req, res) => {
       application = await VisaApplication.findByRef(ref);
     }
 
-    // If not found by ref but email provided, try by email
+    /**
+     * Found by email: the newest application for that address, projected the
+     * same way as the `ref` path below.
+     *
+     * This used to answer `multiple: true` with the RAW ROWS - every column,
+     * including `personal_info` (passport number, date of birth, nationality)
+     * and `documents` - bypassing the public-safe projection that the rest of
+     * this handler exists to apply. Together with the unescaped `%` in
+     * findByEmail it made one unauthenticated request return every applicant on
+     * the system.
+     */
     if (!application && email) {
       const results = await VisaApplication.findByEmail(email);
-      application = results.length > 0 ? results : null;
-
-      if (Array.isArray(application)) {
-        return res.json({
-          success: true,
-          multiple: true,
-          data: application,
-        });
-      }
+      application = results[0] || null;
     }
 
     if (!application) {
@@ -559,9 +561,35 @@ export const getApplicationById = async (req, res) => {
       });
     }
 
-    // An agent may only open an application that is assigned to them. (Admins, superadmin,
-    // and the public success/track flow are unaffected — this guard is agent-specific.)
-    if (req.user?.role === 'agent' && String(application.assigned_agent || '') !== String(req.user.id)) {
+    /**
+     * Staff, or the applicant themselves. Nobody else.
+     *
+     * The only guard here was agent-specific, so a caller with no session at
+     * all - the route is `optionalProtect`, which never rejects - fell straight
+     * past it and received the whole row: `personal_info` with the passport
+     * number, date of birth and nationality, plus `documents` and payment
+     * status. The docstring above has always said "admin or authenticated
+     * owner"; nothing enforced it.
+     *
+     * Ids are UUIDs and not guessable on their own, but the public tracker
+     * handed out every `id` on the system in one request until today, and a
+     * reference lookup returns the id too. The only caller in the app is the
+     * ADMIN detail page, so this costs nothing.
+     */
+    const role = req.user?.role;
+    const isStaff = role === 'admin' || role === 'superadmin' || role === 'agent';
+    const callerId = req.user?.authUserId || req.user?.id;
+    const isOwner = Boolean(callerId) && String(application.user_id || '') === String(callerId);
+
+    if (!isStaff && !isOwner) {
+      return res.status(403).json({
+        success: false,
+        message: 'This application is not yours to view. Track it with your reference and email instead.',
+      });
+    }
+
+    // An agent may only open an application that is assigned to them.
+    if (role === 'agent' && String(application.assigned_agent || '') !== String(req.user.id)) {
       return res.status(403).json({ success: false, message: 'This application is not assigned to you.' });
     }
 
