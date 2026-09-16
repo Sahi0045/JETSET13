@@ -34,6 +34,7 @@ import supabase from '../config/supabase.js';
 import { reconcileBookingPayment } from '../routes/payment/checkout.handlers.js';
 import { replay } from './bookingQueue.job.js';
 import { queueEnvironment } from '../utils/queueEnvironment.js';
+import { liveChainState } from '../utils/bookingChainClaim.js';
 import { buildFlightOrderBody, orderDataFromCheckoutRow } from '../../shared/flightOrderBody.js';
 
 const MINUTE = 60_000;
@@ -88,8 +89,31 @@ export function selectCandidates(rows = [], { now = Date.now(), site = siteForEn
     const details = row?.booking_details || {};
     if (row?.status !== 'pending' || !['unpaid', 'paid'].includes(row.payment_status)) return false;
     if (!details.success_indicator || !details.pending_booking_data) return false;
-    // The order route has seen it: from here the route owns the outcome.
-    if (details.pnr || details.gds_chain || details.queued_order || details.needs_review) return false;
+    // The order route has seen it and owns the outcome: a PNR exists, it is in
+    // the durable queue, or a human has been asked to look.
+    if (details.pnr || details.queued_order || details.needs_review) return false;
+    /**
+     * A chain that is still running owns the booking. One that is NOT running
+     * does not, and this used to skip the row for merely HAVING a `gds_chain`
+     * key - which is left behind for ever.
+     *
+     * That made a dead zone no job could see. A paid row with a finished or
+     * abandoned chain and no PNR is excluded from the booking queue (it has no
+     * `queued_order`), from both alarms (no `needs_review`, no `cancellation`,
+     * no PNR) and from ticket sync (no PNR) - so it sat paid and unbooked for
+     * ever, with nobody told. Three ordinary ways in, all AFTER the money was
+     * taken and reconciled: `releaseBookingChain` writing `state:'failed'` when
+     * the duplicate check could not run, the same when a duplicate payment
+     * could not be held, and a deploy or a restart killing the process
+     * mid-chain and leaving `state:'in_progress'` on the row.
+     *
+     * `liveChainState` already knows the difference and ages a claim out
+     * (CHAIN_CLAIM_TTL_MS 2 min, QUEUED_CHAIN_TTL_MS 30 min). The customer who
+     * closed the tab is exactly who this job exists for, and the 30-minute
+     * GRACE_MS above means a genuinely running chain is long finished before a
+     * row is even a candidate.
+     */
+    if (liveChainState(details.gds_chain, now)) return false;
     if (checkoutSite(row) !== site) return false;
 
     const age = now - Date.parse(row.created_at);
