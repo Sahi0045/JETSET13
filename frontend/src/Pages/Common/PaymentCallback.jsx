@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { getApiUrl } from '../../utils/apiHelper';
+import { isTimeout } from '../../utils/fetchTimeout';
 import { useSupabaseAuth } from '../../contexts/SupabaseAuthContext';
 
 export default function PaymentCallback() {
@@ -69,8 +70,22 @@ export default function PaymentCallback() {
             }, 1500);
           } catch (plError) {
             console.error('⚠️ Payment link update failed:', plError);
-            // Still redirect to success — the payment went through via ARC Pay
-            setStatus('Payment confirmed! Redirecting...');
+            /**
+             * The gateway took the money; our own record of it did not get
+             * written. The customer is still redirected to the receipt, because
+             * the payment genuinely went through ARC Pay - but this branch used
+             * to announce "Payment confirmed!" for a request that had simply
+             * never answered, which reads as a promise that everything is
+             * settled when the payment link is still marked unpaid.
+             *
+             * Now the wording matches what is known: the payment went through,
+             * and the record is still catching up. Nothing to do differently -
+             * a customer cannot fix our bookkeeping - but they are not told
+             * something we have not verified.
+             */
+            setStatus(isTimeout(plError)
+              ? 'Your payment went through. We are still updating your record — opening your receipt...'
+              : 'Payment received. Opening your receipt...');
             setTimeout(() => {
               navigate(`/payment/success?paymentId=${orderId}`);
             }, 1500);

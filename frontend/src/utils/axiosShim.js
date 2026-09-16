@@ -137,15 +137,34 @@ const dispatch = async (instance, method, url, data, userConfig = {}) => {
       controller.abort();
     }, config.timeout);
   }
+  // A caller's own timeout is the authoritative one, and has to be told to the
+  // global deadline on `fetch` (utils/fetchTimeout.js) or that deadline wins.
+  //
+  // This matters most where the caller deliberately waits LONGER: the flight
+  // booking POST allows five minutes because the server's own budget for
+  // committing and issuing is about four, and a generic 45-second deadline
+  // firing first would tell a customer their booking failed while it was being
+  // completed behind them. `timeoutMs` is read by the patch and ignored by a
+  // plain fetch, so it is safe either way.
+  if (config.timeout && config.timeout > 0) fetchInit.timeoutMs = config.timeout;
 
   let raw;
   try {
     raw = await fetch(fullUrl, fetchInit);
   } catch (err) {
     if (timeoutId) clearTimeout(timeoutId);
-    const message = timedOut ? `timeout of ${config.timeout}ms exceeded` : (err?.message || 'Network Error');
+    // A deadline that fired is a timeout whoever set it: this shim's own timer,
+    // or the global one on `fetch`, which rejects with a DOMException named
+    // TimeoutError. Reporting the second as ERR_NETWORK made it identical to a
+    // dropped connection, so a caller could not tell "we waited long enough"
+    // from "there is no network" - and the friendly rewrite that tests for
+    // "timeout" never matched, leaving a customer reading "signal timed out".
+    const deadlineFired = timedOut || err?.name === 'TimeoutError';
+    const message = deadlineFired
+      ? `timeout of ${config.timeout || 'the request deadline'}ms exceeded`
+      : (err?.message || 'Network Error');
     const error = buildAxiosError(message, config, null);
-    error.code = timedOut ? 'ECONNABORTED' : (err?.name === 'AbortError' ? 'ERR_CANCELED' : 'ERR_NETWORK');
+    error.code = deadlineFired ? 'ECONNABORTED' : (err?.name === 'AbortError' ? 'ERR_CANCELED' : 'ERR_NETWORK');
     return runResponseInterceptorsError(instance._responseInterceptors, error);
   }
   if (timeoutId) clearTimeout(timeoutId);

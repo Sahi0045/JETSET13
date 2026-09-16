@@ -13,9 +13,17 @@ import App from './src/app.jsx';
 import { SupabaseAuthProvider } from './src/contexts/SupabaseAuthContext.jsx';
 import { queryClient } from './src/lib/queryClient.js';
 import { initMonitoring } from './src/lib/monitoring.js';
+import { installFetchTimeout } from './src/utils/fetchTimeout.js';
 
 // Initialize error monitoring (no-op unless VITE_SENTRY_DSN is set)
 initMonitoring();
+
+// Every request settles. Before this, not one fetch on the flight journey
+// carried a deadline, and a stalled socket - not a failed one, a stalled one -
+// left the customer on a spinner with no error, no retry and no way out. Worst
+// of all after the card was charged. Installed here rather than at each call
+// site because forty-three call sites had already forgotten.
+installFetchTimeout();
 
 // Initialize the app when DOM is loaded
 const container = document.getElementById('app');
