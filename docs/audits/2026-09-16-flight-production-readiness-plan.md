@@ -74,6 +74,26 @@ line, it is because I introduced it, and it will be labelled as mine.
 
 ## Status
 
-- [x] PR A — items 1, 2 (PR pending)
-- [x] PR B — items 3, 4, 5, 6, 7, 10, 11, 13, 23, 24 (PR pending)
-- [ ] PR C — items 8, 9, 12, 14, 15, 16, 17, 18, 19, 20, 21, 22, 25, 26
+- [x] **PR A** — items 1, 2 — merged (`a4784ba`)
+- [x] **PR B** — items 3, 4, 5, 6, 7, 10, 11, 13, 23, 24 — merged (`1eec8f3`)
+- [x] **PR C** — items 8, 9, 12, 14, 15, 16, 17, 18, 19, 20, 21, 25, 26
+
+### Not fixed, deliberately
+
+**Item 22 — `bookingOwnerWiring.test.js` regex-matches source text.** Left as it
+is. It was written to catch one specific silent revert: a second `userId:` key
+in the object literal passed to `saveBookingToDatabase`, where the later key
+wins and the session owner is discarded. A behavioural replacement has to drive
+POST /order end to end, and the source checks do catch that class today. Worth
+replacing when the `/order` harness is next touched; recording it rather than
+pretending it is done.
+
+### Found while fixing, and fixed
+
+- `fakeBookings` ignored `.or()` (item 20). Implementing it exposed nothing
+  broken in the code, so the 17 files relying on it now assert what they claim.
+- The backend suite's 5s default timeout failed several cases for the cost of
+  re-importing `flight.routes.js` under parallel load, never when run alone.
+  Raised to 30s for the backend project, with the reason recorded in the config.
+- `replayTimeoutMs()` called `getWsConfig()`, which throws when Amadeus settings
+  are absent - that would have stopped a replay outright. It falls back now.

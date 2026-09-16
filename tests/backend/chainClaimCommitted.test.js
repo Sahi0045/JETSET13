@@ -57,7 +57,9 @@ describe('refreshChainClaim', () => {
     expect(await refreshChainClaim('FLT1')).toBe(true);
     expect(chainOf(table).committedAt).not.toBe(OLD);
     expect(chainOf(table).state).toBe('committed');
-  });
+    // Generous: `load` re-imports flight.routes.js, and under a full-suite run
+    // that alone can exceed the 5s default - a timeout, not a behaviour.
+  }, 30000);
 
   it('keeps the booking held, so a cancel arriving mid-issuance is refused', async () => {
     // Committed longer ago than the claim lasts: without a renewal this reads

@@ -42,6 +42,14 @@ export default defineConfig({
             'tests/backend/**/*.test.js',
             'tests/services/**/*.test.js',
           ],
+          // Several suites call vi.resetModules() and re-import
+          // backend/routes/flight.routes.js per case. That import alone takes
+          // over a second on its own and several under a full parallel run, so
+          // the 5s default failed cases for their module-loading cost rather
+          // than their behaviour - and did so only in full runs, never when the
+          // file was run alone, which is the least useful way for a test to
+          // fail.
+          testTimeout: 30000,
         },
       },
       {

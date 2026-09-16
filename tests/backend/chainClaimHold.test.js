@@ -37,7 +37,9 @@ describe('holdChainClaim', () => {
     expect(await holdChainClaim('FLT1', 1)).toBe('held');
     expect(table.row('FLT1').booking_details.gds_chain.startedAt).not.toBe(OLD);
     expect(table.row('FLT1').booking_details.gds_chain.attempt).toBe(1);
-  });
+    // Generous for the same reason as chainClaimCommitted: this is the first
+    // case in the file and bears the flight.routes.js import.
+  }, 30000);
 
   it('has lost a claim a later attempt took over', async () => {
     const { table, holdChainClaim } = await load([rowWith({ state: 'in_progress', startedAt: OLD, attempt: 2 })]);

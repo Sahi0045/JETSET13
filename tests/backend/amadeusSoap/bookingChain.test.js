@@ -33,8 +33,18 @@ const priceDrifted = envelope('Fare_PricePNRWithBookingClassReply',
 const tstOk = envelope('Ticket_CreateTSTFromPricingReply',
   '<tstList><tstReference><uniqueReference>1</uniqueReference></tstReference></tstList>', SESSION);
 const fopOk = envelope('FOP_CreateFormOfPaymentReply', '<dummy/>', SESSION);
+// A hosted carrier's commit (LH, QR, AF): the airline's own record locator is
+// already on the segment, so the ticket is issued in this session. The segment
+// was absent here, and `[].some(...)` is false - so the chain read "no segment
+// I recognise" as "every locator has arrived" and issued eagerly, which is the
+// one thing issueInFreshSessions exists to avoid. The reader is cautious about
+// the empty case now, and this fixture says what it always meant.
 const commitOk = envelope('PNR_Reply',
   '<pnrHeader><reservationInfo><reservation><controlNumber>ABC123</controlNumber><date>040926</date></reservation></reservationInfo></pnrHeader>'
+  + '<originDestinationDetails><itineraryInfo>'
+  + '<elementManagementItinerary><segmentName>AIR</segmentName></elementManagementItinerary>'
+  + '<itineraryReservationInfo><reservation><controlNumber>LH7XY2</controlNumber></reservation></itineraryReservationInfo>'
+  + '</itineraryInfo></originDestinationDetails>'
   + '<travellerInfo><elementManagementPassenger><reference><number>1</number></reference></elementManagementPassenger>'
   + '<passengerData><travellerInformation><traveller><surname>SMITH</surname></traveller><passenger><firstName>JOHN MR</firstName></passenger></travellerInformation></passengerData></travellerInfo>', SESSION);
 const errorReply = (text) => envelope('PNR_Reply',

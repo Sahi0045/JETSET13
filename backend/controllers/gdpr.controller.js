@@ -8,6 +8,64 @@ import supabase from '../config/supabase.js';
 import User from '../models/user.model.js';
 import crypto from 'crypto';
 
+/**
+ * Take the people out of a person's bookings, leaving the booking.
+ *
+ * A booking row is a financial record - the retention rules keep it seven years
+ * - so it is not deleted. But nothing in it needs to go on naming anyone:
+ * `passenger_details` holds each traveller's name, date of birth and passport
+ * number, and `booking_details` carries `pending_booking_data` (the entire
+ * checkout body), the contact details and the guest's name.
+ *
+ * Read-modify-write per row, because PostgREST cannot edit inside a jsonb
+ * column. Failures are logged and skipped rather than failing the whole
+ * request: a customer asking to be forgotten should not be told "try again"
+ * because one row would not move.
+ */
+async function redactBookingsFor(userId) {
+  const { data: rows, error } = await supabase
+    .from('bookings')
+    .select('id, booking_details')
+    .eq('user_id', userId);
+
+  if (error) {
+    console.error('GDPR: could not read bookings to redact:', error.message);
+    return { redacted: 0, failed: 0 };
+  }
+
+  let redacted = 0;
+  let failed = 0;
+  for (const row of rows || []) {
+    const details = row.booking_details || {};
+    const {
+      pending_booking_data: _pending,
+      guest_info: _guest,
+      contact: _contact,
+      customer_email: _email,
+      customer_name: _name,
+      ...kept
+    } = details;
+
+    const { error: writeError } = await supabase
+      .from('bookings')
+      .update({
+        passenger_details: [],
+        booking_details: { ...kept, redacted_at: new Date().toISOString() },
+      })
+      .eq('id', row.id);
+
+    if (writeError) {
+      console.error('GDPR: could not redact booking', row.id, writeError.message);
+      failed += 1;
+    } else {
+      redacted += 1;
+    }
+  }
+
+  console.log(`GDPR: redacted ${redacted} bookings for ${userId}${failed ? `, ${failed} failed` : ''}`);
+  return { redacted, failed };
+}
+
 // ─── Data Export ──────────────────────────────────────────────
 // GET /api/gdpr/export-data
 // Returns a full JSON package of all data for the authenticated user
@@ -16,7 +74,7 @@ export const exportUserData = async (req, res) => {
     const userId    = req.user.id;
     const userEmail = req.user.email;
 
-    const [userRes, inquiriesRes, paymentsRes, chatRes, draftsRes, travellersRes] = await Promise.all([
+    const [userRes, inquiriesRes, paymentsRes, chatRes, draftsRes, travellersRes, bookingsRes] = await Promise.all([
       supabase.from('users').select('id, email, name, first_name, last_name, created_at').eq('id', userId).single(),
       supabase.from('inquiries').select('*').or(`user_id.eq.${userId},customer_email.ilike.${userEmail}`),
       supabase.from('payments').select('id, amount, status, created_at').eq('user_id', userId),
@@ -25,6 +83,13 @@ export const exportUserData = async (req, res) => {
       // The people they book for, passports included: it is their data.
       supabase.from('saved_travellers')
         .select('first_name, last_name, gender, date_of_birth, nationality, passport_number, passport_expiry, created_at')
+        .eq('user_id', userId),
+      // Bookings were missing entirely, and they are the largest store of this
+      // person's data we hold: `passenger_details` carries every traveller's
+      // name, date of birth and passport number. An export that omits them is
+      // not a complete export.
+      supabase.from('bookings')
+        .select('booking_reference, travel_type, status, payment_status, total_amount, created_at, passenger_details')
         .eq('user_id', userId),
     ]);
 
@@ -36,6 +101,7 @@ export const exportUserData = async (req, res) => {
       chat_sessions: chatRes.data || [],
       drafts:        draftsRes.data || [],
       saved_travellers: travellersRes.data || [],
+      bookings:      bookingsRes?.data || [],
     };
 
     res.setHeader('Content-Disposition', `attachment; filename="jetset-data-export-${userId.slice(0, 8)}.json"`);
@@ -79,6 +145,14 @@ export const requestAccountDeletion = async (req, res) => {
       // The people they booked for, with their passports: nothing to retain.
       supabase.from('saved_travellers').delete().eq('user_id', userId),
     ]);
+
+    // Bookings were left untouched by this entirely, and they hold more of this
+    // person's data than anything above: `passenger_details` carries every
+    // traveller's name, date of birth and passport number, and
+    // `booking_details.pending_booking_data` is the whole checkout body. The
+    // row itself is a financial record and stays - the retention rules keep it
+    // seven years - but nothing in it needs to keep naming a real person.
+    await redactBookingsFor(userId);
 
     // Record deletion request for audit
     await supabase.from('audit_logs').insert([{
