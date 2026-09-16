@@ -874,7 +874,20 @@ async function cancelOtherBooking(res, booking, { reason, email }) {
                             console.log('✅ ARC Pay VOID successful:', voidData.result);
                             cancellationResult.paymentProcessed = true;
                             cancellationResult.paymentAction = 'VOID';
-                            cancellationResult.refundAmount = originalAmount; // Full amount returned
+                            // What the gateway says it returned, not what the row
+                            // said was paid. This figure is printed to the customer
+                            // verbatim - "A refund of $X is on its way" - and the row
+                            // amount is what the client asked to be charged, which is
+                            // not always what ARC captured.
+                            const voidedAmount = Number(
+                                voidData?.transaction?.amount ?? voidData?.order?.amount ?? NaN,
+                            );
+                            if (!Number.isFinite(voidedAmount)) {
+                                console.warn('⚠️ VOID reply carried no amount; falling back to the recorded total', {
+                                    bookingReference: booking?.booking_reference,
+                                });
+                            }
+                            cancellationResult.refundAmount = Number.isFinite(voidedAmount) ? voidedAmount : originalAmount;
                             cancellationResult.cancellationFee = 0; // No fee on void (not settled yet)
                             // 'voided' is not a valid payments status; map to 'refunded' (funds fully
                             // returned) and record paymentAction:'VOID' in metadata to distinguish it.

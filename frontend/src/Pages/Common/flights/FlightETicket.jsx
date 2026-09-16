@@ -35,9 +35,18 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
     // Support both nested structure (from success page) and flat structure (from manage booking)
     const bookingDetails = bookingData.bookingDetails || bookingData;
     const passengerData = bookingData.passengerData || bookingData.travelers || [];
+    // `|| '0'` used to sit at the end of this, and `toClientBooking` sends
+    // `amount: parseFloat(amount) || 0` - so a booking with no recorded total
+    // printed "$0.00" as the Total Amount on a document the customer downloads
+    // and may present. ManageBooking guards the same figure on screen
+    // ("Not recorded"); the document did not, and a document asserting $0.00 is
+    // a claim about money the booking cannot support.
     const calculatedFare = bookingData.calculatedFare || {
-        totalAmount: bookingData.amount || bookingData.totalPrice || '0'
+        totalAmount: bookingData.amount || bookingData.totalPrice || null
     };
+    const recordedTotal = Number(calculatedFare.totalAmount) > 0
+        ? formatUsd(calculatedFare.totalAmount)
+        : 'Not recorded';
 
     // What the booking can actually prove about ticketing.
     const tickets = resolveTickets(bookingData);
@@ -319,7 +328,7 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
                                 <p className="text-xs text-gray-400 uppercase mb-1">Total Amount</p>
                                 {/* What was charged, in USD. <Price> converted it into the
                                     visitor's currency, which is not what the card paid. */}
-                                <p className="text-3xl font-bold text-[#055B75]">{formatUsd(calculatedFare.totalAmount)}</p>
+                                <p className="text-3xl font-bold text-[#055B75]">{recordedTotal}</p>
                                 {/* Only claimed when the booking says so. */}
                                 {paid && !isCancelled && <p className="text-xs text-green-600 mt-1 font-medium">Payment Confirmed ✅</p>}
                             </div>

@@ -311,6 +311,9 @@ const mapCombination = (recommendation, flightRef, combination, ctx) => {
   const baggage = readBaggage(reply, baggageRefOf(flightRef) || itemNumber);
 
   const amaSegments = [];
+  // Each segment's own availability, captured beside it. Kept parallel rather
+  // than added to amaSegments, which is the sell request's `_ama.segments`.
+  const segmentAvailability = [];
   let segmentCounter = 0;
 
   const itineraries = legs.map(({ legIndex, group }) => {
@@ -320,6 +323,7 @@ const mapCombination = (recommendation, flightRef, combination, ctx) => {
     const segments = flights.map((flight) => {
       const segment = buildSegment(flight, segmentCounter++);
       const fare = legFares[flights.indexOf(flight)] ?? legFares[0] ?? {};
+      segmentAvailability.push(fare.avlStatus ?? '');
 
       amaSegments.push({
         legIndex,
@@ -353,8 +357,18 @@ const mapCombination = (recommendation, flightRef, combination, ctx) => {
     return { duration: toIsoDuration(elapsed), segments };
   });
 
-  const availability = amaSegments
-    .map((s) => Number.parseInt(fareByLeg.flatMap((l) => l.fares).find((f) => f.rbd === s.rbd)?.avlStatus ?? '', 10))
+  // Each segment's own seat count, from its own leg's fare.
+  //
+  // This used to search `fareByLeg.flatMap(l => l.fares)` - every leg's fares -
+  // for the FIRST whose `rbd` matched, so a scarce leg was overwritten by
+  // another leg booked in the same class. Proven against the certification
+  // fixture: a recommendation supplying [["O:9"],["O:7"]] reported 9, and
+  // [["P:9","P:9"],["P:8","P:9"]] reported 9 against a true 8. Seven
+  // recommendations in that file are wrong the same way, and `seatsLeftLabel`
+  // renders 9 or more as a calm "9+ seats" - so a return leg with 7 left looked
+  // plentiful right up to the sell that refuses it.
+  const availability = segmentAvailability
+    .map((status) => Number.parseInt(status, 10))
     .filter(Number.isFinite);
 
   // Amadeus numbers the passengers with seats; an infant carries the reference

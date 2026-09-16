@@ -2008,17 +2008,32 @@ router.post('/fare-rules', async (req, res) => {
       const re = /CHARGE\s+([A-Z]{3})\s+([\d,]+(?:\.\d+)?)/g;
       let m;
       while ((m = re.exec(penaltyText)) !== null) {
-        charges.push({ currency: m[1], amount: Math.round(parseFloat(m[2].replace(/,/g, ''))), index: m.index });
+        // Not rounded: a 75.50 penalty was shown to the customer as 76.
+        charges.push({ currency: m[1], amount: parseFloat(m[2].replace(/,/g, '')), index: m.index });
       }
 
       const changeIdx = penaltyText.search(/CHANGE|REISSUE|REVALIDATION/);
       const cancelIdx = penaltyText.search(/CANCELLATION|CANCEL\b|REFUND/);
 
+      // A fee belongs to its own mention, and stops at the next one.
+      //
+      // This took the first charge at or after its anchor and never stopped at
+      // the following anchor, so filed text ordered
+      // "CANCELLATION ... NO SHOW ... CHANGES CHARGE USD 200" gave
+      // cancelIdx < changeIdx < charge.index and BOTH fees resolved to the same
+      // 200: the panel printed "Cancellation fee: $200" for a fare whose rules
+      // never stated one. Since the move to filed rules this scraper reads
+      // whole CheckRules sections - ~184 lines for a DEL-BOM fare - so the
+      // distance between an anchor and an unrelated charge is far larger than
+      // it was.
+      const anchors = [changeIdx, cancelIdx].filter((i) => i >= 0).sort((a, b) => a - b);
       const nearest = (anchor) => {
         if (anchor < 0 || charges.length === 0) return null;
-        // first charge at/after the anchor, else the closest overall
-        const after = charges.filter((c) => c.index >= anchor).sort((a, b) => a.index - b.index)[0];
-        return after || null;
+        const next = anchors.find((i) => i > anchor);
+        const within = charges
+          .filter((c) => c.index >= anchor && (next === undefined || c.index < next))
+          .sort((a, b) => a.index - b.index)[0];
+        return within || null;
       };
 
       // Each fee only from its own mention. The cancellation fee used to fall

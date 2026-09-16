@@ -5,6 +5,7 @@
  */
 
 import { formatDateToISO, getSafeDate, getTodayDate } from '../../../utils/dateUtils';
+import { hasCheckedBag } from '../../../utils/baggage';
 import { legsOf, maxStops } from './flightSort';
 
 /** A local calendar date `days` after another, both YYYY-MM-DD. */
@@ -181,9 +182,15 @@ export const matchesFilters = (flight, filters, priceOf) => {
   }
 
   if (filters.baggage !== 'any') {
-    const checkedWeight = flight.baggage?.checked?.weight || 0;
-    if (filters.baggage === 'included' && checkedWeight <= 0) return false;
-    if (filters.baggage === 'cabin_only' && checkedWeight > 0) return false;
+    // An allowance is a weight OR a piece count - `{weight, weightUnit}` or
+    // `{quantity}` - and which one an airline files varies by market. Reading
+    // only `.weight` scored every piece-based fare as zero, so "Included"
+    // removed the very fares whose card reads "1 Piece check-in" and
+    // "Cabin only" kept them. utils/baggage.js exists so no surface can drift
+    // from another; FlightCard already uses it.
+    const included = hasCheckedBag(flight.baggage?.checked);
+    if (filters.baggage === 'included' && !included) return false;
+    if (filters.baggage === 'cabin_only' && included) return false;
   }
 
   if (filters.refundable === 'yes' && !flight.refundable) return false;

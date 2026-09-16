@@ -624,12 +624,34 @@ export const sendCancellationNotificationEmails = async (cancellationData) => {
       text: stripHtml(adminHtml)
     });
 
-    console.log('✅ Cancellation notification sent to:', customerEmail, 'and admin');
+    // Resend reports a refused send in `error`; it does not throw. This
+    // returned `success: true` unconditionally, so a cancellation email that
+    // was never delivered was logged as sent and the caller recorded
+    // "✅ Cancellation email sent successfully". It is the ONLY notification a
+    // customer gets when their refund needs a human to finish it, so a silent
+    // failure leaves them knowing nothing about their money and nobody knowing
+    // they were not told. The same bug was found and fixed for the booking
+    // email in this file; this path was missed.
+    const customerError = customerResult?.error
+      ? (customerResult.error.message || String(customerResult.error))
+      : null;
+    const adminError = adminResult?.error
+      ? (adminResult.error.message || String(adminResult.error))
+      : null;
+
+    if (customerError) console.error('❌ Cancellation email refused:', customerError);
+    if (adminError) console.error('❌ Admin cancellation notification refused:', adminError);
+    if (!customerError) console.log('✅ Cancellation notification sent to:', customerEmail);
 
     return {
-      success: true,
-      customerEmail: customerResult,
-      adminNotification: { success: true, data: adminResult }
+      success: !customerError,
+      ...(customerError ? { error: customerError } : {}),
+      customerEmail: customerError
+        ? { success: false, error: customerError }
+        : { success: true, data: customerResult?.data ?? customerResult },
+      adminNotification: adminError
+        ? { success: false, error: adminError }
+        : { success: true, data: adminResult?.data ?? adminResult }
     };
   } catch (error) {
     console.error('❌ Error sending cancellation notification emails:', error);

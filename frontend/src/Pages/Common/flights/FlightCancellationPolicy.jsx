@@ -10,7 +10,24 @@ const fmtDay = (d) => {
   if (!d || isNaN(d.getTime())) return '';
   return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
 };
-const cur = (code) => (code === 'INR' ? '₹' : (code === 'USD' ? '$' : (code === 'EUR' ? '€' : code + ' ')));
+/**
+ * The currency an amount is in, or null when the fare rules did not say.
+ *
+ * This returned `code + ' '` for anything it did not recognise, so an empty
+ * code became a single space and the panel rendered "Cancellation fee: 3,500" -
+ * a bare number, no currency, on the screen where the customer decides whether
+ * the fare is worth booking. Fare-rule amounts are in the fare's own currency
+ * while the card is always charged in USD, so an unlabelled number is ambiguous
+ * exactly where it must not be. Without a currency we do not state an amount.
+ */
+const cur = (code) => {
+  const c = String(code || '').trim().toUpperCase();
+  if (!c) return null;
+  if (c === 'INR') return '₹';
+  if (c === 'USD') return '$';
+  if (c === 'EUR') return '€';
+  return `${c} `;
+};
 
 function FlightCancellationPolicy({ flightOffer, fromCode, toCode, departureAt }) {
   const [loading, setLoading] = useState(true);
@@ -54,8 +71,8 @@ function FlightCancellationPolicy({ flightOffer, fromCode, toCode, departureAt }
   const cutoffHours = Number.isFinite(c?.cutoffHours) ? c.cutoffHours : null;
   const cutoff = dep && cutoffHours != null ? new Date(dep.getTime() - cutoffHours * 3600000) : null;
   const sym = cur(c?.currency || c?.fareCurrency || '');
-  const fmtAmount = (n) => `${sym}${Number(n).toLocaleString('en-US')}`;
-  const tier1 = c?.cancelFee != null ? fmtAmount(c.cancelFee) : 'See fare rules';
+  const fmtAmount = (n) => (sym === null ? null : `${sym}${Number(n).toLocaleString('en-US')}`);
+  const tier1 = (c?.cancelFee != null && fmtAmount(c.cancelFee)) || 'See fare rules';
   const tier2 = c?.refundable === false ? 'Non-refundable' : 'See fare rules';
 
   return (
