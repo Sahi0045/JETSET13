@@ -50,6 +50,13 @@ const readSegments = (fareInfoGroup) => arr(fareInfoGroup.segmentLevelGroup).map
   const bag = at(segment, 'baggageAllowance.baggageDetails');
   const allowance = bag ? num(bag.freeAllowance) ?? 0 : null;
   const code = bag ? txt(bag.quantityCode) : null;
+  // A pricing reply's `baggageDetails` carries only `freeAllowance` and
+  // `quantityCode` - the `unitQualifier` elsewhere in this reply belongs to
+  // `ptcSegment/quantityDetails` and is the PASSENGER TYPE (ADT, CNN). Reading
+  // it here, as I first did, found nothing and quietly meant KG either way.
+  // So this reply does not say what unit a weight is in, and must not claim to:
+  // the search reply does say (mappers/offer.js reads a real unitQualifier),
+  // and applyPricingToOffer below keeps that answer rather than overwriting it.
   // `quantityCode` says weight or pieces; `unitQualifier` says which unit the
   // weight is in. This hardcoded KG while the search mapper (mappers/offer.js)
   // reads the qualifier properly - and since the priced value OVERRIDES the
@@ -66,9 +73,25 @@ const readSegments = (fareInfoGroup) => arr(fareInfoGroup.segmentLevelGroup).map
     cabin: CABIN_BY_DESIGNATOR[atTxt(segment, 'cabinGroup.cabinSegment.cabinDesignator')] ?? undefined,
     includedCheckedBags: bag === undefined || bag === null
       ? undefined
-      : (code === 'N' ? { quantity: allowance } : { weight: allowance, weightUnit: unit === 'L' ? 'LB' : 'KG' }),
+      // No `weightUnit`: this reply does not know it. `mergeCheckedBags` keeps
+      // whatever the search established.
+      : (code === 'N' ? { quantity: allowance } : { weight: allowance }),
   };
 });
+
+/**
+ * The priced allowance, keeping the unit only the search reply knows.
+ *
+ * The priced value overrides the searched one, and used to arrive stamped
+ * `weightUnit: 'KG'` unconditionally - so a fare the search correctly read as
+ * 50 LB became 50 KG one click later, telling a passenger they may carry more
+ * than twice what they may. Pricing states the number; search states the unit.
+ */
+const mergeCheckedBags = (priced, searched) => {
+  if (!priced) return searched;
+  if (priced.weight === undefined || priced.weightUnit) return priced;
+  return { ...priced, weightUnit: searched?.weightUnit ?? 'KG' };
+};
 
 /** Free text carries the penalty wording the fare-rules panel already parses. */
 const readTextData = (fareInfoGroup) => arr(fareInfoGroup.textData).map((entry) => ({
@@ -176,7 +199,7 @@ export const applyPricingToOffer = (reply, offer) => {
             fareBasis: priced.fareBasis || detail.fareBasis,
             class: priced.class || detail.class,
             cabin: priced.cabin ?? detail.cabin,
-            includedCheckedBags: priced.includedCheckedBags ?? detail.includedCheckedBags,
+            includedCheckedBags: mergeCheckedBags(priced.includedCheckedBags, detail.includedCheckedBags),
           }
           : detail;
       }),
