@@ -938,7 +938,10 @@ export async function handleHostedCheckout(req, res) {
             });
             return res.status(503).json({
                 success: false,
-                error: 'We could not start your payment just now, so nothing has been charged. Please try again in a moment, or call (877) 538-7380 and we will book it for you.',
+                // No "nothing has been charged" here: the review page strips
+                // that phrase (it says so itself in the dialog) and the
+                // sentence came out as "...so Please try again".
+                error: 'We could not start your payment just now. Please try again in a moment, or call (877) 538-7380 and we will book it for you.',
                 code: 'CHECKOUT_NOT_RECORDED',
             });
         }

@@ -46,13 +46,13 @@ beforeEach(() => { storage = store(); });
 describe('keeping what was typed', () => {
   it('gives it back for the same fare', () => {
     const people = [traveller(1)];
-    saveTravellerDraft(people, offer(), storage);
+    saveTravellerDraft(people, offer(), { storage });
 
     expect(readTravellerDraft(offer(), { storage })).toEqual(people);
   });
 
   it('keeps the fields that cost the most to retype', () => {
-    saveTravellerDraft([traveller(1)], offer(), storage);
+    saveTravellerDraft([traveller(1)], offer(), { storage });
 
     const [restored] = readTravellerDraft(offer(), { storage });
     expect(restored.passportNumber).toBe('P11234567');
@@ -62,7 +62,7 @@ describe('keeping what was typed', () => {
 
   it('keeps a whole family, in order', () => {
     const family = [traveller(1), traveller(2), traveller(3, 'CHILD')];
-    saveTravellerDraft(family, offer({ types: ['ADULT', 'ADULT', 'CHILD'] }), storage);
+    saveTravellerDraft(family, offer({ types: ['ADULT', 'ADULT', 'CHILD'] }), { storage });
 
     expect(readTravellerDraft(offer({ types: ['ADULT', 'ADULT', 'CHILD'] }), { storage })).toEqual(family);
   });
@@ -70,13 +70,13 @@ describe('keeping what was typed', () => {
 
 describe('refusing to put stale people on a booking', () => {
   it('will not restore a draft typed for a different route', () => {
-    saveTravellerDraft([traveller(1)], offer({ to: 'DXB' }), storage);
+    saveTravellerDraft([traveller(1)], offer({ to: 'DXB' }), { storage });
 
     expect(readTravellerDraft(offer({ to: 'SIN' }), { storage })).toBeNull();
   });
 
   it('will not restore a draft typed for a different date', () => {
-    saveTravellerDraft([traveller(1)], offer({ date: '2026-10-26' }), storage);
+    saveTravellerDraft([traveller(1)], offer({ date: '2026-10-26' }), { storage });
 
     expect(readTravellerDraft(offer({ date: '2026-10-27' }), { storage })).toBeNull();
   });
@@ -86,20 +86,20 @@ describe('refusing to put stale people on a booking', () => {
    * two-adult-and-a-child fare is how a child ends up on an adult's ticket.
    */
   it('will not restore a draft typed for a different party', () => {
-    saveTravellerDraft([traveller(1)], offer({ types: ['ADULT'] }), storage);
+    saveTravellerDraft([traveller(1)], offer({ types: ['ADULT'] }), { storage });
 
     expect(readTravellerDraft(offer({ types: ['ADULT', 'CHILD'] }), { storage })).toBeNull();
   });
 
   it('lets go of a draft past its age', () => {
-    saveTravellerDraft([traveller(1)], offer(), storage);
+    saveTravellerDraft([traveller(1)], offer(), { storage });
     const later = Date.now() + DRAFT_MAX_AGE_MS + 1000;
 
     expect(readTravellerDraft(offer(), { storage, now: later })).toBeNull();
   });
 
   it('still restores one that is merely old, not stale', () => {
-    saveTravellerDraft([traveller(1)], offer(), storage);
+    saveTravellerDraft([traveller(1)], offer(), { storage });
     const later = Date.now() + DRAFT_MAX_AGE_MS - 60_000;
 
     expect(readTravellerDraft(offer(), { storage, now: later })).not.toBeNull();
@@ -122,18 +122,18 @@ describe('when it cannot help', () => {
   it('carries on when storage refuses the write', () => {
     const full = { getItem: () => null, setItem: () => { throw new Error('full'); }, removeItem: () => {} };
 
-    expect(saveTravellerDraft([traveller(1)], offer(), full)).toBe(false);
+    expect(saveTravellerDraft([traveller(1)], offer(), { storage: full })).toBe(false);
   });
 
   it('writes nothing for an empty form', () => {
-    saveTravellerDraft([], offer(), storage);
+    saveTravellerDraft([], offer(), { storage });
 
     expect(storage.size).toBe(0);
   });
 
   it('writes nothing without a fare to tie it to', () => {
-    saveTravellerDraft([traveller(1)], null, storage);
-    saveTravellerDraft([traveller(1)], { itineraries: [] }, storage);
+    saveTravellerDraft([traveller(1)], null, { storage });
+    saveTravellerDraft([traveller(1)], { itineraries: [] }, { storage });
 
     expect(storage.size).toBe(0);
   });
@@ -147,7 +147,7 @@ describe('when it cannot help', () => {
 
 describe('forgetting it', () => {
   it('leaves nothing behind once the booking is made or the customer signs out', () => {
-    saveTravellerDraft([traveller(1)], offer(), storage);
+    saveTravellerDraft([traveller(1)], offer(), { storage });
     clearTravellerDraft(storage);
 
     expect(readTravellerDraft(offer(), { storage })).toBeNull();
@@ -178,5 +178,56 @@ describe('what identifies a fare', () => {
   it('is nothing for an offer with no flights in it', () => {
     expect(fareFingerprint({ itineraries: [] })).toBeNull();
     expect(fareFingerprint(null)).toBeNull();
+  });
+});
+
+/**
+ * A draft belongs to one booking attempt, not to a flight.
+ *
+ * The fingerprint was route, date, carrier, flight number and party shape - all
+ * identical for two bookings of the same flight, which is an ordinary thing for
+ * an agent issuing two PNRs or a family on separate references. The first
+ * customer's name, date of birth and passport number pre-filled the second
+ * customer's form, with no notice.
+ */
+describe('two bookings of the same flight', () => {
+  const people = [traveller(1)];
+
+  it('does not restore one attempt into another', () => {
+    saveTravellerDraft(people, offer(), { attemptId: 'attempt-a', storage });
+
+    expect(readTravellerDraft(offer(), { attemptId: 'attempt-b', storage })).toBeNull();
+  });
+
+  it('still restores the attempt it was typed in', () => {
+    saveTravellerDraft(people, offer(), { attemptId: 'attempt-a', storage });
+
+    expect(readTravellerDraft(offer(), { attemptId: 'attempt-a', storage })).toEqual(people);
+  });
+
+  it('keeps the fare check as well, so a changed flight still refuses', () => {
+    saveTravellerDraft(people, offer({ to: 'DXB' }), { attemptId: 'attempt-a', storage });
+
+    expect(readTravellerDraft(offer({ to: 'SIN' }), { attemptId: 'attempt-a', storage })).toBeNull();
+  });
+
+  // A visit with no attempt id behaves as before rather than breaking.
+  it('still works when there is no attempt id at all', () => {
+    saveTravellerDraft(people, offer(), { storage });
+
+    expect(readTravellerDraft(offer(), { storage })).toEqual(people);
+  });
+});
+
+// It holds passport numbers. Ignoring a stale draft left them readable for the
+// life of the tab; it is removed now.
+describe('a draft past its age', () => {
+  it('is deleted, not merely ignored', () => {
+    saveTravellerDraft([traveller(1)], offer(), { storage });
+    const later = Date.now() + DRAFT_MAX_AGE_MS + 1000;
+
+    readTravellerDraft(offer(), { storage, now: later });
+
+    expect(storage.getItem('jt_flight_travellers')).toBeNull();
   });
 });

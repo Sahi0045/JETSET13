@@ -35,6 +35,7 @@ import { reconcileBookingPayment } from '../routes/payment/checkout.handlers.js'
 import { replay } from './bookingQueue.job.js';
 import { queueEnvironment } from '../utils/queueEnvironment.js';
 import { liveChainState } from '../utils/bookingChainClaim.js';
+import { unchangedSince } from '../utils/bookingDetailsGuard.js';
 import { buildFlightOrderBody, orderDataFromCheckoutRow } from '../../shared/flightOrderBody.js';
 
 const MINUTE = 60_000;
@@ -143,19 +144,27 @@ async function flagForReview(row, reason) {
 
   const details = fresh.booking_details || {};
   if (fresh.status !== 'pending' || ['refunded', 'partially_refunded'].includes(fresh.payment_status)) return false;
-  if (details.pnr || details.gds_chain || details.queued_order || details.needs_review) return false;
+  if (details.pnr || details.queued_order || details.needs_review) return false;
+  // Same rule as selectCandidates: a RUNNING chain owns the booking, a dead one
+  // does not. Testing for the key meant the rows selectCandidates now admits -
+  // the whole point of that change - were selected and then flagged nowhere.
+  if (liveChainState(details.gds_chain)) return false;
 
-  const { error } = await supabase
-    .from('bookings')
-    .update({
-      booking_details: {
-        ...details,
-        needs_review: { reason, at: new Date().toISOString(), ticketed: false, source: 'abandoned-checkout' },
-      },
-    })
-    .eq('id', row.id)
-    .eq('status', 'pending')
-    .is('booking_details->gds_chain', null);
+  // Pinned to the row as just read, which includes the chain's state and stamp
+  // (utils/bookingDetailsGuard.js), so a chain that starts in between still
+  // wins. The old `.is(gds_chain, null)` could never be true for these rows.
+  const { error } = await unchangedSince(
+    supabase
+      .from('bookings')
+      .update({
+        booking_details: {
+          ...details,
+          needs_review: { reason, at: new Date().toISOString(), ticketed: false, source: 'abandoned-checkout' },
+        },
+      })
+      .eq('id', row.id),
+    fresh,
+  );
   if (error) {
     log('could not flag for review', { bookingReference: row.booking_reference, error: error.message });
     return false;

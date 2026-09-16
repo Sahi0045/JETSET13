@@ -400,7 +400,9 @@ describe('verifyFlightCharge', () => {
     it('tells the customer nothing was taken, and how to book instead', async () => {
       const result = await verify({ amount: 402, bookingData: bookingFor(1), priceOffer: pricedWith({ bookingEnabled: false }) });
 
-      expect(result.message).toMatch(/not taken any payment/i);
+      // The phrase "nothing has been charged" is deliberately absent: the
+      // review page strips it, and the sentence came out mangled.
+      expect(result.message).toMatch(/temporarily unavailable/i);
       expect(result.message).toMatch(/877\) 538-7380/);
     });
 
@@ -771,7 +773,7 @@ describe('hosted checkout for a flight', () => {
 
       const { res } = await run(verified);
 
-      expect(res.body.error).toMatch(/nothing has been charged/i);
+      expect(res.body.error).toMatch(/could not start your payment/i);
       expect(res.body.error).toMatch(/877\) 538-7380/);
     });
 

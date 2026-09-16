@@ -96,7 +96,10 @@ function FlightLanding() {
     const fromCode = cityToIATACode[city] || (city || '');
 
     if (!fromCode) {
-      setPrefill({ from: '', to: toCode, tripType: 'oneWay', departDate, returnDate: '', travelers: '1' });
+      // Only the destination. Sending `travelers: '1'` used to reset a party
+      // the visitor had already chosen - the pill still read "3 Travellers"
+      // while the search asked for one adult.
+      setPrefill({ to: toCode, departDate });
       const form = document.getElementById('flight-search');
       form?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       setTimeout(() => form?.querySelector('input[name="from"]')?.focus(), 400);

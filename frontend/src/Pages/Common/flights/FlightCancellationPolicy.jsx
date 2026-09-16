@@ -33,6 +33,8 @@ function FlightCancellationPolicy({ flightOffer, fromCode, toCode, departureAt }
   const [loading, setLoading] = useState(true);
   const [c, setC] = useState(null);
   const [rules, setRules] = useState([]);
+  // The airline could not be reached, as opposed to filing no rules.
+  const [unreachable, setUnreachable] = useState(false);
   const [showPolicy, setShowPolicy] = useState(false);
 
   useEffect(() => {
@@ -41,6 +43,7 @@ function FlightCancellationPolicy({ flightOffer, fromCode, toCode, departureAt }
     const controller = new AbortController();
     (async () => {
       setLoading(true);
+      setUnreachable(false);
       try {
         const res = await fetch(apiConfig.endpoints.flights.fareRules, {
           method: 'POST',
@@ -53,7 +56,9 @@ function FlightCancellationPolicy({ flightOffer, fromCode, toCode, departureAt }
         setC(data.cancellation || null);
         setRules((data.fareRules || []).filter(r => /PENALT|CANCEL|CHANGE|REISSUE|REFUND/i.test((r.title || '') + (r.text || ''))));
       } catch (e) {
-        if (!cancelled && e.name !== 'AbortError') setC(null);
+        // A TimeoutError is not an AbortError: the deadline firing means we do
+        // not KNOW the rules, which is different from the airline filing none.
+        if (!cancelled && e.name !== 'AbortError') { setC(null); setUnreachable(true); }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -94,6 +99,11 @@ function FlightCancellationPolicy({ flightOffer, fromCode, toCode, departureAt }
           <div className="flex items-center py-4 text-gray-500 text-sm">
             <Loader2 className="h-4 w-4 animate-spin text-[#055B75] mr-2" /> Loading airline cancellation rules…
           </div>
+        ) : unreachable ? (
+          <p className="text-sm text-amber-800">
+            We could not reach the airline for this fare's cancellation rules just now.
+            Charges apply as per the airline's fare rules — please check before you pay.
+          </p>
         ) : !c || !c.hasData ? (
           <p className="text-sm text-gray-500">
             Cancellation and date-change charges apply as per the airline's fare rules.
