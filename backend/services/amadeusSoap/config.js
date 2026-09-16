@@ -89,6 +89,14 @@ const readWsConfig = (env = process.env) => {
     // through ARC; confirm against the production office at cutover, as with
     // the form-of-payment code.
     marketIataCode: (env.AMADEUS_WS_MARKET_IATA_CODE || 'US').trim().toUpperCase(),
+    // The office's own calendar, which is what decides whether a ticket can
+    // still be voided. Amadeus stamps the ticket with the office's local date
+    // (FA ... /15SEP26/SCK1S2400), so comparing it against UTC made every
+    // ticket issued between midnight UTC and midnight in the office look like
+    // yesterday's: on PDT at 00:2x UTC on 16 Sep 2026 a ticket issued minutes
+    // earlier was reported as needing an airline refund instead of being
+    // voided. Set this to the production office's zone at cutover.
+    officeTimeZone: (env.AMADEUS_WS_OFFICE_TIME_ZONE || 'America/New_York').trim(),
     queueNumber: (env.AMADEUS_WS_QUEUE_NUMBER || '50').trim(),
     queueOffice: (env.AMADEUS_WS_QUEUE_OFFICE || env.AMADEUS_WS_OFFICE_ID).trim(),
     // The category within that queue - the "C0" in queue 90 C0, which Amadeus
@@ -162,6 +170,11 @@ const readWsConfig = (env = process.env) => {
     // PNR_Cancel answering 8111 SIMULTANEOUS CHANGES TO PNR is retried after
     // redisplaying the PNR; this is the pause before each retry.
     cancelRetryDelayMs: asInt(env.AMADEUS_WS_CANCEL_RETRY_DELAY_MS, 1500),
+    // A void asked for seconds after issuance can answer 5795 INVALID OR MISSING
+    // COUPON/BOOKLET NUMBER: the coupons are not in the e-ticket record yet. On
+    // PDT (16 Sep 2026) La Compagnie's ticket refused the void immediately and
+    // voided cleanly 15 s later, so one retry after this pause is enough.
+    voidRetryDelayMs: asInt(env.AMADEUS_WS_VOID_RETRY_DELAY_MS, 15000),
     // Before issuing, how long to wait for every air segment to carry the
     // airline's own record locator, and how often to look. Airlines Amadeus
     // hosts (LH, QR, AF) have it at commit; others send it moments later - DL
@@ -169,6 +182,15 @@ const readWsConfig = (env = process.env) => {
     // Royal Brunei's locator took about 56 s on PDT; the owner chose to wait
     // up to 90 s in the booking rather than ticket in the background.
     airlineLocatorWaitMs: asInt(env.AMADEUS_WS_AIRLINE_LOCATOR_WAIT_MS, 90000),
+    // After that wait the ticket is asked for anyway, and the airline can still
+    // answer 9125 NEED AIRLINE R/LOC. La Compagnie's locator took 45 s idle on
+    // PDT and longer under load, where the booking failed although the airline
+    // was only slow, so the looking carries on to this hard cap before the last
+    // attempt decides it. Default: twice the wait.
+    airlineLocatorMaxWaitMs: asInt(
+      env.AMADEUS_WS_AIRLINE_LOCATOR_MAX_WAIT_MS,
+      asInt(env.AMADEUS_WS_AIRLINE_LOCATOR_WAIT_MS, 90000) * 2,
+    ),
     // Each look is a new Amadeus session (issueInFreshSessions: the session that
     // committed never saw BI's locator), so looks are 5 s apart rather than 2.
     airlineLocatorPollMs: asInt(env.AMADEUS_WS_AIRLINE_LOCATOR_POLL_MS, 5000),

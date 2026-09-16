@@ -117,6 +117,45 @@ const SCHEDULE_CHANGE_STATUSES = new Set(['TK', 'TL', 'TN']);
 const issuanceNotReady = (cause) => String(cause?.amadeusCode ?? '') === '9125'
   || /NEED AIRLINE R\/?LOC|ETKT: SYSTEM UNABLE TO PROCESS|ETKT: ITEM\/DATA NOT FOUND/i.test(String(cause?.technicalError ?? ''));
 
+/**
+ * Today, on the office's calendar - the only date the void window is measured
+ * against.
+ *
+ * Amadeus stamps a ticket with the office's local date, not UTC: on PDT at
+ * 00:11 UTC on 16 Sep 2026, a ticket issued minutes earlier read
+ * `FA PAX 220-7491175168/ETLH/USD871.73/15SEP26/SCK1S2400`. Against
+ * `new Date().toISOString()` that ticket looked like yesterday's, so the void
+ * was skipped and the customer was told the airline owed them a refund - every
+ * day, for the hours between midnight UTC and midnight in the office.
+ *
+ * An unusable zone falls back to UTC rather than throwing: a mistyped setting
+ * must not stop a cancellation.
+ */
+const officeToday = (timeZone) => {
+  try {
+    // en-CA renders YYYY-MM-DD, which is what the ticket's date parses to.
+    return new Date().toLocaleDateString('en-CA', { timeZone });
+  } catch {
+    log.warn({ timeZone }, 'unusable office time zone; measuring the void window against UTC');
+    return new Date().toISOString().slice(0, 10);
+  }
+};
+
+/**
+ * A void that failed for now, not for good.
+ *
+ * 5795 INVALID OR MISSING COUPON/BOOKLET NUMBER answered a void asked for
+ * seconds after issuance on PDT (16 Sep 2026): the coupons were not in the
+ * e-ticket record yet, and the same void succeeded 15 s later. A timeout is the
+ * other one - the airline's ticketing link went quiet rather than refusing
+ * (HO, CA, MU, NX on PDT). 5458 NOT AUTHORISED and 5245 NOT SUPPORTED are
+ * refusals and are not retried.
+ */
+const voidFailedForNow = (cause) => String(cause?.amadeusCode ?? '') === '5795'
+  || /INVALID OR MISSING COUPON/i.test(String(cause?.technicalError ?? ''))
+  || cause?.code === 'ECONNABORTED'
+  || /timeout of \d+ms exceeded/i.test(String(cause?.technicalError ?? cause?.message ?? ''));
+
 /** Seats are held per passenger; an infant travels on a lap and holds none. */
 const seatCount = (travelers) => travelers.filter((t) => t.ptc !== 'INF' && t.ptc !== 'HELD_INFANT').length;
 
@@ -252,7 +291,8 @@ const issueInFreshSessions = async (booked, { offer, bookingReference, config, n
 
       const locators = airSegmentLocators(current);
       const waitedMs = Date.now() - waitStarted;
-      if (locators.some((locator) => !locator)) {
+      const locatorMissing = locators.some((locator) => !locator);
+      if (locatorMissing) {
         if (waitedMs < config.airlineLocatorWaitMs) return { waiting: true };
         log.warn({ pnr, locators, waitedMs }, 'airline record locator not on every segment yet; issuing anyway');
       }
@@ -263,7 +303,17 @@ const issueInFreshSessions = async (booked, { offer, bookingReference, config, n
           step: 'issueTicket', operation: 'DocIssuance_IssueTicket', bodyXml: buildIssueTicketBody(), pnr, committed: true,
         });
       } catch (cause) {
-        if (!issuanceNotReady(cause) || refusals >= config.issueRetries) throw cause;
+        if (!issuanceNotReady(cause)) throw cause;
+        // The airline is only slow. While its record locator is still missing,
+        // keep looking until the hard cap rather than spending the two quick
+        // retries on it: La Compagnie's B0100 answered 9125 for the whole 90 s
+        // wait on PDT (16 Sep 2026) and ticketed on a later look, once its
+        // locator arrived about 45 s after commit.
+        if (locatorMissing && waitedMs < config.airlineLocatorMaxWaitMs) {
+          log.warn({ pnr, waitedMs, reason: cause?.technicalError }, 'the airline has not sent its record locator yet; looking again in a new session');
+          return { waiting: true };
+        }
+        if (refusals >= config.issueRetries) throw cause;
         refusals += 1;
         log.warn({ pnr, attempt: refusals, reason: cause?.technicalError }, 'the airline is not ready to ticket yet; retrying in a new session');
         return { waiting: true, notReady: true };
@@ -863,9 +913,9 @@ const confirmFare = async (ctx, { offer, config, flights }) => {
  */
 export const cancelBooking = async (recordLocator) => {
   const config = getWsConfig();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = officeToday(config.officeTimeZone);
 
-  return withSession(async (ctx) => {
+  const cancelOnce = async () => withSession(async (ctx) => {
     const retrieved = await callStep(ctx, {
       step: 'retrieve',
       operation: 'PNR_Retrieve',
@@ -899,6 +949,10 @@ export const cancelBooking = async (recordLocator) => {
             targetOffice: config.officeId,
           })));
         } catch (cause) {
+          // A void asked for too soon, or one the airline left unanswered, is
+          // worth one more try in a moment - this session is unusable after a
+          // timeout, so cancelBooking below opens a new one and runs this again.
+          if (voidFailedForNow(cause)) return { retryVoid: true, reason: cause?.technicalError ?? cause?.message };
           throw new BookingChainError({ step: 'voidTicket', pnr: recordLocator, committed: true, ticketed: true, cause, code: cause?.code ?? 502 });
         }
 
@@ -911,6 +965,9 @@ export const cancelBooking = async (recordLocator) => {
         const result = readVoidTicketReply(voidReply);
         if (!result.voided) {
           const inspected = inspectReply(voidReply, 'Ticket_CancelDocument');
+          if (voidFailedForNow(inspected.error)) {
+            return { retryVoid: true, reason: inspected.error?.technicalError ?? null };
+          }
           throw new BookingChainError({
             step: 'voidTicket',
             pnr: recordLocator,
@@ -979,6 +1036,31 @@ export const cancelBooking = async (recordLocator) => {
       requiresAirlineRefund: unvoidable.filter((t) => t.number).map((t) => t.number),
     };
   }, { config });
+
+  // One more try for a void that failed only for now (voidFailedForNow): the
+  // coupons had not reached the e-ticket record yet, or the airline's link went
+  // quiet. The session is opened again from scratch, because a timed-out one
+  // answers 93 "illogical conversation" to everything after it.
+  const first = await cancelOnce();
+  if (!first.retryVoid) return first;
+
+  log.warn({ pnr: recordLocator, reason: first.reason, retryInMs: config.voidRetryDelayMs }, 'void failed for now; trying once more in a new session');
+  await sleep(config.voidRetryDelayMs);
+
+  const second = await cancelOnce();
+  if (!second.retryVoid) return second;
+
+  // Still not voided: leave the itinerary alone, exactly as a refused void does.
+  log.error({ pnr: recordLocator, reason: second.reason }, 'void failed twice; itinerary left intact');
+  throw new BookingChainError({
+    step: 'voidTicket',
+    pnr: recordLocator,
+    committed: true,
+    ticketed: true,
+    error: 'We could not void the ticket',
+    code: 502,
+    technicalError: second.reason ?? 'Ticket_CancelDocument did not void the ticket',
+  });
 };
 
 /** Read a booking back by record locator. Stateless - no session needed. */

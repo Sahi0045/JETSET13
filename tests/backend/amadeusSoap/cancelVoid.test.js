@@ -39,10 +39,18 @@ const ok = (name) => envelope(name, '<dummy/>', true);
 const errorReply = envelope('PNR_Reply',
   '<generalErrorInfo><errorOrWarningCodeDetails><errorDetails><errorCode>999</errorCode></errorDetails></errorOrWarningCodeDetails><errorFreeText>VOID NOT ALLOWED</errorFreeText></generalErrorInfo>', true);
 
+/**
+ * Today as Amadeus writes it on a ticket: the OFFICE's date, not UTC.
+ *
+ * This helper used to read the UTC date, which made every "issued today" test
+ * here pass only outside the hours between midnight UTC and midnight in the
+ * office - the very window in which the void was being skipped in production.
+ */
+const OFFICE_ZONE = 'America/New_York';
 const todayDDMMMYY = () => {
-  const d = new Date();
   const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
-  return `${String(d.getUTCDate()).padStart(2, '0')}${months[d.getUTCMonth()]}${String(d.getUTCFullYear()).slice(-2)}`;
+  const [year, month, day] = new Date().toLocaleDateString('en-CA', { timeZone: OFFICE_ZONE }).split('-');
+  return `${day}${months[Number(month) - 1]}${year.slice(-2)}`;
 };
 
 const actionsSent = () => axios.post.mock.calls.map(([, , cfg]) => cfg?.headers?.SOAPAction ?? '');
@@ -226,6 +234,94 @@ describe('cancelling', () => {
 
     expect(didCancel()).toBe(true);
     expect(result.voided).toBe(true);
+  });
+
+  // Amadeus stamps the ticket with the OFFICE's date, not UTC. On PDT at
+  // 00:11 UTC on 16 Sep 2026 a ticket issued minutes earlier read /15SEP26/,
+  // so measuring the void window against UTC skipped the void and told the
+  // customer the airline owed them a refund - every night, for the hours
+  // between midnight UTC and midnight in the office.
+  it("voids a ticket the office's calendar still calls today, after UTC has rolled over", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true, now: Date.parse('2026-09-16T00:20:00Z') });
+    vi.stubEnv('AMADEUS_WS_OFFICE_TIME_ZONE', 'America/New_York');
+    const { cancelBooking } = await loadChain();
+    axios.post
+      .mockResolvedValueOnce(reply(retrievedWithTicket('15SEP26')))
+      .mockResolvedValueOnce(reply(voided()))
+      .mockResolvedValueOnce(reply(ok('PNR_Reply')))
+      .mockResolvedValue(reply(ok('Security_SignOutReply')));
+
+    const result = await cancelBooking('ABC123');
+
+    expect(didVoid()).toBe(true);
+    expect(result.voided).toBe(true);
+    expect(result.requiresAirlineRefund).toEqual([]);
+    vi.useRealTimers();
+  });
+
+  it('still leaves a ticket from an earlier day to the airline', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true, now: Date.parse('2026-09-16T00:20:00Z') });
+    vi.stubEnv('AMADEUS_WS_OFFICE_TIME_ZONE', 'America/New_York');
+    const { cancelBooking } = await loadChain();
+    axios.post
+      .mockResolvedValueOnce(reply(retrievedWithTicket('14SEP26')))
+      .mockResolvedValueOnce(reply(ok('PNR_Reply')))
+      .mockResolvedValue(reply(ok('Security_SignOutReply')));
+
+    const result = await cancelBooking('ABC123');
+
+    expect(didVoid()).toBe(false);
+    expect(result.voided).toBe(false);
+    expect(result.requiresAirlineRefund).toEqual(['057-2412345678']);
+    vi.useRealTimers();
+  });
+
+  // 5795 INVALID OR MISSING COUPON/BOOKLET NUMBER answered a void asked for
+  // seconds after issuance on PDT (16 Sep 2026): the coupons were not in the
+  // e-ticket record yet, and the same void succeeded 15 s later.
+  it('tries the void again in a new session when the coupons are not there yet', async () => {
+    vi.stubEnv('AMADEUS_WS_VOID_RETRY_DELAY_MS', '0');
+    const { cancelBooking } = await loadChain();
+    const tooSoon = envelope('Ticket_CancelDocumentReply',
+      '<errorGroup><errorOrWarningCodeDetails><errorDetails><errorCode>5795</errorCode></errorDetails></errorOrWarningCodeDetails>'
+      + '<errorWarningDescription><freeText>INVALID OR MISSING COUPON/BOOKLET NUMBER</freeText></errorWarningDescription></errorGroup>', true);
+    const voided = envelope('Ticket_CancelDocumentReply',
+      '<transactionResults><responseDetails><responseType>X</responseType><statusCode>O</statusCode></responseDetails></transactionResults>', true);
+    axios.post
+      .mockResolvedValueOnce(reply(retrievedWithTicket(todayDDMMMYY())))
+      .mockResolvedValueOnce(reply(tooSoon))
+      .mockResolvedValueOnce(reply(ok('Security_SignOutReply')))
+      .mockResolvedValueOnce(reply(retrievedWithTicket(todayDDMMMYY())))
+      .mockResolvedValueOnce(reply(voided))
+      .mockResolvedValueOnce(reply(ok('PNR_Reply')))
+      .mockResolvedValue(reply(ok('Security_SignOutReply')));
+
+    const result = await cancelBooking('ABC123');
+
+    expect(result).toMatchObject({ cancelled: true, voided: true });
+    const sent = axios.post.mock.calls.map(([, body]) => String(body));
+    expect(sent.filter((body) => body.includes('<Ticket_CancelDocument'))).toHaveLength(2);
+    // The second attempt is a session of its own; a timed-out one is unusable.
+    expect(sent.filter((body) => body.includes('TransactionStatusCode="Start"'))).toHaveLength(2);
+    expect(didCancel()).toBe(true);
+  });
+
+  it('does not try again when the airline refuses the void outright', async () => {
+    vi.stubEnv('AMADEUS_WS_VOID_RETRY_DELAY_MS', '0');
+    const { cancelBooking } = await loadChain();
+    const refused = envelope('Ticket_CancelDocumentReply',
+      '<errorGroup><errorOrWarningCodeDetails><errorDetails><errorCode>5458</errorCode></errorDetails></errorOrWarningCodeDetails>'
+      + '<errorWarningDescription><freeText>NOT AUTHORISED</freeText></errorWarningDescription></errorGroup>', true);
+    axios.post
+      .mockResolvedValueOnce(reply(retrievedWithTicket(todayDDMMMYY())))
+      .mockResolvedValueOnce(reply(refused))
+      .mockResolvedValue(reply(ok('Security_SignOutReply')));
+
+    await expect(cancelBooking('ABC123')).rejects.toMatchObject({ step: 'voidTicket' });
+
+    const sent = axios.post.mock.calls.map(([, body]) => String(body));
+    expect(sent.filter((body) => body.includes('<Ticket_CancelDocument'))).toHaveLength(1);
+    expect(didCancel()).toBe(false);
   });
 
   it('does not cancel when the void is refused for any other reason', async () => {

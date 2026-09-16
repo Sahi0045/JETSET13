@@ -657,6 +657,40 @@ describe('after the PNR exists', () => {
     expect(result.ticketed).toBe(true);
   });
 
+  // La Compagnie's B0100 answered 9125 for the whole 90 s wait on PDT
+  // (16 Sep 2026) and ticketed on a later look, once its record locator arrived.
+  // Spending the two quick retries on a locator that has not arrived fails a
+  // booking the airline was only slow to confirm.
+  it('keeps looking for a late record locator instead of spending the retries', async () => {
+    vi.stubEnv('AMADEUS_WS_AUTO_TICKET', 'true');
+    vi.stubEnv('AMADEUS_WS_AIRLINE_LOCATOR_WAIT_MS', '0');
+    vi.stubEnv('AMADEUS_WS_AIRLINE_LOCATOR_MAX_WAIT_MS', '5000');
+    vi.stubEnv('AMADEUS_WS_AIRLINE_LOCATOR_POLL_MS', '0');
+    vi.stubEnv('AMADEUS_WS_ISSUE_RETRIES', '1');
+    vi.stubEnv('AMADEUS_WS_TICKET_RETRIEVE_INITIAL_MS', '0');
+    const segment = (locator) => '<originDestinationDetails><itineraryInfo><elementManagementItinerary><segmentName>AIR</segmentName></elementManagementItinerary>'
+      + (locator ? `<itineraryReservationInfo><reservation><companyId>B0</companyId><controlNumber>${locator}</controlNumber></reservation></itineraryReservationInfo>` : '')
+      + '</itineraryInfo></originDestinationDetails>';
+    const withoutLocator = envelope('PNR_Reply', pnrHeaderXml + segment(''), SESSION);
+    const withLocator = envelope('PNR_Reply', pnrHeaderXml + segment('004DX4'), SESSION);
+    const { runBookingChain } = await loadChain();
+    // Commit without a locator, then three looks that still have none and are
+    // refused 9125, then one with the locator that issues.
+    queueReplies(sellOk, addOk, fopOk, priceOk, tstOk, withoutLocator, fopOk, signOutOk,
+      withoutLocator, notReadyReply(), signOutOk,
+      withoutLocator, notReadyReply(), signOutOk,
+      withLocator, issueOk, retrieveWithTicket);
+
+    const result = await runBookingChain({ offer: offer(), travelers });
+
+    const sent = axios.post.mock.calls.map(([, body]) => String(body));
+    // Three issuance attempts although only one retry is configured: a missing
+    // locator is waiting, not a retry.
+    expect(sent.filter((body) => body.includes('<DocIssuance_IssueTicket'))).toHaveLength(3);
+    expect(result.ticketed).toBe(true);
+    expect(result.tickets.length).toBeGreaterThan(0);
+  });
+
   it('never issues again when the new session finds a ticket already on the PNR', async () => {
     vi.stubEnv('AMADEUS_WS_AUTO_TICKET', 'true');
     const { runBookingChain } = await loadChain();
