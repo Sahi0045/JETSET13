@@ -153,6 +153,11 @@ export default defineConfig(({ mode }) => {
                             // flights page. scripts/check-chunk-cycles.mjs now fails
                             // the build on any such cycle.
                             id.includes('/frontend/src/utils/bookingStorage') ||
+                            // The half-typed traveller draft, cleared from the same
+                            // Navbar logout. Unpinned it went to booking-flights and
+                            // made the identical cycle; the build guard caught it
+                            // before it could reach anyone.
+                            id.includes('/frontend/src/utils/flightTravellerDraft') ||
                             // Vite's dynamic-import helper. The shell's route prefetch uses
                             // import(), and unpinned the helper was folded into
                             // booking-cruise, so common-shell imported booking-cruise while
