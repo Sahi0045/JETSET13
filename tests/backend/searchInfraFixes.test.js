@@ -35,6 +35,27 @@ describe('the search cache key', () => {
     expect(searchFilterKey({ includedAirlineCodes: ['BA', 'LH'] }, ['AI']))
       .toBe(searchFilterKey({ includedAirlineCodes: ['BA', 'LH'] }, ['AI']));
   });
+
+  /**
+   * Seen in a browser, after B6-LH was blocked: the date strip went on
+   * advertising its fare - the cheapest of the day, and one we would no longer
+   * sell - because the calendar's cache key did not know the policy had moved.
+   * The strip and the search it links to have to be built under the same rules.
+   */
+  it('changes when the interline policy changes', () => {
+    const allowed = searchFilterKey({}, [], { blockAll: false, blocked: [] });
+    const oneBlocked = searchFilterKey({}, [], { blockAll: false, blocked: ['B6-LH'] });
+    const allBlocked = searchFilterKey({}, [], { blockAll: true, blocked: [] });
+
+    expect(oneBlocked).not.toBe(allowed);
+    expect(allBlocked).not.toBe(allowed);
+    expect(allBlocked).not.toBe(oneBlocked);
+  });
+
+  it('separates two different blocked-pair lists', () => {
+    expect(searchFilterKey({}, [], { blocked: ['B6-LH'] }))
+      .not.toBe(searchFilterKey({}, [], { blocked: ['B6-LH', 'DL-UA'] }));
+  });
 });
 
 /**

@@ -1770,7 +1770,8 @@ router.post('/search', validate({ body: flightSearchSchema }), async (req, res) 
       // The unticketable list is in here for the same reason: for up to 5
       // minutes after that env var changes, hidden carriers would keep being
       // served from a key that could not see the change.
-      const filterKey = searchFilterKey(searchParams, describeWsConfig().unticketableCarriers);
+      const wsConfig = describeWsConfig();
+      const filterKey = searchFilterKey(searchParams, wsConfig.unticketableCarriers, wsConfig.interline);
       const flightCacheKey = CacheKeys.flightSearch(
         searchParams.from,
         searchParams.to,
@@ -1969,10 +1970,15 @@ router.post('/date-prices', async (req, res) => {
       return res.status(400).json({ success: false, error: 'from, to and dates[] are required' });
     }
 
+    const ws = describeWsConfig();
     const cacheKey = CacheKeys.flightBrowse('date-prices', [
       resolveToIATACode(from), resolveToIATACode(to),
       `${adults || 1}-${children || 0}-${infants || 0}-${travelClass || 'any'}`,
       dates.slice().sort().join(','),
+      // The strip quotes the cheapest fare of the day, so it has to be built
+      // under the same rules as the search it links to. Without this the strip
+      // kept advertising a blocked carrier's fare for the life of the cache.
+      searchFilterKey({}, ws.unticketableCarriers, ws.interline),
     ]);
 
     const payload = await withCache(cacheKey, TTL.FLIGHT_CALENDAR, () => FlightProvider.getCalendarPrices({
@@ -4304,12 +4310,18 @@ function adminSafeDetails(details) {
  * is here for the same reason: for five minutes after that setting changes, a
  * key that cannot see it keeps serving results built under the old one.
  */
-export function searchFilterKey(params = {}, unticketable = []) {
+export function searchFilterKey(params = {}, unticketable = [], interline = {}) {
   return [
     [].concat(params.includedAirlineCodes || []).filter(Boolean).join('+') || 'any',
     [].concat(params.excludedAirlineCodes || []).filter(Boolean).join('+') || 'none',
     params.maxPrice || 'nomax',
     [].concat(unticketable || []).join('') || 'none',
+    // The interline policy decides which offers exist at all, so a cached
+    // answer built under the old one must not be served under the new. Seen in
+    // a browser: after B6-LH was blocked, the date strip went on advertising
+    // its fare - the cheapest on the day, and one we would no longer sell -
+    // because the calendar's key did not know the policy had changed.
+    interline?.blockAll ? 'noIL' : ([].concat(interline?.blocked || []).join('+') || 'allIL'),
   ].join('|');
 }
 
