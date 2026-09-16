@@ -973,6 +973,22 @@ function FlightBookingConfirmation() {
     if (checkingOut || groupChange.busy) return;
     // Not while a payment page is already opening for this trip.
     if (paymentStarting.current) return;
+    // Not on a fare the airline has already withdrawn. `fareGone` was set when
+    // that happened and then read in exactly one place - to offer a "Search
+    // again" link - so the page said "The airline can no longer sell this fare"
+    // directly above a live Pay button. Checkout refuses it a moment later, but
+    // being sent to a payment page for something unbuyable is its own dead end.
+    if (fareGone) {
+      setNotice({
+        tone: 'error',
+        title: 'This fare is no longer available',
+        message: 'The airline has withdrawn it since you opened this page. Search again to see the fares available now.',
+        reassure: true,
+        actionLabel: 'Search again',
+        onAction: () => searchAgain(),
+      });
+      return;
+    }
     // Everything the airline needs, checked before payment. The server refuses
     // an incomplete traveller too - but only after the charge, and then has to
     // reverse it. Stopping here costs the customer nothing. The same list marks
@@ -1927,7 +1943,10 @@ function FlightBookingConfirmation() {
               <div className="booking-card-body">
                 <p className="text-[#626363] text-sm mb-4 bg-gray-50 p-3 rounded-lg border border-gray-100 flex items-center">
                   <span className="bg-[#65B3CF] text-white text-xs px-2 py-0.5 rounded mr-2">INFO</span>
-                  Your booking reference is sent to these contact details after payment, and your e-ticket once it is issued.
+                  {/* "these contact details" covered the mobile number too, and
+                      nothing is ever sent to it - the e-mail is the one that
+                      carries the reference and the e-ticket. */}
+                  Your booking reference is emailed to you after payment, and your e-ticket once it is issued. The airline uses the mobile number if it needs to reach you about the flight.
                 </p>
                 {/* The first traveller's number and code, filled in above. A
                     second country-code selector sat here, changed nothing
@@ -1953,13 +1972,22 @@ function FlightBookingConfirmation() {
                   </div>
                 </div>
 
+                {/*
+                  This said "Booking alerts will be sent to +91 …", with a green
+                  tick, and no SMS has ever been sent: sms.service.js is
+                  imported by nothing in the backend. The number IS used - the
+                  airline puts it on the PNR as the contact for a schedule
+                  change or a cancellation, which is a real reason to ask for it
+                  and the reason the field is required. So the promise is now
+                  the one we keep.
+                */}
                 {bookingDetails?.contact?.phone && (
                   <div className="mt-3 flex items-center gap-3 p-3 bg-[#f0fdf4] border border-[#dcfce7] rounded-xl">
                     <div className="bg-[#10b981] p-1 rounded-full">
                       <Check className="h-4 w-4 text-white" />
                     </div>
                     <span className="text-sm font-medium text-[#166534]">
-                      Booking alerts will be sent to {`${passengerData?.[0]?.countryCode || ''} ${bookingDetails.contact.phone}`.trim()}
+                      The airline will use {`${passengerData?.[0]?.countryCode || ''} ${bookingDetails.contact.phone}`.trim()} to reach you about this flight
                     </span>
                   </div>
                 )}

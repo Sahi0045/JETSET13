@@ -70,7 +70,11 @@ describe('going back to the results to change who is travelling', () => {
   });
 
   it('the modify bar and the search form arrive open on the traveller picker when asked', () => {
-    expect(modifyBar).toMatch(/const \[expanded, setExpanded\] = useState\(Boolean\(openTravellers\)\)/);
+    // `openTravellers` still opens the bar. Pinned as "does the initial state
+    // read openTravellers" rather than as one exact expression: the bar also
+    // opens for a results page with no search at all, and the literal form of
+    // the line is not what this test is about.
+    expect(modifyBar).toMatch(/const \[expanded, setExpanded\] = useState\([^)]*Boolean\(openTravellers\)/);
     expect(modifyBar).toMatch(/<FlightSearchForm initialData=\{searchParams\} onSearch=\{handleSearch\} openTravellers=\{openTravellers\} \/>/);
     expect(form).toMatch(/const \[showTravellers, setShowTravellers\] = useState\(Boolean\(openTravellers\)\)/);
   });

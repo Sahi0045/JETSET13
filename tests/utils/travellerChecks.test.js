@@ -93,9 +93,19 @@ describe('travellerProblems', () => {
     expect(travellerProblems({ ...complete, countryCode: '+91' }, { ...domestic, index: 0 })).toEqual([]);
   });
 
-  it("needs the lead traveller's mobile, and a guest's email", () => {
+  /**
+   * The mobile number is required, and the reason given for it has to be the
+   * real one. It used to read "for booking updates", which means an SMS, and no
+   * SMS is ever sent - sms.service.js is imported by nothing. What the number
+   * actually does is go on the PNR, as the airline's way to reach the traveller
+   * about a schedule change or a cancellation.
+   */
+  it("needs the lead traveller's mobile, and says what it is for", () => {
     const lead = { ...complete, mobile: '' };
-    expect(travellerProblems(lead, { ...domestic, index: 0 })).toContain('Enter a mobile number for booking updates.');
+    const problems = travellerProblems(lead, { ...domestic, index: 0 });
+    expect(problems.some((p) => /mobile number/i.test(p))).toBe(true);
+    expect(problems.join(' ')).toMatch(/airline can reach you/i);
+    expect(problems.join(' ')).not.toMatch(/booking updates/i);
     expect(travellerProblems(complete, { ...domestic, index: 0, bookingAsGuest: true })[0]).toMatch(/Enter an email address/);
   });
 });
