@@ -334,8 +334,26 @@ export default function ProfilePage() {
         }, { onConflict: 'id' })
       }
 
-      const dataToSave = { ...data }
-      delete dataToSave.profile_photo
+      /**
+       * Only what this cache is for, which is painting a name before the
+       * database answers.
+       *
+       * It used to save the whole form with just the photo stripped - passport
+       * number, passport expiry, issuing country, PAN number, date of birth,
+       * mobile and address - to localStorage, with no expiry and no clear
+       * except the Navbar's logout. A government ID and an Indian tax ID, in
+       * plaintext, indefinitely, on whatever browser was used. The
+       * booking-draft sweep never touched it: `userData` is not in
+       * BOOKING_STORAGE_KEYS.
+       *
+       * None of it needs to be here. The profile is read from the `users`
+       * table on every mount a few lines above, and that is the copy the form
+       * fills from; this only exists so the page is not blank for a moment.
+       */
+      const CACHEABLE = ['first_name', 'last_name', 'name', 'email', 'role'];
+      const dataToSave = Object.fromEntries(
+        CACHEABLE.filter((key) => data[key] != null).map((key) => [key, data[key]]),
+      );
       localStorage.setItem('userData', JSON.stringify(dataToSave))
 
       setProcessing(false)

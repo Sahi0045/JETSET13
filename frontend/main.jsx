@@ -14,6 +14,7 @@ import { SupabaseAuthProvider } from './src/contexts/SupabaseAuthContext.jsx';
 import { queryClient } from './src/lib/queryClient.js';
 import { initMonitoring } from './src/lib/monitoring.js';
 import { installFetchTimeout } from './src/utils/fetchTimeout.js';
+import { pruneStoredProfile } from './src/utils/bookingStorage.js';
 
 // Initialize error monitoring (no-op unless VITE_SENTRY_DSN is set)
 initMonitoring();
@@ -24,6 +25,12 @@ initMonitoring();
 // of all after the card was charged. Installed here rather than at each call
 // site because forty-three call sites had already forgotten.
 installFetchTimeout();
+
+// Remove identity documents left in this browser by an older build. `userData`
+// held passport number, passport expiry, issuing country, PAN and date of birth
+// with no expiry and no clear but a click on Logout; the profile page no longer
+// writes them, and this reaches everyone who already has them.
+pruneStoredProfile();
 
 // Initialize the app when DOM is loaded
 const container = document.getElementById('app');

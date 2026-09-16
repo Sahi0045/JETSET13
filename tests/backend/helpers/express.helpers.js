@@ -30,6 +30,16 @@ export function createResponse() {
     body:       null,
     cookies:    {},
     _headers:   {},
+    /**
+     * Real Express sets this once a response is sent, and throws
+     * ERR_HTTP_HEADERS_SENT on a second one. This double had no such property,
+     * so `if (res.headersSent) return;` - which guards flight.routes.js and
+     * middleware/errorHandler.js - read permanently false, and a handler that
+     * answered twice was indistinguishable from one that answered once: the
+     * test simply saw the last write. A money path that returns 200 and then
+     * falls through to a 403 would ship green.
+     */
+    headersSent: false,
 
     status(code) {
       this.statusCode = code;
@@ -37,13 +47,25 @@ export function createResponse() {
     },
 
     json(data) {
+      this._sent();
       this.body = data;
       return this;
     },
 
     send(data) {
+      this._sent();
       this.body = data;
       return this;
+    },
+
+    /** Answered once already: say so the way Node says it. */
+    _sent() {
+      if (this.headersSent) {
+        const error = new Error('Cannot set headers after they are sent to the client');
+        error.code = 'ERR_HTTP_HEADERS_SENT';
+        throw error;
+      }
+      this.headersSent = true;
     },
 
     setHeader(key, value) {
