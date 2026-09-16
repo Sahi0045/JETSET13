@@ -64,10 +64,45 @@ const CLOSED = ['cancelled', 'canceled', 'refunded', 'failed'];
  * (needsReviewAlert.job.js), because it is the same population: that job tells
  * staff about them, and this one notices when staff have finished with them.
  */
+/**
+ * Where a booking keeps the address to write to.
+ *
+ * Checked against live rows rather than assumed, because assuming is how this
+ * was wrong: the first version read `contactInfo.email`, `customerEmail` and
+ * `email`, and NOT ONE of those keys is ever written for a flight. Every
+ * booking would have failed with "No email address" - the e-ticket email could
+ * not have reached a single customer.
+ *
+ * What is actually there, on real rows: `booking_details.customer_email`
+ * (written by checkout), and the lead traveller's own address on
+ * `passenger_details`. Same precedence the order route's own resolver uses
+ * (flight.routes.js, buildConfirmationEmail).
+ */
+export const addressFor = (row) => {
+  const details = row?.booking_details || {};
+  const travellers = Array.isArray(row?.passenger_details) ? row.passenger_details
+    : (Array.isArray(details.travelers) ? details.travelers : []);
+  return String(details.customer_email || details.contactInfo?.email || travellers[0]?.email || '').trim() || null;
+};
+
+/** The customer's name, from the same places. */
+export const nameFor = (row) => {
+  const details = row?.booking_details || {};
+  const travellers = Array.isArray(row?.passenger_details) ? row.passenger_details
+    : (Array.isArray(details.travelers) ? details.travelers : []);
+  const lead = travellers[0] || {};
+  const full = `${lead.firstName || lead.name?.firstName || ''} ${lead.lastName || lead.name?.lastName || ''}`.trim();
+  return details.customer_name || full || null;
+};
+
+const SELECT = 'booking_reference, status, payment_status, booking_details, passenger_details, created_at';
+
+const open = (row) => !CLOSED.includes(String(row.status || '').toLowerCase());
+
 export async function findUnticketed({ limit = MAX_PER_TICK } = {}) {
   const { data, error } = await supabase
     .from('bookings')
-    .select('booking_reference, status, payment_status, booking_details, created_at')
+    .select(SELECT)
     .in('payment_status', PAID)
     .not('booking_details->>pnr', 'is', null)
     .order('created_at', { ascending: true })
@@ -76,13 +111,48 @@ export async function findUnticketed({ limit = MAX_PER_TICK } = {}) {
   if (error) throw new Error(`could not read bookings: ${error.message}`);
 
   return (data || [])
-    .filter((row) => !CLOSED.includes(String(row.status || '').toLowerCase()))
+    .filter(open)
     .filter((row) => {
       const details = row.booking_details || {};
       // Already has its number: nothing to ask about.
       if (Array.isArray(details.tickets) && details.tickets.length > 0) return false;
       if (details.gds?.ticketed === true) return false;
       return Boolean(details.pnr);
+    })
+    .slice(0, limit);
+}
+
+/**
+ * Tickets this job recorded whose owner has not been told yet.
+ *
+ * Without this the retry below is unreachable and the promise is quietly
+ * dropped: the moment the numbers are written, `findUnticketed` stops selecting
+ * the row, so "let it be sent again next tick" had no next tick. A refused send
+ * - a full mailbox, a moment's Resend outage, or the missing address above -
+ * meant the customer was never told, ever.
+ *
+ * Only rows carrying `ticket_synced_at`, which only this job writes. A booking
+ * ticketed inline at order time already had its ticket number in the
+ * confirmation email; announcing those would mean emailing every past customer
+ * about a ticket they have had for weeks.
+ */
+export async function findUnannounced({ limit = MAX_PER_TICK } = {}) {
+  const { data, error } = await supabase
+    .from('bookings')
+    .select(SELECT)
+    .in('payment_status', PAID)
+    .not('booking_details->>ticket_synced_at', 'is', null)
+    .order('created_at', { ascending: true })
+    .limit(limit * 5);
+
+  if (error) throw new Error(`could not read bookings: ${error.message}`);
+
+  return (data || [])
+    .filter(open)
+    .filter((row) => {
+      const details = row.booking_details || {};
+      if (details.ticket_issued_emailed === true) return false;
+      return Array.isArray(details.tickets) && details.tickets.some((t) => t?.number);
     })
     .slice(0, limit);
 }
@@ -118,6 +188,43 @@ export const withTravellerNames = (order) => {
  * Returns what happened, so a tick can be reported and a test can assert on it
  * without reading the database.
  */
+/** Tell the customer, from whichever of the two populations found them. */
+const announce = (row, tickets, sendEmail) => sendEmail({
+  customerEmail: addressFor(row),
+  customerName: nameFor(row),
+  bookingReference: row.booking_reference,
+  tickets,
+  bookingDetails: { ...(row.booking_details || {}), tickets },
+}).catch((error) => ({ success: false, error: error?.message }));
+
+/**
+ * Send the e-ticket for a booking whose numbers are already recorded.
+ *
+ * The send is claimed with a compare-and-set before the mail goes out, so two
+ * workers cannot both announce it; a refused send releases the claim and the
+ * row is picked up again next tick.
+ */
+export async function announceOne(row, { sendEmail = sendTicketIssuedEmail } = {}) {
+  const reference = row.booking_reference;
+  const tickets = (row.booking_details?.tickets || []).filter((t) => t?.number);
+  if (tickets.length === 0) return { reference, outcome: 'nothing-to-announce' };
+
+  let claimed = false;
+  const written = await patchBookingDetails(reference, (current) => {
+    claimed = current.ticket_issued_emailed !== true;
+    return claimed ? { ticket_issued_emailed: true } : {};
+  });
+  if (!written || !claimed) return { reference, outcome: 'already-announced' };
+
+  const sent = await announce(row, tickets, sendEmail);
+  if (!sent?.success) {
+    log('e-ticket email not sent', { booking: reference, reason: sent?.error });
+    await patchBookingDetails(reference, { ticket_issued_emailed: false });
+    return { reference, outcome: 'announce-failed', emailed: false };
+  }
+  return { reference, outcome: 'announced', emailed: true };
+}
+
 export async function syncOne(row, { provider = FlightProvider, sendEmail = sendTicketIssuedEmail } = {}) {
   const reference = row.booking_reference;
   const details = row.booking_details || {};
@@ -170,13 +277,7 @@ export async function syncOne(row, { provider = FlightProvider, sendEmail = send
   // The email is what the customer was promised, but it is not what makes the
   // booking correct: the numbers are already recorded, so a refused send leaves
   // My Trips, Manage Booking and the PDF all telling the truth.
-  const sent = await sendEmail({
-    customerEmail: details.contactInfo?.email || details.customerEmail || details.email,
-    customerName: details.customerName || details.contactInfo?.name,
-    bookingReference: reference,
-    tickets,
-    bookingDetails: { ...details, tickets },
-  }).catch((error) => ({ success: false, error: error?.message }));
+  const sent = await announce(row, tickets, sendEmail);
 
   if (!sent?.success) {
     log('e-ticket email not sent', { booking: reference, reason: sent?.error });
@@ -190,16 +291,24 @@ export async function syncOne(row, { provider = FlightProvider, sendEmail = send
 
 export async function runOnce({ limit = MAX_PER_TICK, provider = FlightProvider, sendEmail = sendTicketIssuedEmail } = {}) {
   const rows = await findUnticketed({ limit });
-  if (rows.length === 0) return { checked: 0, ticketed: 0 };
-
   const results = [];
   for (const row of rows) {
     results.push(await syncOne(row, { provider, sendEmail }));
   }
 
+  // Tickets recorded on an earlier tick whose owner still has not been told -
+  // a refused send, or a restart between the write and the mail.
+  const owed = await findUnannounced({ limit });
+  const announced = [];
+  for (const row of owed) {
+    announced.push(await announceOne(row, { sendEmail }));
+  }
+
   const ticketed = results.filter((r) => r.outcome === 'recorded').length;
+  const told = announced.filter((r) => r.outcome === 'announced').length;
   if (ticketed > 0) log(`recorded ${ticketed} newly issued ticket(s)`);
-  return { checked: rows.length, ticketed, results };
+  if (told > 0) log(`sent ${told} e-ticket email(s)`);
+  return { checked: rows.length, ticketed, announced: told, results, owed: announced };
 }
 
 export function startTicketSyncJob({ intervalMs = DEFAULT_INTERVAL_MS, env = process.env } = {}) {
