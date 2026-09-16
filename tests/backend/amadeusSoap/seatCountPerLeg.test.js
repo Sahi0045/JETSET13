@@ -9,62 +9,72 @@ import { parseSoap, unwrapEnvelope } from '../../../backend/services/amadeusSoap
  * It was read by searching `fareByLeg.flatMap(l => l.fares)` - every leg's
  * fares - for the first whose `rbd` matched the segment's. On a round trip
  * booked in one class that is the OUTBOUND's fare for both legs, so a scarce
- * return was reported with the outbound's roomier count. The mapper now takes
- * each segment's availability from its own leg's fare, where that fare is
- * already resolved.
+ * return was reported with the outbound's roomier count. Each segment now takes
+ * its availability from its own leg's fare, where that fare is already
+ * resolved.
  *
  * Why it matters: `seatsLeftLabel` (searchResults.js) renders 9 or more as a
- * calm "9+ seats". An offer with 7 left on the return therefore looked
+ * calm "9+ seats". An offer with 4 left on the return therefore looked
  * plentiful right up to the sell that refuses it - and a sell refused after
  * payment is a refund, not a retry.
  *
- * Measured, not assumed: running the mapper over the recorded certification
- * reply with and without the change moves exactly two of its fifty offers,
- * each downward, to the number the supplier actually stated.
+ * The fixture is `mptbs-roundtrip.xml` with ONE value changed: the return
+ * leg's E fare carries 4 seats where the outbound's carries 9. Everything else
+ * is a recorded reply. Measured against the mapper as it stood before the fix,
+ * that offer reports 9; after it, 4.
+ *
+ * (The certification replies show the same fault in seven of fifty offers, but
+ * `tests/fixtures/amadeus/certification/` is gitignored - 1.4 MB of recorded
+ * Amadeus traffic - so a test that reads them passes locally and fails in CI,
+ * which is how this file first went red on main.)
  */
 
 const config = { wsap: '1ASIWJETJEC', officeId: 'SCK1S2400', currency: 'USD' };
 
-const certification = (name) => {
-  const xml = readFileSync(new URL(`../../fixtures/amadeus/certification/${name}`, import.meta.url), 'utf8');
+const load = (name) => {
+  const xml = readFileSync(new URL(`../../fixtures/amadeus/${name}.xml`, import.meta.url), 'utf8');
   const { body } = unwrapEnvelope(parseSoap(xml));
   const reply = body[Object.keys(body).find((k) => k !== 'Fault')];
   return mapMasterPricerReply(reply, { config, searchSignature: 'test' });
 };
 
-const REPLY = '02-Fare_MasterPricerTravelBoardSearch.reply.xml';
+/** Every availability figure the reply states, read straight out of the XML. */
+const statedAvailability = (name) => {
+  const xml = readFileSync(new URL(`../../fixtures/amadeus/${name}.xml`, import.meta.url), 'utf8');
+  return [...xml.matchAll(/<avlStatus>(\d+)<\/avlStatus>/g)].map((m) => Number(m[1]));
+};
 
 describe('numberOfBookableSeats', () => {
-  // The bug, exactly: both of these reported 9 - "9+ seats" to the customer.
+  // The bug, exactly: this offer reported 9 - "9+ seats" - for a return leg
+  // that has 4.
   it('reports the scarcer leg, not the roomier one', () => {
-    const { offers } = certification(REPLY);
+    const { offers } = load('mptbs-roundtrip-uneven-availability');
 
-    expect(Number(offers[39].numberOfBookableSeats)).toBe(8);
-    expect(Number(offers[42].numberOfBookableSeats)).toBe(7);
+    expect(Number(offers[0].numberOfBookableSeats)).toBe(4);
   });
 
-  it('never claims more seats than the supplier stated anywhere in the offer', () => {
-    const { offers } = certification(REPLY);
+  it('leaves the other offers in the same reply alone', () => {
+    const { offers } = load('mptbs-roundtrip-uneven-availability');
 
-    for (const [index, offer] of offers.entries()) {
-      const seats = Number(offer.numberOfBookableSeats);
-      if (!Number.isFinite(seats)) continue;
-      // Amadeus caps its own availability figure at 9.
-      expect(seats, `offer ${index}`).toBeGreaterThan(0);
-      expect(seats, `offer ${index}`).toBeLessThanOrEqual(9);
+    expect(offers.map((o) => Number(o.numberOfBookableSeats))).toEqual([4, 3, 9, 1, 9]);
+  });
+
+  // The unedited recording: the same mapper must not move anything here.
+  it('is unchanged on a reply whose legs agree', () => {
+    const { offers } = load('mptbs-roundtrip');
+
+    expect(offers.map((o) => Number(o.numberOfBookableSeats))).toEqual([9, 3, 9, 1, 9]);
+  });
+
+  it('never claims more seats than the reply states anywhere', () => {
+    for (const name of ['mptbs-roundtrip', 'mptbs-roundtrip-uneven-availability', 'mptbs-oneway-jfk-lhr']) {
+      const highest = Math.max(...statedAvailability(name));
+      for (const [index, offer] of load(name).offers.entries()) {
+        const seats = Number(offer.numberOfBookableSeats);
+        if (!Number.isFinite(seats)) continue;
+        expect(seats, `${name} offer ${index}`).toBeGreaterThan(0);
+        expect(seats, `${name} offer ${index}`).toBeLessThanOrEqual(highest);
+      }
     }
-  });
-
-  // The rest of the file must not move: a fix that changed every count would
-  // be a different bug, not this one.
-  it('leaves every other offer in the reply untouched', () => {
-    const { offers } = certification(REPLY);
-    const counts = offers.map((o) => Number(o.numberOfBookableSeats));
-
-    expect(counts).toEqual([
-      9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 3, 3,
-      3, 3, 3, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 7, 9, 9, 6, 9, 9, 8,
-      3, 7, 7, 3, 9, 9, 7, 9, 9, 9,
-    ]);
   });
 });
