@@ -275,6 +275,30 @@ describe('failing before the PNR is committed', () => {
     const result = await runBookingChain({ offer: offer(), travelers, expectedTotal: 90 });
     expect(result.pnr).toBe('ABC123');
   });
+
+  // A reply with no 712 was totalled as 0, which is never a rise: a fare that
+  // went up after payment would have been ticketed at our cost.
+  it('refuses a pricing reply it cannot read a total from', async () => {
+    vi.stubEnv('AMADEUS_WS_PRICE_TOLERANCE', '0');
+    const { runBookingChain } = await loadChain();
+    const priceBaseOnly = envelope('Fare_PricePNRWithBookingClassReply',
+      '<fareList><fareReference><uniqueReference>1</uniqueReference></fareReference><fareDataInformation><fareDataSupInformation><fareDataQualifier>B</fareDataQualifier><fareAmount>129.00</fareAmount><fareCurrency>USD</fareCurrency></fareDataSupInformation></fareDataInformation></fareList>', SESSION);
+    queueReplies(sellOk, addOk, fopOk, priceBaseOnly, tstOk, commitOk);
+
+    await expect(runBookingChain({ offer: offer(), travelers, expectedTotal: 76 }))
+      .rejects.toMatchObject({ step: 'priceCheck', committed: false, code: 409 });
+  });
+
+  it('refuses a total priced in a currency the customer did not pay in', async () => {
+    vi.stubEnv('AMADEUS_WS_PRICE_TOLERANCE', '0');
+    const { runBookingChain } = await loadChain();
+    const priceEur = envelope('Fare_PricePNRWithBookingClassReply',
+      '<fareList><fareReference><uniqueReference>1</uniqueReference></fareReference><fareDataInformation><fareDataSupInformation><fareDataQualifier>712</fareDataQualifier><fareAmount>76.00</fareAmount><fareCurrency>EUR</fareCurrency></fareDataSupInformation></fareDataInformation></fareList>', SESSION);
+    queueReplies(sellOk, addOk, fopOk, priceEur, tstOk, commitOk);
+
+    await expect(runBookingChain({ offer: offer(), travelers, expectedTotal: 76 }))
+      .rejects.toMatchObject({ step: 'priceCheck', committed: false, code: 409 });
+  });
 });
 
 // The fare-drift guard checks the fare is stable; it does NOT check the
