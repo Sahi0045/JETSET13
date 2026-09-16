@@ -301,7 +301,9 @@ describe('Fare_PricePNRWithBookingClass', () => {
   });
 
   // An office filing fares in one currency and converting to another returns
-  // both; adding them gives a total wrong by an exchange rate.
+  // both; adding them gives a total wrong by an exchange rate. Leaving the
+  // other fare out is no better: that total is one passenger short, and the
+  // fare guard passes it.
   it('never sums amounts across currencies', () => {
     const reply = {
       fareList: [
@@ -323,7 +325,18 @@ describe('Fare_PricePNRWithBookingClass', () => {
         },
       ],
     };
-    expect(readPricePnrReply(reply).total).toBe(76);
+    expect(readPricePnrReply(reply).total).toBeNull();
+  });
+
+  // Read as 0, a total with no 712 passed the fare guard whatever the fare was.
+  it('has no total when a fare carries no 712', () => {
+    const fare = (ref, qualifier, amount) => ({
+      fareReference: { uniqueReference: ref },
+      fareDataInformation: { fareDataSupInformation: [{ fareDataQualifier: qualifier, fareAmount: amount, fareCurrency: 'USD' }] },
+    });
+    expect(readPricePnrReply({ fareList: fare('1', 'B', '129.00') }).total).toBeNull();
+    expect(readPricePnrReply({ fareList: [fare('1', '712', '85.85'), fare('2', 'B', '60.00')] }).total).toBeNull();
+    expect(readPricePnrReply({ fareList: fare('1', '712', 'n/a') }).total).toBeNull();
   });
 
   // This is the deadline after which the airline cancels an unticketed
@@ -586,6 +599,32 @@ describe('readVoidTicketReply', () => {
     const refused = { responseDetails: { responseType: 'X', statusCode: 'N' } };
     expect(readVoidTicketReply({ transactionResults: [voidedNow, voidedBefore] }).voided).toBe(true);
     expect(readVoidTicketReply({ transactionResults: [voidedNow, refused] }).voided).toBe(false);
+  });
+
+  // Two tickets sent, one answered: every answer said voided, and the booking
+  // was cancelled and refunded over the ticket nobody voided.
+  describe('against the documents it was sent', () => {
+    const sent = ['2207491174913', '2207491174914'];
+    // Captured on PDT: 2207491174913 is answered with its check digit.
+    const voided = (number) => ({
+      responseDetails: { responseType: 'X', statusCode: 'O' },
+      ticketNumbers: { documentDetails: { number } },
+    });
+
+    it('needs an answer for every document', () => {
+      expect(readVoidTicketReply({ transactionResults: [voided('22074911749139')] }, sent).voided).toBe(false);
+      expect(readVoidTicketReply({ transactionResults: [voided('22074911749139'), voided('22074911749140')] }, sent).voided).toBe(true);
+    });
+
+    it('does not count an answer for a ticket it did not send', () => {
+      expect(readVoidTicketReply({ transactionResults: [voided('22074911749139'), voided('99900000000001')] }, sent).voided).toBe(false);
+    });
+
+    it('holds a reply without ticket numbers to a count', () => {
+      const bare = { responseDetails: { responseType: 'X', statusCode: 'O' } };
+      expect(readVoidTicketReply({ transactionResults: [bare] }, sent).voided).toBe(false);
+      expect(readVoidTicketReply({ transactionResults: [bare, bare] }, sent).voided).toBe(true);
+    });
   });
 });
 

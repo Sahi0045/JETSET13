@@ -112,14 +112,21 @@ export const readPricePnrReply = (reply) => {
   // per fare priced 2 adults, a child and an infant at 171.70 instead of 251.90
   // (live WSAP, 2026-09-15), and the fare-change guard - zero tolerance - would
   // have refused every booking for two or more after the customer had paid.
-  const total = fares.reduce((sum, fare) => {
+  //
+  // A fare with no 712 in that currency makes the total unknown, not smaller.
+  // Skipping it, or counting it as 0, handed the fare guard a total it could
+  // only pass, and a price rise after payment was ticketed anyway.
+  const readable = fares.length > 0 && fares.every((fare) => {
     const amount = fare.amounts['712'];
-    return amount && amount.currency === currency ? sum + (amount.amount ?? 0) * fare.passengers : sum;
-  }, 0);
+    return amount && amount.currency === currency && Number.isFinite(amount.amount);
+  });
+  const total = readable
+    ? fares.reduce((sum, fare) => sum + fare.amounts['712'].amount * fare.passengers, 0)
+    : null;
 
   // In cents: a sum of per-passenger amounts is not a price until it is rounded
   // (85.85 x 2 + 80.20 is 251.89999999999998 in floating point).
-  return { fares, total: fares.length ? Math.round(total * 100) / 100 : null, currency };
+  return { fares, total: total == null ? null : Math.round(total * 100) / 100, currency };
 };
 
 /**
@@ -333,7 +340,7 @@ export const buildVoidTicketBody = ({ documentNumbers, marketIataCode, targetOff
  * `statusCode`. Reading it matters because the caller cannot otherwise tell a
  * void from a reply that merely parsed.
  */
-export const readVoidTicketReply = (reply) => {
+export const readVoidTicketReply = (reply, sentNumbers = []) => {
   // One transactionResults per document. A booking with two tickets - two
   // adults, or an adult and the infant on their lap - is answered with a list,
   // and reading that as a single result found no responseType: Amadeus had
@@ -351,10 +358,24 @@ export const readVoidTicketReply = (reply) => {
     const status = atTxt(result, 'responseDetails.statusCode');
     const errorCode = atTxt(result, 'errorGroup.errorOrWarningCodeDetails.errorDetails.errorCode');
     const alreadyVoided = errorCode === '6150';
-    return { type, status, errorCode, alreadyVoided, voided: /^X$/i.test(type) && (/^O$/i.test(status) || alreadyVoided) };
+    const number = atTxt(result, 'ticketNumbers.documentDetails.number').replace(/\D/g, '');
+    return { type, status, errorCode, alreadyVoided, number, voided: /^X$/i.test(type) && (/^O$/i.test(status) || alreadyVoided) };
   });
+
+  // Every document we sent needs its own answer. "Every answer says voided"
+  // was true of a reply answering one of two tickets, and the booking was then
+  // cancelled and refunded over the ticket nobody voided. The reply's number
+  // carries a check digit ours does not (2207491174913 is answered as
+  // 22074911749139, PDT), so it is matched as a prefix; ticketNumbers is
+  // optional in the schema, and a reply without them is held to a count.
+  const sent = sentNumbers.map((n) => String(n).replace(/\D/g, '')).filter(Boolean);
+  const numbered = documents.length > 0 && documents.every((document) => document.number);
+  const answersEverySent = numbered
+    ? sent.every((n) => documents.some((document) => document.voided && document.number.startsWith(n)))
+    : documents.length >= sent.length;
+
   return {
-    voided: documents.length > 0 && documents.every((document) => document.voided),
+    voided: documents.length > 0 && documents.every((document) => document.voided) && answersEverySent,
     responseType: documents.map((document) => document.type).join(','),
     status: documents.map((document) => document.status).join(','),
     documents,

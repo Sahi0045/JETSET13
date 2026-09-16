@@ -563,7 +563,18 @@ export const runBookingChain = async (p) => {
     // And only a RISE is refused. A fare that prices lower than the customer
     // paid for costs nobody anything, and refusing it refunded customers out of
     // a cheaper seat.
-    if (expectedTotal != null && priced.total != null) {
+    //
+    // A total we cannot read, or one in another currency, is refused too: the
+    // guard can only pass a fare it cannot compare, and nothing is sold yet.
+    if (expectedTotal != null && (priced.total == null || priced.currency !== config.currency)) {
+      throw new BookingChainError({
+        step: 'priceCheck',
+        error: 'We could not confirm the fare with the airline - please search again',
+        code: 409,
+        technicalError: `no comparable fare total in the pricing reply (total ${priced.total}, currency ${priced.currency}, expected ${expectedTotal} ${config.currency})`,
+      });
+    }
+    if (expectedTotal != null) {
       const riseCents = Math.round(Number(priced.total) * 100) - Math.round(Number(expectedTotal) * 100);
       if (riseCents > Math.round(config.priceTolerance * 100)) {
         throw new BookingChainError({
@@ -1032,9 +1043,10 @@ export const cancelBooking = async (recordLocator) => {
     if (voidable.length > 0) {
       try {
         let voidReply;
+        const documentNumbers = voidable.map((t) => t.number.replace('-', ''));
         try {
           voidReply = replyOf(await ctx.call('Ticket_CancelDocument', buildVoidTicketBody({
-            documentNumbers: voidable.map((t) => t.number.replace('-', '')),
+            documentNumbers,
             marketIataCode: config.marketIataCode,
             targetOffice: config.officeId,
           })));
@@ -1052,7 +1064,7 @@ export const cancelBooking = async (recordLocator) => {
         // group, and treated as a failure it stopped every retry here - a cancel
         // whose PNR_Cancel had failed could never finish, and the booking stayed
         // live with its tickets voided (PDT, 15 Sep 2026).
-        const result = readVoidTicketReply(voidReply);
+        const result = readVoidTicketReply(voidReply, documentNumbers);
         if (!result.voided) {
           const inspected = inspectReply(voidReply, 'Ticket_CancelDocument');
           if (voidFailedForNow(inspected.error)) {
