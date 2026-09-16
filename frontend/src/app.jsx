@@ -672,7 +672,20 @@ const App = () => {
           <Route path="/supabase-login" element={<SupabaseLogin />} />
           <Route path="/supabase-signup" element={<SupabaseSignup />} />
           <Route path="/supabase-profile" element={<SupabaseProfileDashboard />} />
-          <Route path="/supabase-auth-debug" element={<SupabaseAuthDebug />} />
+          {/*
+            A developer page that prints the visitor's live session - access
+            token and refresh token - into the DOM, with a "copy" button. It
+            was routed unguarded in production, which makes it a ready-made
+            way to hand a token to anyone who can get the visitor to open it:
+            a support call, a screen share, a screenshot.
+
+            It only ever shows the viewer's OWN session, so it is not a way
+            into someone else's account. It is still a page that exists to
+            exfiltrate a token, and it has no business on the live site.
+          */}
+          {import.meta.env.DEV && (
+            <Route path="/supabase-auth-debug" element={<SupabaseAuthDebug />} />
+          )}
           <Route path="/supabase-auth-status" element={<SupabaseAuthStatus />} />
           <Route path="/auth/callback" element={<AuthCallback />} />
 

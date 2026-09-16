@@ -48,7 +48,14 @@ const AuthCallback = () => {
           }
 
           if (data.session) {
-            console.log('Session established from hash:', data.session);
+            // The session object carries `access_token` and `refresh_token`.
+            // Logging it printed a live refresh token to the console of every
+            // OAuth sign-in - and the production build strips no console calls,
+            // while Sentry's Breadcrumbs integration captures console arguments
+            // by default. That undoes the whole point of `persistSession:false`
+            // in lib/supabase.js, which exists so no token is at rest for an
+            // XSS to steal. The user's email is enough to say it worked.
+            console.log('Signed in from hash:', data.session.user?.email);
             
             // Store in localStorage
             const role = data.session.user.user_metadata?.role || 'user';
@@ -108,7 +115,14 @@ const AuthCallback = () => {
           }
 
           if (data.session) {
-            console.log('Session established from code:', data.session);
+            // The session object carries `access_token` and `refresh_token`.
+            // Logging it printed a live refresh token to the console of every
+            // OAuth sign-in - and the production build strips no console calls,
+            // while Sentry's Breadcrumbs integration captures console arguments
+            // by default. That undoes the whole point of `persistSession:false`
+            // in lib/supabase.js, which exists so no token is at rest for an
+            // XSS to steal. The user's email is enough to say it worked.
+            console.log('Signed in from code:', data.session.user?.email);
             
             // Store in localStorage
             const role = data.session.user.user_metadata?.role || 'user';

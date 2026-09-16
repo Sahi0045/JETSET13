@@ -34,6 +34,12 @@ const passes = (row, [op, column, expected]) => {
   // `or` and `not` carry clauses rather than a column, so they are answered
   // before any attempt to read one.
   if (op === 'or') return expected.some((clause) => passes(row, clause));
+  // `and(a,b)` inside an `or`. Without this the group was split on its inner
+  // comma and its halves parsed as separate clauses - the last of which ended
+  // `null)`, which is not the string `null`, so `is` never matched, `not`
+  // inverted it, and the whole `or` answered TRUE for every row. That is the
+  // live paid-but-not-ticketed alarm's filter, so its test could not fail.
+  if (op === 'and') return expected.every((clause) => passes(row, clause));
   if (op === 'not') return !passes(row, expected);
   if (op === 'unsupported') return false;
   const actual = valueAt(row, column);
@@ -43,6 +49,10 @@ const passes = (row, [op, column, expected]) => {
     case 'is': return expected === null ? actual === null || actual === undefined : actual === expected;
     case 'ilike': return actual !== undefined && actual !== null
       && String(actual).toLowerCase() === String(expected).replace(/\\([\\%_])/g, '$1').toLowerCase();
+    case 'gte': return actual !== undefined && actual !== null && actual >= expected;
+    case 'lte': return actual !== undefined && actual !== null && actual <= expected;
+    case 'gt': return actual !== undefined && actual !== null && actual > expected;
+    case 'lt': return actual !== undefined && actual !== null && actual < expected;
     default: return true;
   }
 };
@@ -61,11 +71,35 @@ const passes = (row, [op, column, expected]) => {
  * Splitting on commas is enough for the shapes this codebase writes; a value
  * containing a comma would need the real grammar, and none do.
  */
-const parseOr = (expression) => String(expression || '')
-  .split(',')
+/** Split on commas that are not inside a bracketed group. */
+const splitTop = (expression) => {
+  const parts = [];
+  let depth = 0;
+  let current = '';
+  for (const ch of String(expression || '')) {
+    if (ch === '(') depth += 1;
+    if (ch === ')') depth -= 1;
+    if (ch === ',' && depth === 0) { parts.push(current); current = ''; continue; }
+    current += ch;
+  }
+  parts.push(current);
+  return parts;
+};
+
+const parseClause = (raw) => {
+  const clause = String(raw).trim();
+  const group = /^(and|or)\((.*)\)$/.exec(clause);
+  if (group) return [group[1], null, splitTop(group[2]).map(parseClause).filter(Boolean)];
+  return parseLeaf(clause);
+};
+
+const parseOr = (expression) => splitTop(expression)
   .map((clause) => clause.trim())
   .filter(Boolean)
-  .map((clause) => {
+  .map(parseClause);
+
+const parseLeaf = (clause) => {
+  {
     // `column.not.is.null` - PostgREST puts the negation between the column and
     // the operator. Without this branch the lazy `(.+?)` swallowed `.not` into
     // the column name, `valueAt` then walked a path that does not exist and
@@ -87,7 +121,8 @@ const parseOr = (expression) => String(expression || '')
     const [, column, negated, op, value] = match;
     const parsed = [op, column, value === 'null' ? null : value];
     return negated ? ['not', null, parsed] : parsed;
-  });
+  }
+};
 
 export function fakeBookingsTable(rows = [], { tables = {}, fail } = {}) {
   const table = rows.map(clone);
@@ -98,17 +133,59 @@ export function fakeBookingsTable(rows = [], { tables = {}, fail } = {}) {
     const target = Object.prototype.hasOwnProperty.call(others, name) ? others[name] : table;
     const filters = [];
     let patch = null;
+    let pending = null;
+    let sort = null;
+    let cap = null;
+    let skip = 0;
 
     const run = () => {
-      if (fail?.({ table: name, filters: [...filters], patch })) {
+      if (fail?.({ table: name, filters: [...filters], patch, write: pending })) {
         return { data: null, error: { message: 'connection reset' } };
       }
+
+      if (pending?.kind === 'insert' || pending?.kind === 'upsert') {
+        const incoming = (Array.isArray(pending.value) ? pending.value : [pending.value]).map(clone);
+        const written = [];
+        for (const row of incoming) {
+          const at = target.findIndex((existing) => existing.booking_reference === row.booking_reference
+            && row.booking_reference !== undefined);
+          if (at !== -1 && pending.kind === 'upsert') Object.assign(target[at], row);
+          else if (at !== -1) {
+            return { data: null, error: { code: '23505', message: 'duplicate key value violates unique constraint' } };
+          } else target.push(row);
+          written.push(row);
+        }
+        writes.push({ table: name, [pending.kind]: incoming.map(clone), matched: written.length });
+        return { data: written.map(clone), error: null };
+      }
+
       const matched = target.filter((row) => filters.every((filter) => passes(row, filter)));
+
+      if (pending?.kind === 'delete') {
+        for (const row of matched) target.splice(target.indexOf(row), 1);
+        writes.push({ table: name, delete: true, filters: [...filters], matched: matched.length });
+        return { data: matched.map(clone), error: null };
+      }
+
       if (patch) {
         for (const row of matched) Object.assign(row, clone(patch));
         writes.push({ table: name, patch: clone(patch), filters: [...filters], matched: matched.length });
       }
-      return { data: matched.map(clone), error: null };
+
+      let out = matched;
+      if (sort) {
+        const at = (row) => valueAt(row, sort.column);
+        out = [...out].sort((a, b) => {
+          const left = at(a);
+          const right = at(b);
+          if (left === right) return 0;
+          const order = left > right ? 1 : -1;
+          return sort.ascending ? order : -order;
+        });
+      }
+      if (skip) out = out.slice(skip);
+      if (cap !== null) out = out.slice(0, cap);
+      return { data: out.map(clone), error: null };
     };
 
     const chain = {};
@@ -126,13 +203,51 @@ export function fakeBookingsTable(rows = [], { tables = {}, fail } = {}) {
       if (clauses.length > 0) filters.push(['or', null, clauses]);
       return chain;
     };
-    for (const ignored of ['select', 'not', 'order', 'limit', 'insert', 'upsert', 'delete', 'gte', 'lte']) {
-      chain[ignored] = () => chain;
+    // `.not(column, op, value)` - the method form, as the alarms and the queue
+    // worker use it. Ignored, it let a query that selects "rows WITHOUT a
+    // cancellation" return every row, so the filter each alarm depends on could
+    // be deleted with no test going red.
+    chain.not = (column, op, value) => {
+      filters.push(['not', null, [op, column, value === null ? null : value]]);
+      return chain;
+    };
+    for (const op of ['gte', 'lte', 'gt', 'lt']) {
+      chain[op] = (column, value) => { filters.push([op, column, value]); return chain; };
     }
+    // Ordering and paging decide WHICH row a query answers with, and every one
+    // of these is load-bearing: "the newest booking for this reference"
+    // (loadOwnedBooking), "the oldest queued booking first" (the queue worker,
+    // so a paid customer is not starved), "the 200 oldest stuck bookings" (both
+    // alarms). Ignored, any of those could be reversed and stay green - and 19
+    // of the 21 files using this helper seed a single row, where ordered and
+    // unordered are indistinguishable by construction.
+    chain.order = (column, { ascending = true } = {}) => { sort = { column, ascending }; return chain; };
+    chain.limit = (count) => { cap = count; return chain; };
+    chain.range = (start, end) => { cap = end - start + 1; skip = start; return chain; };
+    chain.select = () => chain;
+    /**
+     * Writes that write.
+     *
+     * `insert`, `upsert` and `delete` were no-ops returning the chain, so a
+     * route could stop writing entirely and every test stayed green - the
+     * checkout's booking row upsert is the one that matters, and its test
+     * asserts nothing about the row. A no-op double cannot fail the way the
+     * real thing fails.
+     */
+    chain.insert = (value) => { pending = { kind: 'insert', value }; return chain; };
+    chain.upsert = (value) => { pending = { kind: 'upsert', value }; return chain; };
+    chain.delete = () => { pending = { kind: 'delete' }; return chain; };
     chain.update = (value) => { patch = value; return chain; };
     chain.single = async () => {
       const { data, error } = run();
       if (error) return { data: null, error };
+      // PostgREST's `.single()` errors on MORE than one row as well as none.
+      // Answering with the first of many is how an unfiltered `.single()` -
+      // admin.routes.js reads price_settings that way - looked correct here
+      // while it errors in production.
+      if (data.length > 1) {
+        return { data: null, error: { code: 'PGRST116', message: 'JSON object requested, multiple (or no) rows returned' } };
+      }
       return data.length ? { data: data[0], error: null } : { data: null, error: { code: 'PGRST116', message: 'no rows' } };
     };
     chain.maybeSingle = async () => {
