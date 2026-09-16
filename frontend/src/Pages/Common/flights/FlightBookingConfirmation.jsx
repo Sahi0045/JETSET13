@@ -760,7 +760,7 @@ function FlightBookingConfirmation() {
       // Only a draft matching this exact fare and its traveller mix is used
       // (utils/flightTravellerDraft.js); anything else leaves the form empty,
       // as before.
-      const draft = readTravellerDraft(reviewState?.flightData?.originalOffer);
+      const draft = readTravellerDraft(reviewState?.flightData?.originalOffer, { attemptId: reviewState?.attemptId });
       if (draft && draft.length === types.length && draft.every((t, index) => t?.type === types[index])) {
         setPassengerData(draft);
         return;
@@ -901,9 +901,9 @@ function FlightBookingConfirmation() {
     if (passengerData.length === 0) return undefined;
     const offer = reviewState?.flightData?.originalOffer;
     if (!offer) return undefined;
-    const timer = setTimeout(() => saveTravellerDraft(passengerData, offer), 800);
+    const timer = setTimeout(() => saveTravellerDraft(passengerData, offer, { attemptId: reviewState?.attemptId }), 800);
     return () => clearTimeout(timer);
-  }, [passengerData, reviewState?.flightData?.originalOffer]);
+  }, [passengerData, reviewState?.flightData?.originalOffer, reviewState?.attemptId]);
 
   const toggleEditMode = () => {
     setEditMode(!editMode);

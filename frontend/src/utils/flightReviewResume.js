@@ -15,20 +15,24 @@
 
 const KEY = 'jt_flight_review';
 
-/** @param {{ flightData?: object, searchData?: object }} state the review page's router state */
+/** @param {{ flightData?: object, searchData?: object, attemptId?: string }} state the review page's router state */
 export const saveFlightReview = (state) => {
   if (!state?.flightData) return;
   try {
     sessionStorage.setItem(KEY, JSON.stringify({
       flightData: state.flightData,
       searchData: state.searchData ?? null,
+      // Carried so the traveller draft still matches after the login round
+      // trip - one of the four cases that draft exists for. It is a random id,
+      // not a traveller detail; those are still never kept here.
+      attemptId: state.attemptId ?? null,
     }));
   } catch {
     // Storage blocked or full: the visitor searches again after logging in.
   }
 };
 
-/** @returns {{ flightData: object, searchData: object|null }|null} */
+/** @returns {{ flightData: object, searchData: object|null, attemptId: string|null }|null} */
 export const readFlightReview = () => {
   try {
     const kept = JSON.parse(sessionStorage.getItem(KEY) || 'null');

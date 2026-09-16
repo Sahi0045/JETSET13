@@ -215,7 +215,7 @@ export async function verifyFlightCharge({
   // send it must not stop a booking that would have worked.
   if (priced?._ama?.bookingEnabled === false) {
     return refuse(503, 'BOOKING_DISABLED',
-      'Online booking is temporarily unavailable, so we have not taken any payment. '
+      'Online booking is temporarily unavailable. '
       + 'Please call (877) 538-7380 and we will book this flight for you by phone.');
   }
 

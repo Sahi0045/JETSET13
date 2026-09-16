@@ -63,7 +63,7 @@ export const DRAFT_MAX_AGE_MS = 2 * 60 * 60 * 1000;
  * thing that was priced, and they are exactly what has to still be true for
  * these people to belong on this booking.
  */
-export const fareFingerprint = (offer) => {
+export const fareFingerprint = (offer, attemptId = null) => {
   if (!offer) return null;
   const legs = (offer.itineraries ?? [])
     .flatMap((itinerary) => itinerary?.segments ?? [])
@@ -75,12 +75,18 @@ export const fareFingerprint = (offer) => {
       segment?.number,
     ].join('-'));
   const types = (offer.travelerPricings ?? []).map((pricing) => pricing?.travelerType).sort();
-  return legs.length ? `${legs.join('|')}::${types.join(',')}` : null;
+  if (!legs.length) return null;
+  // The attempt id is what stops one booking's travellers restoring into
+  // another's. Route, date and party shape are identical for two bookings of
+  // the same flight - an agent issuing two PNRs, a family on separate
+  // references - so without it the first customer's name, date of birth and
+  // passport number pre-filled the second customer's form, with no notice.
+  return `${attemptId ? `${attemptId}::` : ''}${legs.join('|')}::${types.join(',')}`;
 };
 
 /** Keep what was typed, against the fare it was typed for. Never throws. */
-export const saveTravellerDraft = (travellers, offer, storage = globalThis.sessionStorage) => {
-  const fare = fareFingerprint(offer);
+export const saveTravellerDraft = (travellers, offer, { attemptId = null, storage = globalThis.sessionStorage } = {}) => {
+  const fare = fareFingerprint(offer, attemptId);
   if (!fare || !Array.isArray(travellers) || travellers.length === 0) return false;
   try {
     storage?.setItem(KEY, JSON.stringify({ fare, savedAt: Date.now(), travellers }));
@@ -98,14 +104,19 @@ export const saveTravellerDraft = (travellers, offer, storage = globalThis.sessi
  * past its age, or anything unreadable is simply not used, and the customer
  * gets the empty form they would have got anyway.
  */
-export const readTravellerDraft = (offer, { storage = globalThis.sessionStorage, now = Date.now() } = {}) => {
-  const fare = fareFingerprint(offer);
+export const readTravellerDraft = (offer, { attemptId = null, storage = globalThis.sessionStorage, now = Date.now() } = {}) => {
+  const fare = fareFingerprint(offer, attemptId);
   if (!fare) return null;
   try {
     const kept = JSON.parse(storage?.getItem(KEY) || 'null');
     if (!kept || kept.fare !== fare) return null;
     if (!Array.isArray(kept.travellers) || kept.travellers.length === 0) return null;
-    if (!Number.isFinite(Number(kept.savedAt)) || now - Number(kept.savedAt) > DRAFT_MAX_AGE_MS) return null;
+    if (!Number.isFinite(Number(kept.savedAt)) || now - Number(kept.savedAt) > DRAFT_MAX_AGE_MS) {
+      // Removed, not just ignored: it holds passport numbers, and ignoring it
+      // left them readable for the life of the tab.
+      clearTravellerDraft(storage);
+      return null;
+    }
     return kept.travellers;
   } catch {
     return null;
@@ -113,10 +124,10 @@ export const readTravellerDraft = (offer, { storage = globalThis.sessionStorage,
 };
 
 /** Forget it: the booking is made, or the customer signed out. Never throws. */
-export const clearTravellerDraft = (storage = globalThis.sessionStorage) => {
+export function clearTravellerDraft(storage = globalThis.sessionStorage) {
   try {
     storage?.removeItem(KEY);
   } catch {
     // Nothing to clear.
   }
-};
+}

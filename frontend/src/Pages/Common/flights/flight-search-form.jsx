@@ -70,7 +70,11 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
 
   useEffect(() => {
     if (initialData) {
-      setFormData(withTripType(initialData));
+      // Merged, not replaced. A PARTIAL prefill - the landing page filling in
+      // only the destination from a card - used to wipe the origin the visitor
+      // had already typed. A full one (the modify bar) merges to the same
+      // thing it replaced.
+      setFormData((current) => withTripType({ ...current, ...initialData }));
     }
   }, [initialData]);
 

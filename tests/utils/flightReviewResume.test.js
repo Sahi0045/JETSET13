@@ -18,7 +18,14 @@ afterEach(() => vi.restoreAllMocks());
 describe('the flight kept while a visitor logs in', () => {
   it('comes back after the trip through login', () => {
     saveFlightReview({ flightData, searchData });
-    expect(readFlightReview()).toEqual({ flightData, searchData });
+    expect(readFlightReview()).toEqual({ flightData, searchData, attemptId: null });
+  });
+
+  // Carried so the traveller draft still matches on the other side of login -
+  // one of the four cases that draft exists for. A random id, not a detail.
+  it('carries the booking attempt id, so the traveller draft still matches', () => {
+    saveFlightReview({ flightData, searchData, attemptId: 'attempt-a' });
+    expect(readFlightReview().attemptId).toBe('attempt-a');
   });
 
   it('keeps the flight and the search, never traveller details', () => {
