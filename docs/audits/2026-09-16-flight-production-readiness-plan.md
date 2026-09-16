@@ -97,3 +97,52 @@ pretending it is done.
   Raised to 30s for the backend project, with the reason recorded in the config.
 - `replayTimeoutMs()` called `getWsConfig()`, which throws when Amadeus settings
   are absent - that would have stopped a replay outright. It falls back now.
+
+---
+
+# Round 2 — re-audit of the fixes themselves (16 Sep 2026, after #138)
+
+Four agents re-read the flight service at `00f9f90`, told what had just changed and
+asked to hunt for damage caused by it. They found **eight defects in code written
+that same day**, all mine. Fixed in **#139** (merged `9d72f14`).
+
+The worst was mine twice over: the pricing `?? null` change was meant to make a
+712-less reply refuse, and instead made it undercharge by a whole passenger
+rather than by taxes, because the offer total is a `reduce` that coerces null to
+zero. A comment claiming a behaviour is not that behaviour.
+
+Second worst: `patchBookingDetails` skipped its compare-and-set *exactly* when the
+read failed and then wrote the patch as the entire column — so one Supabase blip
+during `persistCommittedPnr` would strip a booking down to a PNR and nothing
+else, and a queue replay reading no verified offer reverses the charge.
+
+## Still open — for the next pass, not fixed
+
+Nothing below is new damage; these are pre-existing and were found while
+checking the fixes.
+
+| Severity | What | Where |
+|---|---|---|
+| HIGH | `cancelOtherBooking`'s payment lookup can never match a row (`bookings` has no `payment_id`; `payments.quote_id` references `quotes`), so its VOID branch is dead code and every non-flight cancel does a blind REFUND of the row amount | `payment/operations.handlers.js:750` |
+| HIGH | 25 test files assert on production **source text** without executing it — 129 assertions in `customerSurfaces.test.js` alone. `FlightBookingConfirmation.jsx`, the page where money is taken, is rendered by **no** test | `tests/components/**` |
+| HIGH | `setup.js`'s global `axios` mock has no `put`/`delete`, and every ARC capture/refund/void is `axios.put`. Seven files paper over it with `if (!axios.put) axios.put = vi.fn()`; any file without that guard silently asserts the soft-failure branch | `tests/backend/setup.js:92` |
+| HIGH | `setup.js`'s `sendCancellationNotificationEmails` stub answers `{id}` with no `success`, so the branch added in #137 has never run in CI | `tests/backend/setup.js:112` |
+| MEDIUM | Both alarm jobs' DB filters are stubbed to no-ops, so what each job *selects* is asserted nowhere | `needsReviewAlert.test.js`, `paymentFailureAlert.test.js` |
+| MEDIUM | `clearStaleStoredBookings` also clears `pendingPaymentSession`, which cruise/hotel/package checkouts share | `frontend/src/utils/bookingStorage.js:52` |
+| MEDIUM | `cutoverRisks()` has no production caller; its docstring claims a boot banner prints it | `amadeusSoap/config.js` |
+| MEDIUM | The `unitQualifier` read added to `pricing.js` is inert — no recorded pricing reply carries that element, so priced baggage still always says KG and still overrides the search value | `mappers/pricing.js:53` |
+| MEDIUM | `/upsell` and `/seatmaps` `meta.available` reaches no consumer; neither frontend reads `meta` | `FlightFareOptions.jsx`, `FlightSeatMap.jsx` |
+| MEDIUM | Admin bookings still ship **unmasked passport numbers** in `passenger_details`, beside the now-sanitised `bookingDetails` | `flight.routes.js:4202, 4297` |
+| MEDIUM | `fakeBookings` gaps: `single()` returns the first of many instead of PGRST116; `insert`/`delete` write nothing; `order`/`limit` ignored, so `loadOwnedBooking`'s "newest row" is not modelled | `tests/backend/helpers/fakeBookings.js` |
+| MEDIUM | `bookingStatusConstraint.test.js` asserts on migration SQL text; the 23514 it exists for is a property of the live table, and migrations are applied by hand | `tests/backend/bookingStatusConstraint.test.js` |
+| LOW | `codes.js`'s `empty` rule can match across the `\|` that joins unrelated error nodes, and now gates a 409. Not reproducible against any recorded reply | `amadeusSoap/codes.js:99` |
+| LOW | `getCheapestFlightDates` dereferences the `null` `getCalendarPrices` deliberately returns | `amadeusSoap/index.js:574` |
+| LOW | 7 of #138's items ship with no test: `redactBookingsFor`, `replayTimeoutMs`, `adminSafeDetails`, the soft-fail reporting, `officeCalendarToday`, `anyLocatorMissing` | — |
+
+## The lesson worth keeping
+
+Three of the eight were the *same shape*: a fix that changed one line and left the
+surrounding assumption in place — `?? null` without the refusal, a CAS without the
+read check, a renewed claim without moving the `clearInterval`. Changing behaviour
+means asking what depended on the old behaviour, and the audit that finds that is
+the one run **after** the fix, not before it.
