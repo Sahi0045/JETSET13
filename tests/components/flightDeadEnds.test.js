@@ -1,6 +1,5 @@
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { readCode } from '../helpers/source.js';
 
 /**
  * Three places the flight pages sent a customer somewhere that could only fail.
@@ -10,23 +9,8 @@ import { describe, expect, it } from 'vitest';
  * directly under a sentence saying the opposite.
  */
 
-/**
- * The code, without the prose about it.
- *
- * A test that reads source cannot otherwise tell a line of code from a comment
- * describing the line it replaced - and these fixes are all documented by
- * quoting the string they removed, so "is that string gone?" matched the
- * explanation of its removal and failed. Block comments and whole-line
- * comments go; a `//` inside a URL does not, because that line does not start
- * with one.
- */
-const codeOf = (source) => source
-  .replace(/\/\*[\s\S]*?\*\//g, '')
-  .split('\n')
-  .filter((line) => !/^\s*(\/\/|\*)/.test(line))
-  .join('\n');
+const read = readCode;
 
-const read = (file) => codeOf(readFileSync(path.resolve(process.cwd(), file), 'utf8'));
 const landing = read('frontend/src/Pages/Common/flights/flightlanding.jsx');
 const results = read('frontend/src/Pages/Common/flights/flightsearchpage.jsx');
 const review = read('frontend/src/Pages/Common/flights/FlightBookingConfirmation.jsx');

@@ -1,5 +1,6 @@
 import express from 'express';
 import supabase from '../config/supabase.js';
+import { protect, admin } from '../middleware/auth.middleware.js';
 import { cruises } from '../data/catalog.js';
 const router = express.Router();
 
@@ -182,7 +183,27 @@ router.post('/bookings', async (req, res) => {
 });
 
 // Get all cruise bookings
-router.get('/bookings', async (req, res) => {
+/**
+ * Staff only, and it never was.
+ *
+ * This answered `GET /bookings` with `select('*')` on every row of its travel
+ * type, with no authentication, no ownership filter and no limit - through
+ * config/supabase.js, which holds the SERVICE ROLE key and therefore bypasses
+ * RLS entirely. One unauthenticated curl returned every customer's
+ * `passenger_details`, `customer_email`, amount and `booking_details` - which
+ * carries the ARC `success_indicator`, the single secret that authorises
+ * `?action=get-pending-booking`.
+ *
+ * Migration 20260911000000_fix_bookings_anon_read_rls.sql closed exactly this
+ * data to the anon role after 27 rows were found readable in production. This
+ * route was the same leak through the front door, and the RLS fix could not
+ * touch it because the service-role client is not subject to RLS.
+ *
+ * Verified live on 16 Sep 2026: no credentials, real rows returned. No page in
+ * the app has ever called it - the frontend only POSTs here - so gating it
+ * breaks nothing.
+ */
+router.get('/bookings', protect, admin, async (req, res) => {
   try {
     if (!supabase) {
       return res.json({ success: true, data: [] });
