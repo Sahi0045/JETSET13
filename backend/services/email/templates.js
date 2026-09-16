@@ -537,6 +537,16 @@ export function generateBookingConfirmationTemplate(data) {
     d.hotelName ? ['Hotel', d.hotelName] : null,
     d.cruiseLine ? ['Cruise Line', d.cruiseLine] : null,
     d.PNR || d.pnr ? ['Airline reference', d.PNR || d.pnr] : null,
+    // The one number a customer actually needs at a check-in desk, and the one
+    // this email never carried: a ticketed booking said "Confirmed" and listed
+    // its booking reference, its PNR and its transaction id, and nowhere the
+    // 13 digits the airline asks for.
+    ...(Array.isArray(d.tickets) ? d.tickets : [])
+      .filter((ticket) => ticket?.number)
+      .map((ticket, index, all) => [
+        all.length === 1 ? 'E-ticket number' : `E-ticket · ${ticket.travelerName || ticket.passengerName || `Traveller ${index + 1}`}`,
+        ticket.number,
+      ]),
     d.Cabin || d.cabin ? ['Cabin', d.Cabin || d.cabin] : null,
   ].filter(Boolean);
 
@@ -659,6 +669,79 @@ export function generateBookingConfirmationTemplate(data) {
     emoji: icon,
     heading: unticketed ? 'Reservation Held' : 'Booking Confirmed!',
     subheading: 'Thank you for choosing Jetsetters',
+    contentHtml: content,
+    cta: { text: 'View My Trips', url: `${process.env.FRONTEND_URL || BRAND.site}/my-trips` },
+  });
+}
+
+/**
+ * The e-ticket that every other email promised.
+ *
+ * Three surfaces told the customer "we will email your e-ticket as soon as it
+ * is issued", and there was no such email in the codebase to send. With
+ * auto-ticketing off, a person finishes the ticket in the Amadeus terminal and
+ * nothing came back to say so - see jobs/ticketSync.job.js, which is what now
+ * notices and calls this.
+ *
+ * The ticket number leads, because it is the only thing in here the customer
+ * did not already have. It is what an airline's check-in page and its call
+ * centre ask for, and it is the difference between a held seat and a document
+ * you can fly on. One number per traveller, named, because a family gets one
+ * each and "your ticket number" is useless to the person whose it is not.
+ */
+export function generateTicketIssuedTemplate(data = {}) {
+  const { customerName, bookingReference, tickets = [], bookingDetails = {} } = data;
+  const details = bookingDetails || {};
+  const issued = (Array.isArray(tickets) ? tickets : []).filter((t) => t?.number);
+
+  const named = issued.map((ticket) => [
+    ticket.travelerName || ticket.passengerName || 'Traveller',
+    `<span style="letter-spacing:1px;">${ticket.number}</span>`,
+  ]);
+
+  const opening = issued.length === 1
+    ? `Good news${customerName ? `, ${String(customerName).split(' ')[0]}` : ''} — your e-ticket has been issued. `
+      + 'Your seat is no longer just reserved: this is the document you travel on.'
+    : `Good news${customerName ? `, ${String(customerName).split(' ')[0]}` : ''} — your e-tickets have been issued. `
+      + 'Those seats are no longer just reserved: these are the documents you travel on.';
+
+  const content = `
+    ${paragraph(opening)}
+    ${figureBlock([
+    issued.length === 1
+      ? { label: 'E-ticket number', value: issued[0].number, mono: true, note: statusPill('Issued', 'success') }
+      : { label: 'E-tickets issued', value: String(issued.length), note: statusPill('Issued', 'success') },
+    { label: 'Booking reference', value: bookingReference, mono: true, small: true },
+  ])}
+    ${named.length > 1 ? detailCard('Ticket numbers', named) : ''}
+    ${paragraph(
+    'Use the ticket number if the airline asks for one — at check-in, at the airport, '
+    + 'or on the phone. The airline reference below is the one on its own website.',
+  )}
+    ${detailCard('Your booking', [
+    details.pnr || details.PNR ? ['Airline reference', details.pnr || details.PNR] : null,
+    ['Booking reference', bookingReference],
+  ].filter(Boolean))}
+    ${actionRow([
+    {
+      text: 'View your e-ticket',
+      url: bookingReference
+        ? `${BRAND.site}/manage-booking/${encodeURIComponent(bookingReference)}`
+        : `${BRAND.site}/my-trips`,
+    },
+    { text: 'My trips', url: `${BRAND.site}/my-trips` },
+  ])}
+  `;
+
+  return renderBrandedEmail({
+    preheader: line([
+      issued.length === 1 ? 'Your e-ticket is issued' : 'Your e-tickets are issued',
+      bookingReference,
+    ], ' '),
+    headerLabel: 'E-Ticket Issued',
+    emoji: '🎫',
+    heading: issued.length === 1 ? 'Your e-ticket is issued' : 'Your e-tickets are issued',
+    subheading: 'You are ready to travel',
     contentHtml: content,
     cta: { text: 'View My Trips', url: `${process.env.FRONTEND_URL || BRAND.site}/my-trips` },
   });

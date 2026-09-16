@@ -1,7 +1,7 @@
 import { Resend } from 'resend';
 import dotenv from 'dotenv';
 import { renderBrandedEmail, detailCard, highlightBox, paragraph, BRAND } from './emailTemplate.js';
-import { generateReservationHeldTemplate, isUnticketedFlight } from './email/templates.js';
+import { generateReservationHeldTemplate, generateTicketIssuedTemplate, isUnticketedFlight } from './email/templates.js';
 import {
   generateCruiseCallbackTemplate,
   generatePackageCallbackTemplate,
@@ -534,6 +534,60 @@ export const sendBookingConfirmationEmail = async (bookingData) => {
  * @param {Object} bookingData - Booking information
  * @returns {Promise} - Combined email send response
  */
+/**
+ * The e-ticket, once it exists.
+ *
+ * Sent by jobs/ticketSync.job.js when a ticket number appears on a PNR that
+ * did not have one. Until this existed, three surfaces promised the customer
+ * "we will email your e-ticket as soon as it is issued" and nothing in the
+ * codebase could send it - with auto-ticketing off, which is every booking so
+ * far, that promise was never once kept.
+ *
+ * Returns rather than throws, like every sender here, because the ticket
+ * numbers are recorded before this is called: a refused send leaves My Trips,
+ * Manage Booking and the PDF all telling the truth, and the job simply tries
+ * again next tick.
+ */
+export const sendTicketIssuedEmail = async ({
+  customerEmail, customerName, bookingReference, tickets = [], bookingDetails = {},
+} = {}) => {
+  if (!customerEmail) {
+    console.warn('⚠️ No customer email on the booking; e-ticket email not sent', { bookingReference });
+    return { success: false, error: 'No email address' };
+  }
+  const issued = (Array.isArray(tickets) ? tickets : []).filter((t) => t?.number);
+  if (issued.length === 0) return { success: false, error: 'No ticket numbers' };
+
+  try {
+    const html = generateTicketIssuedTemplate({ customerName, bookingReference, tickets: issued, bookingDetails });
+
+    const response = await getResend().emails.send({
+      from: 'Jetsetters <noreply@jetsetterss.com>',
+      to: [customerEmail],
+      // The number is the thing they need; putting it in the subject means a
+      // customer at an airline desk can read it off a notification.
+      subject: issued.length === 1
+        ? `🎫 Your e-ticket ${issued[0].number} - ${bookingReference} | Jetsetters`
+        : `🎫 Your ${issued.length} e-tickets are issued - ${bookingReference} | Jetsetters`,
+      html,
+      text: stripHtml(html),
+    });
+
+    // Resend reports a refused send in `error`; it does not throw.
+    if (response?.error) {
+      const reason = response.error.message || String(response.error);
+      console.error('❌ E-ticket email refused:', reason);
+      return { success: false, error: reason };
+    }
+
+    console.log('✅ E-ticket email sent to:', customerEmail);
+    return { success: true, data: response?.data ?? response };
+  } catch (error) {
+    console.error('❌ Error sending e-ticket email:', error);
+    return { success: false, error: error.message };
+  }
+};
+
 export const sendBookingNotificationEmails = async (bookingData) => {
   try {
     const adminEmail = process.env.ADMIN_EMAIL || 'jetsetters721@gmail.com';
