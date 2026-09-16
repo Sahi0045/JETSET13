@@ -223,3 +223,44 @@ export const describeWsConfig = (env = process.env) => ({
   priceCheckBeforePayment: isTrue(env.AMADEUS_WS_PRICE_CHECK_BEFORE_PAYMENT, true),
   unticketableCarriers: unticketableCarriers(env),
 });
+
+/**
+ * Settings whose DEFAULT is only correct for the PDT test office, and which are
+ * still on that default.
+ *
+ * Every one of these fails silently rather than loudly. Unset,
+ * AMADEUS_WS_UNTICKETABLE_CARRIERS is not "block nothing" - it is the 19-carrier
+ * PDT list, so Emirates, Singapore, Cathay, Qantas and fifteen others simply
+ * stop appearing in search results with no error anywhere. The queue number
+ * defaults to 50, which is a PDT queue. The office time zone decides the
+ * same-day void window, the FOP code and market code decide whether a ticket can
+ * be issued and voided at all - and each was verified against PDT, never
+ * against a production office.
+ *
+ * Reported rather than enforced: a missing value is not always wrong, and
+ * refusing to boot over one would be worse. The boot banner prints this so the
+ * cutover is a checklist someone reads, not a thing someone remembers.
+ */
+export const cutoverRisks = (env = process.env) => {
+  const onDefault = [];
+  // Present-but-empty counts as set: `AMADEUS_WS_UNTICKETABLE_CARRIERS=''` is
+  // the deliberate way to say "block nothing", and flagging it would train
+  // whoever reads this list to ignore it.
+  const check = (name, why) => {
+    if (env[name] === undefined || env[name] === null) onDefault.push({ setting: name, risk: why });
+  };
+
+  check('AMADEUS_WS_UNTICKETABLE_CARRIERS',
+    'unset means the 19-carrier PDT blocklist, not "none": those carriers vanish from search');
+  check('AMADEUS_WS_QUEUE_NUMBER', 'defaults to 50, a PDT queue; production needs one from the PRD bank');
+  check('AMADEUS_WS_OFFICE_TIME_ZONE', 'defaults to America/New_York; it decides the same-day void window');
+  check('AMADEUS_WS_FOP_CODE', 'defaults to CASH, correct on PDT and never confirmed against production');
+  check('AMADEUS_WS_MARKET_IATA_CODE', 'defaults to US; it identifies the ticket stock when voiding');
+
+  const endpoint = String(env.AMADEUS_WS_ENDPOINT || '');
+  if (/\btest\b/i.test(endpoint)) {
+    onDefault.push({ setting: 'AMADEUS_WS_ENDPOINT', risk: 'still points at the Amadeus TEST node' });
+  }
+
+  return onDefault;
+};

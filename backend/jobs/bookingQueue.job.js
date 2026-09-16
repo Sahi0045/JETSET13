@@ -33,14 +33,44 @@ const MAX_PER_TICK = 5;
  */
 export const RETRY_DELAY_MS = 60_000;
 
+/**
+ * How long a replay may run before the worker gives up on the answer.
+ *
+ * Derived from what the chain can actually take, not guessed: the post-commit
+ * locator wait plus the issue retries, plus room for the ten GDS calls before
+ * the commit. A ceiling shorter than the chain makes the worker abandon a
+ * request that is still working and ask again on the next tick.
+ */
+const DEFAULT_REPLAY_TIMEOUT_MS = 250_000;
+const replayTimeoutMs = () => {
+  try {
+    const ws = getWsConfig();
+    const postCommit = (ws.airlineLocatorMaxWaitMs ?? 180_000)
+      + ((ws.issueRetries ?? 2) * (ws.issueRetryDelayMs ?? 4000));
+    return postCommit + 60_000;
+  } catch {
+    // getWsConfig throws when the Amadeus settings are absent. A replay that
+    // cannot read a timeout must still run: the alternative is a paid booking
+    // never retried because of a config lookup.
+    return DEFAULT_REPLAY_TIMEOUT_MS;
+  }
+};
+
 const log = (msg, extra = {}) => console.log(`[BookingQueue] ${msg}`, extra);
 
 /** Rows that still hold an order and are not being worked on right now. */
 export async function findRunnable({ limit = MAX_PER_TICK, now = Date.now(), env = queueEnvironment() } = {}) {
+  // The environment filter belongs in the query, not after it.
+  //
+  // This took the 50 oldest queued rows and then discarded the other
+  // environment's in JS, so 50+ foreign rows at the front of the queue starved
+  // this environment's paid bookings indefinitely - and dev and production
+  // share this database, which is the whole premise of the label.
   const { data, error } = await supabase
     .from('bookings')
     .select('booking_reference, status, booking_details')
     .not('booking_details->queued_order', 'is', null)
+    .eq('booking_details->>queued_env', env)
     .order('updated_at', { ascending: true })
     .limit(50);
 
@@ -294,7 +324,17 @@ export async function replay(row, { baseUrl, fetchImpl = fetch } = {}) {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-booking-queue-replay': '1' },
       body: JSON.stringify(order),
-      signal: AbortSignal.timeout(90_000),
+      // Longer than the chain can legitimately take.
+      //
+      // 90s was set when everything after the commit took seconds. Since the
+      // airline-locator patience of #132 the chain can run to
+      // AMADEUS_WS_AIRLINE_LOCATOR_MAX_WAIT_MS (180s by default) plus its issue
+      // retries, so this aborted a replay that was still working: the worker
+      // logged "did not complete, will retry" and asked again on the next tick,
+      // while the first replay carried on and committed. The claim is what
+      // stops that becoming two PNRs, but the worker should not be racing its
+      // own in-flight request in the first place.
+      signal: AbortSignal.timeout(replayTimeoutMs()),
     });
     status = response.status;
     body = await response.json().catch(() => ({}));

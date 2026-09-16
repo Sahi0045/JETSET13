@@ -42,7 +42,12 @@ const collectMessages = (body) => {
       // read as success and the chain committed a PNR that had none, and a
       // rejected queue placement (91D) was recorded as queued. Found by
       // recording a real booking chain against PDT.
-      if (/^(errorMessage|errorGroup|generalErrorInfo|errorAtMessageLevel|errorAtItineraryLevel|applicationError|transmissionError|errorReturn)$/i.test(key)) {
+      // `errorInfo` is where Fare_CheckRules reports a refusal, and it was
+      // missing here: a rejected rules request read as `ok`, so the caller
+      // logged nothing and simply found zero sections. The fare-rules panel
+      // then looked identical whether the airline had filed no penalties or
+      // Amadeus had refused the question - with no log, and no alert.
+      if (/^(errorMessage|errorGroup|generalErrorInfo|errorAtMessageLevel|errorAtItineraryLevel|applicationError|transmissionError|errorReturn|errorInfo)$/i.test(key)) {
         for (const entry of arr(value)) {
           const text = JSON.stringify(entry);
           if (text && text !== '{}' && text !== '""') found.push(entry);

@@ -13,7 +13,7 @@ import { emailMatchesBooking, isBookingOwner } from '../utils/bookingAccess.js';
 import { reconcileBookingPayment } from './payment/checkout.handlers.js';
 import { reportError } from '../services/monitoring.js';
 import { withBookingPriority } from '../services/amadeusSoap/semaphore.js';
-import { getWsConfig } from '../services/amadeusSoap/config.js';
+import { describeWsConfig, getWsConfig } from '../services/amadeusSoap/config.js';
 import { recordCouponUse } from '../services/coupon.service.js';
 import { isFareRefusal } from '../services/flightCheckout.service.js';
 import { crossesBorder, touchesUnitedStates } from '../utils/itinerary.js';
@@ -1401,7 +1401,7 @@ export async function handleDuplicateBookingMerge(bookingData, rowTemplate) {
 }
 
 // Helper function to save booking to database
-async function saveBookingToDatabase(bookingData) {
+export async function saveBookingToDatabase(bookingData) {
   if (!supabase) {
     console.error('❌ CRITICAL: Supabase not configured! Bookings will NOT be saved to database!');
     console.error('   Please check SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables');
@@ -1740,11 +1740,22 @@ router.post('/search', validate({ body: flightSearchSchema }), async (req, res) 
 
     try {
       // Call real Amadeus API (served from Redis cache when available; passthrough when not)
+      // Every dimension that changes the answer belongs in the key.
+      //
+      // The airline filters were accepted, forwarded, and genuinely changed the
+      // Amadeus request (carrierQualifier M/X) - but were absent from the key,
+      // with a 5 minute TTL. A BA-only search therefore poisoned the next
+      // unfiltered search of the same route and dates, which then silently
+      // missed cheaper carriers; reversed, the filter appeared to do nothing.
+      // The unticketable list is in here for the same reason: for up to 5
+      // minutes after that env var changes, hidden carriers would keep being
+      // served from a key that could not see the change.
+      const filterKey = searchFilterKey(searchParams, describeWsConfig().unticketableCarriers);
       const flightCacheKey = CacheKeys.flightSearch(
         searchParams.from,
         searchParams.to,
         `${searchParams.departDate}|${searchParams.returnDate || 'ow'}`,
-        `${searchParams.adults}-${searchParams.children}-${searchParams.infants}-${searchParams.travelClass || 'any'}-${searchParams.nonStop ? 'ns' : 'any'}`
+        `${searchParams.adults}-${searchParams.children}-${searchParams.infants}-${searchParams.travelClass || 'any'}-${searchParams.nonStop ? 'ns' : 'any'}-${filterKey}`
       );
       let amadeusResponse = await cacheGet(flightCacheKey);
       if (amadeusResponse) {
@@ -1892,6 +1903,20 @@ router.post('/upsell', async (req, res) => {
 
     const upsellResponse = await FlightProvider.getBrandedFareUpsell(flightOffer);
 
+    // "We may not ask" is not "this flight has no other fares".
+    //
+    // getBrandedFareUpsell soft-fails with `{success:false, reason:'not_available'}`
+    // rather than throwing, so the catch below was unreachable and this answered
+    // 200 `success:true, data:[]` - indistinguishable from an airline that files
+    // a single fare family. The client can only tell the difference if we say so.
+    if (upsellResponse?.success === false) {
+      return res.json({
+        success: true,
+        data: [],
+        meta: { count: 0, available: false, reason: upsellResponse.reason || 'not_available' },
+      });
+    }
+
     // Reuse the standard transform so fare options share the card data shape
     const options = transformAmadeusFlightData(
       upsellResponse.data || [],
@@ -1901,7 +1926,7 @@ router.post('/upsell', async (req, res) => {
     res.json({
       success: true,
       data: options,
-      meta: { count: options.length }
+      meta: { count: options.length, available: true }
     });
 
   } catch (error) {
@@ -2089,6 +2114,18 @@ router.post('/seatmaps', async (req, res) => {
 
     // First attempt with the offer as received
     let result = await FlightProvider.getSeatMaps(flightOffer);
+
+    // A soft-fail is not a stale offer, and re-pricing cannot cure it.
+    //
+    // getSeatMaps answers `{success:false, reason:'not_available'}` on this
+    // WSAP - the entitlement is out of the IBE project's scope - so the retry
+    // below fired on EVERY call and spent a live
+    // Fare_InformativePricingWithoutPNR transaction before returning the same
+    // empty map. On an unauthenticated endpoint that is a free lever on our
+    // GDS quota.
+    if (result?.success === false) {
+      return res.json({ ...result, meta: { available: false, reason: result.reason || 'not_available' } });
+    }
 
     // Amadeus offers expire fast — by the time the user reaches the booking page the
     // stored offer is often stale and the seat map comes back empty. Re-price the offer
@@ -4160,8 +4197,8 @@ router.get('/admin-bookings', protect, admin, async (req, res) => {
         cruiseName: booking.booking_details?.cruise_name || '',
         cruiseDeparture: booking.booking_details?.departure || '',
         cruiseArrival: booking.booking_details?.arrival || '',
-        // Raw details for expandable view
-        bookingDetails: booking.booking_details,
+        // Details for the expandable view, with the secrets taken out.
+        bookingDetails: adminSafeDetails(booking.booking_details),
         passengerDetails: booking.passenger_details,
         // Payment details for void/refund operations
         arcOrderId: booking.booking_details?.arc_order_id || booking.booking_details?.order_id || booking.booking_reference
@@ -4183,6 +4220,53 @@ router.get('/admin-bookings', protect, admin, async (req, res) => {
 
 // ── Unified bookings (flight/hotel/cruise from `bookings` + packages from quotes) ──
 // Normalize a `bookings` row to the shared admin shape.
+/**
+ * `booking_details` with the things nobody needs in a browser taken out.
+ *
+ * The admin panel received this column raw, and it carries `success_indicator`
+ * - the secret `provesPayer` accepts as proof of payment on POST /order and the
+ * cancel routes - along with `pending_booking_data`, which is the entire
+ * checkout body including passport numbers, and the GDS session. Anyone holding
+ * an admin token, or any XSS in the panel, could confirm or reverse arbitrary
+ * orders with it. `handleGetPendingBooking` and `toClientBooking` already
+ * refuse to hand it out; this path had not caught up.
+ *
+ * Named removals rather than an allow-list: the panel's expandable view shows
+ * whatever a booking happens to carry, and an allow-list here would quietly
+ * blank fields staff rely on.
+ */
+function adminSafeDetails(details) {
+  if (!details || typeof details !== 'object') return details;
+  const {
+    success_indicator: _indicator,
+    pending_booking_data: _pending,
+    queued_order: _queued,
+    gds_session: _session,
+    ...safe
+  } = details;
+  return safe;
+}
+
+/**
+ * The part of a search that changes the answer but was not in the cache key.
+ *
+ * The airline filters are accepted, forwarded, and genuinely change the Amadeus
+ * request (carrierQualifier M/X) - and were absent from the key, with a five
+ * minute TTL. So a BA-only search poisoned the next unfiltered search of the
+ * same route and dates, which then silently missed every other carrier;
+ * reversed, the filter appeared to do nothing at all. The blocked-carrier list
+ * is here for the same reason: for five minutes after that setting changes, a
+ * key that cannot see it keeps serving results built under the old one.
+ */
+export function searchFilterKey(params = {}, unticketable = []) {
+  return [
+    [].concat(params.includedAirlineCodes || []).filter(Boolean).join('+') || 'any',
+    [].concat(params.excludedAirlineCodes || []).filter(Boolean).join('+') || 'none',
+    params.maxPrice || 'nomax',
+    [].concat(unticketable || []).join('') || 'none',
+  ].join('|');
+}
+
 function normalizeBookingRow(b) {
   const amount = b.total_amount || b.booking_details?.amount || b.booking_details?.flight_offer?.price?.total || 0;
   let customerName = 'N/A', customerEmail = '';
@@ -4210,7 +4294,7 @@ function normalizeBookingRow(b) {
     totalAmount: parseFloat(amount) || 0, currency: d.currency || 'USD',
     bookingDate: b.created_at, customerName, customerEmail,
     service,
-    bookingDetails: d, passengerDetails: b.passenger_details, isPackage: false,
+    bookingDetails: adminSafeDetails(d), passengerDetails: b.passenger_details, isPackage: false,
     arcOrderId: d.arc_order_id || d.order_id || b.booking_reference,
     // Being booked, waiting in the queue, or being cancelled right now
     // (utils/bookingChainClaim.js). The panel hides Void for such a booking, as

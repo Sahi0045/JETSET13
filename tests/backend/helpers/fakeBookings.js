@@ -31,6 +31,9 @@ const valueAt = (row, column) => column
   .reduce((value, key) => (value === null || value === undefined ? undefined : value[key]), row);
 
 const passes = (row, [op, column, expected]) => {
+  // `or` carries clauses rather than a column, so it is answered before any
+  // attempt to read one.
+  if (op === 'or') return expected.some((clause) => passes(row, clause));
   const actual = valueAt(row, column);
   switch (op) {
     case 'eq': return actual !== undefined && actual !== null && String(actual) === String(expected);
@@ -41,6 +44,32 @@ const passes = (row, [op, column, expected]) => {
     default: return true;
   }
 };
+
+/**
+ * PostgREST's `or` string, as the routes write it:
+ *   `booking_reference.eq.FLT1,booking_details->>order_id.eq.FLT1`
+ *
+ * This was in the ignored list, which made it a no-op - and `.or()` is how
+ * `loadOwnedBooking`, `refundOnFulfillmentFailure` and the DELETE fallback find
+ * a booking at all. With it ignored those queries carried no filter and the
+ * double returned the FIRST row in the table whatever reference was asked for,
+ * so every "a different reference is refused" assertion across 17 test files
+ * passed without testing anything.
+ *
+ * Splitting on commas is enough for the shapes this codebase writes; a value
+ * containing a comma would need the real grammar, and none do.
+ */
+const parseOr = (expression) => String(expression || '')
+  .split(',')
+  .map((clause) => clause.trim())
+  .filter(Boolean)
+  .map((clause) => {
+    const match = /^(.+?)\.(eq|neq|is|ilike)\.(.*)$/.exec(clause);
+    if (!match) return null;
+    const [, column, op, value] = match;
+    return [op, column, value === 'null' ? null : value];
+  })
+  .filter(Boolean);
 
 export function fakeBookingsTable(rows = [], { tables = {}, fail } = {}) {
   const table = rows.map(clone);
@@ -71,7 +100,15 @@ export function fakeBookingsTable(rows = [], { tables = {}, fail } = {}) {
     // `.filter(column, 'eq', value)` is the long form of `.eq`, which the cancel
     // handler uses to find a booking by its order id or PNR.
     chain.filter = (column, op, value) => { filters.push([op, column, value]); return chain; };
-    for (const ignored of ['select', 'or', 'not', 'order', 'limit', 'insert', 'upsert', 'delete', 'gte', 'lte']) {
+    // `.or()` really filters now - see parseOr. An UPDATE never carries one
+    // (PostgREST rejects arrow paths inside `or` on an update, which is why
+    // unchangedSince keeps them in `.eq`/`.is`), so this only narrows reads.
+    chain.or = (expression) => {
+      const clauses = parseOr(expression);
+      if (clauses.length > 0) filters.push(['or', null, clauses]);
+      return chain;
+    };
+    for (const ignored of ['select', 'not', 'order', 'limit', 'insert', 'upsert', 'delete', 'gte', 'lte']) {
       chain[ignored] = () => chain;
     }
     chain.update = (value) => { patch = value; return chain; };

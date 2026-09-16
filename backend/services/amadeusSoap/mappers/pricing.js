@@ -115,7 +115,13 @@ export const applyPricingToOffer = (reply, offer) => {
       // The passenger type the group was priced as: ADT, CNN for a child, INF.
       type: { ADT: 'ADULT', CNN: 'CHILD', CHD: 'CHILD', CH: 'CHILD', INF: 'HELD_INFANT', IN: 'HELD_INFANT' }[pricedAs] ?? null,
       base,
-      total: totalAmount?.amount ?? base,
+      // No silent fall back to the base fare. `?? base` meant a reply missing
+      // qualifier 712 priced the fare at its base - taxes excluded - and
+      // presented that as the total: an undercharge shown as a price rather
+      // than a refusal. Null instead, so applyPricingToOffer treats the reply
+      // as unpriced and the caller refuses (index.js noFareFound), before a
+      // card is charged rather than after.
+      total: totalAmount?.amount ?? null,
       currency,
       taxes: readTaxes(fareInfoGroup),
       segments: readSegments(fareInfoGroup),

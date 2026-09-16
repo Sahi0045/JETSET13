@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { buildBookingRow } from '../../backend/routes/flight.routes.js';
 
 /**
@@ -144,31 +144,93 @@ describe('buildBookingRow', () => {
   });
 });
 
-describe('saveBookingToDatabase (logic)', () => {
-  it('FK violation code 23503 should trigger fallback', () => {
-    const error = { code: '23503', message: 'violates foreign key constraint' };
-    const shouldRetry = error.code === '23503' || error.code === '42501' ||
-      error.message?.includes('violates foreign key') || error.message?.includes('row-level security');
-    expect(shouldRetry).toBe(true);
+/**
+ * These four cases used to retype the FK/RLS condition inline and assert the
+ * copy - `saveBookingToDatabase` was never called. They would all have passed
+ * with the real function deleted, and the header above this file warns about
+ * exactly that ("A replica tests the replica") for `buildBookingRow`. The
+ * warning was acted on there and left standing here.
+ *
+ * They now drive the real function against a database double that answers with
+ * the error code under test, and assert what the booking actually ends up as.
+ */
+describe('saveBookingToDatabase, against a database that refuses the row', () => {
+  const bookingData = () => ({
+    bookingReference: 'BK-SAVE-1',
+    pnr: 'ABC123',
+    orderId: 'ORD-1',
+    totalAmount: '350.50',
+    currency: 'USD',
+    origin: 'JFK',
+    destination: 'LAX',
+    departureDate: '2026-03-15',
+    airline: 'AA',
+    flightNumber: 'AA100',
+    userId: 'not-in-auth-users',
+    passengerDetails: [{ firstName: 'John', lastName: 'Doe' }],
   });
 
-  it('RLS violation code 42501 should trigger fallback', () => {
-    const error = { code: '42501', message: 'new row violates row-level security policy' };
-    const shouldRetry = error.code === '23503' || error.code === '42501';
-    expect(shouldRetry).toBe(true);
+  /**
+   * Fails the first insert with `error`, accepts the second. The route's
+   * fallback re-inserts without user_id, so "did it retry" is answerable by
+   * whether a second insert happened and what it carried.
+   */
+  const dbRefusing = (error) => {
+    const inserts = [];
+    const chain = () => {
+      const c = {
+        select: vi.fn(() => c),
+        eq: vi.fn(() => c),
+        or: vi.fn(() => c),
+        update: vi.fn(() => c),
+        insert: vi.fn((row) => { inserts.push(row); return c; }),
+        single: vi.fn(async () => (inserts.length === 1
+          ? { data: null, error }
+          : { data: { id: 'bk-1', booking_reference: 'BK-SAVE-1', user_id: inserts.at(-1)?.user_id ?? null }, error: null })),
+        then: (resolve) => resolve({ data: [], error: null }),
+      };
+      return c;
+    };
+    return { from: vi.fn(() => chain()), inserts };
+  };
+
+  const saveWith = async (error) => {
+    vi.resetModules();
+    const db = dbRefusing(error);
+    const supabase = (await import('../../backend/config/supabase.js')).default;
+    supabase.from.mockImplementation(db.from);
+    const { saveBookingToDatabase } = await import('../../backend/routes/flight.routes.js');
+    const saved = await saveBookingToDatabase(bookingData());
+    return { saved, inserts: db.inserts };
+  };
+
+  it('retries without the owner when the user_id fails its foreign key', async () => {
+    const { saved, inserts } = await saveWith({ code: '23503', message: 'violates foreign key constraint' });
+
+    expect(inserts).toHaveLength(2);
+    expect(inserts[0].user_id).toBe('not-in-auth-users');
+    expect(inserts[1].user_id, 'the retry drops the owner so the booking is still saved').toBeNull();
+    expect(saved).toBeTruthy();
   });
 
-  it('Other errors should NOT trigger fallback', () => {
-    const error = { code: '23505', message: 'duplicate key value violates unique constraint' };
-    const shouldRetry = error.code === '23503' || error.code === '42501' ||
-      error.message?.includes('violates foreign key') || error.message?.includes('row-level security');
-    expect(shouldRetry).toBe(false);
+  it('retries without the owner when row-level security refuses it', async () => {
+    const { inserts } = await saveWith({ code: '42501', message: 'new row violates row-level security policy' });
+
+    expect(inserts).toHaveLength(2);
+    expect(inserts[1].user_id).toBeNull();
   });
 
-  it('FK message text should trigger fallback even without code', () => {
-    const error = { code: null, message: 'violates foreign key constraint on user_id' };
-    const shouldRetry = error.code === '23503' || error.code === '42501' ||
-      error.message?.includes('violates foreign key') || error.message?.includes('row-level security');
-    expect(shouldRetry).toBe(true);
+  it('recognises the foreign key by its message when there is no code', async () => {
+    const { inserts } = await saveWith({ code: null, message: 'violates foreign key constraint on user_id' });
+
+    expect(inserts).toHaveLength(2);
+  });
+
+  // A CHECK violation is not something dropping the owner can cure.
+  it('does not retry a row the table refuses on its own terms', async () => {
+    const { saved, inserts } = await saveWith({ code: '23514', message: 'violates check constraint' });
+
+    expect(inserts, 'no pointless second insert').toHaveLength(1);
+    expect(saved).toBeNull();
   });
 });

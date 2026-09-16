@@ -101,6 +101,22 @@ const airSegmentValues = (pnrReply, path) => {
 /** The airline's own record locator on each air segment, '' until it sends one. */
 const airSegmentLocators = (pnrReply) => airSegmentValues(pnrReply, 'itineraryReservationInfo.reservation.controlNumber');
 
+/**
+ * Is any air segment still without the airline's own record locator?
+ *
+ * Both call sites used to ask `locators.some((l) => !l)` directly, and
+ * `[].some(...)` is false - so a reply carrying no segment this reader
+ * recognises (an unexpected shape, a reshaped schema) was read as "every
+ * locator is present" and issuance was attempted at once. Issuing too early is
+ * the exact failure the fresh-session mechanism exists for, so the empty case
+ * belongs on the cautious side: not knowing is not the same as knowing they
+ * have arrived.
+ */
+const anyLocatorMissing = (pnrReply) => {
+  const locators = airSegmentLocators(pnrReply);
+  return locators.length === 0 || locators.some((locator) => !locator);
+};
+
 /** Each air segment's status: HK, or TK when the airline has changed it. */
 const airSegmentStatuses = (pnrReply) => airSegmentValues(pnrReply, 'relatedProduct.status');
 
@@ -300,7 +316,7 @@ const issueInFreshSessions = async (booked, { offer, bookingReference, config, n
 
       const locators = airSegmentLocators(current);
       const waitedMs = Date.now() - waitStarted;
-      const locatorMissing = locators.some((locator) => !locator);
+      const locatorMissing = anyLocatorMissing(current);
       if (locatorMissing) {
         if (waitedMs < config.airlineLocatorWaitMs) return { waiting: true };
         log.warn({ pnr, locators, waitedMs }, 'airline record locator not on every segment yet; issuing anyway');
@@ -708,7 +724,7 @@ export const runBookingChain = async (p) => {
     let issueInNewSession = false;
     let notReadyRefusals = 0;
     if (config.autoTicket) {
-      if (airSegmentLocators(bookedReply).some((locator) => !locator)) {
+      if (anyLocatorMissing(bookedReply)) {
         issueInNewSession = true;
       } else {
         try {

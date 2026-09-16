@@ -227,7 +227,16 @@ const getFiledFareRules = async (flightOffer, { sections = DEFAULT_RULE_SECTIONS
           log.warn({ section, reason: inspected.error.technicalError }, 'Fare_CheckRules section refused');
           continue;
         }
-        filed.push(...readCheckRulesReply(reply).sections);
+        // The reader's own verdict, which used to be discarded: it reports a
+        // refusal this reply carried even where inspectReply found no container
+        // it recognised. Dropping it made "the airline filed no penalties" and
+        // "Amadeus refused the question" indistinguishable on the panel.
+        const { sections: filedSections, error: readError } = readCheckRulesReply(reply);
+        if (readError) {
+          log.warn({ section, reason: readError }, 'Fare_CheckRules section refused');
+          continue;
+        }
+        filed.push(...filedSections);
       } catch (cause) {
         // One unreadable section must not cost the customer the whole panel.
         log.warn({ section, reason: cause?.technicalError ?? cause?.message }, 'Fare_CheckRules failed');
@@ -445,8 +454,29 @@ const MAX_CALENDAR_DATES = 10;
  * Past dates are dropped first: they cannot be priced, and spending cap slots
  * on them costs a live GDS call each.
  */
+/**
+ * Today as the office keeps it, not as UTC does.
+ *
+ * `new Date().toISOString().slice(0,10)` is the UTC date, and neither the
+ * office's calendar nor the customer's is UTC. A Los Angeles customer at 18:00
+ * on 15 Oct is already 16 Oct in UTC, so the date strip silently dropped 15 Oct
+ * - while `/search` would still happily sell that date, because
+ * searchDateProblem deliberately allows a day of slack. The two validators
+ * disagreed by design in one place and by accident here. Same family as the
+ * cancelBooking timezone bug.
+ */
+const officeCalendarToday = () => {
+  const zone = getWsConfig().officeTimeZone;
+  try {
+    return new Date().toLocaleDateString('en-CA', { timeZone: zone });
+  } catch {
+    log.warn({ zone }, 'unusable office time zone; measuring the calendar against UTC');
+    return new Date().toISOString().slice(0, 10);
+  }
+};
+
 const sampleDates = (dates, cap = MAX_CALENDAR_DATES) => {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = officeCalendarToday();
   const usable = [...new Set(dates)].filter((d) => d && d >= today).sort();
   if (usable.length <= cap) return usable;
 
@@ -534,7 +564,9 @@ const getCheapestFlightDates = async (origin, destination, options = {}) => {
     const d = new Date(anchor);
     d.setUTCDate(d.getUTCDate() + offset);
     return d.toISOString().slice(0, 10);
-  }).filter((d) => d >= new Date().toISOString().slice(0, 10));
+    // Office-local, for the same reason as sampleDates: measured against UTC
+    // this dropped a date the search would still sell.
+  }).filter((d) => d >= officeCalendarToday());
 
   const result = await getCalendarPrices({
     from: origin, to: destination, adults: 1, dates,
