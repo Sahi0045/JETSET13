@@ -24,7 +24,7 @@ import { each, el, wrap } from '../xml.js';
  * the segment-status vocabulary would suggest. Verified against the live reply:
  * without OK here every successful booking was rejected as unsold.
  */
-const SOLD = new Set(['OK', 'KK', 'HK', 'SS', 'HL']);
+const SOLD = new Set(['OK', 'KK', 'HK', 'SS']);
 
 /**
  * Statuses that mean they are not, and never will be for this request.
@@ -34,8 +34,14 @@ const SOLD = new Set(['OK', 'KK', 'HK', 'SS', 'HL']);
  * UNS was observed on a live refusal that this set did not name: the segment
  * came back `actionDetails/statusCode UNS` alongside a message-level error
  * carrying only the code 288 and no text at all.
+ *
+ * A waitlist is not a seat. HL ("holding waitlist") used to be counted as sold,
+ * which would have booked and charged a customer for a seat the airline had not
+ * given them; WL was in neither set, so China Eastern's waitlisted MU551 on PDT
+ * (15 Sep 2026) failed as "Amadeus returned no usable reply" instead of the
+ * plain "no longer available" it is. Both are refusals.
  */
-const REFUSED = new Set(['UC', 'NO', 'US', 'UN', 'NN', 'UNS']);
+const REFUSED = new Set(['UC', 'NO', 'US', 'UN', 'NN', 'UNS', 'WL', 'HL']);
 
 /** Group the flat `_ama.segments` list back into the legs it came from. */
 const groupByLeg = (segments) => {

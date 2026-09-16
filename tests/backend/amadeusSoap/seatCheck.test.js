@@ -29,6 +29,9 @@ const refused = envelope('Air_SellFromRecommendationReply',
   '<errorAtMessageLevel><errorSegment><errorDetails><errorCode>288</errorCode><errorCategory>EC</errorCategory></errorDetails></errorSegment></errorAtMessageLevel>'
   + '<itineraryDetails><segmentInformation><actionDetails><quantity>1</quantity><statusCode>UNS</statusCode></actionDetails></segmentInformation>'
   + '<segmentInformation><actionDetails><quantity>1</quantity><statusCode>X</statusCode></actionDetails></segmentInformation></itineraryDetails>', true);
+const waitlisted = (status) => envelope('Air_SellFromRecommendationReply',
+  `<itineraryDetails><segmentInformation><actionDetails><quantity>1</quantity><statusCode>${status}</statusCode></actionDetails></segmentInformation>`
+  + `<segmentInformation><actionDetails><quantity>1</quantity><statusCode>${status}</statusCode></actionDetails></segmentInformation></itineraryDetails>`, true);
 const noStatus = envelope('Air_SellFromRecommendationReply', '<dummy/>', true);
 const signOut = envelope('Security_SignOutReply', '<dummy/>');
 
@@ -123,6 +126,25 @@ describe('confirming the seats before payment', () => {
     expect(sent('Fare_PricePNRWithBookingClass')).toHaveLength(0);
     expect(sent('PNR_AddMultiElements')).toHaveLength(0);
     expect(actionsSent().some((action) => action.includes('VLSSOQ'))).toBe(true);
+  });
+
+  // A waitlist is not a seat. China Eastern's MU551 came back WL on PDT
+  // (16 Sep 2026) and failed as "no usable reply" rather than as the plain
+  // refusal it is; HL, "holding waitlist", used to count as sold, which would
+  // have charged a customer for a seat the airline never gave them.
+  it.each(['WL', 'HL'])('refuses a waitlisted seat (%s) as a fare that cannot be sold', async (status) => {
+    const confirmSeats = await load();
+    const isFareRefusal = await refusal();
+    replies(waitlisted(status));
+
+    const error = await confirmSeats(offer()).catch((e) => e);
+
+    expect(error).toMatchObject({ name: 'AmadeusSoapError', code: 409, operation: 'Air_SellFromRecommendation' });
+    expect(error.technicalError).toContain(status);
+    expect(isFareRefusal(error)).toBe(true);
+    // Nothing waitlisted is priced or booked.
+    expect(sent('Fare_PricePNRWithBookingClass')).toHaveLength(0);
+    expect(sent('PNR_AddMultiElements')).toHaveLength(0);
   });
 
   it('does not call a reply without a seat status a refusal', async () => {
