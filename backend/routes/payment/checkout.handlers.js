@@ -1493,14 +1493,20 @@ export async function reconcileBookingPayment(booking, { fresh = false } = {}) {
     }
 
     if (!orderData) {
-        // No answer is not a yes. A row marked paid without a recorded capture
-        // used to be trusted here on its word, and a paid row can be written by
-        // paths that never asked the gateway. The caller may retry.
+        // "There is no such order" is an ANSWER, not an outage. ARC returns 400
+        // or 404 for an order it has never seen, and reporting that as
+        // unavailable makes the caller retry for ever - the abandoned-checkout
+        // job asked about the same two references every five minutes and could
+        // never move them on, which is the dead end it exists to close.
+        //
+        // Anything else - no response at all, a 401, a 5xx - genuinely is "we
+        // could not find out", and the caller should ask again.
+        const answeredNoSuchOrder = gatewayStatus === 400 || gatewayStatus === 404;
         return fromRow(false, {
-            error: 'Could not retrieve order from gateway',
-            gatewayUnavailable: true,
+            error: answeredNoSuchOrder ? 'No such order at the gateway' : 'Could not retrieve order from gateway',
+            ...(answeredNoSuchOrder ? {} : { gatewayUnavailable: true }),
             ...(gatewayStatus ? { gatewayStatus } : {}),
-            ...(alreadyPaid ? { disagreement: 'row marked paid, gateway not reachable to confirm' } : {}),
+            ...(alreadyPaid ? { disagreement: 'row marked paid, gateway does not have the order' } : {}),
         });
     }
 
