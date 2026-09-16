@@ -277,7 +277,16 @@ const issueInFreshSessions = async (booked, { offer, bookingReference, config, n
   let refusals = notReadyRefusals;
 
   for (;;) {
-    const outcome = await withSession(async (ctx) => {
+    // `withSession` takes its semaphore permit itself, outside `callStep`, so a
+    // SlotTimeoutError raised here is raw: no `committed`, no `pnr`. Every look
+    // in this loop happens AFTER the PNR is committed, and the order route reads
+    // `slotTimeout && !committed` as "nothing was sold" - it queues the booking,
+    // overwrites the committed marker, and answers 202 for a reservation the
+    // airline already holds. Anything that escapes a post-commit session is a
+    // post-commit failure, whatever raised it.
+    let outcome;
+    try {
+      outcome = await withSession(async (ctx) => {
       const current = await callStep(ctx, {
         step: 'retrieve', operation: 'PNR_Retrieve', bodyXml: buildRetrieveBody(pnr), pnr, committed: true,
       });
@@ -320,7 +329,13 @@ const issueInFreshSessions = async (booked, { offer, bookingReference, config, n
       }
       if (!readIssueTicketReply(issueReply).issued) return { ticketed: false };
       return { ticketed: true, ...(await readTicketNumbers(ctx, { pnr, order: booked.order, offer, bookingReference, config })) };
-    }, { config });
+      }, { config });
+    } catch (cause) {
+      if (cause instanceof BookingChainError) throw cause;
+      throw new BookingChainError({
+        step: 'issueTicket', pnr, committed: true, ticketed: false, cause, code: cause?.code ?? 502,
+      });
+    }
 
     if (!outcome.waiting) {
       log.info({ pnr, ticketed: outcome.ticketed, waitedMs: Date.now() - waitStarted }, 'flight.booking.chain ticketing in a new session finished');
@@ -938,6 +953,28 @@ export const cancelBooking = async (recordLocator) => {
     const voidable = tickets.filter((t) => t.issuedOn === today && t.number);
     const unvoidable = tickets.filter((t) => !voidable.includes(t));
     let voided = false;
+
+    // A ticket whose issue date could not be read is not "past its void
+    // window" - the window is unknown. `issuedOn` is null whenever the DDMMMYY
+    // token is missing from the joined FA free text, and `null === today` is
+    // false, so such a ticket fell into `unvoidable`, the void block below was
+    // skipped entirely, and PNR_Cancel went ahead: the segments stripped with a
+    // live ticket standing against them. That is precisely what the guard on a
+    // FAILED void prevents - a void that was never ATTEMPTED had no guard at
+    // all.
+    const undated = tickets.filter((t) => t.number && !t.issuedOn);
+    if (undated.length > 0) {
+      throw new BookingChainError({
+        step: 'voidTicket',
+        pnr: recordLocator,
+        committed: true,
+        ticketed: true,
+        error: 'We could not cancel this booking automatically - our team will finish it',
+        code: 502,
+        technicalError: `ticket ${undated.map((t) => t.number).join(', ')} carries no readable issue date; `
+          + 'refusing to cancel the itinerary over a ticket that may still be voidable',
+      });
+    }
 
     if (voidable.length > 0) {
       try {

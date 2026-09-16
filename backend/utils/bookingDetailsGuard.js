@@ -26,6 +26,12 @@ const PINNED = [
   ['booking_details->confirmation_email->>state', (details) => details?.confirmation_email?.state],
   ['booking_details->cancellation->>cancelledAt', (details) => details?.cancellation?.cancelledAt],
   ['booking_details->needs_review->>at', (details) => details?.needs_review?.at],
+  // The one writer this list was missing. `reconcileBookingPayment` writes
+  // `arc_captured_amount` and nothing else, so its write was invisible to every
+  // pin above and could be spread away by a copy read before it - and
+  // holdChainClaim's own comment names "a payment reconcile, say" as the write
+  // that put a chain back as it was.
+  ['booking_details->>arc_captured_amount', (details) => details?.arc_captured_amount],
 ];
 
 const pin = (query, column, value) => (value === undefined || value === null ? query.is(column, null) : query.eq(column, value));
