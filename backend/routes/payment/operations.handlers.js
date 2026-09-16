@@ -613,7 +613,7 @@ async function cancelFlightBooking(res, booking, { reason, email }) {
     // Read back rather than spread the copy from the start: reconcile has
     // written the captured amount to the row since.
     const current = (await readBookingDetails(booking.id)) || claim.details;
-    const { error: updateError } = await supabase
+    const { data: updated, error: updateError } = await supabase
         .from('bookings')
         .update({
             status: 'cancelled',
@@ -649,14 +649,31 @@ async function cancelFlightBooking(res, booking, { reason, email }) {
             },
             updated_at: now,
         })
-        .eq('id', booking.id);
+        .eq('id', booking.id)
+        // Pinned to OUR claim, the way releaseCancellation pins its own.
+        //
+        // `claimCancellation` stamps once and there is no heartbeat, so
+        // `liveChainState` releases a 'cancelling' claim after
+        // CHAIN_CLAIM_TTL_MS. A cancel that runs long - a fresh ARC reconcile,
+        // a WSAP session of several calls, then the refund - loses its claim
+        // while still working, and this write would otherwise land `cancelled`
+        // and `refunded` over a PNR that another request committed in the
+        // meantime.
+        .eq('booking_details->gds_chain->>startedAt', claim.stamp)
+        .select('id');
 
-    if (updateError) {
+    // Matching nothing means someone else holds the booking now. That is the
+    // same situation as a failed write - the seats are released and the money
+    // has moved - so it takes the same answer rather than reporting success.
+    const lostTheClaim = !updateError && !(updated?.length);
+    if (updateError || lostTheClaim) {
         // The seats are released and the money has done whatever it did; only
         // the record failed. Trying again would find nothing to cancel, so the
         // customer is told not to, and what happened travels with the answer.
         console.error('❌ Cancellation carried out but not recorded', {
-            bookingReference, paymentAction: cancellationResult.paymentAction, error: updateError.message
+            bookingReference,
+            paymentAction: cancellationResult.paymentAction,
+            error: updateError ? updateError.message : 'the booking moved to another request mid-cancel',
         });
         const text = 'Your cancellation was processed, but we could not save it. Please do not try again - '
             + 'call (877) 538-7380 and we will confirm what happened to your payment.';

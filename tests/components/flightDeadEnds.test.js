@@ -145,3 +145,24 @@ describe('the results page offering a way on', () => {
     expect(results).toMatch(/'Find a flight'/);
   });
 });
+
+/**
+ * Passport numbers do not go to the browser console.
+ *
+ * The production build strips no console calls, so both of these shipped. The
+ * review page already carries the rule in a comment — "Not logged: it carries
+ * names, dates of birth and passport numbers" — and it was not applied here.
+ */
+describe('what the booking path logs', () => {
+  it('does not dump the order payload', () => {
+    expect(read('frontend/src/Pages/Common/flights/FlightCreateOrders.jsx'))
+      .not.toMatch(/JSON\.stringify\(flightBookingData/);
+  });
+
+  it('does not hand the whole checkout object to the console', () => {
+    const svc = read('frontend/src/Services/ArcPayService.js');
+
+    expect(svc).not.toMatch(/checkout session\.\.\.', checkoutData\)/);
+    expect(svc).toMatch(/orderId: checkoutData\.orderId/);
+  });
+});
