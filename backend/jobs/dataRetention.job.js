@@ -1,19 +1,52 @@
 import supabase from '../config/supabase.js';
+import { queueEnvironment } from '../utils/queueEnvironment.js';
 
+/**
+ * Deleting records that are past their retention period.
+ *
+ * Every rule here is a hard DELETE, not an archive. `ARCHIVE_STATUSES` sat
+ * unused beneath this for the life of the file and the log line still said
+ * "Archived": the name promised something the code never did, on seven tables
+ * including `bookings`.
+ *
+ * `statusColumn` is the column each table actually has. `payments` has
+ * `payment_status` and no `status`, and `chat_sessions` has neither, so those
+ * two rules errored on every run - the retention they describe was never
+ * applied, and the failure was only ever a console line.
+ */
 const RETENTION_RULES = {
-  inquiries: { years: 7, status: ['archived', 'rejected'] },
-  payments: { years: 10, status: ['completed', 'failed'] },
-  audit_logs: { years: 2, status: null },
-  chat_sessions: { years: 1, status: ['completed'] },
-  application_drafts: { years: 0.5, status: null },
-  visa_applications: { years: 10, status: ['completed', 'rejected', 'archived'] },
-  bookings: { years: 7, status: ['completed', 'cancelled'] }
+  inquiries: { years: 7, statusColumn: 'status', status: ['archived', 'rejected'] },
+  payments: { years: 10, statusColumn: 'payment_status', status: ['completed', 'failed'] },
+  audit_logs: { years: 2, statusColumn: null, status: null },
+  chat_sessions: { years: 1, statusColumn: null, status: null },
+  application_drafts: { years: 0.5, statusColumn: null, status: null },
+  visa_applications: { years: 10, statusColumn: 'status', status: ['completed', 'rejected', 'archived'] },
+  bookings: { years: 7, statusColumn: 'status', status: ['completed', 'cancelled'] }
 };
 
-const ARCHIVE_STATUSES = ['archived', 'deleted'];
+/**
+ * Only production deletes.
+ *
+ * Local development and production share one database, and this job was started
+ * under a bare `NODE_ENV !== 'test'` in `backend/server.js` - which is what
+ * `npm run dev` launches. Every developer's laptop was therefore running a hard
+ * DELETE across seven production tables every 24 hours. The two jobs beside it,
+ * `bookingQueue` and `abandonedCheckout`, were both given this guard for exactly
+ * this reason; the one that deletes never got it.
+ *
+ * `BOOKING_QUEUE_ENV` names production explicitly (utils/queueEnvironment.js):
+ * NODE_ENV cannot be used, because `npm start` sets it to production on any
+ * machine.
+ */
+export const retentionMayDelete = (env = process.env) => queueEnvironment(env) === 'production';
 
-export async function archiveOldRecords() {
+export async function archiveOldRecords({ env = process.env } = {}) {
   const results = {};
+
+  if (!retentionMayDelete(env)) {
+    console.log(`[Retention] Not deleting: this is '${queueEnvironment(env)}', not production`);
+    return results;
+  }
 
   for (const [table, config] of Object.entries(RETENTION_RULES)) {
     try {
@@ -25,8 +58,8 @@ export async function archiveOldRecords() {
         .delete()
         .lt('created_at', cutoffDate.toISOString());
 
-      if (config.status && config.status.length > 0) {
-        query = query.in('status', config.status);
+      if (config.statusColumn && config.status?.length > 0) {
+        query = query.in(config.statusColumn, config.status);
       }
 
       const { data, error } = await query.select('id');
@@ -36,8 +69,9 @@ export async function archiveOldRecords() {
         results[table] = { success: false, error: error.message };
       } else {
         const count = data?.length || 0;
-        console.log(`[Retention] Archived ${count} records from ${table}`);
-        results[table] = { success: true, archived: count };
+        // Said "Archived" for a hard DELETE, on seven tables including bookings.
+        console.log(`[Retention] Deleted ${count} records from ${table}`);
+        results[table] = { success: true, deleted: count };
       }
     } catch (err) {
       console.error(`[Retention] Exception for ${table}:`, err.message);
@@ -71,8 +105,15 @@ export async function softDeleteUserData(userId, scheduleDays = 30) {
   console.log(`[Retention] User ${userId} scheduled for deletion in ${scheduleDays} days`);
 }
 
-export async function processScheduledDeletions() {
+export async function processScheduledDeletions({ env = process.env } = {}) {
   const now = new Date().toISOString();
+
+  // Erases a person's records. Same guard as archiveOldRecords, for the same
+  // reason: this ran on every developer's laptop against the shared database.
+  if (!retentionMayDelete(env)) {
+    console.log(`[Retention] Not processing deletions: this is '${queueEnvironment(env)}', not production`);
+    return;
+  }
 
   const { data: users } = await supabase
     .from('users')
@@ -93,7 +134,11 @@ export async function processScheduledDeletions() {
 }
 
 async function performHardDelete(userId) {
-  const tables = ['inquiries', 'payments', 'chat_sessions', 'application_drafts', 'visa_applications'];
+  // `payments` is deliberately absent: RETENTION_RULES keeps it for 10 years,
+  // and this deleted a user's payment records the moment their deletion came
+  // due - the financial record a refund dispute or an audit is settled from.
+  // A deletion request does not shorten a statutory retention period.
+  const tables = ['inquiries', 'chat_sessions', 'application_drafts', 'visa_applications'];
 
   for (const table of tables) {
     await supabase.from(table).delete().eq('user_id', userId);

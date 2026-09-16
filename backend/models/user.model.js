@@ -2,7 +2,20 @@ import bcrypt from 'bcryptjs';
 import supabase from '../config/supabase.js';
 
 class User {
-  static async create({ firstName, lastName, email, password, googleId = null, isGoogleAccount = false }) {
+  /**
+   * `id` is the row's primary key, and it must be the caller's Supabase auth
+   * uid whenever there is one.
+   *
+   * This used to insert with no `id` at all, so the row took the table default -
+   * a fresh uuid unrelated to `auth.users`. `bookings.user_id` REFERENCES
+   * auth.users(id), so a user provisioned this way (auth.middleware.js
+   * autoProvisionSupabaseUser, which runs whenever a valid Supabase token has no
+   * public.users row) got an id that fails that foreign key. The checkout upsert
+   * then failed as a whole and was caught as non-blocking: the customer paid at
+   * ARC, no booking row existed, POST /order answered PAYMENT_NOT_FOUND, and the
+   * abandoned-checkout job could not see it because it reads `bookings`.
+   */
+  static async create({ id = null, firstName, lastName, email, password, googleId = null, isGoogleAccount = false }) {
     try {
       console.log('Creating user with data:', { firstName, lastName, email, hasGoogleId: !!googleId });
       
@@ -29,6 +42,7 @@ class User {
       const { data, error } = await supabase
         .from('users')
         .insert([{
+          ...(id ? { id } : {}),
           email: email,
           password: hashedPassword,
           name: fullName,

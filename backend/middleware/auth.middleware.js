@@ -158,7 +158,7 @@ export async function verifySupabaseToken(token) {
   }
 }
 
-async function autoProvisionSupabaseUser(decodedToken) {
+export async function autoProvisionSupabaseUser(decodedToken) {
   if (!decodedToken?.email) {
     return null;
   }
@@ -178,6 +178,12 @@ async function autoProvisionSupabaseUser(decodedToken) {
     const randomPassword = crypto.randomBytes(32).toString('hex');
 
     const newUser = await User.create({
+      // The auth uid, not a fresh one. `bookings.user_id` references
+      // auth.users(id): a row provisioned with any other id fails that foreign
+      // key, which silently costs the customer their booking row after they
+      // have paid. `sub` is the uid on a Supabase-issued token, which this
+      // function has already confirmed the issuer of.
+      id: decodedToken.sub,
       firstName,
       lastName,
       email: decodedToken.email,
