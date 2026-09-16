@@ -12,6 +12,7 @@ import { useSupabaseAuth } from '../../../contexts/SupabaseAuthContext';
 import { buildFlightOrderBody } from '../../../../../shared/flightOrderBody';
 import { itinerariesFromOffer, returnDateOf } from '../../../../../shared/bookingItineraries';
 import { clearStoredBookings } from '../../../utils/bookingStorage';
+import { clearTravellerDraft } from '../../../utils/flightTravellerDraft';
 
 /**
  * Failures where the reference the user is holding can never be completed: the
@@ -418,6 +419,7 @@ function FlightCreateOrders() {
         // page's draft is removed too, now the order has an answer; the
         // booking itself is on the server and in router state below.
         clearStoredBookings();
+        clearTravellerDraft();
 
         // Hand the booking over in router state. The confirmation page used
         // to re-read localStorage, which is shared across tabs and could
