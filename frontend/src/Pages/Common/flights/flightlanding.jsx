@@ -1,4 +1,4 @@
-import React from "react"
+import React, { useState } from "react"
 import { useNavigate } from "react-router-dom"
 import FlightSearchForm from "./flight-search-form"
 import PopularDestinations from "./popular-destination"
@@ -28,7 +28,13 @@ const cityToIATACode = allAirports.reduce((acc, airport) => {
 
 function FlightLanding() {
   const navigate = useNavigate();
-  const { city, cityCode } = useLocationContext();
+  // `cityCode` was read here too and does not exist on this context - only
+  // city, country, countryCode and currency do - so every use of it was
+  // undefined.
+  const { city } = useLocationContext();
+  // A destination chosen from the gallery before we know where the visitor is
+  // flying from, kept so the form can ask for the missing half.
+  const [prefill, setPrefill] = useState(null);
 
   // Straight to the results, which run the search. This page ran it first, up
   // to 10 seconds with a spinner, and handed an answer to a results page that
@@ -44,61 +50,65 @@ function FlightLanding() {
     navigate(`/flights/search?${searchToQuery(searchData)}`, { state: { searchData } });
   };
 
-  // Handle navigation to destination search
+  /**
+   * "Explore more destinations" - ask where to, rather than searching nowhere.
+   *
+   * This sent `to: ""` and navigated to the results page, on every click,
+   * unconditionally. There is no such thing as a search with no destination:
+   * the results page refuses it with "Please choose where you are flying from,
+   * where to, and the date" and offers a Retry that repeats the identical empty
+   * search. So the most prominent button under the destination gallery led
+   * nowhere but an error, every single time.
+   *
+   * The honest thing for a button that means "somewhere else" is to put the
+   * cursor in the field that answers it. The search form is at the top of this
+   * same page, so this scrolls back to it and focuses "To" - no navigation, and
+   * nothing that can fail.
+   */
   const handleExploreDestinations = () => {
-    const defaultOrigin = city || "";
-    const defaultOriginCode = cityCode || "";
+    const form = document.getElementById('flight-search');
+    form?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // After the scroll starts, so the field is not focused off-screen and the
+    // browser does not jump back to it.
+    setTimeout(() => {
+      const destination = form?.querySelector('input[name="to"]');
+      destination?.focus();
+    }, 400);
+  };
 
-    // Navigate to search page with default search parameters
+  /**
+   * A destination card: search it, or ask where they are flying FROM.
+   *
+   * The origin came from `city`, which is empty until the geo lookup answers
+   * and stays empty if the visitor blocks it - and from `cityCode`, which
+   * `useLocationContext` has never exposed at all, so it was always undefined.
+   * With no origin the search page gives the same "Please choose where you are
+   * flying from" error as the button above, so a card clicked in the first
+   * second, or with geo off, could not work.
+   *
+   * A destination the visitor picked is worth keeping either way. So when the
+   * origin is unknown, the search form is filled in with it and asks for the
+   * one missing piece, rather than throwing the choice away on an error page.
+   */
+  const handleBookFlight = (destination) => {
+    const departDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const toCode = cityToIATACode[destination] || destination;
+    const fromCode = cityToIATACode[city] || (city || '');
+
+    if (!fromCode) {
+      setPrefill({ from: '', to: toCode, tripType: 'oneWay', departDate, returnDate: '', travelers: '1' });
+      const form = document.getElementById('flight-search');
+      form?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setTimeout(() => form?.querySelector('input[name="from"]')?.focus(), 400);
+      return;
+    }
+
     navigate('/flights/search', {
       state: {
         searchData: {
-          from: defaultOrigin,
-          fromCode: defaultOriginCode,
-          to: "",  // Empty destination for exploring all
-          tripType: "oneWay",
-          departDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 1 week from today
-          returnDate: "",
-          travelers: "1"
-        }
-      }
-    });
-  };
-
-  // Handle book flight for a specific destination
-  const handleBookFlight = (destination) => {
-    const defaultOrigin = city || "";
-
-    // Create a search request with the selected destination
-    const searchData = {
-      from: defaultOrigin,
-      to: destination,
-      tripType: "oneWay",
-      departDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 1 week from today
-      returnDate: "",
-      travelers: "1"
-    };
-
-    // Get IATA codes for the cities
-    const fromCode = cityToIATACode[searchData.from] || cityCode || searchData.from;
-    const toCode = cityToIATACode[searchData.to] || searchData.to;
-
-    // Add IATA codes to search data
-    const searchRequestData = {
-      ...searchData,
-      from: fromCode,
-      to: toCode
-    };
-
-    console.log('Booking flight to destination:', destination);
-    console.log('Search data for booking:', searchRequestData);
-
-    // Navigate directly to the search page with search parameters
-    // This will trigger the search on the search page component
-    navigate('/flights/search', {
-      state: {
-        searchData: searchRequestData
-      }
+          from: fromCode, to: toCode, tripType: 'oneWay', departDate, returnDate: '', travelers: '1',
+        },
+      },
     });
   };
 
@@ -168,8 +178,8 @@ function FlightLanding() {
 
             {/* Booking card — relative z-30 keeps its open dropdowns above the
                 content below (the reveal-up transform creates a stacking context) */}
-            <div className="reveal-up relative z-30 mt-11 md:mt-14 max-w-5xl mx-auto" style={{ animationDelay: '0.28s' }}>
-              <FlightSearchForm onSearch={handleSearch} />
+            <div id="flight-search" className="reveal-up relative z-30 mt-11 md:mt-14 max-w-5xl mx-auto" style={{ animationDelay: '0.28s' }}>
+              <FlightSearchForm onSearch={handleSearch} initialData={prefill ?? undefined} />
             </div>
 
             {/* Security reassurance */}

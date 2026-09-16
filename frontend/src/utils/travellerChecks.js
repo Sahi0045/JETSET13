@@ -29,7 +29,10 @@ export function travellerProblems(traveller, {
   const problems = bookingTravellerProblems(t, { international, secureFlight, travelDate, lastDate });
   const add = (text) => problems.push(text);
 
-  if (index === 0 && !t.mobile) add('Enter a mobile number for booking updates.');
+  // "for booking updates" implied an SMS. None is sent - sms.service.js is
+  // imported by nothing. The number goes on the PNR as the airline's contact
+  // for a schedule change or a cancellation, which is why it is required.
+  if (index === 0 && !t.mobile) add('Enter a mobile number so the airline can reach you about the flight.');
   // The number goes onto the booking with this code. There is no default to
   // fall back on: the old one wrote every number as +1.
   if (index === 0 && t.mobile && !String(t.countryCode ?? '').replace(/\D/g, '')) {

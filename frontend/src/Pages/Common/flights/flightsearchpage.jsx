@@ -66,10 +66,22 @@ function FlightSearchPage() {
     const { editTravellers: _opened, ...state } = location.state;
     navigate(`${location.pathname}${location.search}`, { replace: true, state });
   }, []);
+  /**
+   * No invented search when nobody searched.
+   *
+   * This defaulted to Delhi to Hyderabad. With no search to run the effect
+   * below returns early leaving `loading` false and `error` null, so the page
+   * rendered as a finished result: "Flights from New Delhi to Hyderabad - 0
+   * flights found", for a route the visitor had never asked about, with an
+   * inert date strip and filters that could not help. It reads as "we have no
+   * flights" rather than "we have no search".
+   *
+   * Empty fields instead, and the effect says what is actually missing.
+   */
   const [searchParams, setSearchParams] = useState(searchData || {
-    from: 'DEL',
-    to: 'HYD',
-    departDate: getTodayDate(),
+    from: '',
+    to: '',
+    departDate: '',
     returnDate: '',
     travelers: 1,
     tripType: 'oneWay'
@@ -151,6 +163,11 @@ function FlightSearchPage() {
    */
   useEffect(() => {
     if (!searchData) {
+      // Reached with no search at all - a bare /flights/search, or a link that
+      // lost its state. Say so, rather than showing zero results for a route
+      // nobody chose. `Modify` opens the search form with these empty fields.
+      setFlights([]);
+      setError('Tell us where you are flying from, where to, and when — then we will find the fares.');
       setLoading(false);
       return undefined;
     }
@@ -972,6 +989,8 @@ function FlightSearchPage() {
         cityMap={cityMap}
         onSearch={handleSearch}
         openTravellers={openTravellers}
+        // Nothing was searched, so the form is the only useful thing here.
+        open={!searchData}
       />
 
       {/* Date Navigation Bar */}
@@ -1046,7 +1065,11 @@ function FlightSearchPage() {
           {/* Route header */}
           <div className="mb-4">
             <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
-              Flights from {fromCityName} <span className="text-gray-400 font-normal">to</span> {toCityName}
+              {/* With no search there is no route, and "Flights from  to" with
+                  two blanks reads like a page that failed to load. */}
+              {searchData
+                ? <>Flights from {fromCityName} <span className="text-gray-400 font-normal">to</span> {toCityName}</>
+                : 'Find a flight'}
             </h1>
             {!loading && !error && (
               <p className="text-sm text-gray-500 mt-0.5">
@@ -1070,16 +1093,24 @@ function FlightSearchPage() {
               <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-amber-50 mb-6">
                 <AlertTriangle className="h-10 w-10 text-amber-600" />
               </div>
-              <h3 className="text-xl font-bold text-gray-800 mb-3">We couldn't search these flights</h3>
+              <h3 className="text-xl font-bold text-gray-800 mb-3">
+                {searchData ? "We couldn't search these flights" : 'Where would you like to go?'}
+              </h3>
               <p className="text-gray-600 mb-8 max-w-md mx-auto">{error}</p>
-              <button
-                type="button"
-                onClick={() => setSearchAttempt((n) => n + 1)}
-                className="px-6 py-3 bg-[#055B75] text-white rounded-lg font-medium hover:bg-[#034457] transition-colors"
-              >
-                <RefreshCw className="h-4 w-4 mr-2 inline" />
-                Retry
-              </button>
+              {/* Retry re-runs the search that failed. With no search to run it
+                  can only fail the same way, which is the shape the customer
+                  was already stuck in - so the form above is the way on, and it
+                  is already open. */}
+              {searchData && (
+                <button
+                  type="button"
+                  onClick={() => setSearchAttempt((n) => n + 1)}
+                  className="px-6 py-3 bg-[#055B75] text-white rounded-lg font-medium hover:bg-[#034457] transition-colors"
+                >
+                  <RefreshCw className="h-4 w-4 mr-2 inline" />
+                  Retry
+                </button>
+              )}
             </div>
           ) : (
             <div className="flex flex-col md:flex-row gap-6">

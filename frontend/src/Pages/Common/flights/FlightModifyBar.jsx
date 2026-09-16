@@ -32,8 +32,10 @@ const CLASS_LABELS = {
 
 // `openTravellers`: arrive with the form open on the traveller picker - the
 // review page's "Change travellers" sends the customer here.
-function FlightModifyBar({ searchParams = {}, cityMap = {}, onSearch, openTravellers = false }) {
-  const [expanded, setExpanded] = useState(Boolean(openTravellers));
+// `open`: arrive with the form open at all, which is what a results page with
+// no search to show needs - the one thing that page can offer is the form.
+function FlightModifyBar({ searchParams = {}, cityMap = {}, onSearch, openTravellers = false, open = false }) {
+  const [expanded, setExpanded] = useState(Boolean(openTravellers) || Boolean(open));
 
   const fromCode = searchParams.fromCode || extractCode(searchParams.from);
   const toCode = searchParams.toCode || extractCode(searchParams.to);
