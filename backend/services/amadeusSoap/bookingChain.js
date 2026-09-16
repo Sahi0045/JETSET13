@@ -19,7 +19,9 @@ import {
   readPricePnrReply,
 } from './operations/ticketing.js';
 import { callStateless, withSession } from './session.js';
-import { cannotTicket, ticketingCarrierOf } from './ticketingCarriers.js';
+import {
+  cannotTicket, interlineNotAllowed, interlinePairsOf, ticketingCarrierOf,
+} from './ticketingCarriers.js';
 
 const log = logger.child({ svc: 'amadeus-ws', flow: 'booking' });
 
@@ -409,6 +411,19 @@ export const runBookingChain = async (p) => {
       error: 'This airline cannot be booked with us online - please choose another flight',
       code: 409,
       technicalError: `validating carrier ${ticketingCarrierOf(offer)} is one this office cannot ticket (AMADEUS_WS_UNTICKETABLE_CARRIERS)`,
+    });
+  }
+
+  // Interline, before any seat is sold. Proven on PDT 16 Sep 2026: a B6-plated
+  // itinerary carrying LH900 sold and priced cleanly and was refused only at
+  // issuance - 8102 NO INTERLINE BETWEEN CARRIERS B6-LH - with the PNR
+  // committed and the card already charged (ticketingCarriers.js).
+  if (interlineNotAllowed(offer, config.interline)) {
+    throw new BookingChainError({
+      step: 'validate',
+      error: 'This itinerary cannot be ticketed as one booking - please choose another flight',
+      code: 409,
+      technicalError: `interline ticketing not confirmed for ${interlinePairsOf(offer).join(', ')} (AMADEUS_WS_INTERLINE_PAIRS_ALLOWED)`,
     });
   }
 

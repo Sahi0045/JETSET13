@@ -11,7 +11,9 @@
  * what is wrong instead of failing later inside a SOAP call.
  */
 
-import { DEFAULT_UNTICKETABLE_CARRIERS, parseCarrierList } from './ticketingCarriers.js';
+import {
+  DEFAULT_NO_INTERLINE_PAIRS, DEFAULT_UNTICKETABLE_CARRIERS, parseCarrierList, parsePairList,
+} from './ticketingCarriers.js';
 
 const REQUIRED = Object.freeze({
   AMADEUS_WS_ENDPOINT: 'endpoint',
@@ -40,6 +42,21 @@ const unticketableCarriers = (env) => Object.freeze(parseCarrierList(
     ? DEFAULT_UNTICKETABLE_CARRIERS.join(',')
     : env.AMADEUS_WS_UNTICKETABLE_CARRIERS,
 ));
+
+// Interline - one airline's stock carrying another airline's flight. Only the
+// pairs issuance has actually refused are kept out, because plating other
+// airlines is normal and often necessary (Hahn Air and APG do nothing else).
+// See ticketingCarriers.js interlineNotAllowed.
+const interlinePolicy = (env) => Object.freeze({
+  blockAll: isTrue(env.AMADEUS_WS_BLOCK_ALL_INTERLINE, false),
+  // Unset means the pairs issuance has actually refused; set but empty means
+  // none, the same convention as the unticketable carriers above.
+  blocked: Object.freeze(parsePairList(
+    env.AMADEUS_WS_INTERLINE_BLOCKED_PAIRS === undefined
+      ? DEFAULT_NO_INTERLINE_PAIRS.join(',')
+      : env.AMADEUS_WS_INTERLINE_BLOCKED_PAIRS,
+  )),
+});
 
 let cached = null;
 
@@ -84,6 +101,7 @@ const readWsConfig = (env = process.env) => {
     // Carriers this office cannot ticket: their fares are left out of search
     // and refused at pricing and booking (ticketingCarriers.js).
     unticketableCarriers: unticketableCarriers(env),
+    interline: interlinePolicy(env),
     // The office's market (country) code, required by Ticket_CancelDocument to
     // identify whose ticket stock is being voided. US because settlement is
     // through ARC; confirm against the production office at cutover, as with
@@ -222,6 +240,7 @@ export const describeWsConfig = (env = process.env) => ({
   seatCheckBeforePayment: isTrue(env.AMADEUS_WS_SEAT_CHECK_BEFORE_PAYMENT, true),
   priceCheckBeforePayment: isTrue(env.AMADEUS_WS_PRICE_CHECK_BEFORE_PAYMENT, true),
   unticketableCarriers: unticketableCarriers(env),
+  interline: interlinePolicy(env),
 });
 
 /**
