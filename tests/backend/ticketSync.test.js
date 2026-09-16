@@ -338,3 +338,110 @@ describe('naming a ticket from a real PNR', () => {
     expect(orphan).toEqual([{ number: '057-9', travelerId: '99' }]);
   });
 });
+
+/**
+ * Where the address actually lives.
+ *
+ * The first version of this job read `contactInfo.email`, `customerEmail` and
+ * `email`. Checked against live rows on 16 Sep, NOT ONE of those keys is ever
+ * written for a flight booking: checkout stores `booking_details.customer_email`
+ * and the lead traveller's own address sits on `passenger_details`. So the
+ * e-ticket email would have failed with "No email address" on every single
+ * booking - the promise it exists to keep could not have been kept once.
+ *
+ * The tests passed anyway, because they fed the shape the code expected. Which
+ * is the same way the invented `travelerName` got through, in this same file.
+ */
+describe('finding the customer to write to', () => {
+  const rowWith = (details, passengers) => ({
+    booking_reference: 'FLT-1', booking_details: details, passenger_details: passengers,
+  });
+
+  it('reads customer_email, which is what checkout writes', () => {
+    expect(job.addressFor(rowWith({ customer_email: 'flyer@example.com' }))).toBe('flyer@example.com');
+  });
+
+  it('falls back to the lead traveller on passenger_details', () => {
+    expect(job.addressFor(rowWith({}, [{ email: 'lead@example.com' }, { email: 'second@example.com' }])))
+      .toBe('lead@example.com');
+  });
+
+  it('finds nobody rather than inventing an address', () => {
+    expect(job.addressFor(rowWith({}, []))).toBeNull();
+    expect(job.addressFor(rowWith({ customer_email: '   ' }, []))).toBeNull();
+  });
+
+  it('names the traveller from the details that exist', () => {
+    expect(job.nameFor(rowWith({}, [{ firstName: 'Asha', lastName: 'Rao' }]))).toBe('Asha Rao');
+  });
+
+  /**
+   * The shape of a real row, copied from production on 16 Sep rather than
+   * imagined: customer_email set, passenger_details carrying the same person,
+   * and none of the three keys the first version looked for.
+   */
+  it('handles a booking row shaped the way production actually shapes one', () => {
+    const real = rowWith(
+      { pnr: 'BEEDS3', customer_email: 'flyer@example.com', gds: { ticketed: false } },
+      [{ firstName: 'Asha', lastName: 'Rao', email: 'flyer@example.com' }],
+    );
+
+    expect(job.addressFor(real)).toBe('flyer@example.com');
+    expect(job.nameFor(real)).toBe('Asha Rao');
+  });
+});
+
+/**
+ * The retry that could never run.
+ *
+ * `syncOne` writes the ticket numbers and then, on a refused send, set
+ * `ticket_issued_emailed: false` "so it can be sent again next tick". But
+ * `findUnticketed` drops any row that HAS tickets - so the moment the numbers
+ * were written the row was never selected again. There was no next tick, and a
+ * customer whose email bounced once was never told at all.
+ */
+describe('a ticket recorded but not yet announced', () => {
+  const recorded = () => ({
+    booking_reference: 'FLT-1',
+    status: 'confirmed',
+    payment_status: 'paid',
+    booking_details: {
+      pnr: 'BEEDS3', customer_email: 'flyer@example.com',
+      tickets: [ticket('220-1', '1')], ticket_synced_at: '2026-09-16T10:00:00Z',
+      gds: { ticketed: true },
+    },
+    passenger_details: [{ firstName: 'Asha', lastName: 'Rao' }],
+  });
+
+  it('is sent, and the send is claimed first', async () => {
+    stored = { ...recorded().booking_details };
+    const sendEmail = sentOk();
+
+    const result = await job.announceOne(recorded(), { sendEmail });
+
+    expect(result.outcome).toBe('announced');
+    expect(sendEmail).toHaveBeenCalledTimes(1);
+    expect(sendEmail.mock.calls[0][0].customerEmail).toBe('flyer@example.com');
+  });
+
+  it('is announced once, however many workers find it', async () => {
+    stored = { ...recorded().booking_details };
+    const sendEmail = sentOk();
+
+    await job.announceOne(recorded(), { sendEmail });
+    await job.announceOne(recorded(), { sendEmail });
+
+    expect(sendEmail).toHaveBeenCalledTimes(1);
+  });
+
+  it('releases the claim when the send is refused, so it runs again', async () => {
+    stored = { ...recorded().booking_details };
+
+    const result = await job.announceOne(recorded(), {
+      sendEmail: vi.fn(async () => ({ success: false, error: 'mailbox full' })),
+    });
+
+    expect(result.outcome).toBe('announce-failed');
+    expect(patched.at(-1).changes.ticket_issued_emailed).toBe(false);
+  });
+});
