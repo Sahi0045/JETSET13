@@ -14,7 +14,9 @@ import { attributeTickets } from './mappers/flightOrder.js';
 import { cancelBooking, confirmSeats, retrieveBooking, runBookingChain } from './bookingChain.js';
 import { unwrapEnvelope } from './parseXml.js';
 import { callStateless, withSession } from './session.js';
-import { cannotTicket, ticketingCarrierOf } from './ticketingCarriers.js';
+import {
+  cannotTicket, interlineNotAllowed, interlinePairsOf, ticketingCarrierOf,
+} from './ticketingCarriers.js';
 import { travellerGroupProblem } from '../../../shared/travellerGroup.js';
 
 const log = logger.child({ svc: 'amadeus-ws' });
@@ -138,12 +140,20 @@ const searchFlights = async (params) => {
   // A fare plated on a carrier this office cannot ticket is not offered: the
   // customer would pay, we would book, and issuance would refuse the ticket.
   // See ticketingCarriers.js.
-  const offers = mapped.filter((offer) => !cannotTicket(offer, config.unticketableCarriers));
+  const offers = mapped.filter((offer) => !cannotTicket(offer, config.unticketableCarriers)
+    && !interlineNotAllowed(offer, config.interline));
   if (offers.length < mapped.length) {
     const carriers = [...new Set(mapped
       .filter((offer) => cannotTicket(offer, config.unticketableCarriers))
       .map(ticketingCarrierOf))];
-    log.info({ hidden: mapped.length - offers.length, carriers }, 'search: left out fares on carriers the office cannot ticket');
+    // Named by pair, so one that turns out to be fine can be allowed by name
+    // through AMADEUS_WS_INTERLINE_PAIRS_ALLOWED.
+    const pairs = [...new Set(mapped
+      .filter((offer) => interlineNotAllowed(offer, config.interline))
+      .flatMap(interlinePairsOf))];
+    log.info({
+      hidden: mapped.length - offers.length, carriers, interlinePairs: pairs,
+    }, 'search: left out fares this office cannot be relied on to ticket');
   }
 
   return {
@@ -309,6 +319,18 @@ const priceFlightOffer = async (flightOffer) => {
       error: 'This airline cannot be booked with us online - please choose another flight',
       code: 409,
       technicalError: `validating carrier ${ticketingCarrierOf(offer)} is one this office cannot ticket (AMADEUS_WS_UNTICKETABLE_CARRIERS)`,
+      operation: 'Fare_InformativePricingWithoutPNR',
+    });
+  }
+
+  // One airline's stock carrying another's flight. Nothing before payment can
+  // tell whether this office holds the agreement - sell and price both succeed
+  // and only issuance refuses - so a replayed offer is stopped here too.
+  if (interlineNotAllowed(offer, config.interline)) {
+    throw new AmadeusSoapError({
+      error: 'This itinerary cannot be ticketed as one booking - please choose another flight',
+      code: 409,
+      technicalError: `interline ticketing not confirmed for ${interlinePairsOf(offer).join(', ')} (AMADEUS_WS_INTERLINE_PAIRS_ALLOWED)`,
       operation: 'Fare_InformativePricingWithoutPNR',
     });
   }
