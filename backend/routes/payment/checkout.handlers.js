@@ -867,11 +867,11 @@ export async function handleHostedCheckout(req, res) {
             // session; a genuine guest still books, with null.
             const ownerId = resolveBookingUserId(req);
 
-            const { error: saveError } = await supabase.from('bookings').upsert({
+            const bookingRow = (userId) => ({
                 booking_reference: orderId,
                 travel_type: bookingType || 'flight',
                 status: 'pending',
-                ...(ownerId ? { user_id: ownerId } : {}),
+                ...(userId ? { user_id: userId } : {}),
                 // What ARC was asked to charge: for a flight, the verified figure.
                 total_amount: parseFloat(chargeAmount) || 0,
                 payment_status: 'unpaid',
@@ -888,7 +888,45 @@ export async function handleHostedCheckout(req, res) {
                     checkout_created_at: new Date().toISOString()
                 },
                 passenger_details: Array.isArray(passengerDetails) ? passengerDetails : []
-            }, { onConflict: 'booking_reference' });
+            });
+
+            const write = (userId) => supabase.from('bookings')
+                .upsert(bookingRow(userId), { onConflict: 'booking_reference' });
+
+            let { error: saveError } = await write(ownerId);
+
+            /**
+             * An owner the bookings table cannot accept is not a reason to
+             * refuse the sale.
+             *
+             * `bookings.user_id` REFERENCES auth.users(id), and
+             * `resolveBookingUserId` can legitimately return an id that is not
+             * in that table: a travel agent's token carries a `travel_agents`
+             * id, a legacy login a `public.users` id, and
+             * `autoProvisionSupabaseUser` used to mint ids unrelated to
+             * auth.users (models/user.model.js documents this as the ORIGINAL
+             * cause of the paid-with-no-row bug). The order route has always
+             * recovered by saving without the owner
+             * (flight.routes.js, "Retrying booking save without user_id"), and
+             * checkout refusing instead would have stopped those customers
+             * buying at all.
+             *
+             * So: drop the owner and try once more. The booking is then
+             * unowned - it will not appear in My Trips until it is claimed -
+             * which is the same trade the order route already makes, and far
+             * better than no booking.
+             */
+            const ownerRejected = ownerId && (
+                saveError?.code === '23503' || saveError?.code === '42501'
+                || /violates foreign key|row-level security/i.test(saveError?.message || '')
+            );
+            if (ownerRejected) {
+                console.warn('🔄 Checkout: the booking owner was rejected, saving without one', {
+                    orderId, code: saveError.code,
+                });
+                ({ error: saveError } = await write(null));
+            }
+
             if (saveError) throw saveError;
             console.log('💾 Pending booking saved to DB:', orderId);
         } catch (dbError) {

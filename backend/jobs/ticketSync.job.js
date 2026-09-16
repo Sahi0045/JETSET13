@@ -105,6 +105,22 @@ export async function findUnticketed({ limit = MAX_PER_TICK } = {}) {
     .select(SELECT)
     .in('payment_status', PAID)
     .not('booking_details->>pnr', 'is', null)
+    // The narrowing has to be IN THE QUERY, not only in the filter below.
+    //
+    // Without it every ticketed booking matches, and the oldest-first window
+    // fills with rows that are already done: past about fifty paid bookings
+    // with a PNR, a newly ticketed one is never inside the window and its
+    // ticket is never recorded. No error, no log - the job reports `checked: 0`
+    // for ever. The paid-but-not-ticketed alarm gets this right
+    // (needsReviewAlert.job.js) and this was written from it; the clause was
+    // dropped on the way across.
+    //
+    // Null-safe, and that is not pedantry: of 21 live rows with a PNR, SIX
+    // carry no readable `ticketed` state - one has no `gds` object at all and
+    // five have `gds` without the key. `->>` yields NULL for those, and
+    // `eq 'false'` on NULL is NULL, so a plain `.eq` would silently skip
+    // exactly the rows this job exists to find.
+    .or('booking_details->gds->>ticketed.is.null,booking_details->gds->>ticketed.eq.false')
     .order('created_at', { ascending: true })
     .limit(limit * 5);
 
@@ -142,6 +158,10 @@ export async function findUnannounced({ limit = MAX_PER_TICK } = {}) {
     .select(SELECT)
     .in('payment_status', PAID)
     .not('booking_details->>ticket_synced_at', 'is', null)
+    // Same reason as findUnticketed, and null-safe for the same reason: a row
+    // that has never been announced has no `ticket_issued_emailed` key at all,
+    // and `neq` against NULL is NULL - it would exclude every row this is for.
+    .or('booking_details->>ticket_issued_emailed.is.null,booking_details->>ticket_issued_emailed.eq.false')
     .order('created_at', { ascending: true })
     .limit(limit * 5);
 

@@ -17,11 +17,22 @@ const rows = {};
 // write - it resolves with `{ data, error }` - which is exactly how a failed
 // write used to pass for a successful one here.
 let upsertError = null;
+// When true the FIRST upsert fails and the retry succeeds, which is what a
+// rejected owner looks like: the row saves once `user_id` is dropped.
+let upsertErrorOnce = false;
+let upsertAttempts = 0;
 const clientFor = () => ({
   from: vi.fn((table) => {
     const c = {};
     for (const m of ['select', 'eq', 'order', 'limit', 'insert', 'update']) c[m] = vi.fn(() => c);
-    c.upsert = vi.fn(() => ({ ...c, then: (resolve) => resolve({ data: null, error: upsertError }) }));
+    c.upsert = vi.fn(() => ({
+      ...c,
+      then: (resolve) => {
+        upsertAttempts += 1;
+        const fails = upsertErrorOnce ? upsertAttempts === 1 : Boolean(upsertError);
+        resolve({ data: null, error: fails ? upsertError : null });
+      },
+    }));
     c.single = vi.fn(async () => ({ data: rows[table] ?? null, error: null }));
     c.maybeSingle = c.single;
     return c;
@@ -51,6 +62,8 @@ const verify = async (opts) => {
 beforeEach(() => {
   vi.resetModules();
   upsertError = null;
+  upsertErrorOnce = false;
+  upsertAttempts = 0;
   for (const key of Object.keys(rows)) delete rows[key];
   rows.price_settings = { settings: { flight_taxes_fees: 1, flight_taxes_fees_percentage: 0 } };
 });
@@ -742,7 +755,7 @@ describe('hosted checkout for a flight', () => {
     });
 
     it('does not hand back a payment page', async () => {
-      upsertError = { message: 'insert or update on table "bookings" violates foreign key constraint', code: '23503' };
+      upsertError = { message: 'null value in column "total_amount" violates not-null constraint', code: '23502' };
 
       const { res } = await run(verified);
 
@@ -754,12 +767,54 @@ describe('hosted checkout for a flight', () => {
     });
 
     it('tells the customer nothing was charged, and how else to book', async () => {
-      upsertError = { message: 'row-level security', code: '42501' };
+      upsertError = { message: 'permission denied', code: '42P01' };
 
       const { res } = await run(verified);
 
       expect(res.body.error).toMatch(/nothing has been charged/i);
       expect(res.body.error).toMatch(/877\) 538-7380/);
+    });
+
+    /**
+     * An owner the bookings table cannot accept is NOT a reason to refuse the
+     * sale, and the first version of this refused exactly those two codes.
+     *
+     * `bookings.user_id` REFERENCES auth.users(id), and `resolveBookingUserId`
+     * can legitimately return an id that is not in it - a travel agent's token
+     * carries a `travel_agents` id, a legacy login a `public.users` id. The
+     * order route has always recovered by saving without the owner
+     * (flight.routes.js, "Retrying booking save without user_id"); refusing
+     * here would have stopped those customers buying at all.
+     */
+    it('saves without the owner when the owner is rejected, and still opens the payment page', async () => {
+      upsertError = { message: 'insert or update on table "bookings" violates foreign key constraint', code: '23503' };
+      // The retry succeeds - that is what `upsertAttempts` models.
+      upsertErrorOnce = true;
+
+      const { res } = await run(verified);
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.paymentPageUrl).toMatch(/arcpay\.travel\/checkout\/pay\/S1/);
+    });
+
+    it('does the same for a row-level security refusal', async () => {
+      upsertError = { message: 'new row violates row-level security policy', code: '42501' };
+      upsertErrorOnce = true;
+
+      const { res } = await run(verified);
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.paymentPageUrl).toBeDefined();
+    });
+
+    it('still refuses when even the unowned save fails', async () => {
+      upsertError = { message: 'violates foreign key constraint', code: '23503' };
+      upsertErrorOnce = false;
+
+      const { res } = await run(verified);
+
+      expect(res.statusCode).toBe(503);
+      expect(res.body.code).toBe('CHECKOUT_NOT_RECORDED');
     });
 
     it('still opens the payment page when the row is written', async () => {

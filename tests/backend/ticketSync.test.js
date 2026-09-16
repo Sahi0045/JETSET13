@@ -229,6 +229,9 @@ describe('which bookings are asked about', () => {
       select: () => chain,
       in: () => chain,
       not: () => chain,
+      or: () => chain,
+      eq: () => chain,
+      neq: () => chain,
       order: () => chain,
       limit: async () => ({ data: list, error: null }),
       then: (resolve) => resolve({ data: list, error: null }),
@@ -443,5 +446,75 @@ describe('a ticket recorded but not yet announced', () => {
 
     expect(result.outcome).toBe('announce-failed');
     expect(patched.at(-1).changes.ticket_issued_emailed).toBe(false);
+  });
+});
+
+/**
+ * The window has to be able to reach a new booking.
+ *
+ * `findUnticketed` narrowed only in JavaScript: the query asked for every paid
+ * booking with a PNR, oldest first, capped - so once about fifty already-done
+ * rows existed, the window was permanently full of them, the JS filter emptied
+ * it, and a newly ticketed booking was never seen. No error, no log, `checked:
+ * 0` for ever. The paid-but-not-ticketed alarm gets this right and this job was
+ * written from it; the clause was dropped on the way across.
+ */
+describe('the query window', () => {
+  const asked = [];
+  const chainFor = (rows) => {
+    const c = {
+      select: () => c,
+      in: (...a) => { asked.push(['in', ...a]); return c; },
+      not: (...a) => { asked.push(['not', ...a]); return c; },
+      or: (...a) => { asked.push(['or', ...a]); return c; },
+      eq: (...a) => { asked.push(['eq', ...a]); return c; },
+      neq: (...a) => { asked.push(['neq', ...a]); return c; },
+      order: () => c,
+      limit: async () => ({ data: rows, error: null }),
+      then: (resolve) => resolve({ data: rows, error: null }),
+    };
+    return c;
+  };
+  const ask = async (fn, rows = []) => {
+    asked.length = 0;
+    const supabase = (await import('../../backend/config/supabase.js')).default;
+    supabase.from.mockImplementation(() => chainFor(rows));
+    await fn({ limit: 10 });
+    return asked;
+  };
+
+  it('asks the database for unticketed rows, not for all of them', async () => {
+    const filters = await ask(job.findUnticketed);
+    const clause = filters.find(([op]) => op === 'or')?.[1] || '';
+
+    expect(clause).toMatch(/gds->>ticketed/);
+  });
+
+  /**
+   * Of 21 live rows with a PNR, SIX carry no readable `ticketed` state - one
+   * with no `gds` object, five with `gds` and no key. `->>` yields NULL there,
+   * and `eq 'false'` on NULL is NULL, so a plain equality would skip exactly
+   * the rows this job is for.
+   */
+  it('counts a missing ticketed flag as unticketed', async () => {
+    const filters = await ask(job.findUnticketed);
+    const clause = filters.find(([op]) => op === 'or')?.[1] || '';
+
+    expect(clause).toMatch(/gds->>ticketed\.is\.null/);
+    expect(clause).toMatch(/gds->>ticketed\.eq\.false/);
+  });
+
+  it('asks only for tickets nobody has been told about', async () => {
+    const filters = await ask(job.findUnannounced);
+    const clause = filters.find(([op]) => op === 'or')?.[1] || '';
+
+    expect(clause).toMatch(/ticket_issued_emailed\.is\.null/);
+    expect(clause).toMatch(/ticket_issued_emailed\.eq\.false/);
+  });
+
+  it('still asks only about its own stamped rows', async () => {
+    const filters = await ask(job.findUnannounced);
+
+    expect(filters).toContainEqual(['not', 'booking_details->>ticket_synced_at', 'is', null]);
   });
 });
