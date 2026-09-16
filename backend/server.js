@@ -28,6 +28,7 @@ import { startWorkflowEngine } from './jobs/workflowEngine.js';
 import { startDataRetentionJob } from './jobs/dataRetention.job.js';
 import { startBookingQueueWorker } from './jobs/bookingQueue.job.js';
 import { logCutoverRisks } from './services/amadeusSoap/config.js';
+import { startTicketSyncJob } from './jobs/ticketSync.job.js';
 import { startNeedsReviewAlertJob } from './jobs/needsReviewAlert.job.js';
 import { startPaymentFailureAlertJob } from './jobs/paymentFailureAlert.job.js';
 import { startAbandonedCheckoutJob } from './jobs/abandonedCheckout.job.js';
@@ -290,6 +291,9 @@ const server = app.listen(PORT, () => {
     startPaymentFailureAlertJob();
     // Asleep outside production unless ABANDONED_CHECKOUT_JOB=true.
     startAbandonedCheckoutJob({ port: PORT });
+    // Notices a ticket issued by hand, records it, sends the e-ticket.
+    // Asleep outside production unless TICKET_SYNC_JOB=true.
+    startTicketSyncJob();
 
     // Initialize default email templates
     initializeDefaultTemplates().catch(e => console.error('[Templates] Init failed:', e.message));
