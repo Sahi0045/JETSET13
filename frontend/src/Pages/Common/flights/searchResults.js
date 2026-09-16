@@ -15,6 +15,31 @@ const addDays = (isoDate, days) => {
   return formatDateToISO(date);
 };
 
+/**
+ * "Sun, Nov 15" for a YYYY-MM-DD date. Read in UTC because the date is the
+ * airport's own calendar day: parsed as local midnight it is the day before
+ * anywhere west of Greenwich.
+ */
+export const legDateLabel = (isoDate) => {
+  const day = String(isoDate || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return '';
+  return new Date(`${day}T00:00:00Z`)
+    .toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
+};
+
+/**
+ * "+1" when a leg lands on a later calendar day than it left, "-1" when it lands
+ * the day before (westward over the date line), "" on the same day. Both dates
+ * are local to their airports, which is what a boarding pass shows.
+ */
+export const arrivalDayOffset = (departureDate, arrivalDate) => {
+  const from = Date.parse(`${String(departureDate || '').slice(0, 10)}T00:00:00Z`);
+  const to = Date.parse(`${String(arrivalDate || '').slice(0, 10)}T00:00:00Z`);
+  if (!Number.isFinite(from) || !Number.isFinite(to)) return '';
+  const days = Math.round((to - from) / 86400000);
+  return days === 0 ? '' : `${days > 0 ? '+' : ''}${days}`;
+};
+
 /** The seven dates the strip shows: three either side of `centerIso`. */
 export const stripDates = (centerIso) => [-3, -2, -1, 0, 1, 2, 3]
   .map((offset) => addDays(centerIso || getTodayDate(), offset));

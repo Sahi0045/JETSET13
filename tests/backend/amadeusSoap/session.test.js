@@ -152,6 +152,57 @@ describe('stateful sequences', () => {
     expect(axios.post.mock.calls.some(([, b]) => b.includes('Security_SignOut'))).toBe(false);
   });
 
+  // Captured on PDT: a Start call answered with a SOAP fault (1931 NO MATCH FOR
+  // RECORD LOCATOR) still comes back InSeries with a SessionId. The fault threw
+  // before the header was read, so that session was never signed out.
+  describe('a call answered with a fault', () => {
+    const fault = (sessionXml) => ({
+      status: 500,
+      data: envelope(sessionXml, '<soap:Fault><faultcode>soap:Server</faultcode><faultstring>1931|Application|NO MATCH FOR RECORD LOCATOR</faultstring></soap:Fault>'),
+      headers: {},
+    });
+    const signOut = () => axios.post.mock.calls.find(([, body]) => body.includes('Security_SignOut'))?.[1];
+
+    it('signs out the session a faulted first call opened', async () => {
+      axios.post.mockResolvedValueOnce(fault(withSessionXml('SESS7', '1'))).mockResolvedValue(ok(envelope()));
+
+      await expect(withSession((ctx) => ctx.call('PNR_Retrieve', '<a/>'))).rejects.toMatchObject({ technicalError: expect.stringContaining('1931') });
+
+      expect(signOut()).toContain('<awsse:SessionId>SESS7</awsse:SessionId>');
+    });
+
+    it('signs out after a later fault with the number that fault used', async () => {
+      axios.post
+        .mockResolvedValueOnce(ok(envelope(withSessionXml('SESS7', '1'))))
+        .mockResolvedValueOnce(fault(withSessionXml('SESS7', '2')))
+        .mockResolvedValue(ok(envelope()));
+
+      await expect(withSession(async (ctx) => {
+        await ctx.call('Air_SellFromRecommendation', '<a/>');
+        await ctx.call('PNR_Retrieve', '<a/>');
+      })).rejects.toBeTruthy();
+
+      expect(signOut()).toContain('<awsse:SequenceNumber>3</awsse:SequenceNumber>');
+    });
+
+    it('does not sign out a session the fault already ended', async () => {
+      axios.post.mockResolvedValueOnce(fault(withSessionXml('SESS7', '1').replace('InSeries', 'End'))).mockResolvedValue(ok(envelope()));
+
+      await expect(withSession((ctx) => ctx.call('PNR_Retrieve', '<a/>'))).rejects.toBeTruthy();
+
+      expect(signOut()).toBeUndefined();
+    });
+
+    it('keeps the security token out of anything that serialises the error', async () => {
+      axios.post.mockResolvedValueOnce(fault(withSessionXml('SESS7', '1'))).mockResolvedValue(ok(envelope()));
+
+      const error = await withSession((ctx) => ctx.call('PNR_Retrieve', '<a/>')).catch((e) => e);
+
+      expect(JSON.stringify(error)).not.toContain('TOK-1');
+      expect(JSON.stringify({ ...error })).not.toContain('TOK-1');
+    });
+  });
+
   it('rejects a nested session rather than corrupting the sequence', async () => {
     axios.post.mockResolvedValue(ok(envelope(withSessionXml('SESS9', '1'))));
 

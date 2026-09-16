@@ -2,13 +2,19 @@ import React, { useState, useEffect } from 'react';
 import { Plane, ChevronDown, Loader2 } from 'lucide-react';
 import apiConfig from '@/config/api';
 
+// Segment times are the departure airport's wall clock with no offset
+// ("2026-11-15T10:30:00"). They are held in UTC and formatted in UTC so they
+// print exactly as the airport's clock reads, in every viewer's time zone.
+const airportClock = (at) => (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(String(at || ''))
+  ? new Date(`${at}Z`)
+  : null);
 const fmtTime = (d) => {
   if (!d || isNaN(d.getTime())) return '';
-  return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' });
 };
 const fmtDay = (d) => {
   if (!d || isNaN(d.getTime())) return '';
-  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', timeZone: 'UTC' });
 };
 /**
  * The currency an amount is in, or null when the fare rules did not say.
@@ -72,7 +78,7 @@ function FlightCancellationPolicy({ flightOffer, fromCode, toCode, departureAt }
   // first, a 4-hour cutoff when the rules gave none, rupees when no currency
   // was given, and used the change fee as the cancellation fee - all rendered
   // as precise amounts and times on the page where the customer decides.
-  const dep = departureAt ? new Date(departureAt) : null;
+  const dep = airportClock(departureAt);
   const cutoffHours = Number.isFinite(c?.cutoffHours) ? c.cutoffHours : null;
   const cutoff = dep && cutoffHours != null ? new Date(dep.getTime() - cutoffHours * 3600000) : null;
   const sym = cur(c?.currency || c?.fareCurrency || '');
@@ -140,10 +146,10 @@ function FlightCancellationPolicy({ flightOffer, fromCode, toCode, departureAt }
                 </div>
               </div>
 
-              {/* Time tiers - in the viewer's own time zone, which is how these
-                  are formatted. The label said IST regardless. */}
+              {/* Time tiers - on the departure airport's clock. The label said
+                  IST, then "your time"; neither was what these times are. */}
               <div className="flex items-start mt-1.5">
-                <span className="text-[11px] sm:text-xs text-gray-500 w-[92px] sm:w-[150px] flex-shrink-0">Cancel between (your time) :</span>
+                <span className="text-[11px] sm:text-xs text-gray-500 w-[92px] sm:w-[150px] flex-shrink-0">Cancel between ({fromCode ? `${fromCode} local time` : 'airport local time'}) :</span>
                 <div className="relative flex-1 h-9 text-[11px] sm:text-xs">
                   <span className="absolute left-0 font-semibold text-gray-700">Now</span>
                   {cutoff && (

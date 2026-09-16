@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import Price from '../../../Components/Price';
 import { formatCheckedBag } from '../../../utils/baggage';
-import { seatsLeftLabel } from './searchResults';
+import { arrivalDayOffset, legDateLabel, seatsLeftLabel } from './searchResults';
 
 const AIRLINE_LOGO_FALLBACK = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiByeD0iOCIgZmlsbD0iIzM3NzNmNCIvPgo8dGV4dCB4PSIyMCIgeT0iMjgiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxOCIgZmlsbD0id2hpdGUiIHRleHQtYW5jaG9yPSJtaWRkbGUiPuKciO+4jzwvdGV4dD4KPHN2Zz4K';
 
@@ -74,6 +74,7 @@ function StopsLabel({ leg }) {
 
 // One leg's timeline: departure — duration/stops — arrival
 function Leg({ leg, label }) {
+  const dayOffset = arrivalDayOffset(leg.departure?.rawDate, leg.arrival?.rawDate);
   return (
     <div>
       {label && <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1">{label}</div>}
@@ -81,7 +82,8 @@ function Leg({ leg, label }) {
         {/* Departure */}
         <div className="text-left">
           <div className="text-lg sm:text-xl font-bold text-gray-900 leading-none">{leg.departure?.time || 'N/A'}</div>
-          <div className="text-xs text-gray-500 mt-1">
+          <div className="text-[11px] text-gray-500 mt-1">{legDateLabel(leg.departure?.rawDate)}</div>
+          <div className="text-xs text-gray-500 mt-0.5">
             <span className="font-semibold text-gray-700">{leg.departure?.airport}</span>
             {leg.departure?.terminal && <span className="ml-1 text-[10px]">T{leg.departure.terminal}</span>}
           </div>
@@ -108,8 +110,14 @@ function Leg({ leg, label }) {
 
         {/* Arrival */}
         <div className="text-right">
-          <div className="text-lg sm:text-xl font-bold text-gray-900 leading-none">{leg.arrival?.time || 'N/A'}</div>
-          <div className="text-xs text-gray-500 mt-1">
+          <div className="text-lg sm:text-xl font-bold text-gray-900 leading-none">
+            {leg.arrival?.time || 'N/A'}
+            {dayOffset && (
+              <sup className="ml-0.5 text-[10px] font-semibold text-amber-600" title="Arrives on a different day">{dayOffset}</sup>
+            )}
+          </div>
+          <div className="text-[11px] text-gray-500 mt-1">{legDateLabel(leg.arrival?.rawDate)}</div>
+          <div className="text-xs text-gray-500 mt-0.5">
             <span className="font-semibold text-gray-700">{leg.arrival?.airport}</span>
             {leg.arrival?.terminal && <span className="ml-1 text-[10px]">T{leg.arrival.terminal}</span>}
           </div>

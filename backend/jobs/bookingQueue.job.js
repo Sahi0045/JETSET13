@@ -15,7 +15,6 @@
  * customer's own retry) running one booking twice.
  */
 import supabase from '../config/supabase.js';
-import { providerStatus } from '../services/flightProvider.js';
 import { getWsConfig } from '../services/amadeusSoap/config.js';
 import { getSemaphore } from '../services/amadeusSoap/semaphore.js';
 import { sendEmail } from '../services/emailService.js';
@@ -408,7 +407,11 @@ export function startBookingQueueWorker({ port, intervalMs = 5000 } = {}) {
   let running = false;
 
   const tick = async () => {
-    if (running || !providerStatus().bookingEnabled) return;
+    // Not paused while booking is switched off. Every queued row is a customer
+    // who has paid, and waiting for booking to come back held their money with
+    // no email; the route answers a replay then as it answers a live request,
+    // with a refund and a phone number (BOOKING_DISABLED).
+    if (running) return;
     running = true;
     try {
       const free = Math.min(freeSlots(), MAX_PER_TICK);

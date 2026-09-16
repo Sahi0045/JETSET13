@@ -527,12 +527,14 @@ function FlightSearchPage() {
             return {
               departure: {
                 time: new Date(first.departure.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+                rawDate: first.departure.at?.split('T')[0],
                 airport: first.departure.iataCode,
                 terminal: first.departure.terminal || '',
                 cityName: cityMap[first.departure.iataCode] || first.departure.iataCode,
               },
               arrival: {
                 time: new Date(last.arrival.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+                rawDate: last.arrival.at?.split('T')[0],
                 airport: last.arrival.iataCode,
                 terminal: last.arrival.terminal || '',
                 cityName: cityMap[last.arrival.iataCode] || last.arrival.iataCode,

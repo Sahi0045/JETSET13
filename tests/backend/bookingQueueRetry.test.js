@@ -223,3 +223,29 @@ describe("which environment's queue a process runs", () => {
     expect((await findRunnable({ now: Date.now() })).map((row) => row.booking_reference)).toEqual([REF]);
   });
 });
+
+describe('while booking is switched off', () => {
+  // Every tick returned early, so a customer who had paid and been queued
+  // waited with no email and no refund until booking was switched back on.
+  it('still replays a queued booking, which the route refunds', async () => {
+    vi.stubEnv('AMADEUS_WS_ENDPOINT', 'https://node.test.invalid/1ASIWJETJEC');
+    vi.stubEnv('AMADEUS_WS_USERNAME', 'WSTEST');
+    vi.stubEnv('AMADEUS_WS_PASSWORD', 'pw');
+    vi.stubEnv('AMADEUS_WS_OFFICE_ID', 'SCK1S2400');
+    vi.stubEnv('AMADEUS_WS_BOOKING_ENABLED', 'false');
+    const { startBookingQueueWorker, sendEmail } = await load([queuedRow({}, { queued_env: queueEnvironment() })]);
+    const route = answer(503, { success: false, code: 'BOOKING_DISABLED', bookingFailed: true, refunded: true });
+    vi.stubGlobal('fetch', route);
+
+    const worker = startBookingQueueWorker({ port: 5004, intervalMs: 3_600_000 });
+    try {
+      await worker.tick();
+    } finally {
+      worker.stop();
+      vi.unstubAllGlobals();
+    }
+
+    expect(route).toHaveBeenCalledTimes(1);
+    expect(emailed(sendEmail)).toContain('your payment has been reversed');
+  });
+});

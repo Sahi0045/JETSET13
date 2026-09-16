@@ -87,7 +87,15 @@ export const postEnvelope = async ({ operation, bodyXml, session = null, config 
     log.debug({ op: operation.name, reply: redactEnvelope(xml) }, 'amadeus reply');
   }
 
-  if (faultstring) throw faultToError(faultstring, operation.name, response.status);
+  if (faultstring) {
+    // A fault can still open a session: on PDT a Start call answered 1931 NO
+    // MATCH FOR RECORD LOCATOR comes back InSeries, with a SessionId. withSession
+    // needs that header to sign out. Not enumerable, so the security token never
+    // reaches a log line that serialises the error.
+    const error = faultToError(faultstring, operation.name, response.status);
+    Object.defineProperty(error, 'session', { value: readSession(header), enumerable: false });
+    throw error;
+  }
 
   return { status: response.status, xml, body, session: readSession(header), durationMs };
 };
