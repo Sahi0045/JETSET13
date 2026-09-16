@@ -2845,6 +2845,16 @@ router.post('/order', optionalProtect, async (req, res) => {
           });
         }
       }));
+      // The moment the chain reports a ticket, in memory, for the same reason
+      // `committedPnr` is set the moment a PNR exists: if anything after this
+      // throws, the outer catch is the only thing that knows.
+      //
+      // `ticketed` only - NOT `tickets.length`. Reading `tickets` here moves
+      // where a failure to read it lands: heldForReviewEmail's test makes it a
+      // throwing getter precisely to simulate "the chain answered, then reading
+      // its answer failed", and touching it turned that 202-held into a 502.
+      if (orderResponse?.ticketed === true) committedTicketed = true;
+
       console.log('✅ Amadeus service call completed:', {
         success: orderResponse?.success,
         mode: orderResponse?.mode,
@@ -3250,7 +3260,14 @@ router.post('/order', optionalProtect, async (req, res) => {
           bookingReference: ref,
           pnr,
           reason: `order route failed after commit: ${String(error.message || error).slice(0, 200)}`,
-          ticketed: committedTicketed || row?.booking_details?.gds?.ticketed === true
+          // `committedTicketed` was declared and never assigned, so this read
+          // was permanently false: a booking whose ticket HAD been issued was
+          // flagged `ticketed: false`, every surface told the customer they had
+          // no ticket, and a later cancel could refund in full against a live
+          // one. Now set when the chain reports a ticket, and `error.ticketed`
+          // covers a failure inside a post-issuance step.
+          ticketed: committedTicketed || error?.ticketed === true
+            || row?.booking_details?.gds?.ticketed === true
         });
         // This answer promises an email; it used to send none.
         await sendHeldForReviewEmail(ref, req.body);
