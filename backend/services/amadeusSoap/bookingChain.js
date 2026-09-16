@@ -657,16 +657,38 @@ export const runBookingChain = async (p) => {
     }
 
     // ---- 6. Commit. Everything changes here. -------------------------------
+    //
+    // `committed: 'unknown'` - a third state, and the only honest one for a
+    // request whose ANSWER we never saw.
+    //
+    // This step was marked `committed: false`, the default. A 25s timeout
+    // (AMADEUS_WS_TIMEOUT_MS) on the end transact does not mean Amadeus did not
+    // process it: this file's own notes record airlines taking 45 to 117
+    // seconds around commit. The route reads `providerError.committed` to
+    // choose between "flag for review" and "reverse the payment", so a commit
+    // that timed out was refunded while the airline held the reservation - and
+    // with no PNR list operation in this layer, the RM remark filed at commit
+    // cannot be used to find the orphan afterwards.
+    //
+    // Checked before choosing a truthy value: nothing compares `committed`
+    // strictly, nothing persists it, and `if (providerError?.committed)`
+    // (flight.routes.js) returns 202 before the `slotTimeout && !committed`
+    // queue branch is reached. So 'unknown' routes to a human, which is what
+    // not knowing deserves.
     const commitReply = await callStep(ctx, {
       step: 'commit',
       operation: 'PNR_AddMultiElements',
       bodyXml: buildCommitBody(),
+      committed: 'unknown',
     });
 
     pnr = readRecordLocator(commitReply);
     if (!pnr) {
       throw new BookingChainError({
         step: 'commit',
+        // Same reasoning: the end transact was accepted and we cannot read a
+        // locator out of the answer. The record may well exist.
+        committed: 'unknown',
         error: 'We could not confirm your booking',
         code: 502,
         technicalError: 'PNR_AddMultiElements committed without returning a record locator',

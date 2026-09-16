@@ -233,3 +233,63 @@ describe('the held email', () => {
     expect(html).not.toMatch(/Booking Confirmed|is confirmed/);
   });
 });
+
+/**
+ * A commit whose answer never arrived.
+ *
+ * The commit step was marked `committed: false` — the default — so a 25s
+ * timeout on the end transact told the route "nothing was sold" and it reversed
+ * the payment. Amadeus may well have processed it and be holding the
+ * reservation, and this layer has no PNR search to find the orphan afterwards.
+ *
+ * `committed: 'unknown'` is truthy, so the route's "a committed PNR needs a
+ * human, not an automatic reversal" branch takes it.
+ */
+describe('a commit we never got an answer to', () => {
+  it('is held for a human rather than refunded', async () => {
+    bookThen(() => {
+      throw Object.assign(new Error('We could not confirm your booking'), {
+        committed: 'unknown', step: 'commit', technicalError: 'timeout of 25000ms exceeded',
+      });
+    });
+    const { app } = await appWith([checkoutRow()]);
+
+    const res = await request(app).post('/api/flights/order').send(order);
+
+    expect(res.status).toBe(202);
+    expect(res.body.needsReview).toBe(true);
+  });
+
+  /**
+   * And it must not claim seats it cannot see. With no record locator we do not
+   * know whether the airline holds anything.
+   */
+  it('does not tell the customer their seats are reserved', async () => {
+    bookThen(() => {
+      throw Object.assign(new Error('We could not confirm your booking'), {
+        committed: 'unknown', step: 'commit',
+      });
+    });
+    const { app } = await appWith([checkoutRow()]);
+
+    const res = await request(app).post('/api/flights/order').send(order);
+
+    expect(res.body.message).not.toMatch(/seats are reserved/i);
+    expect(res.body.message).toMatch(/checking with the airline/i);
+    expect(res.body.message).toMatch(/do not book again/i);
+  });
+
+  // The ordinary held case, which DOES have a locator, still says so.
+  it('still says the seats are reserved when a locator came back', async () => {
+    bookThen(() => {
+      throw Object.assign(new Error('ticketing refused'), {
+        committed: true, pnr: 'HELD42', step: 'issueTicket', ticketed: false,
+      });
+    });
+    const { app } = await appWith([checkoutRow()]);
+
+    const res = await request(app).post('/api/flights/order').send(order);
+
+    expect(res.body.message).toMatch(/seats are reserved/i);
+  });
+});

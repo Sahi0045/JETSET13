@@ -485,12 +485,37 @@ describe('committing', () => {
     expect(result.pnr).toBe('ABC123');
   });
 
-  it('treats a commit that returns no locator as a failure', async () => {
+  /**
+   * The end transact was accepted and no locator could be read out of the
+   * answer. `committed: false` told the route "nothing was sold", and it
+   * reversed the payment - while the airline may well hold the record.
+   *
+   * 'unknown' is the honest third state, and it is truthy, so the route's
+   * `if (providerError?.committed)` sends it to a human instead.
+   */
+  it('treats a commit with no readable locator as UNKNOWN, not as nothing sold', async () => {
     const { runBookingChain } = await loadChain();
     queueReplies(sellOk, addOk, fopOk, priceOk, tstOk,envelope('PNR_Reply', '<dummy/>', SESSION));
 
     await expect(runBookingChain({ offer: offer(), travelers }))
-      .rejects.toMatchObject({ step: 'commit', committed: false });
+      .rejects.toMatchObject({ step: 'commit', committed: 'unknown' });
+  });
+
+  // A timeout on the end transact is the same question: we never saw the answer.
+  it('treats a commit that never answered as UNKNOWN too', async () => {
+    const { runBookingChain } = await loadChain();
+    // Five good replies, then the end transact times out with no answer at all.
+    axios.post.mockReset();
+    for (const xml of [sellOk, addOk, fopOk, priceOk, tstOk]) axios.post.mockResolvedValueOnce(reply(xml));
+    axios.post.mockRejectedValueOnce(Object.assign(new Error('timeout of 25000ms exceeded'), { code: 'ECONNABORTED' }));
+    axios.post.mockResolvedValue(reply(signOutOk));
+
+    const failure = await runBookingChain({ offer: offer(), travelers }).catch((e) => e);
+
+    expect(failure.step).toBe('commit');
+    expect(failure.committed).toBe('unknown');
+    // Truthy is the property the route depends on.
+    expect(Boolean(failure.committed)).toBe(true);
   });
 });
 
