@@ -86,7 +86,8 @@ const supabaseFor = (row, { claimError = null } = {}) => {
     };
     return c;
   });
-  return { client: { from }, updates, filters };
+  // Lets a test move the stamp mid-cancel: another request taking the booking.
+  return { client: { from }, updates, filters, takeOver: (who = 'someone-else') => { stamp = who; } };
 };
 
 const cancelFlightOrder = vi.fn();
@@ -353,5 +354,44 @@ describe('the booking queue', () => {
 
     expect(outcome).toBe('already-finished');
     expect(sendEmail).not.toHaveBeenCalled();
+  });
+});
+
+
+/**
+ * The write that records a cancellation is pinned to the claim that authorised
+ * it.
+ *
+ * `claimCancellation` stamps once and there is no heartbeat, so `liveChainState`
+ * releases a 'cancelling' claim after CHAIN_CLAIM_TTL_MS. A cancel that runs
+ * long — a fresh ARC reconcile, a WSAP session of several calls, then the refund
+ * — loses its claim while still working. Unpinned, its final write landed
+ * `cancelled` / `refunded` over whatever the new holder had written, including a
+ * PNR just committed. With no `.select('id')` the loss was undetectable and the
+ * handler answered 200.
+ */
+describe('a cancel that outlives its claim', () => {
+  it('does not report success when another request took the booking mid-cancel', async () => {
+    supabaseDouble = supabaseFor(booking());
+    // While we are at the GDS, someone else claims the booking.
+    cancelFlightOrder.mockImplementationOnce(async () => {
+      supabaseDouble.takeOver();
+      return { success: true, hadTickets: false, voided: false, requiresAirlineRefund: [] };
+    });
+
+    const res = await cancelWith();
+
+    expect(res.statusCode).toBe(500);
+    expect(res.body.error).toMatch(/could not save it/i);
+    expect(res.body.error).toMatch(/do not try again/i);
+  });
+
+  it('still answers 200 when the claim is still ours', async () => {
+    supabaseDouble = supabaseFor(booking());
+
+    const res = await cancelWith();
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.success).toBe(true);
   });
 });

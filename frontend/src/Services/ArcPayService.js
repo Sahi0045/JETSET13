@@ -104,7 +104,15 @@ class ArcPayService {
     // Create Hosted Checkout Session (redirects to ARC Pay payment page)
     async createHostedCheckout(checkoutData) {
         try {
-            console.log('🚀 Creating hosted checkout session...', checkoutData);
+            // Not `checkoutData`: its `bookingData` carries every traveller's
+            // passport number, expiry and date of birth, for all four product
+            // lines, and the production build strips no console calls.
+            console.log('🚀 Creating hosted checkout session...', {
+                amount: checkoutData.amount,
+                currency: checkoutData.currency || 'USD',
+                orderId: checkoutData.orderId,
+                bookingType: checkoutData.bookingType,
+            });
             const response = await this.api.post('?action=hosted-checkout', {
                 amount: checkoutData.amount,
                 currency: checkoutData.currency || 'USD',

@@ -6,6 +6,7 @@ import { isGuestFlightBookingEnabled, isUsableEmail } from '../../services/guest
 import { getCaller } from './agents.handlers.js';
 import { safeReturnUrl } from '../../utils/returnUrl.js';
 import { checkoutKey } from '../../utils/tripMatch.js';
+import { unchangedSince } from '../../utils/bookingDetailsGuard.js';
 import { toPnrName } from '../../../shared/passengerName.js';
 
 const sanitizeRef = (v) => String(v ?? '').replace(/[^A-Za-z0-9_-]/g, '') || '__none__';
@@ -1572,24 +1573,65 @@ export async function reconcileBookingPayment(booking, { fresh = false } = {}) {
     const capturedAmount = netCaptured;
     const capturedCurrency = captured?.transaction?.currency || orderData.currency || null;
 
-    const { error: updateErr } = await supabase
-        .from('bookings')
-        .update({
-            payment_status: 'paid',
-            // No `status` write. This used to move a pending row to 'paid', a
-            // value outside the booking vocabulary that My Trips and Manage
-            // Booking render as a raw string. Payment is `payment_status`'s job;
-            // the booking's own status is set by whatever books it.
-            booking_details: {
-                ...details,
-                arc_transaction_id: arcTransactionId,
-                arc_order_status: orderData.status || 'CAPTURED',
-                arc_captured_amount: capturedAmount,
-                arc_captured_currency: capturedCurrency,
-                payment_reconciled_at: new Date().toISOString()
-            }
-        })
-        .eq('id', booking.id);
+    /**
+     * Read again, merge into THAT, and pin the write.
+     *
+     * This spread `details` - the caller's snapshot, taken before the ARC
+     * RETRIEVE_ORDER above - and wrote it back with only `.eq('id')`. Every
+     * other writer of this column pins with `unchangedSince`, and
+     * `arc_captured_amount` is on that pinned list BECAUSE of this function;
+     * its own write was the one that never used it.
+     *
+     * Two concurrent order requests - a double-click, a second tab, the queue
+     * worker beside the customer's browser, all of which the order route's own
+     * comments name - and the slower reconcile lands its stale snapshot on top
+     * of a PNR the faster one just committed. The row then has no `pnr`, no
+     * `gds`, no `gds_chain`: invisible to ticket sync, to both alarms, and to
+     * the abandoned-checkout job, while the airline holds a reservation.
+     *
+     * Losing the race is not an error - it means someone wrote first. Read
+     * again and merge onto what they wrote.
+     */
+    let updateErr = null;
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+        const { data: fresh, error: readErr } = await supabase
+            .from('bookings')
+            .select('status, payment_status, booking_details')
+            .eq('id', booking.id)
+            .single();
+
+        if (readErr || !fresh) {
+            updateErr = readErr || new Error('the booking could not be read back');
+            break;
+        }
+
+        const { data: wrote, error: writeErr } = await unchangedSince(
+            supabase
+                .from('bookings')
+                .update({
+                    payment_status: 'paid',
+                    // No `status` write. This used to move a pending row to 'paid', a
+                    // value outside the booking vocabulary that My Trips and Manage
+                    // Booking render as a raw string. Payment is `payment_status`'s job;
+                    // the booking's own status is set by whatever books it.
+                    booking_details: {
+                        ...(fresh.booking_details || {}),
+                        arc_transaction_id: arcTransactionId,
+                        arc_order_status: orderData.status || 'CAPTURED',
+                        arc_captured_amount: capturedAmount,
+                        arc_captured_currency: capturedCurrency,
+                        payment_reconciled_at: new Date().toISOString()
+                    }
+                })
+                .eq('id', booking.id),
+            fresh,
+        ).select('id');
+
+        if (writeErr) { updateErr = writeErr; break; }
+        if (wrote?.length) { updateErr = null; break; }
+        // Nothing matched: the row moved under us. Try again on what is there now.
+        updateErr = new Error('the booking changed while its payment was being recorded');
+    }
 
     if (updateErr) {
         console.error('❌ [reconcile] booking paid-update failed:', updateErr.message);

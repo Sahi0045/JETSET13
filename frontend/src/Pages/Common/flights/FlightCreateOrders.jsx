@@ -284,7 +284,9 @@ function FlightCreateOrders() {
         hasContactInfo: !!flightBookingData.contactInfo,
         totalAmount: flightBookingData.totalAmount
       });
-      console.log('📋 Full payload:', JSON.stringify(flightBookingData, null, 2));
+      // Not the payload: it carries every traveller's passport number, expiry,
+      // date of birth and nationality, and the production build strips no
+      // console calls. The shape above is what debugging actually needs.
 
       // A deadline longer than the server's own budget, never shorter.
       //

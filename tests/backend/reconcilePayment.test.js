@@ -14,16 +14,29 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  */
 
 const updates = [];
+/**
+ * The row the reconcile reads back before it writes.
+ *
+ * That write is pinned with `unchangedSince` now, so it re-reads the booking and
+ * merges onto THAT rather than onto the caller's snapshot - which is how a
+ * slower reconcile used to land a stale copy on top of a PNR a faster request
+ * had just committed. Tests set this to whatever the database should hold.
+ */
+let currentRow = null;
+
 const chain = () => {
   const c = {
     select: vi.fn(() => c),
     update: vi.fn((payload) => { updates.push(payload); return c; }),
     eq: vi.fn(() => c),
+    is: vi.fn(() => c),
     or: vi.fn(() => c),
     order: vi.fn(() => c),
     limit: vi.fn(() => c),
-    single: vi.fn().mockResolvedValue({ data: null, error: null }),
-    maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+    single: vi.fn(async () => ({ data: currentRow, error: null })),
+    maybeSingle: vi.fn(async () => ({ data: currentRow, error: null })),
+    // Awaiting the update chain: one row matched, as a won compare-and-set.
+    then: (resolve) => resolve({ data: [{ id: currentRow?.id ?? 7 }], error: null }),
   };
   return c;
 };
@@ -68,6 +81,7 @@ const row = (over = {}) => ({
 
 beforeEach(() => {
   vi.resetModules();
+  currentRow = row();
   updates.length = 0;
 });
 
@@ -392,5 +406,49 @@ describe('a fresh read', () => {
     axios.get.mockRejectedValue(new Error('ECONNREFUSED'));
 
     expect((await freshly(row())).gatewayUnavailable).toBe(true);
+  });
+});
+
+/**
+ * The write that records a payment must not spread a stale snapshot.
+ *
+ * It used to merge into `details` — the caller's copy, read BEFORE the ARC
+ * round trip — and write it with only `.eq('id')`. Every sibling writer of this
+ * column pins with `unchangedSince`, and `arc_captured_amount` is on that
+ * pinned list *because of this function*; its own write was the one that never
+ * used it.
+ *
+ * Two concurrent order requests — a double-click, a second tab, the queue
+ * worker beside the browser — and the slower reconcile lands its stale copy on
+ * top of a PNR the faster one just committed. The row then has no `pnr`, no
+ * `gds`, no `gds_chain`: invisible to ticket sync, to both alarms and to the
+ * abandoned-checkout job, while the airline holds a reservation.
+ */
+describe('recording a payment beside a booking that moved', () => {
+  it('keeps a PNR that landed while the gateway was being asked', async () => {
+    // The caller's snapshot has no PNR...
+    const stale = row({ total_amount: 291 });
+    // ...but by the time the answer comes back, the chain has committed one.
+    currentRow = row({
+      total_amount: 291,
+      booking_details: { order_id: 'FLTTEST1', pnr: 'ABC123', gds: { ticketed: false }, gds_chain: { state: 'committed' } },
+    });
+    axios.get.mockResolvedValue(captured(291));
+
+    await reconcile(stale);
+
+    const written = updates.at(-1).booking_details;
+    expect(written.pnr).toBe('ABC123');
+    expect(written.gds_chain).toEqual({ state: 'committed' });
+    expect(written.arc_captured_amount).toBe(291);
+  });
+
+  it('still records the capture when nothing else changed', async () => {
+    axios.get.mockResolvedValue(captured(291));
+
+    const result = await reconcile(row({ total_amount: 291 }));
+
+    expect(result.paid).toBe(true);
+    expect(updates.at(-1).payment_status).toBe('paid');
   });
 });

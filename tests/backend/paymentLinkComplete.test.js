@@ -16,11 +16,15 @@ const writes = [];
 
 const chainFor = (table) => {
   const c = {};
-  for (const m of ['select', 'eq', 'or', 'order', 'limit', 'contains']) c[m] = vi.fn(() => c);
+  for (const m of ['select', 'eq', 'is', 'or', 'order', 'limit', 'contains']) c[m] = vi.fn(() => c);
   c.update = vi.fn((payload) => { writes.push({ table, payload }); return c; });
   c.insert = vi.fn((payload) => { writes.push({ table, payload, insert: true }); return c; });
   c.single = vi.fn(async () => ({ data: tables[table] ?? null, error: null }));
   c.maybeSingle = c.single;
+  // `reconcileBookingPayment` reads the booking back and pins its write with
+  // `unchangedSince`, so awaiting an update chain has to answer with the rows
+  // it matched - otherwise a won compare-and-set looks like a lost one.
+  c.then = (resolve) => resolve({ data: [{ id: tables[table]?.id ?? 'row-1' }], error: null });
   return c;
 };
 
