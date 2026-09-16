@@ -130,6 +130,24 @@ export const applyPricingToOffer = (reply, offer) => {
   });
 
   const currency = perGroup[0].currency;
+
+  // A group Amadeus priced at nothing makes the WHOLE reply unusable.
+  //
+  // `total` was `totalAmount?.amount ?? base` - a silent fall back to the base
+  // fare, taxes excluded. Changing that to `?? null` was not enough on its own
+  // and made the failure larger: the reducer below coerces `null` to 0, so a
+  // 1 adult + 1 child reply whose CHILD group carries no qualifier 712 priced
+  // at the adult's fare alone. That is non-zero, so it clears every "is there a
+  // price" gate, the customer is charged it, and the order route re-prices to
+  // the same understated figure and compares it against itself. We would sell
+  // the airline a fare we had undercharged for by a whole passenger.
+  //
+  // `priced: false` is the honest answer: index.js turns it into noFareFound, a
+  // 409, and the customer is asked to search again before anything is charged.
+  if (perGroup.some((g) => g.total === null || !Number.isFinite(g.total))) {
+    return { offer, priced: false };
+  }
+
   // Each group prices one passenger type; the offer total is the sum across
   // every passenger, which is what was charged.
   const total = perGroup.reduce((sum, g) => sum + (g.total ?? 0) * g.paxCount, 0);

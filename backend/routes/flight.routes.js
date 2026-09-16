@@ -260,20 +260,40 @@ export async function patchBookingDetails(bookingReference, patch, { attempts = 
   if (!supabase || !bookingReference) return null;
 
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
-    const { data: existing } = await supabase
+    const { data: existing, error: readError } = await supabase
       .from('bookings')
       .select('status, payment_status, booking_details')
       .eq('booking_reference', bookingReference)
       .single();
 
-    const details = existing?.booking_details || {};
+    // A read that failed is not an empty booking.
+    //
+    // supabase-js does not throw on a transport error - it answers
+    // `{ data: null, error }`. The merge base was `existing?.booking_details ||
+    // {}` and the pin was `if (existing)`, so ONE blip did both of the wrong
+    // things at once: it dropped the compare-and-set AND made the patch the
+    // whole column. `persistCommittedPnr` hitting that would leave the row with
+    // a PNR and nothing else - no `order_id`, no `success_indicator` (a guest
+    // can no longer prove they paid), no `arc_captured_amount`, no
+    // `pending_booking_data` - and a queue replay reading no verified offer
+    // REVERSES THE CHARGE. Writing nothing is always better than writing that.
+    if (readError || !existing) {
+      console.error('❌ Not patching booking_details: the booking could not be read', {
+        bookingReference, reason: readError?.message ?? 'no row',
+      });
+      return null;
+    }
+
+    const details = existing.booking_details || {};
     const changes = typeof patch === 'function' ? patch(details) : patch;
 
-    let write = supabase
-      .from('bookings')
-      .update({ booking_details: { ...details, ...changes } })
-      .eq('booking_reference', bookingReference);
-    if (existing) write = unchangedSince(write, existing);
+    let write = unchangedSince(
+      supabase
+        .from('bookings')
+        .update({ booking_details: { ...details, ...changes } })
+        .eq('booking_reference', bookingReference),
+      existing,
+    );
 
     const { data, error } = await write.select();
     if (error) {
@@ -2167,6 +2187,14 @@ router.post('/order', optionalProtect, async (req, res) => {
   // persistCommittedPnr is allowed to fail. A commit whose persist lost its
   // race therefore read as "never booked" and was refunded automatically.
   let committedPnr = null;
+  // Whether the chain got as far as issuing. Hoisted for the same reason as the
+  // PNR: `orderResponse` is block-scoped to the try, so the outer catch could
+  // only ask the ROW whether a ticket exists - and the row says `false` there,
+  // because persistCommittedPnr wrote it at the commit. It therefore passed
+  // `ticketed: false` for a booking that had a live ticket, and
+  // decideFlightRefund's guard ("the booking records a ticket, but the airline
+  // showed none") could never fire for it.
+  let committedTicketed = false;
   try {
     // ---- Whose payment is this, and is it real? ------------------------------
     //
@@ -2807,6 +2835,19 @@ router.post('/order', optionalProtect, async (req, res) => {
         hasPnr: !!orderResponse?.pnr
       });
     } catch (providerError) {
+      // Stop the heartbeat before anything in here writes.
+      //
+      // `finally` runs after this whole block, so the heartbeat stayed alive
+      // across flagForReview, the coupon note, the held-for-review email and
+      // the ARC reversal - every one of them a write. That was harmless while
+      // refreshChainClaim ignored committed chains; now that it renews them it
+      // spreads a snapshot of booking_details taken BEFORE those writes, and it
+      // pins only on gds_chain state and committedAt - neither of which
+      // flagForReview touches - so the renewal always wins. The review flag,
+      // the Amadeus error text and the ticketing verdict would simply vanish
+      // from a booking the airline is holding. Cleared here; the `finally`
+      // stays as the catch-all for every other exit.
+      clearInterval(heartbeat);
       console.error('❌ FlightProvider.createFlightOrder threw:', {
         step: providerError?.step,
         committed: providerError?.committed,
@@ -3181,6 +3222,11 @@ router.post('/order', optionalProtect, async (req, res) => {
       // the branch below - "the airline holds seats, never refund that
       // automatically" - was skipped for exactly the booking it exists for.
       const pnr = row?.booking_details?.pnr || committedPnr;
+      // `row` is null whenever findExistingBooking's read failed - which is
+      // precisely when `committedPnr` is carrying the branch - so every read of
+      // it here has to be optional. It was not, and the TypeError landed in the
+      // recovery catch below: a 500 with no review flag and no held-for-review
+      // email, for a booking the airline holds.
       if (pnr && row?.status !== 'cancelled') {
         // A PNR exists: the airline holds seats. Never refund that
         // automatically - a human decides.
@@ -3188,7 +3234,7 @@ router.post('/order', optionalProtect, async (req, res) => {
           bookingReference: ref,
           pnr,
           reason: `order route failed after commit: ${String(error.message || error).slice(0, 200)}`,
-          ticketed: row.booking_details?.gds?.ticketed === true
+          ticketed: committedTicketed || row?.booking_details?.gds?.ticketed === true
         });
         // This answer promises an email; it used to send none.
         await sendHeldForReviewEmail(ref, req.body);
