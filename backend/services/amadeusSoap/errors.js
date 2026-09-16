@@ -47,7 +47,23 @@ const collectMessages = (body) => {
       // logged nothing and simply found zero sections. The fare-rules panel
       // then looked identical whether the airline had filed no penalties or
       // Amadeus had refused the question - with no log, and no alert.
-      if (/^(errorMessage|errorGroup|generalErrorInfo|errorAtMessageLevel|errorAtItineraryLevel|applicationError|transmissionError|errorReturn|errorInfo)$/i.test(key)) {
+      // Four more, read off the WSAP schemas in the PDT bundle rather than
+      // guessed - and one of the old entries was a guess:
+      //
+      //   errorAtItineraryLevel   appears in NO schema. A mis-transcription.
+      //   errorItinerarylevel     the real one (Air_SellFromRecommendationReply)
+      //   errorAtSegmentLevel     the real one, same reply, also missing
+      //   elementErrorInformation PNR_Reply: a rejected FM / SSR DOCS / FOID / CTCE
+      //   nameError               PNR_Reply: a rejected NM element
+      //
+      // With those unmatched, `collectMessages` found nothing and inspectReply
+      // answered `{ok: true}`. Two consequences: a round trip whose second
+      // itinerary comes back with errorItinerarylevel read as fully sold - the
+      // customer pays a round-trip fare for a one-way PNR - and a rejected name
+      // or SSR passed addElements and surfaced after the commit and the charge,
+      // as 374 NEED COMMISSION or 27791 SSR DOCS MISSING, with nothing in the
+      // log naming the cause.
+      if (/^(errorMessage|errorGroup|generalErrorInfo|errorAtMessageLevel|errorItinerarylevel|errorAtSegmentLevel|elementErrorInformation|nameError|applicationError|transmissionError|errorReturn|errorInfo)$/i.test(key)) {
         for (const entry of arr(value)) {
           const text = JSON.stringify(entry);
           if (text && text !== '{}' && text !== '""') found.push(entry);

@@ -145,3 +145,63 @@ describe('an error code nested below the named paths', () => {
     expect(inspectReply({ itineraryDetails: { segmentInformation: {} } }, 'X').ok).toBe(true);
   });
 });
+
+/**
+ * Four containers read off the WSAP schemas in the PDT bundle, not guessed.
+ *
+ * The list carried `errorAtItineraryLevel`, which appears in NO schema — a
+ * mis-transcription of `errorItinerarylevel`. Three more real ones were absent
+ * entirely. With none of them matched, `collectMessages` found nothing and
+ * `inspectReply` answered `{ ok: true }` for a reply that carried a refusal.
+ */
+describe('containers verified against the WSAP schemas', () => {
+  /**
+   * Air_SellFromRecommendationReply. A round trip whose second itinerary comes
+   * back with this and no segmentInformation left `readAirSellReply` with the
+   * first leg's statuses only — `sold: true` — so the customer paid a
+   * round-trip fare for a one-way PNR, and the pre-payment seat check passed
+   * too, because it reads the same reply.
+   */
+  it('sees a refusal at itinerary level', () => {
+    const reply = { errorItinerarylevel: { errorDetails: { errorCode: '288', errorCategory: 'EC' } } };
+
+    expect(inspectReply(reply, 'Air_SellFromRecommendation').ok).not.toBe(true);
+  });
+
+  it('sees a refusal at segment level', () => {
+    const reply = { errorAtSegmentLevel: { errorDetails: { errorCode: '288' } } };
+
+    expect(inspectReply(reply, 'Air_SellFromRecommendation').ok).not.toBe(true);
+  });
+
+  /**
+   * PNR_Reply. A rejected FM, SSR DOCS, FOID or CTCE passed addElements and the
+   * chain ran on to FOP, pricing, the TST and the commit — surfacing after the
+   * card was charged as 374 NEED COMMISSION or 27791 SSR DOCS MISSING.
+   */
+  it('sees a rejected PNR element', () => {
+    const reply = { elementErrorInformation: { errorOrWarningCodeDetails: { errorDetails: { errorCode: '374' } } } };
+
+    expect(inspectReply(reply, 'PNR_AddMultiElements').ok).not.toBe(true);
+  });
+
+  it('sees a rejected name element', () => {
+    const reply = { nameError: { errorOrWarningCodeDetails: { errorDetails: { errorCode: '1170' } } } };
+
+    expect(inspectReply(reply, 'PNR_AddMultiElements').ok).not.toBe(true);
+  });
+
+  // The entry that was there instead, and which no schema declares.
+  it('no longer carries an element name that does not exist', () => {
+    const source = fs.readFileSync(new URL('../../../backend/services/amadeusSoap/errors.js', import.meta.url), 'utf8');
+
+    expect(source).not.toMatch(/errorAtItineraryLevel\|/);
+  });
+
+  // And a clean reply is still clean.
+  it('still reads a good sell reply as fine', () => {
+    const reply = { itineraryDetails: [{ segmentInformation: [{ actionDetails: { statusCode: 'OK' } }] }] };
+
+    expect(inspectReply(reply, 'Air_SellFromRecommendation').ok).toBe(true);
+  });
+});
