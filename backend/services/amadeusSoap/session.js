@@ -90,9 +90,18 @@ export const withSession = async (fn, options = {}) => {
       // The permit is already held for the whole session (below), so each call
       // inside it must not try to take a second one - with a low limit that is
       // an immediate self-deadlock.
-      const result = await postEnvelope({
-        operation, bodyXml, session: outgoing, config, bypassSemaphore: true, ...callOptions,
-      });
+      let result;
+      try {
+        result = await postEnvelope({
+          operation, bodyXml, session: outgoing, config, bypassSemaphore: true, ...callOptions,
+        });
+      } catch (cause) {
+        // Keep the session a fault reply carries. Without it a failed first
+        // call left `session` null and the sign-out below never ran, and a
+        // failed later call signed out with a sequence number already used.
+        if (cause?.session?.sessionId) session = cause.session;
+        throw cause;
+      }
       if (result.session?.sessionId) session = result.session;
       return result;
     },
@@ -132,7 +141,7 @@ export const withSession = async (fn, options = {}) => {
     return await activeSession.run(true, () => fn(ctx));
   } finally {
     try {
-      if (session?.sessionId) {
+      if (session?.sessionId && session.status !== 'End') {
         // Own try/catch and own short timeout: a hung sign-out must never become
         // the caller's error, and must never mask the real one.
         await signOutQuietly(session, config);
