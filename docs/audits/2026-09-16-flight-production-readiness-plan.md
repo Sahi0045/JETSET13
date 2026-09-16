@@ -116,6 +116,30 @@ read failed and then wrote the patch as the entire column — so one Supabase bl
 during `persistCommittedPnr` would strip a booking down to a PNR and nothing
 else, and a queue replay reading no verified offer reverses the charge.
 
+## Round 3 — found in a browser, not by an agent (16 Sep 2026)
+
+Clicking the real flow signed out, from search results to the review page, the
+page sat on "Loading your booking details…" for over a minute and never
+redirected to log in. Nothing on our side was slow: measured from inside that
+very page, the feature flag answered in 550 ms and `/api/auth/supabase-session`
+returned a valid token in 660 ms.
+
+The await that never returned was Supabase's own. auth-js 2.80 guards
+`getSession` with `this._acquireLock(-1, …)` — **-1 meaning no acquire timeout at
+all**. The lock is a Web Lock named for the storage key and shared by every tab
+on the origin, so one tab holding it holds the rest indefinitely, and two tabs
+open on a travel site is ordinary. `loading` never left `true`, which on the
+review page is fatal twice: the spinner renders while it is true, *and* the
+effect that sends a signed-out visitor to log in returns early on it. A customer
+about to pay got a spinner with no way out.
+
+Fixed in **#145**: the bootstrap is raced against an 8 s deadline, after which
+the app carries on signed-out — the httpOnly cookie still corrects it on the next
+navigation. Reproduced and verified in the browser by holding that exact lock
+from a second tab: the console logged `Auth bootstrap did not settle in 8000ms`
+and the review page went to `/login` instead of spinning; releasing the lock, the
+next load signed in normally in about a second with no warning.
+
 ## Still open — for the next pass, not fixed
 
 Nothing below is new damage; these are pre-existing and were found while

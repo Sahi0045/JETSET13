@@ -55,6 +55,44 @@ export const SupabaseAuthProvider = ({ children }) => {
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    /**
+     * Whatever happens, stop loading.
+     *
+     * `loading` gates the whole app: the review page renders a spinner while it
+     * is true AND its "send a signed-out visitor to log in" effect returns
+     * early on it, so a bootstrap that never settles leaves a customer on
+     * "Loading your booking details..." for ever - no page, no redirect, no
+     * error, on the screen where they were about to pay. Seen in a browser on
+     * 16 Sep 2026 with the backend answering fine: /api/auth/supabase-session
+     * returned a valid token in 660 ms while the page span for over a minute.
+     *
+     * The await that does not return is the Supabase one. auth-js 2.80 guards
+     * getSession with `this._acquireLock(-1, ...)` (GoTrueClient.js:1062) and
+     * the -1 means *no acquire timeout*: the lock is a Web Lock named after the
+     * storage key, shared across every tab on the origin, and a tab holding it
+     * blocks this one for as long as it likes. Having a second tab open on the
+     * site is ordinary, not an edge case. The `finally` below cannot help,
+     * because control never returns to reach it.
+     *
+     * So the bootstrap is raced against a deadline. Losing it is not an error
+     * state: the app simply carries on signed-out, which the httpOnly cookie
+     * can still correct on the next navigation, and the review page sends the
+     * visitor to log in instead of spinning.
+     */
+    const AUTH_BOOTSTRAP_TIMEOUT_MS = 8000;
+    let settled = false;
+    const stopLoading = () => {
+      if (settled) return;
+      settled = true;
+      setLoading(false);
+    };
+    const deadline = setTimeout(() => {
+      if (!settled) {
+        console.warn(`Auth bootstrap did not settle in ${AUTH_BOOTSTRAP_TIMEOUT_MS}ms; continuing signed-out.`);
+        stopLoading();
+      }
+    }, AUTH_BOOTSTRAP_TIMEOUT_MS);
+
     // Get initial session
     const initializeAuth = async () => {
       try {
@@ -104,7 +142,8 @@ export const SupabaseAuthProvider = ({ children }) => {
         console.error('Error initializing auth:', error);
         setError(error.message);
       } finally {
-        setLoading(false);
+        clearTimeout(deadline);
+        stopLoading();
       }
     };
 
@@ -165,7 +204,9 @@ export const SupabaseAuthProvider = ({ children }) => {
     });
 
     return () => {
+      clearTimeout(deadline);
       subscription.unsubscribe();
+      settled = true;
     };
   }, []);
 
