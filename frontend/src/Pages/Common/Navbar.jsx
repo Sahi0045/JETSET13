@@ -6,6 +6,7 @@ import CurrencySelector from '../../Components/CurrencySelector';
 import Breadcrumbs from '../../Components/Breadcrumbs';
 import { useSupabaseAuth } from '../../contexts/SupabaseAuthContext';
 import { clearStoredBookings } from '../../utils/bookingStorage';
+import { clearTravellerDraft } from '../../utils/flightTravellerDraft';
 
 const Navbar = ({ forceScrolled }) => {
   const location = useLocation();
@@ -102,8 +103,9 @@ const Navbar = ({ forceScrolled }) => {
       localStorage.removeItem('userData');
       // Travellers' names, dates of birth and passport numbers from a booking
       // made in this browser. They stayed after logout, for whoever used the
-      // browser next.
+      // browser next. The half-typed draft on this tab goes with them.
       clearStoredBookings();
+      clearTravellerDraft();
 
       // Update local state
       setIsAuthenticated(false);

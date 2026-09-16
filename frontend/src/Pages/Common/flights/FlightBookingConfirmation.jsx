@@ -11,6 +11,7 @@ import ChargeAmount from "../../../Components/ChargeAmount";
 import { CHARGE_CURRENCY, describeServiceFee, formatUsd } from "../../../utils/chargeDisplay";
 import { useSupabaseAuth } from "../../../contexts/SupabaseAuthContext";
 import { clearFlightReview, readFlightReview, saveFlightReview } from "../../../utils/flightReviewResume";
+import { clearTravellerDraft, readTravellerDraft, saveTravellerDraft } from "../../../utils/flightTravellerDraft";
 import { cancelUrlFor, isCancelledReturn, readCancelledCheckout } from "../../../utils/cancelledCheckout";
 import NoticeDialog from "../../../Components/NoticeDialog";
 import ArcPayService from "../../../Services/ArcPayService";
@@ -753,6 +754,17 @@ function FlightBookingConfirmation() {
         setPassengerData(restored);
         return;
       }
+      // Typed on this tab, for this fare, and not yet paid for: a refresh, a
+      // Back and Forward to re-check a flight time, a phone discarding the tab,
+      // or the round trip through the login page used to throw all of it away.
+      // Only a draft matching this exact fare and its traveller mix is used
+      // (utils/flightTravellerDraft.js); anything else leaves the form empty,
+      // as before.
+      const draft = readTravellerDraft(reviewState?.flightData?.originalOffer);
+      if (draft && draft.length === types.length && draft.every((t, index) => t?.type === types[index])) {
+        setPassengerData(draft);
+        return;
+      }
       setPassengerData(types.map((type, index) => blankTraveller(type, index)));
     }
   }, [bookingDetails, passengerData.length]);
@@ -871,6 +883,28 @@ function FlightBookingConfirmation() {
     return `${hours}h ${minutes}m`;
   };
 
+  /**
+   * Keep what has been typed, for this tab, as it is typed.
+   *
+   * Nothing persisted these until `handleProceedToPayment`, so everything
+   * before that moment was lost to a refresh, a Back and Forward, a discarded
+   * tab, or being sent to log in - around forty fields for a family abroad,
+   * passport numbers among them. It is written to sessionStorage rather than
+   * the localStorage payment draft, which keeps it to this tab and ends it
+   * when the tab does; the reasoning is in utils/flightTravellerDraft.js.
+   *
+   * On a timer rather than on every keystroke: a passport number is a dozen
+   * renders, and the only moment this has to have caught up is when the page
+   * goes away, which is at least a second after the last key.
+   */
+  useEffect(() => {
+    if (passengerData.length === 0) return undefined;
+    const offer = reviewState?.flightData?.originalOffer;
+    if (!offer) return undefined;
+    const timer = setTimeout(() => saveTravellerDraft(passengerData, offer), 800);
+    return () => clearTimeout(timer);
+  }, [passengerData, reviewState?.flightData?.originalOffer]);
+
   const toggleEditMode = () => {
     setEditMode(!editMode);
   };
@@ -902,7 +936,13 @@ function FlightBookingConfirmation() {
   // travellers the search asked for. A different party is a new search.
 
   const savePassengerDetails = () => {
-    // In a real app, this would send the updated data to the server
+    // What this button does is collapse the card. What it USED to do is
+    // nothing else at all - its comment read "In a real app, this would send
+    // the updated data to the server" - while telling the customer their
+    // details were saved. They are now kept for this tab as they are typed
+    // (the effect above), so the word on the button is true before it is
+    // pressed. Sending them to the ACCOUNT is the separate opt-in checkbox
+    // below, which is what `useSaveTravellers` is for.
     setEditMode(false);
     // Update the bookingDetails with the new passenger data
     setBookingDetails({
