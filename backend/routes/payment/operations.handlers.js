@@ -1093,11 +1093,45 @@ export async function handlePaymentRefund(req, res) {
         if (isNaN(refundAmount) || refundAmount <= 0) {
             return res.status(400).json({ success: false, error: 'Invalid refund amount' });
         }
-        // Never refund more than was captured. `amount` is admin-supplied; cap it
-        // at the recorded payment total minus anything already refunded.
-        const capturedAmount = Number(payment.amount) || 0;
-        const alreadyRefunded = Number(payment.refund_amount) || 0;
-        const refundCeiling = Math.max(0, capturedAmount - alreadyRefunded);
+        // CRITICAL: Use the ARC Pay order ID (FLT...), NOT the Supabase UUID
+        const arcOrderId = payment.arc_order_id || paymentId;
+        console.log('🔑 ARC Pay Order ID for refund:', arcOrderId, '(Supabase ID:', paymentId, ')');
+        const authConfig = getArcPayAuthConfig();
+
+        // Never refund more than the gateway still holds, asked of the gateway.
+        //
+        // The ceiling used to be `payment.amount - payment.refund_amount`, and
+        // `refund_amount` is a column that exists in no schema: it read
+        // undefined every time, so `alreadyRefunded` was always 0 and the full
+        // captured amount could be refunded again on every call. ARC's own
+        // transaction list is the only honest source - the same one
+        // reverseArcPaymentForOrder reads.
+        const orderUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${arcOrderId}`;
+        const orderResp = await axios.get(orderUrl, { headers: authConfig.headers, validateStatus: () => true });
+        if (orderResp.status !== 200 || !orderResp.data) {
+            return res.status(502).json({
+                success: false,
+                error: `Could not read this payment from ARC Pay (${orderResp.status}). Nothing has been refunded.`,
+            });
+        }
+        const txns = Array.isArray(orderResp.data.transaction) ? orderResp.data.transaction : [];
+        const capturedTxn = [...txns].reverse().find((t) => {
+            const type = t.transaction?.type;
+            const ok = t.result === 'SUCCESS' || t.response?.gatewayCode === 'APPROVED';
+            return ok && ['PAYMENT', 'CAPTURE', 'AUTHORIZATION'].includes(type);
+        });
+        const capturedAmount = parseFloat(capturedTxn?.transaction?.amount ?? orderResp.data.amount ?? payment.amount ?? 0) || 0;
+        const alreadyRefunded = txns
+            .filter((t) => t.transaction?.type === 'REFUND' && t.result === 'SUCCESS')
+            .reduce((sum, t) => sum + (parseFloat(t.transaction?.amount) || 0), 0);
+        const alreadyVoided = txns.some((t) => t.transaction?.type === 'VOID' && t.result === 'SUCCESS');
+        if (alreadyVoided || (capturedAmount > 0 && alreadyRefunded + 0.01 >= capturedAmount)) {
+            return res.status(400).json({
+                success: false,
+                error: 'This payment has already been returned in full.',
+            });
+        }
+        const refundCeiling = Math.max(0, Math.round((capturedAmount - alreadyRefunded) * 100) / 100);
         if (capturedAmount > 0 && refundAmount > refundCeiling + 0.001) {
             return res.status(400).json({
                 success: false,
@@ -1105,92 +1139,90 @@ export async function handlePaymentRefund(req, res) {
             });
         }
 
-        // Process refund via ARC Pay
-        // CRITICAL: Use the ARC Pay order ID (FLT...), NOT the Supabase UUID
-        const arcOrderId = payment.arc_order_id || paymentId;
-        console.log('🔑 ARC Pay Order ID for refund:', arcOrderId, '(Supabase ID:', paymentId, ')');
-        const authConfig = getArcPayAuthConfig();
         const refundTxnId = `refund-admin-${Date.now()}`;
         const refundUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${arcOrderId}/transaction/${refundTxnId}`;
 
-        try {
-            const refundResponse = await fetch(refundUrl, {
-                method: 'PUT',
-                headers: authConfig.headers,
-                body: JSON.stringify({
-                    apiOperation: 'REFUND',
-                    transaction: {
-                        amount: refundAmount.toFixed(2),
-                        currency: payment.currency || 'USD',
-                        reference: `Admin refund: ${reason}`
-                    }
-                })
-            });
-
-            const refundData = await refundResponse.json().catch(() => null);
-
-            if (refundResponse.ok) {
-                // Update payment status in DB
-                await supabase.from('payments').update({
-                    payment_status: 'refunded',
-                    refund_amount: refundAmount,
-                    refund_reason: reason,
-                    refunded_at: new Date().toISOString()
-                }).eq('id', paymentId);
-
-                // Also update the associated booking status if exists
-                if (payment.quote_id) {
-                    await supabase.from('bookings').update({
-                        payment_status: 'refunded'
-                    }).eq('id', payment.quote_id);
-                }
-
-                console.log('✅ Refund processed successfully:', paymentId);
-                return res.json({
-                    success: true,
-                    message: 'Refund processed successfully',
-                    refund: {
-                        paymentId,
-                        amount: refundAmount,
-                        transactionId: refundTxnId,
-                        status: 'refunded'
-                    }
-                });
-            } else {
-                console.warn('⚠️ ARC Pay refund failed:', refundData);
-                // Still update locally so admin can track
-                await supabase.from('payments').update({
-                    payment_status: 'refund_pending',
-                    refund_amount: refundAmount,
-                    refund_reason: reason
-                }).eq('id', paymentId);
-
-                return res.json({
-                    success: true,
-                    message: 'Refund marked as pending. ARC Pay processing may take time.',
-                    refund: {
-                        paymentId,
-                        amount: refundAmount,
-                        status: 'refund_pending',
-                        arcPayResponse: refundData
-                    }
-                });
+        // `refundResponse.ok` used to decide this. ARC answers a refund it
+        // refused with HTTP 200 and `result: "FAILURE"`, so a declined refund
+        // was written `refunded`, reported to the operator as "Refund processed
+        // successfully", and never retried - the customer was never paid. Every
+        // other reversal site in this file asks arcSucceeded; this one did not.
+        const refundResponse = await axios.put(refundUrl, {
+            apiOperation: 'REFUND',
+            transaction: {
+                amount: refundAmount.toFixed(2),
+                currency: payment.currency || 'USD',
+                reference: `Admin refund: ${reason}`.substring(0, 40)
             }
-        } catch (arcError) {
-            console.warn('⚠️ ARC Pay refund error, marking locally:', arcError.message);
-            // Mark refund locally even if ARC Pay is unreachable
-            await supabase.from('payments').update({
-                payment_status: 'refund_pending',
-                refund_amount: refundAmount,
-                refund_reason: reason
-            }).eq('id', paymentId);
+        }, { headers: authConfig.headers, validateStatus: () => true });
 
-            return res.json({
-                success: true,
-                message: 'Refund recorded locally. Will be processed when payment gateway is available.',
-                refund: { paymentId, amount: refundAmount, status: 'refund_pending' }
+        if (!arcSucceeded(refundResponse)) {
+            console.error('❌ ARC Pay refund refused:', refundResponse.status, JSON.stringify(refundResponse.data));
+            // Nothing is written. `refund_pending` is not a value the payments
+            // CHECK constraint allows and no job ever read it, so recording it
+            // only told the operator a refund was under way that nothing would
+            // ever carry out.
+            return res.status(400).json({
+                success: false,
+                error: 'ARC Pay refused the refund. Nothing has been refunded - check the order in ARC Pay before trying again.',
+                details: refundResponse.data
             });
         }
+
+        // Only columns this table has. The old write named refund_amount,
+        // refund_reason and refunded_at, none of which exist, so the whole
+        // update failed with 42703 - unchecked - and even
+        // `payment_status: 'refunded'` never landed. The "already been
+        // refunded" guard above could therefore never trip, and the same
+        // payment could be refunded over and over.
+        const refundedAt = new Date().toISOString();
+        const { error: paymentWriteError } = await supabase.from('payments').update({
+            payment_status: 'refunded',
+            metadata: {
+                ...(payment.metadata || {}),
+                refunds: [
+                    ...(payment.metadata?.refunds || []),
+                    { amount: refundAmount, reason, transactionId: refundTxnId, at: refundedAt, by: 'admin' }
+                ]
+            },
+            updated_at: refundedAt
+        }).eq('id', paymentId);
+
+        // The booking this payment belongs to, found the way it is actually
+        // linked. This used to filter `bookings.id` by `payment.quote_id` - a
+        // quotes primary key - so it matched nothing, or something unrelated.
+        // `bookings` has no quote_id, payment_id or inquiry_id column; the ARC
+        // order id is the booking reference.
+        let bookingWriteError = null;
+        if (payment.arc_order_id) {
+            const { error } = await supabase.from('bookings')
+                .update({ payment_status: 'refunded', updated_at: refundedAt })
+                .eq('booking_reference', payment.arc_order_id);
+            bookingWriteError = error || null;
+        }
+
+        if (paymentWriteError || bookingWriteError) {
+            console.error('❌ Refund went through at ARC Pay but was not recorded:',
+                paymentWriteError?.message || bookingWriteError?.message);
+            return res.status(500).json({
+                success: false,
+                code: 'RECORD_FAILED',
+                error: 'The refund went through at ARC Pay, but it could not be recorded here. Do not send it again - record it by hand.',
+                refund: { paymentId, amount: refundAmount, transactionId: refundTxnId }
+            });
+        }
+
+        console.log('✅ Refund processed successfully:', paymentId);
+        return res.json({
+            success: true,
+            message: 'Refund processed successfully',
+            refund: {
+                paymentId,
+                amount: refundAmount,
+                transactionId: refundTxnId,
+                status: 'refunded'
+            }
+        });
     } catch (error) {
         console.error('❌ Payment refund error:', error);
         return res.status(500).json({ success: false, error: 'Failed to process refund', details: error.message });
