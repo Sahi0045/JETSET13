@@ -24,7 +24,8 @@
     "test:integration": "vitest run --project integration",
     "test:backend:watch": "vitest --project backend",
     "test:unit": "vitest run --project backend --project frontend",
-    "build:prod": "NODE_ENV=production npm run build"
+    "build:prod": "NODE_ENV=production npm run build",
+    "e2e:flight": "node scripts/e2e-flight-pdt.mjs"
   },
   "devDependencies": {
     "@headlessui/react": "^2.2.10",
