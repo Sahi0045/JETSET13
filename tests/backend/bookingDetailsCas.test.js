@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { readCode } from '../helpers/source.js';
 import { fakeBookingsTable } from './helpers/fakeBookings.js';
 
 /**
@@ -105,6 +106,43 @@ describe('patchBookingDetails', () => {
 
     expect(saved).toBeNull();
     expect(table.row(REF).booking_details.needs_review, 'nothing half-written').toBeUndefined();
+  });
+});
+
+/**
+ * `flagForReview` handles `ticketed: true` correctly - the defect was that the
+ * order route never passed it.
+ *
+ * `committedTicketed` was declared and read and NEVER assigned, so the flag was
+ * permanently false. A booking whose ticket had genuinely been issued, whose
+ * route then threw before the final save, was recorded as unticketed: every
+ * surface told the customer they had no ticket and must not travel on the
+ * document, and a later cancel could refund in full against a live ticket
+ * because `decideFlightRefund`'s "the row says ticketed" guard had nothing to
+ * read.
+ */
+describe('what the order route tells flagForReview about the ticket', () => {
+  const route = readCode('backend/routes/flight.routes.js');
+
+  it('sets the flag the moment the chain reports a ticket', () => {
+    expect(route).toMatch(/if \(orderResponse\?\.ticketed === true\) committedTicketed = true;/);
+  });
+
+  /**
+   * `ticketed` only. Reading `tickets` here moves where a failure to read it
+   * lands - heldForReviewEmail makes it a throwing getter to simulate exactly
+   * that - and turned a 202-held into a 502.
+   */
+  it('does not touch the tickets array while checking', () => {
+    expect(route).not.toMatch(/orderResponse\?\.tickets\?\.length\) committedTicketed/);
+  });
+
+  it('also believes a failure that happened after issuance', () => {
+    expect(route).toMatch(/ticketed: committedTicketed \|\| error\?\.ticketed === true/);
+  });
+
+  it('still falls back to what the row already records', () => {
+    expect(route).toMatch(/row\?\.booking_details\?\.gds\?\.ticketed === true/);
   });
 });
 
