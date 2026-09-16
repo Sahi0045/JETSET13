@@ -834,7 +834,30 @@ export async function handleHostedCheckout(req, res) {
 
         const paymentPageUrl = `https://api.arcpay.travel/checkout/pay/${sessionId}`;
 
-        // Save pending booking data to DB so callback can retrieve it even if localStorage is cleared
+        /**
+         * The booking row is not optional, and a failure to write it must not
+         * hand back a payment page.
+         *
+         * This used to `await supabase...upsert(...)` without reading the
+         * result. supabase-js does not throw on a rejected write - it answers
+         * `{ data, error }` - so a foreign key on `user_id`, an RLS refusal or
+         * a CHECK violation logged "Pending booking saved to DB" and returned
+         * 200 with a live ARC checkout URL. The `catch` below only ever caught
+         * a transport error.
+         *
+         * The old comment said localStorage was a fallback. It is not: the
+         * order route finds the booking by reading THIS row
+         * (`findExistingBooking`) and answers 402 PAYMENT_NOT_FOUND without it
+         * (flight.routes.js), and every job - abandoned checkout, the booking
+         * queue, both alarms, ticket sync - starts from the `bookings` table.
+         * A customer who paid with no row would have had no ticket, no refund,
+         * no alert and no record anywhere. Permanently invisible.
+         *
+         * So the write is checked, and a checkout that cannot be recorded is
+         * refused. The ARC session already exists at this point, but a session
+         * nobody is sent to costs nothing: money moves only when a customer
+         * pays on the page, and that page is what we withhold.
+         */
         try {
             const passengerDetails = bookingData?.passengerData || bookingData?.travelers || [];
             // Own the row from the moment it exists. Without this the booking
@@ -844,7 +867,7 @@ export async function handleHostedCheckout(req, res) {
             // session; a genuine guest still books, with null.
             const ownerId = resolveBookingUserId(req);
 
-            await supabase.from('bookings').upsert({
+            const { error: saveError } = await supabase.from('bookings').upsert({
                 booking_reference: orderId,
                 travel_type: bookingType || 'flight',
                 status: 'pending',
@@ -866,11 +889,20 @@ export async function handleHostedCheckout(req, res) {
                 },
                 passenger_details: Array.isArray(passengerDetails) ? passengerDetails : []
             }, { onConflict: 'booking_reference' });
+            if (saveError) throw saveError;
             console.log('💾 Pending booking saved to DB:', orderId);
         } catch (dbError) {
-            console.error('⚠️ Failed to save pending booking to DB:', dbError.message);
-            console.error('   Error details:', typeof dbError === 'object' ? JSON.stringify(dbError) : dbError);
-            // Non-blocking: localStorage still works as fallback
+            console.error('❌ Refusing checkout: the booking could not be recorded', {
+                orderId,
+                bookingType,
+                reason: dbError?.message || String(dbError),
+                code: dbError?.code,
+            });
+            return res.status(503).json({
+                success: false,
+                error: 'We could not start your payment just now, so nothing has been charged. Please try again in a moment, or call (877) 538-7380 and we will book it for you.',
+                code: 'CHECKOUT_NOT_RECORDED',
+            });
         }
 
         // No success indicator. It is the secret that proves who paid - the order

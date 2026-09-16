@@ -13,10 +13,15 @@ import { createRequest, createResponse } from './helpers/express.helpers.js';
  */
 
 const rows = {};
+// What the booking row write answers. supabase-js does not throw on a rejected
+// write - it resolves with `{ data, error }` - which is exactly how a failed
+// write used to pass for a successful one here.
+let upsertError = null;
 const clientFor = () => ({
   from: vi.fn((table) => {
     const c = {};
-    for (const m of ['select', 'eq', 'order', 'limit', 'insert', 'update', 'upsert']) c[m] = vi.fn(() => c);
+    for (const m of ['select', 'eq', 'order', 'limit', 'insert', 'update']) c[m] = vi.fn(() => c);
+    c.upsert = vi.fn(() => ({ ...c, then: (resolve) => resolve({ data: null, error: upsertError }) }));
     c.single = vi.fn(async () => ({ data: rows[table] ?? null, error: null }));
     c.maybeSingle = c.single;
     return c;
@@ -45,6 +50,7 @@ const verify = async (opts) => {
 
 beforeEach(() => {
   vi.resetModules();
+  upsertError = null;
   for (const key of Object.keys(rows)) delete rows[key];
   rows.price_settings = { settings: { flight_taxes_fees: 1, flight_taxes_fees_percentage: 0 } };
 });
@@ -710,6 +716,57 @@ describe('hosted checkout for a flight', () => {
     it('holds no test merchant id to derive a code from', () => {
       const source = readFileSync(new URL('../../backend/routes/payment/checkout.handlers.js', import.meta.url), 'utf8');
       expect(source).not.toMatch(/TESTARC|05511704/);
+    });
+  });
+
+  /**
+   * A payment page is only handed back once the booking is recorded.
+   *
+   * The row write was `await supabase...upsert(...)` with the result discarded.
+   * supabase-js does not throw on a rejected write - a foreign key on `user_id`,
+   * an RLS refusal, a CHECK - it answers `{ data, error }`. So the failure logged
+   * "Pending booking saved to DB" and returned 200 with a live ARC checkout URL,
+   * and the `catch` only ever fired on a transport error.
+   *
+   * Without that row the customer is unreachable by everything: the order route
+   * answers 402 PAYMENT_NOT_FOUND, and every job - abandoned checkout, the
+   * booking queue, both alarms, ticket sync - starts from the `bookings` table.
+   * Money captured, no ticket, no refund, no alert, no record.
+   */
+  describe('a checkout whose booking row cannot be written', () => {
+    const verified = { ok: true, charge: { total: 402, base: 400, fee: 2, discount: 0 }, coupon: null, pricedFare: { total: 400 } };
+
+    beforeEach(() => {
+      axios.post.mockReset();
+      axios.post.mockResolvedValue({ status: 201, data: { result: 'SUCCESS', session: { id: 'S1' }, successIndicator: 'SI' } });
+    });
+
+    it('does not hand back a payment page', async () => {
+      upsertError = { message: 'insert or update on table "bookings" violates foreign key constraint', code: '23503' };
+
+      const { res } = await run(verified);
+
+      expect(res.statusCode).toBe(503);
+      expect(res.body.success).toBe(false);
+      expect(res.body.code).toBe('CHECKOUT_NOT_RECORDED');
+      expect(res.body.paymentPageUrl).toBeUndefined();
+      expect(res.body.sessionId).toBeUndefined();
+    });
+
+    it('tells the customer nothing was charged, and how else to book', async () => {
+      upsertError = { message: 'row-level security', code: '42501' };
+
+      const { res } = await run(verified);
+
+      expect(res.body.error).toMatch(/nothing has been charged/i);
+      expect(res.body.error).toMatch(/877\) 538-7380/);
+    });
+
+    it('still opens the payment page when the row is written', async () => {
+      const { res } = await run(verified);
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.paymentPageUrl).toMatch(/arcpay\.travel\/checkout\/pay\/S1/);
     });
   });
 });

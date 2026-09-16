@@ -80,7 +80,7 @@ describe('which checkouts it looks at', () => {
   it('leaves anything the order route has already touched', () => {
     const touched = [
       checkoutRow({ booking_details: { pnr: 'ABC123' } }),
-      checkoutRow({ booking_details: { gds_chain: { state: 'in_progress' } } }),
+      checkoutRow({ booking_details: { gds_chain: { state: 'in_progress', startedAt: ago(30_000) } } }),
       checkoutRow({ booking_details: { queued_order: { bookingReference: 'FLTABANDON1' } } }),
       checkoutRow({ booking_details: { needs_review: { reason: 'x' } } }),
       checkoutRow({ status: 'pending_ticketing' }),
@@ -88,6 +88,50 @@ describe('which checkouts it looks at', () => {
       checkoutRow({ payment_status: 'refunded' }),
     ];
     expect(select(touched)).toHaveLength(0);
+  });
+
+  /**
+   * The dead zone.
+   *
+   * This skipped a row for merely HAVING a `gds_chain` key, and that key is
+   * left behind for ever. A paid row with a finished or abandoned chain and no
+   * PNR was then excluded from every job at once - the booking queue wants a
+   * `queued_order`, both alarms want `needs_review` or a cancellation or a PNR,
+   * ticket sync wants a PNR - so it sat paid and unbooked with nobody told.
+   *
+   * A chain that is still RUNNING owns the booking. One that is not, does not.
+   */
+  describe('a chain that is no longer running', () => {
+    const withChain = (gds_chain) => select([checkoutRow({ booking_details: { gds_chain } })]);
+
+    it('picks up a chain that failed', () => {
+      expect(withChain({ state: 'failed', startedAt: ago(40 * MIN) })).toHaveLength(1);
+    });
+
+    it('picks up a claim left behind by a process that died mid-chain', () => {
+      expect(withChain({ state: 'in_progress', startedAt: ago(40 * MIN) })).toHaveLength(1);
+    });
+
+    /**
+     * A claim with no readable stamp cannot be aged, and this codebase already
+     * treats one as released rather than a lock nobody can expire
+     * (utils/bookingChainClaim.js). It must not be a lock here either.
+     */
+    it('picks up a claim with no timestamp to age', () => {
+      expect(withChain({ state: 'in_progress' })).toHaveLength(1);
+    });
+
+    it('still leaves a queued chain alone while the worker has it', () => {
+      expect(withChain({ state: 'queued', startedAt: ago(5 * MIN) })).toHaveLength(0);
+    });
+
+    it('picks up a queued chain whose worker abandoned it', () => {
+      expect(withChain({ state: 'queued', startedAt: ago(45 * MIN) })).toHaveLength(1);
+    });
+
+    it('leaves a chain that has just committed, while it finishes ticketing', () => {
+      expect(withChain({ state: 'committed', committedAt: ago(30_000) })).toHaveLength(0);
+    });
   });
 
   // Local and production share the database.
