@@ -120,37 +120,31 @@ vi.mock('../../backend/services/emailService.js', () => ({
 }));
 
 // ─── Redis / Cache mock ───────────────────────────────────────
-vi.mock('../../backend/services/cache.service.js', () => ({
-  withCache: vi.fn((key, ttl, fn) => fn()),  // passthrough in tests
-  invalidate: vi.fn().mockResolvedValue(undefined),
-  invalidatePattern: vi.fn().mockResolvedValue(undefined),
-  set: vi.fn().mockResolvedValue(undefined),
-  get: vi.fn().mockResolvedValue(null),
-  healthCheck: vi.fn().mockResolvedValue({ status: 'disabled' }),
-  // Mirrors the real module's surface. It previously stopped at three TTLs and
-  // three key builders, so any route reaching for CacheKeys.flightBrowse threw
-  // a TypeError, hit its own catch and soft-failed - the test still passed, for
-  // entirely the wrong reason. Keep this in step with cache.service.js.
-  TTL: {
-    FLIGHT_SEARCH: 300,
-    HOTEL_SEARCH: 300,
-    VISA_REQUIREMENTS: 3600,
-    ANALYTICS_DASH: 900,
-    USER_PROFILE: 600,
-    GEO_LOCATION: 86400,
-    FLIGHT_BROWSE: 43200,
-    FLIGHT_CALENDAR: 21600,
-  },
-  CacheKeys: {
-    flightSearch: (f, t, d, p) => `flights:${f}:${t}:${d}:${p}`,
-    hotelSearch:  (c, ci, co, g) => `hotels:${c}:${ci}:${co}:${g}`,
-    visaRequirements: (n, d) => `visa:req:${n}:${d}`,
-    analyticsData: (period) => `analytics:dashboard:${period}`,
-    userProfile: (id) => `user:profile:${id}`,
-    geoLocation: (ip) => `geo:${ip}`,
-    flightBrowse: (kind, parts = []) => `flights:browse:${kind}:${parts.join(':')}`,
-  },
-}));
+//
+// Only the parts that touch Redis are stubbed. `CacheKeys` and `TTL` are taken
+// from the real module, because they are pure functions and constants - the
+// real module's Redis client is built lazily inside getRedisClient(), so
+// importing it connects to nothing.
+//
+// They used to be hand-copied here, and drifted twice. First the copy stopped
+// at three key builders, so any route reaching for CacheKeys.flightBrowse threw
+// a TypeError, hit its own catch and soft-failed - the test passed for entirely
+// the wrong reason. Then the real keys gained the GDS fingerprint that stops a
+// PDT price being served to a customer after cutover, and the copy did not, so
+// the change was invisible to every test that mattered. A copy of a thing is
+// not the thing.
+vi.mock('../../backend/services/cache.service.js', async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    withCache: vi.fn((key, ttl, fn) => fn()),  // passthrough in tests
+    invalidate: vi.fn().mockResolvedValue(undefined),
+    invalidatePattern: vi.fn().mockResolvedValue(undefined),
+    set: vi.fn().mockResolvedValue(undefined),
+    get: vi.fn().mockResolvedValue(null),
+    healthCheck: vi.fn().mockResolvedValue({ status: 'disabled' }),
+  };
+});
 
 // ─── JWT mock helpers ─────────────────────────────────────────
 export const TEST_JWT_SECRET = 'test-secret-key';

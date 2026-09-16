@@ -257,29 +257,98 @@ export const describeWsConfig = (env = process.env) => ({
  * against a production office.
  *
  * Reported rather than enforced: a missing value is not always wrong, and
- * refusing to boot over one would be worse. The boot banner prints this so the
- * cutover is a checklist someone reads, not a thing someone remembers.
+ * refusing to boot over one would be worse. `logCutoverRisks()` prints it at
+ * startup so the cutover is a checklist someone reads, not a thing someone
+ * remembers.
+ *
+ * Two kinds of wrong, and the first version only caught one of them:
+ *
+ *   MISSING - the setting is unset, so a PDT-shaped default applies.
+ *   PDT      - the setting IS set, to a value that is only right for PDT.
+ *
+ * Checking only for "missing" is how the check defeats itself. Queue 90 is the
+ * queue Amadeus created for PDT testing; it is written into the environment, so
+ * a presence test reports it as fine. At cutover you edit the endpoint, the
+ * office and the credentials and leave the rest - which is exactly the shape
+ * that slips past a presence test and is caught by a value test.
  */
 export const cutoverRisks = (env = process.env) => {
   const onDefault = [];
+
   // Present-but-empty counts as set: `AMADEUS_WS_UNTICKETABLE_CARRIERS=''` is
   // the deliberate way to say "block nothing", and flagging it would train
   // whoever reads this list to ignore it.
-  const check = (name, why) => {
-    if (env[name] === undefined || env[name] === null) onDefault.push({ setting: name, risk: why });
+  const missing = (name) => env[name] === undefined || env[name] === null;
+  const check = (name, why, pdtValues = []) => {
+    if (missing(name)) {
+      onDefault.push({ setting: name, kind: 'MISSING', risk: why });
+      return;
+    }
+    const value = String(env[name]).trim();
+    if (value && pdtValues.some((pdt) => pdt.toUpperCase() === value.toUpperCase())) {
+      onDefault.push({ setting: name, kind: 'PDT', risk: `set to ${value}, which is a PDT value — ${why}` });
+    }
   };
 
   check('AMADEUS_WS_UNTICKETABLE_CARRIERS',
     'unset means the 19-carrier PDT blocklist, not "none": those carriers vanish from search');
-  check('AMADEUS_WS_QUEUE_NUMBER', 'defaults to 50, a PDT queue; production needs one from the PRD bank');
-  check('AMADEUS_WS_OFFICE_TIME_ZONE', 'defaults to America/New_York; it decides the same-day void window');
-  check('AMADEUS_WS_FOP_CODE', 'defaults to CASH, correct on PDT and never confirmed against production');
-  check('AMADEUS_WS_MARKET_IATA_CODE', 'defaults to US; it identifies the ticket stock when voiding');
+  // Learned from one 8102 on the PDT office. A production office may hold the
+  // agreement, and the same "unset is not none" trap applies.
+  check('AMADEUS_WS_INTERLINE_BLOCKED_PAIRS',
+    `unset means the PDT-learned pair list (${DEFAULT_NO_INTERLINE_PAIRS.join(', ')}), not "none"`);
+  check('AMADEUS_WS_QUEUE_NUMBER',
+    'production needs a queue from the PRD bank', ['50', '90']);
+  check('AMADEUS_WS_QUEUE_CATEGORY',
+    'the C0 in "queue 90 C0" is PDT-shaped; a production queue may use another category');
+  check('AMADEUS_WS_OFFICE_TIME_ZONE',
+    'defaults to America/New_York; it decides the same-day void window');
+  check('AMADEUS_WS_FOP_CODE',
+    'defaults to CASH, correct on PDT and never confirmed against production');
+  check('AMADEUS_WS_MARKET_IATA_CODE',
+    'defaults to US; it identifies the ticket stock when voiding');
+  // Sent in AMA_SecurityHostedUser on every authenticating call. A wrong duty
+  // code on the production office reads as an outage, not as a config error.
+  check('AMADEUS_WS_DUTY_CODE',
+    'defaults to SU; a duty code the production office does not grant looks like an Amadeus outage');
+
+  // The WSAP is not just a credential - it is the label stamped on every offer
+  // and compared by the chain's cross-environment guard. Left pinned to the
+  // test WSAP while the endpoint moves, that guard compares PDT to PDT, agrees,
+  // and lets a cached PDT offer be sold on the production node.
+  check('AMADEUS_WS_WSAP',
+    'the offer stamp and the chain\'s cross-environment guard both read it', ['1ASIWJETJEC']);
+  check('AMADEUS_WS_OFFICE_ID',
+    'every sell, price and issuance runs under this office and its authorisations', ['SCK1S2400']);
 
   const endpoint = String(env.AMADEUS_WS_ENDPOINT || '');
   if (/\btest\b/i.test(endpoint)) {
-    onDefault.push({ setting: 'AMADEUS_WS_ENDPOINT', risk: 'still points at the Amadeus TEST node' });
+    onDefault.push({ setting: 'AMADEUS_WS_ENDPOINT', kind: 'PDT', risk: 'still points at the Amadeus TEST node' });
   }
 
   return onDefault;
+};
+
+/**
+ * Print the cutover checklist at startup.
+ *
+ * The reason this exists as a banner rather than a document: the settings it
+ * names each fail SILENTLY. A production office running the PDT carrier list
+ * looks exactly like an office with no Emirates inventory. There is no error to
+ * search for afterwards, so the warning has to arrive before anyone looks.
+ *
+ * Never throws and never exits — a boot that dies over a warning is worse than
+ * the warning.
+ */
+export const logCutoverRisks = (env = process.env, log = console) => {
+  try {
+    const risks = cutoverRisks(env);
+    if (risks.length === 0) return risks;
+    log.warn('⚠️  Amadeus cutover checklist — settings still on a PDT-shaped value:');
+    for (const risk of risks) log.warn(`   [${risk.kind}] ${risk.setting} — ${risk.risk}`);
+    log.warn('   Each of these fails silently. Confirm every one against the production office.');
+    return risks;
+  } catch (error) {
+    log.warn('Could not evaluate the Amadeus cutover checklist:', error?.message);
+    return [];
+  }
 };

@@ -1892,6 +1892,16 @@ router.post('/price', async (req, res) => {
         // Whether a date of birth is needed for everyone, domestic or not (Secure Flight).
         secureFlight: touchesUnitedStates(pricingResponse.data?.flightOffers?.[0] ?? flightOffer),
         seatsConfirmed: seatsChecked,
+        // Whether THIS server would book the offer it just priced.
+        //
+        // The order route refuses a booking when the flag is off, but it runs
+        // after ARC has taken the money, so refusing there means charging the
+        // customer and reversing it. Checkout has to ask before the charge -
+        // and checkout runs on Vercel, whose environment is not the one that
+        // books. Reading its own AMADEUS_WS_BOOKING_ENABLED would be reading
+        // the wrong host. So the answer rides back with the price, from the
+        // host that would do the booking, exactly as `international` does.
+        bookingEnabled: providerStatus().bookingEnabled,
       },
       message: 'Flight priced successfully'
     });

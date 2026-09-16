@@ -15,6 +15,7 @@
  *   );
  */
 
+import { createHash } from 'node:crypto';
 import Redis from 'ioredis';
 
 // ─── Connection ──────────────────────────────────────────────
@@ -219,9 +220,43 @@ export async function healthCheck() {
 // ─── Key Builders ─────────────────────────────────────────────
 // Centralised key naming — prevents typos across controllers.
 
+/**
+ * Which GDS the flight data came from, as eight hex characters.
+ *
+ * Every flight key carries it, because a cached answer is only meaningful for
+ * the Amadeus environment that produced it. Without this, moving
+ * AMADEUS_WS_ENDPOINT from the test node to production leaves Redis serving
+ * test prices and test availability to real customers under a key that looks
+ * identical - for five minutes on a search, and for six to twelve hours on the
+ * date strip and the browse endpoints. The customer clicks a price the live
+ * airline never quoted.
+ *
+ * Endpoint, WSAP and office together are what "this GDS" means: the same host
+ * with a different WSAP is a different set of contracts and a different
+ * ticketing office. Hashed, so nothing identifying goes into a key that gets
+ * logged.
+ *
+ * Read once per process, like the Amadeus config itself. Changing any of the
+ * three needs a restart either way.
+ */
+let gdsTagMemo = null;
+const gdsTag = () => {
+  if (gdsTagMemo) return gdsTagMemo;
+  const identity = [
+    process.env.AMADEUS_WS_ENDPOINT,
+    process.env.AMADEUS_WS_WSAP,
+    process.env.AMADEUS_WS_OFFICE_ID,
+  ].map((part) => part ?? '').join('|');
+  gdsTagMemo = createHash('sha1').update(identity).digest('hex').slice(0, 8);
+  return gdsTagMemo;
+};
+
+/** Test seam: forget the memoised tag. */
+export const resetGdsTag = () => { gdsTagMemo = null; };
+
 export const CacheKeys = {
   flightSearch: (from, to, date, travelers) =>
-    `flights:${from}:${to}:${date}:${travelers}`,
+    `flights:${gdsTag()}:${from}:${to}:${date}:${travelers}`,
 
   hotelSearch: (city, checkIn, checkOut, guests) =>
     `hotels:${city}:${checkIn}:${checkOut}:${guests}`,
@@ -242,5 +277,5 @@ export const CacheKeys = {
   // Pass a kind + an ordered list of params; undefined/empty parts collapse to '' so
   // the key is stable for the same logical query.
   flightBrowse: (kind, parts = []) =>
-    `flights:browse:${kind}:${parts.map((p) => (p === undefined || p === null ? '' : p)).join(':')}`,
+    `flights:browse:${gdsTag()}:${kind}:${parts.map((p) => (p === undefined || p === null ? '' : p)).join(':')}`,
 };

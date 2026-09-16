@@ -146,8 +146,8 @@ const searchFlights = async (params) => {
     const carriers = [...new Set(mapped
       .filter((offer) => cannotTicket(offer, config.unticketableCarriers))
       .map(ticketingCarrierOf))];
-    // Named by pair, so one that turns out to be fine can be allowed by name
-    // through AMADEUS_WS_INTERLINE_PAIRS_ALLOWED.
+    // Named by pair, so a pair that turns out to be fine can be dropped from
+    // AMADEUS_WS_INTERLINE_BLOCKED_PAIRS without touching the others.
     const pairs = [...new Set(mapped
       .filter((offer) => interlineNotAllowed(offer, config.interline))
       .flatMap(interlinePairsOf))];
@@ -330,7 +330,7 @@ const priceFlightOffer = async (flightOffer) => {
     throw new AmadeusSoapError({
       error: 'This itinerary cannot be ticketed as one booking - please choose another flight',
       code: 409,
-      technicalError: `interline ticketing not confirmed for ${interlinePairsOf(offer).join(', ')} (AMADEUS_WS_INTERLINE_PAIRS_ALLOWED)`,
+      technicalError: `interline ticketing not confirmed for ${interlinePairsOf(offer).join(', ')} (AMADEUS_WS_INTERLINE_BLOCKED_PAIRS)`,
       operation: 'Fare_InformativePricingWithoutPNR',
     });
   }
