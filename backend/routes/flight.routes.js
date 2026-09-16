@@ -2938,6 +2938,12 @@ router.post('/order', optionalProtect, async (req, res) => {
         });
         // This answer promises an email; it used to send none.
         await sendHeldForReviewEmail(req.body.bookingReference, req.body);
+        // "Your seats are reserved" is true when a record locator came back.
+        // It is NOT true when the commit itself never answered
+        // (`committed: 'unknown'`): we do not know whether the airline holds
+        // anything, and saying so would be the kind of promise this route has
+        // been cleaned of elsewhere.
+        const holdsSeats = Boolean(providerError.pnr);
         return res.status(202).json({
           success: true,
           data: { id: providerError.pnr, pnr: providerError.pnr, status: 'PENDING_CONFIRMATION' },
@@ -2945,8 +2951,11 @@ router.post('/order', optionalProtect, async (req, res) => {
           orderId: providerError.pnr,
           bookingReference: req.body.bookingReference,
           needsReview: true,
-          message: 'Your seats are reserved with the airline and our team is finalising your ticket. '
-            + 'We will email you as soon as it is issued.'
+          message: holdsSeats
+            ? 'Your seats are reserved with the airline and our team is finalising your ticket. '
+              + 'We will email you as soon as it is issued.'
+            : 'Your payment is safe and our team is checking with the airline whether your booking went '
+              + 'through. We will email you either way - please do not book again in the meantime.'
         });
       }
 
