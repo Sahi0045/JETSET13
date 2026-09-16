@@ -31,9 +31,11 @@ const valueAt = (row, column) => column
   .reduce((value, key) => (value === null || value === undefined ? undefined : value[key]), row);
 
 const passes = (row, [op, column, expected]) => {
-  // `or` carries clauses rather than a column, so it is answered before any
-  // attempt to read one.
+  // `or` and `not` carry clauses rather than a column, so they are answered
+  // before any attempt to read one.
   if (op === 'or') return expected.some((clause) => passes(row, clause));
+  if (op === 'not') return !passes(row, expected);
+  if (op === 'unsupported') return false;
   const actual = valueAt(row, column);
   switch (op) {
     case 'eq': return actual !== undefined && actual !== null && String(actual) === String(expected);
@@ -64,12 +66,28 @@ const parseOr = (expression) => String(expression || '')
   .map((clause) => clause.trim())
   .filter(Boolean)
   .map((clause) => {
-    const match = /^(.+?)\.(eq|neq|is|ilike)\.(.*)$/.exec(clause);
-    if (!match) return null;
-    const [, column, op, value] = match;
-    return [op, column, value === 'null' ? null : value];
-  })
-  .filter(Boolean);
+    // `column.not.is.null` - PostgREST puts the negation between the column and
+    // the operator. Without this branch the lazy `(.+?)` swallowed `.not` into
+    // the column name, `valueAt` then walked a path that does not exist and
+    // returned undefined, and `is null` answered TRUE for every row - so
+    // `needs_review.not.is.null`, which is how the needs-review alarm selects
+    // the bookings it is about, matched bookings that had never been flagged.
+    const match = /^(.+?)\.(not\.)?(eq|neq|is|ilike)\.(.*)$/.exec(clause);
+    if (!match) {
+      // Fail CLOSED, and say so. A clause this helper cannot parse used to be
+      // dropped, which left the `or` with nothing to filter on and returned the
+      // whole table - so a test asserting "the wrong reference is refused"
+      // passed while the query matched everything. A clause that matches
+      // nothing makes such a test go red instead, which is the honest direction
+      // to be wrong in.
+      console.warn(`fakeBookings: .or() clause "${clause}" is not understood; treating it as no match. `
+        + 'Add it to parseOr if a test needs it.');
+      return ['unsupported', null, clause];
+    }
+    const [, column, negated, op, value] = match;
+    const parsed = [op, column, value === 'null' ? null : value];
+    return negated ? ['not', null, parsed] : parsed;
+  });
 
 export function fakeBookingsTable(rows = [], { tables = {}, fail } = {}) {
   const table = rows.map(clone);

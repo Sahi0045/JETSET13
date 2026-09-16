@@ -23,6 +23,7 @@ import { sendEmail } from '../services/emailService.js';
 // that died, and its booking needs running again.
 import { CHAIN_CLAIM_TTL_MS as CLAIM_TTL_MS, MAX_QUEUE_ATTEMPTS, liveChainState } from '../utils/bookingChainClaim.js';
 import { queueEnvironment } from '../utils/queueEnvironment.js';
+import { unchangedSince } from '../utils/bookingDetailsGuard.js';
 const MAX_PER_TICK = 5;
 
 /**
@@ -101,12 +102,24 @@ export async function findRunnable({ limit = MAX_PER_TICK, now = Date.now(), env
 async function clearQueuedOrder(bookingReference) {
   const { data: row } = await supabase
     .from('bookings')
-    .select('booking_details')
+    .select('status, payment_status, booking_details')
     .eq('booking_reference', bookingReference)
     .single();
   if (!row?.booking_details?.queued_order) return;
   const { queued_order: _order, queued_env: _env, ...rest } = row.booking_details;
-  await supabase.from('bookings').update({ booking_details: rest }).eq('booking_reference', bookingReference);
+  // Pinned, like every other writer of this column. A replay that the worker
+  // abandoned at its timeout leaves the route's own chain still running, and
+  // the next tick picks the row up again as soon as a PNR appears - so this
+  // read and write can straddle the chain's final save and put the row back as
+  // it was, losing the tickets and itineraries it had just written while
+  // leaving `status` on the newer value.
+  const { data: written } = await unchangedSince(
+    supabase.from('bookings').update({ booking_details: rest }).eq('booking_reference', bookingReference),
+    row,
+  ).select('booking_reference');
+  if (!written?.length) {
+    log('queued order not cleared: the booking changed while it was being read', { bookingReference });
+  }
 }
 
 /**

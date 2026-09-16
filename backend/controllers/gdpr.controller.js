@@ -7,6 +7,7 @@
 import supabase from '../config/supabase.js';
 import User from '../models/user.model.js';
 import crypto from 'crypto';
+import { unchangedSince } from '../utils/bookingDetailsGuard.js';
 
 /**
  * Take the people out of a person's bookings, leaving the booking.
@@ -25,18 +26,45 @@ import crypto from 'crypto';
 async function redactBookingsFor(userId) {
   const { data: rows, error } = await supabase
     .from('bookings')
-    .select('id, booking_details')
+    .select('id, booking_reference, status, payment_status, booking_details')
     .eq('user_id', userId);
 
   if (error) {
     console.error('GDPR: could not read bookings to redact:', error.message);
-    return { redacted: 0, failed: 0 };
+    return { redacted: 0, failed: 0, deferred: 0 };
   }
 
   let redacted = 0;
   let failed = 0;
+  let deferred = 0;
+
   for (const row of rows || []) {
     const details = row.booking_details || {};
+
+    // A booking still being made keeps everything until it is finished.
+    //
+    // `pending_booking_data` is not just a record of what the customer typed -
+    // POST /flights/order reads the verified offer out of it
+    // (flight.routes.js: `pending_booking_data.bookingData.originalOffer`) and
+    // REVERSES THE CHARGE when it is absent, and the abandoned-checkout job
+    // requires it to find a paid checkout at all. Stripping it from a booking
+    // that is still queued or unticketed would destroy the trip the customer
+    // paid for, and hide it from the one job that would have caught that.
+    //
+    // So a booking that is not finished is deferred: nothing about it is
+    // touched, and it is counted so a human can see there is something left.
+    // The retention job erases it on its own schedule.
+    const unfinished = Boolean(details.queued_order)
+      || Boolean(details.gds_chain && !details.pnr)
+      || (row.payment_status === 'paid' && !details.pnr && row.status !== 'cancelled');
+    if (unfinished) {
+      console.warn('GDPR: booking still in flight, not redacted', {
+        bookingReference: row.booking_reference, status: row.status,
+      });
+      deferred += 1;
+      continue;
+    }
+
     const {
       pending_booking_data: _pending,
       guest_info: _guest,
@@ -46,24 +74,36 @@ async function redactBookingsFor(userId) {
       ...kept
     } = details;
 
-    const { error: writeError } = await supabase
+    // Pinned to the row this was built from, like every other whole-column
+    // write of booking_details. Without it, a chain committing a PNR between
+    // this read and this write would have that PNR erased - the airline holds
+    // a reservation our database can no longer find.
+    let write = supabase
       .from('bookings')
       .update({
         passenger_details: [],
-        booking_details: { ...kept, redacted_at: new Date().toISOString() },
+        // `redacted_at` is set once: re-running must not lose the first stamp.
+        booking_details: { ...kept, redacted_at: details.redacted_at || new Date().toISOString() },
       })
       .eq('id', row.id);
+    write = unchangedSince(write, row);
+
+    const { data: written, error: writeError } = await write.select('id');
 
     if (writeError) {
       console.error('GDPR: could not redact booking', row.id, writeError.message);
       failed += 1;
+    } else if (!written?.length) {
+      console.warn('GDPR: booking changed while being redacted, left alone', { bookingReference: row.booking_reference });
+      deferred += 1;
     } else {
       redacted += 1;
     }
   }
 
-  console.log(`GDPR: redacted ${redacted} bookings for ${userId}${failed ? `, ${failed} failed` : ''}`);
-  return { redacted, failed };
+  console.log(`GDPR: redacted ${redacted} bookings for ${userId}`
+    + `${failed ? `, ${failed} failed` : ''}${deferred ? `, ${deferred} left for later` : ''}`);
+  return { redacted, failed, deferred };
 }
 
 // ─── Data Export ──────────────────────────────────────────────
