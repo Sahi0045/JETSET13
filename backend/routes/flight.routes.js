@@ -1378,6 +1378,21 @@ async function saveBookingToDatabase(bookingData) {
       console.error('   Error Message:', error.message);
       console.error('   User ID that was attempted:', bookingData.userId || 'null');
 
+      // A CHECK violation means the database refuses the shape of the row - a
+      // `status` the constraint does not list, say. No retry below can help:
+      // the fallback only drops user_id. The route still answers success:true
+      // with savedToDatabase:false, so without this the failure is silent - a
+      // paid customer with a real PNR, no row and no confirmation email. This
+      // is how `pending_ticketing` went unnoticed until it was audited for.
+      if (error.code === '23514') {
+        reportError(new Error(`the bookings table refused this row: ${error.message}`), {
+          where: 'saveBookingToDatabase',
+          bookingReference: bookingData.bookingReference,
+          pnr: bookingData.pnr,
+          status: row.status,
+        });
+      }
+
       // If duplicate key right away
       if (error.code === '23505' || error.message?.includes('duplicate key') || error.message?.includes('unique constraint')) {
         return await handleDuplicateBookingMerge(bookingData, row);
