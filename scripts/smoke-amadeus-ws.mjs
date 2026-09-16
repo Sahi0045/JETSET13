@@ -12,6 +12,7 @@
  *   AMADEUS_WS_SMOKE=true node scripts/smoke-amadeus-ws.mjs --booking --keep
  */
 import 'dotenv/config';
+import { refuseUnlessTestNode } from './lib/gdsGuard.mjs';
 
 if (process.env.AMADEUS_WS_SMOKE !== 'true') {
   console.error('Refusing to run: set AMADEUS_WS_SMOKE=true. This calls the live GDS.');
@@ -24,7 +25,12 @@ const keep = args.has('--keep');
 
 // Booking must be on for the chain regardless of how the environment is set,
 // and auto-ticketing must be off: PDT has no ticketing stock configured.
+//
+// Forcing the flag on is what makes this dangerous after cutover - the same
+// command that makes a throwaway PNR on PDT makes a real one on the production
+// office - so the endpoint is checked before the flag is touched, not after.
 if (wantBooking) {
+  refuseUnlessTestNode(args.has('--ticket') ? 'issuing a ticket' : 'creating a PNR');
   process.env.AMADEUS_WS_BOOKING_ENABLED = 'true';
   if (!args.has('--ticket')) process.env.AMADEUS_WS_AUTO_TICKET = 'false';
 }

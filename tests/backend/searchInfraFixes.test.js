@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
 import { searchFilterKey } from '../../backend/routes/flight.routes.js';
-import { cutoverRisks } from '../../backend/services/amadeusSoap/config.js';
 import { inspectReply } from '../../backend/services/amadeusSoap/errors.js';
 
 /**
@@ -84,46 +83,13 @@ describe('reading an Amadeus error container', () => {
 });
 
 /**
- * Settings whose default is only right for the PDT test office. Each fails
- * silently: unset, the unticketable list is the 19-carrier PDT blocklist rather
- * than "none", and those carriers simply stop appearing in search.
+ * cutoverRisks lived here, and now lives in cutoverSafetyNet.test.js with the
+ * rest of the cutover safety net - the boot banner that prints it, the guard on
+ * the scripts that book, and the GDS fingerprint in the cache key. It grew a
+ * second kind of check (a setting SET to a PDT value, not only a missing one)
+ * and five more settings; two files asserting on the same function would have
+ * drifted, and the fixture here had already gone stale.
  */
-describe('cutoverRisks', () => {
-  const production = {
-    AMADEUS_WS_UNTICKETABLE_CARRIERS: '',
-    AMADEUS_WS_QUEUE_NUMBER: 'Q8',
-    AMADEUS_WS_OFFICE_TIME_ZONE: 'America/New_York',
-    AMADEUS_WS_FOP_CODE: 'CASH',
-    AMADEUS_WS_MARKET_IATA_CODE: 'US',
-    AMADEUS_WS_ENDPOINT: 'https://nodeD1.production.webservices.amadeus.com/1ASIWJETJEC',
-  };
-
-  it('names every setting still on a PDT-shaped default', () => {
-    const risks = cutoverRisks({}).map((r) => r.setting);
-
-    expect(risks).toContain('AMADEUS_WS_UNTICKETABLE_CARRIERS');
-    expect(risks).toContain('AMADEUS_WS_QUEUE_NUMBER');
-    expect(risks).toContain('AMADEUS_WS_OFFICE_TIME_ZONE');
-    expect(risks).toContain('AMADEUS_WS_FOP_CODE');
-    expect(risks).toContain('AMADEUS_WS_MARKET_IATA_CODE');
-  });
-
-  it('says so while the endpoint still points at the test node', () => {
-    const risks = cutoverRisks({ ...production, AMADEUS_WS_ENDPOINT: 'https://nodeD2.test.webservices.amadeus.com/1ASIWJETJEC' });
-
-    expect(risks.map((r) => r.setting)).toContain('AMADEUS_WS_ENDPOINT');
-  });
-
-  it('is empty once every one of them has been set for production', () => {
-    expect(cutoverRisks(production)).toEqual([]);
-  });
-
-  it('explains each risk rather than only naming it', () => {
-    for (const risk of cutoverRisks({})) {
-      expect(String(risk.risk).length, risk.setting).toBeGreaterThan(20);
-    }
-  });
-});
 
 /**
  * The queue worker took the 50 oldest queued rows and discarded the other

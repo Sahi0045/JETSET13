@@ -42,6 +42,7 @@ import { validateEnv } from "./backend/config/validateEnv.js";
 import { initMonitoring } from "./backend/services/monitoring.js";
 import { installProcessGuards } from "./backend/bootstrap/processGuards.js";
 import { startBookingQueueWorker } from "./backend/jobs/bookingQueue.job.js";
+import { logCutoverRisks } from "./backend/services/amadeusSoap/config.js";
 import { startNeedsReviewAlertJob } from "./backend/jobs/needsReviewAlert.job.js";
 import { startPaymentFailureAlertJob } from "./backend/jobs/paymentFailureAlert.job.js";
 import { startAbandonedCheckoutJob } from "./backend/jobs/abandonedCheckout.job.js";
@@ -321,6 +322,11 @@ app.use(errorHandler);
 if (process.env.NODE_ENV !== "test") {
   const server = app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
+    // Names every Amadeus setting still on a PDT-shaped value. Each one fails
+    // silently - a production office running the PDT carrier list looks exactly
+    // like an office with no Emirates inventory - so the warning has to arrive
+    // before anyone goes looking for an error that was never logged.
+    logCutoverRisks();
     // Finishes paid bookings that could not get an Amadeus slot. Lives here,
     // with the booking chain, and never in the Vercel handler.
     startBookingQueueWorker({ port: PORT });

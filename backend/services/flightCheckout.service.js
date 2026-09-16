@@ -72,12 +72,14 @@ export async function priceOfferForCheckout(offer) {
     }
     const international = resp?.data?.meta?.international;
     const secureFlight = resp?.data?.meta?.secureFlight;
+    const bookingEnabled = resp?.data?.meta?.bookingEnabled;
     return {
       ...priced,
       _ama: {
         ...priced._ama,
         ...(typeof international === 'boolean' ? { international } : {}),
         ...(typeof secureFlight === 'boolean' ? { secureFlight } : {}),
+        ...(typeof bookingEnabled === 'boolean' ? { bookingEnabled } : {}),
       },
     };
   }
@@ -93,7 +95,8 @@ export async function priceOfferForCheckout(offer) {
   const priced = result?.data?.flightOffers?.[0];
   if (!result?.success || !priced?.price) throw new Error(result?.error || 'pricing returned no offer');
   const { describeWsConfig } = await import('./amadeusSoap/config.js');
-  if (describeWsConfig().seatCheckBeforePayment) {
+  const wsConfig = describeWsConfig();
+  if (wsConfig.seatCheckBeforePayment) {
     try {
       await FlightProvider.confirmSeats(priced);
     } catch (error) {
@@ -102,7 +105,17 @@ export async function priceOfferForCheckout(offer) {
     }
   }
   const { crossesBorder, touchesUnitedStates } = await import('../utils/itinerary.js');
-  return { ...priced, _ama: { ...priced._ama, international: crossesBorder(priced), secureFlight: touchesUnitedStates(priced) } };
+  return {
+    ...priced,
+    _ama: {
+      ...priced._ama,
+      international: crossesBorder(priced),
+      secureFlight: touchesUnitedStates(priced),
+      // This process is the one that would book, so its own config is the
+      // authority. Over HTTPS the same answer arrives in the reply's `meta`.
+      bookingEnabled: wsConfig.bookingEnabled === true,
+    },
+  };
 }
 
 /** The configured price settings, merged over the defaults exactly as the page receives them. */
@@ -183,6 +196,27 @@ export async function verifyFlightCharge({
         'The airline can no longer sell this fare. Please search again to see the fares available now. Nothing has been charged.');
     }
     return refuse(503, 'PRICE_UNAVAILABLE', 'We could not confirm the current fare with the airline. Please try again in a moment.');
+  }
+
+  // Can this even be booked right now?
+  //
+  // AMADEUS_WS_BOOKING_ENABLED is off in production while the office waits for
+  // Amadeus certification, and the order route honours it - but the order route
+  // runs after ARC's hosted checkout has completed, so its refusal means taking
+  // the customer's money and reversing it. A charge and a refund for a booking
+  // that was never possible is a bad enough experience that the flag defeats
+  // its own purpose; the route's own comment says as much.
+  //
+  // Asked here, the customer is told before anything is charged. It is asked
+  // AFTER pricing because that is the earliest moment the answer exists:
+  // checkout can run on Vercel, which never books, so the authority is the host
+  // that priced the offer and the answer rides back on `_ama.bookingEnabled`.
+  // An absent answer is not treated as "off" - an older server that does not
+  // send it must not stop a booking that would have worked.
+  if (priced?._ama?.bookingEnabled === false) {
+    return refuse(503, 'BOOKING_DISABLED',
+      'Online booking is temporarily unavailable, so we have not taken any payment. '
+      + 'Please call (877) 538-7380 and we will book this flight for you by phone.');
   }
 
   // Every traveller as the airline needs them before the card is charged, by

@@ -423,7 +423,7 @@ export const runBookingChain = async (p) => {
       step: 'validate',
       error: 'This itinerary cannot be ticketed as one booking - please choose another flight',
       code: 409,
-      technicalError: `interline ticketing not confirmed for ${interlinePairsOf(offer).join(', ')} (AMADEUS_WS_INTERLINE_PAIRS_ALLOWED)`,
+      technicalError: `interline ticketing not confirmed for ${interlinePairsOf(offer).join(', ')} (AMADEUS_WS_INTERLINE_BLOCKED_PAIRS)`,
     });
   }
 

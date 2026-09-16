@@ -35,6 +35,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import axios from 'axios';
+import { refuseUnlessTestNode } from './lib/gdsGuard.mjs';
 
 if (process.env.AMADEUS_WS_RECORD !== 'true') {
   console.error('Refusing to run: set AMADEUS_WS_RECORD=true. This calls the live GDS.');
@@ -57,7 +58,12 @@ const outDir = path.resolve(ROOT, flag('out', 'tests/fixtures/amadeus/certificat
 // The chain must be reachable regardless of how the environment is configured,
 // and ticketing must stay off: PDT has no ticketing stock, so DocIssuance can
 // only be recorded once Amadeus confirms it.
+//
+// Forcing the flag on is what makes this dangerous after cutover - the same
+// command that records a throwaway PNR on PDT makes a real one on the
+// production office - so the endpoint is checked before the flag is touched.
 if (scenario === 'booking' || scenario === 'all') {
+  refuseUnlessTestNode(has('ticket') ? 'recording a ticket issuance' : 'recording a booking');
   process.env.AMADEUS_WS_BOOKING_ENABLED = 'true';
   if (!has('ticket')) process.env.AMADEUS_WS_AUTO_TICKET = 'false';
 }

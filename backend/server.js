@@ -27,6 +27,7 @@ import { checkQuoteExpirationHandler } from './jobs/checkQuoteExpiration.js';
 import { startWorkflowEngine } from './jobs/workflowEngine.js';
 import { startDataRetentionJob } from './jobs/dataRetention.job.js';
 import { startBookingQueueWorker } from './jobs/bookingQueue.job.js';
+import { logCutoverRisks } from './services/amadeusSoap/config.js';
 import { startNeedsReviewAlertJob } from './jobs/needsReviewAlert.job.js';
 import { startPaymentFailureAlertJob } from './jobs/paymentFailureAlert.job.js';
 import { startAbandonedCheckoutJob } from './jobs/abandonedCheckout.job.js';
@@ -279,6 +280,9 @@ const server = app.listen(PORT, () => {
 
   // Start automated workflow engine (auto-assign, SLA, escalation, retention)
   if (process.env.NODE_ENV !== 'test') {
+    // Names every Amadeus setting still on a PDT-shaped value, because each one
+    // fails silently and there would be no error to search for later.
+    logCutoverRisks();
     startWorkflowEngine().catch(e => console.error('[Workflow] Engine failed to start:', e.message));
     try { startDataRetentionJob(24); } catch(e) { console.error('[Retention] Job failed to start:', e.message); }
     startBookingQueueWorker({ port: PORT });

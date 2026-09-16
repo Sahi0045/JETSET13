@@ -347,6 +347,73 @@ describe('verifyFlightCharge', () => {
 
     expect(result.ok).toBe(true);
   });
+
+  /**
+   * Booking switched off, refused before the card rather than after it.
+   *
+   * AMADEUS_WS_BOOKING_ENABLED is false in production while the office waits
+   * for Amadeus certification. The order route honours it - but it runs after
+   * ARC's hosted checkout has completed, so its refusal means charging the
+   * customer and reversing it. Its own comment says so: "this gate does NOT run
+   * before the money moves... by now the customer has already paid." A charge
+   * and a refund for a booking that was never possible defeats the purpose of
+   * the flag.
+   *
+   * The answer cannot come from checkout's own environment, because checkout
+   * runs on Vercel and Vercel never books - it forwards pricing to the host
+   * that does. So the host that priced the offer says whether it would book it,
+   * on `_ama.bookingEnabled`, exactly as it already answers `international`.
+   */
+  describe('booking switched off', () => {
+    const pricedWith = (ama) => vi.fn().mockResolvedValue({
+      price: { total: '400.00', base: '300.00', currency: 'USD' },
+      _ama: { international: false, ...ama },
+    });
+
+    it('refuses before the charge when the booking host says it would not book', async () => {
+      const result = await verify({ amount: 402, bookingData: bookingFor(1), priceOffer: pricedWith({ bookingEnabled: false }) });
+
+      expect(result.ok).toBe(false);
+      expect(result.code).toBe('BOOKING_DISABLED');
+      expect(result.status).toBe(503);
+    });
+
+    it('tells the customer nothing was taken, and how to book instead', async () => {
+      const result = await verify({ amount: 402, bookingData: bookingFor(1), priceOffer: pricedWith({ bookingEnabled: false }) });
+
+      expect(result.message).toMatch(/not taken any payment/i);
+      expect(result.message).toMatch(/877\) 538-7380/);
+    });
+
+    it('proceeds when the booking host says it would book', async () => {
+      const result = await verify({ amount: 401, bookingData: bookingFor(1), priceOffer: pricedWith({ bookingEnabled: true }) });
+
+      expect(result.ok).toBe(true);
+    });
+
+    /**
+     * An older server that does not send the field must not stop a booking that
+     * would have worked. Absent is unknown, and unknown is not "off".
+     */
+    it('does not refuse when the answer is absent', async () => {
+      const result = await verify({ amount: 401, bookingData: bookingFor(1), priceOffer: pricedWith({}) });
+
+      expect(result.ok).toBe(true);
+    });
+
+    /**
+     * Asked before the traveller checks, so a customer who cannot book at all is
+     * not first sent away to find a passport number.
+     */
+    it('is answered before the traveller details are picked over', async () => {
+      const incomplete = bookingFor(1);
+      delete incomplete.passengerData[0].dateOfBirth;
+
+      const result = await verify({ amount: 402, bookingData: incomplete, priceOffer: pricedWith({ bookingEnabled: false }) });
+
+      expect(result.code).toBe('BOOKING_DISABLED');
+    });
+  });
 });
 
 describe('priceOfferForCheckout tells a refused fare from an outage', () => {
