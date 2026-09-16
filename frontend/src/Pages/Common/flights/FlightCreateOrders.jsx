@@ -45,6 +45,16 @@ const IN_PROGRESS_RETRIES = 4;
 const IN_PROGRESS_RETRY_MS = 8000;
 
 /**
+ * How long the browser waits for the booking itself.
+ *
+ * Longer than the server's own budget for the same work - the chain's
+ * post-commit wait plus the queue worker's margin is about 250 seconds - so
+ * this only fires once the server has certainly given up too. A shorter
+ * deadline would tell a customer their booking failed while it was completing.
+ */
+const BOOKING_TIMEOUT_MS = 300_000;
+
+/**
  * PAYMENT_NOT_CAPTURED with `retryable: true` means the server could not reach
  * the payment gateway to check, not that the payment failed. The page asks
  * again this many times, this far apart, before offering to check again.
@@ -275,7 +285,22 @@ function FlightCreateOrders() {
       });
       console.log('📋 Full payload:', JSON.stringify(flightBookingData, null, 2));
 
-      const response = await axios.post(endpoints.flights.booking, flightBookingData);
+      // A deadline longer than the server's own budget, never shorter.
+      //
+      // This request had none at all, and the page it sits behind says "This
+      // may take a few moments. Please don't close this window." - so a stalled
+      // socket left a customer who had already paid watching that sentence for
+      // ever. Amadeus booking is genuinely slow, which is what made the hang
+      // indistinguishable from working.
+      //
+      // The number is derived, not picked: the chain's own post-commit budget
+      // is `airlineLocatorMaxWaitMs` (180s) plus the issue retries, and the
+      // queue worker allows that plus a minute - about 250s. Giving up earlier
+      // than the server would be the worst outcome available: the customer is
+      // told it failed while the booking completes behind them.
+      const response = await axios.post(endpoints.flights.booking, flightBookingData, {
+        timeout: BOOKING_TIMEOUT_MS,
+      });
 
       const body = response.data || {};
       if (body.success) {
@@ -413,6 +438,36 @@ function FlightCreateOrders() {
       // memory. Kept only when no answer came, as a dropped connection is
       // retried by reloading this page.
       if (error.response) clearStoredBookings();
+
+      /**
+       * No answer within the deadline. The customer has already paid, and the
+       * server is very likely still working - so this is "still confirming",
+       * not "failed".
+       *
+       * Asking again is safe and is the right move: the order route holds a
+       * compare-and-set claim on the booking reference, so a second request for
+       * a booking already under way is answered BOOKING_IN_PROGRESS rather than
+       * booking it twice. That is the same machinery used below, and it ends at
+       * the honest screen - "You don't need to pay or try again: we will email
+       * you as soon as the airline confirms it."
+       *
+       * The old fallback read "Connection error. Please check your internet
+       * connection and try again", under a red Booking Failed, to a customer
+       * whose booking was in all likelihood being confirmed at that moment.
+       */
+      const timedOut = error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT'
+        || (!error.response && /timeout/i.test(error.message || ''));
+      if (timedOut) {
+        inProgressAttempts.current += 1;
+        const gaveUp = inProgressAttempts.current > IN_PROGRESS_RETRIES;
+        setErrorCode('BOOKING_TIMEOUT');
+        setError(null);
+        setStillConfirming({ gaveUp, cancelling: false });
+        if (!gaveUp) {
+          retryTimer.current = setTimeout(() => processFlightOrder(orderDataRef.current), IN_PROGRESS_RETRY_MS);
+        }
+        return;
+      }
 
       if (error.response?.data?.code === 'BOOKING_IN_PROGRESS') {
         // Not a failure: the request holding this booking is confirming it.

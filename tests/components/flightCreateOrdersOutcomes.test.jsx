@@ -393,3 +393,73 @@ describe('the order route codes', () => {
     expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 });
+
+/**
+ * The booking request that never answers.
+ *
+ * This POST had no deadline at all, behind a page that says "This may take a
+ * few moments. Please don't close this window." - so a stalled socket left a
+ * customer who had ALREADY PAID reading that sentence for ever, while the
+ * server may well have been completing the booking behind them.
+ *
+ * Giving up is now bounded, but it is not a failure: the order route holds a
+ * compare-and-set claim on the booking reference, so asking again is answered
+ * BOOKING_IN_PROGRESS rather than booking twice. So a timeout takes the same
+ * honest path as BOOKING_IN_PROGRESS, and never the red "Booking Failed" with
+ * "check your internet connection" that it used to produce.
+ */
+describe('a booking request that times out', () => {
+  const flush = (ms = 0) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
+  const timesOut = () => Object.assign(new DOMException('signal timed out', 'TimeoutError'));
+
+  it('says it is still confirming, not that the booking failed', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    vi.stubGlobal('fetch', vi.fn(async () => { throw timesOut(); }));
+    const { container } = renderOrderPage();
+
+    await flush();
+
+    expect(container.textContent).toMatch(/Still confirming your booking/);
+    expect(container.textContent).not.toMatch(/Booking Failed/);
+    expect(container.textContent).not.toMatch(/internet connection/i);
+  });
+
+  it('asks again, and shows the booking when the answer finally comes', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const fetchMock = vi.fn()
+      .mockImplementationOnce(async () => { throw timesOut(); })
+      .mockResolvedValueOnce(reply(200, {
+        success: true, bookingReference: 'FLT1', pnr: 'BEEDS3', ticketed: true,
+        data: { bookingReference: 'FLT1' },
+      }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { container } = renderOrderPage();
+
+    await flush();
+    await flush(9000);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(container.textContent).not.toMatch(/Booking Failed/);
+  });
+
+  /**
+   * It cannot ask for ever. When it stops, the customer is told the truth -
+   * that they need do nothing and will be emailed - rather than being invited
+   * to pay again.
+   */
+  it('stops asking, and tells them not to pay again', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const fetchMock = vi.fn(async () => { throw timesOut(); });
+    vi.stubGlobal('fetch', fetchMock);
+    const { container } = renderOrderPage();
+
+    await flush();
+    for (let i = 0; i < 6; i += 1) await flush(9000);
+
+    expect(container.textContent).toMatch(/still being confirmed/i);
+    expect(container.textContent).toMatch(/don't need to pay or try again/i);
+    const calls = fetchMock.mock.calls.length;
+    await flush(60000);
+    expect(fetchMock.mock.calls.length).toBe(calls);
+  });
+});
