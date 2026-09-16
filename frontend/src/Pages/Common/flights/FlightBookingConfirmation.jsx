@@ -20,6 +20,8 @@ import PricingService from '../../../Services/PricingService';
 import { useGuestFlightBooking, usePriceConfig } from '../../../hooks/queries';
 import CouponInput from '../../../components/CouponInput';
 import FlightFareRules from './FlightFareRules';
+import { formatCalendarDate } from '../../../utils/dateUtils';
+import { clearStaleStoredBookings } from '../../../utils/bookingStorage';
 import { formatCheckedBag } from '../../../utils/baggage';
 import FlightCancellationPolicy from './FlightCancellationPolicy';
 import { searchToQuery } from './searchQuery';
@@ -97,6 +99,16 @@ function FlightBookingConfirmation() {
   useEffect(() => {
     if (!cancelledCheckout) return;
     navigate(routerLocation.pathname, { replace: true, state: cancelledCheckout.reviewState });
+  }, []);
+
+  // A draft left behind by a customer who reached ARC Pay and closed the tab
+  // holds every traveller's name, date of birth and passport number, and
+  // nothing removed it: clearStoredBookings runs on logout and once an order
+  // has answered, neither of which happens on that path. Runs after the
+  // cancelled-return read above, so coming back from ARC still restores the
+  // flight and the travellers.
+  useEffect(() => {
+    clearStaleStoredBookings();
   }, []);
   const [editMode, setEditMode] = useState(true); // Start in edit mode for new bookings
   // Collapsible passenger cards: null → first card open by default; '' → all
@@ -808,20 +820,27 @@ function FlightBookingConfirmation() {
     return duration;
   };
 
+  // A flight date is the calendar day written in it, read through
+  // parseCalendarDate (utils/dateUtils.js).
+  //
+  // These two did `new Date(dateString)` on `flightData.departure.rawDate`,
+  // which is date-only (`departure.at.split('T')[0]`). `new Date('2026-11-15')`
+  // is UTC midnight, which in every American time zone is the evening of the
+  // 14th - so this page showed a Los Angeles customer their flight leaving a day
+  // early, on the screen where they confirm and pay. dateUtils was written for
+  // exactly this bug and its docstring names it; every post-booking surface
+  // already uses it, and this page alone did not.
+  //
+  // Connecting itineraries were never affected: renderSegmentList formats
+  // `seg.departure.at`, a full airport-local timestamp, which round-trips.
+
   // Format just month and day
-  const formatShortDate = (dateString) => {
-    const date = new Date(dateString);
-    const options = { day: 'numeric', month: 'short' };
-    return date.toLocaleDateString('en-US', options);
-  };
+  const formatShortDate = (dateString) => formatCalendarDate(dateString, { day: 'numeric', month: 'short' });
 
   // Format full date with day of week: "Fri, 13 Feb 2026"
-  const formatFullDate = (dateString) => {
-    if (!dateString) return '';
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) return '';
-    return date.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
-  };
+  const formatFullDate = (dateString) => formatCalendarDate(dateString, {
+    weekday: 'short', day: 'numeric', month: 'short', year: 'numeric',
+  });
 
   // Format time from ISO datetime: "11:20"
   const formatTimeFromISO = (isoString) => {
@@ -1008,7 +1027,11 @@ function FlightBookingConfirmation() {
         couponCode: appliedCoupon?.code || null,
         flightData: flightDataForArcPay,
         // So a cancelled payment can come back to this search's results too.
-        searchData: reviewState?.searchData ?? null
+        searchData: reviewState?.searchData ?? null,
+        // When this draft was written. It holds every traveller's name, date of
+        // birth and passport number, and nothing removed it when a customer
+        // reached ARC Pay and closed the tab - see clearStaleStoredBookings.
+        savedAt: Date.now()
       };
 
       // Not logged: it carries names, dates of birth and passport numbers.

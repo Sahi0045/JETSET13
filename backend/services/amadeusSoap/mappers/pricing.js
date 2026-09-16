@@ -50,6 +50,14 @@ const readSegments = (fareInfoGroup) => arr(fareInfoGroup.segmentLevelGroup).map
   const bag = at(segment, 'baggageAllowance.baggageDetails');
   const allowance = bag ? num(bag.freeAllowance) ?? 0 : null;
   const code = bag ? txt(bag.quantityCode) : null;
+  // `quantityCode` says weight or pieces; `unitQualifier` says which unit the
+  // weight is in. This hardcoded KG while the search mapper (mappers/offer.js)
+  // reads the qualifier properly - and since the priced value OVERRIDES the
+  // searched one below, the same fare read "50 LB" on the card and "50 KG" one
+  // click later on the review page. A US-settled agency sees pounds-filed
+  // fares routinely, and a passenger told they may carry 50 KG when the fare
+  // says 50 LB is told they may carry more than twice what they may.
+  const unit = bag ? txt(bag.unitQualifier) : null;
 
   return {
     segmentId: String(index + 1),
@@ -58,7 +66,7 @@ const readSegments = (fareInfoGroup) => arr(fareInfoGroup.segmentLevelGroup).map
     cabin: CABIN_BY_DESIGNATOR[atTxt(segment, 'cabinGroup.cabinSegment.cabinDesignator')] ?? undefined,
     includedCheckedBags: bag === undefined || bag === null
       ? undefined
-      : (code === 'N' ? { quantity: allowance } : { weight: allowance, weightUnit: 'KG' }),
+      : (code === 'N' ? { quantity: allowance } : { weight: allowance, weightUnit: unit === 'L' ? 'LB' : 'KG' }),
   };
 });
 
