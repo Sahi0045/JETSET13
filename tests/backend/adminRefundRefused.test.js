@@ -180,3 +180,139 @@ describe('admin refund', () => {
     expect(axios.put).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * A partial refund must not lock the remainder away.
+ *
+ * Until this handler was fixed its writes all failed with 42703, so
+ * `payment_status` never became 'refunded' and the guard at the top of the
+ * handler never ran. Making the write land turned that guard into a trap: a
+ * $100 refund out of $291 wrote 'refunded', and every later call was refused
+ * before ARC was even asked - the other $191 could never be returned. Worse,
+ * `reconcileBookingPayment` and the flight cancel guard both then read money
+ * still held at the gateway as already gone back.
+ */
+describe('a partial admin refund', () => {
+  it('does not mark the payment fully refunded', async () => {
+    const res = await refundWith({
+      order: arcOrder(),
+      putReply: { status: 200, data: { result: 'SUCCESS' } },
+      body: { paymentId: 'pay-1', amount: 100, reason: 'Partial' },
+    });
+
+    expect(res.body.success).toBe(true);
+    const write = table.writes.find((w) => w.table === 'payments');
+    expect(write.patch.payment_status, 'still owes 191').toBeUndefined();
+    expect(write.patch.metadata.refunds).toHaveLength(1);
+  });
+
+  it('records the booking as partly refunded, not refunded', async () => {
+    await refundWith({
+      order: arcOrder(),
+      putReply: { status: 200, data: { result: 'SUCCESS' } },
+      body: { paymentId: 'pay-1', amount: 100, reason: 'Partial' },
+    });
+
+    expect(table.row(REF).payment_status).toBe('partially_refunded');
+  });
+
+  it('lets the remainder be refunded afterwards', async () => {
+    // ARC now lists the first refund; the row carries its history.
+    const res = await refundWith({
+      order: arcOrder([100]),
+      putReply: { status: 200, data: { result: 'SUCCESS' } },
+      payments: [payment({ payment_status: 'refunded', metadata: { refunds: [{ amount: 100 }] } })],
+      body: { paymentId: 'pay-1', amount: 191, reason: 'The rest' },
+    });
+
+    expect(res.body.success, 'the remainder is still refundable').toBe(true);
+    expect(table.row(REF).payment_status).toBe('refunded');
+  });
+
+  it('marks it refunded once the last of it goes back', async () => {
+    await refundWith({
+      order: arcOrder(),
+      putReply: { status: 200, data: { result: 'SUCCESS' } },
+      body: { paymentId: 'pay-1', amount: 291, reason: 'All of it' },
+    });
+
+    const write = table.writes.find((w) => w.table === 'payments');
+    expect(write.patch.payment_status).toBe('refunded');
+  });
+});
+
+/**
+ * The ceiling is only as good as the transaction list it is read from.
+ */
+describe('reading the gateway’s transaction list', () => {
+  // Fail CLOSED: this used to fall back to the row's own amount - the figure
+  // the whole check exists to stop trusting - and both guards were skipped
+  // when it came to zero, so any typed amount went to ARC unbounded.
+  it('refuses when ARC reports no captured payment at all', async () => {
+    const res = await refundWith({ order: { status: 200, data: {} } });
+
+    expect(res.statusCode).toBe(502);
+    expect(axios.put).not.toHaveBeenCalled();
+  });
+
+  it('adds up an order captured in two parts', async () => {
+    const split = {
+      status: 200,
+      data: {
+        status: 'CAPTURED',
+        amount: 291,
+        transaction: [
+          { result: 'SUCCESS', transaction: { id: 't1', type: 'CAPTURE', amount: 200 } },
+          { result: 'SUCCESS', transaction: { id: 't2', type: 'CAPTURE', amount: 91 } },
+        ],
+      },
+    };
+
+    const res = await refundWith({
+      order: split,
+      putReply: { status: 200, data: { result: 'SUCCESS' } },
+      body: { paymentId: 'pay-1', amount: 291, reason: 'All of it' },
+    });
+
+    expect(res.body.success, 'both captures count toward the balance').toBe(true);
+  });
+
+  // The same success test for every type: reading captures loosely and refunds
+  // strictly let a reversal ARC reported only by gatewayCode raise the ceiling
+  // while reducing nothing.
+  it('counts a refund ARC reported only through gatewayCode', async () => {
+    const order = {
+      status: 200,
+      data: {
+        status: 'CAPTURED',
+        amount: 291,
+        transaction: [
+          { result: 'SUCCESS', transaction: { id: 't1', type: 'PAYMENT', amount: 291 } },
+          { response: { gatewayCode: 'APPROVED' }, transaction: { id: 'r1', type: 'REFUND', amount: 291 } },
+        ],
+      },
+    };
+
+    const res = await refundWith({ order });
+
+    expect(res.statusCode, 'already returned in full').toBe(400);
+    expect(axios.put).not.toHaveBeenCalled();
+  });
+
+  // An authorisation is money held, not taken; nothing refunds against it.
+  it('does not treat an authorisation as a refundable capture', async () => {
+    const order = {
+      status: 200,
+      data: {
+        status: 'AUTHORIZED',
+        amount: 291,
+        transaction: [{ result: 'SUCCESS', transaction: { id: 'a1', type: 'AUTHORIZATION', amount: 291 } }],
+      },
+    };
+
+    const res = await refundWith({ order });
+
+    expect(res.statusCode).toBe(502);
+    expect(axios.put).not.toHaveBeenCalled();
+  });
+});

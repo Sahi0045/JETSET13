@@ -1098,7 +1098,14 @@ export async function handlePaymentRefund(req, res) {
             return res.status(404).json({ success: false, error: 'Payment not found' });
         }
 
-        if (payment.payment_status === 'refunded') {
+        // Deliberately not a row-status check. Until this handler was fixed its
+        // writes all failed with 42703, so `payment_status` never became
+        // 'refunded' and this guard never ran. Now that the write lands, a
+        // guard on the row would refuse the REMAINDER of a partial refund -
+        // $100 returned out of $291 would lock the other $191 away for good.
+        // What is still refundable is a question only the gateway can answer,
+        // and it is asked below against ARC's own transaction list.
+        if (payment.payment_status === 'refunded' && !payment.metadata?.refunds?.length) {
             return res.status(400).json({ success: false, error: 'Payment has already been refunded' });
         }
 
@@ -1128,29 +1135,56 @@ export async function handlePaymentRefund(req, res) {
             });
         }
         const txns = Array.isArray(orderResp.data.transaction) ? orderResp.data.transaction : [];
-        const capturedTxn = [...txns].reverse().find((t) => {
-            const type = t.transaction?.type;
-            const ok = t.result === 'SUCCESS' || t.response?.gatewayCode === 'APPROVED';
-            return ok && ['PAYMENT', 'CAPTURE', 'AUTHORIZATION'].includes(type);
-        });
-        const capturedAmount = parseFloat(capturedTxn?.transaction?.amount ?? orderResp.data.amount ?? payment.amount ?? 0) || 0;
-        const alreadyRefunded = txns
-            .filter((t) => t.transaction?.type === 'REFUND' && t.result === 'SUCCESS')
-            .reduce((sum, t) => sum + (parseFloat(t.transaction?.amount) || 0), 0);
-        const alreadyVoided = txns.some((t) => t.transaction?.type === 'VOID' && t.result === 'SUCCESS');
-        if (alreadyVoided || (capturedAmount > 0 && alreadyRefunded + 0.01 >= capturedAmount)) {
+        // One test of success for every transaction type. Reading captures
+        // loosely (`result` OR `gatewayCode`) while reading refunds strictly
+        // meant a reversal ARC reported only through `gatewayCode` raised the
+        // captured side and reduced nothing - so the ceiling came back at the
+        // full capture and the money could go out twice.
+        const succeeded = (t) => t.result === 'SUCCESS' || t.response?.gatewayCode === 'APPROVED';
+        const sumOf = (list) => list.reduce((sum, t) => sum + (parseFloat(t.transaction?.amount) || 0), 0);
+
+        // The SUM of captures, not the last one. reconcileBookingPayment and
+        // inspectArcOrder both sum; taking a single transaction refused a
+        // legitimate full refund on an order captured in two parts.
+        // `AUTHORIZATION` is deliberately absent: an authorisation is money
+        // held, not taken, and nothing can be refunded against it.
+        const captured = txns.filter((t) => succeeded(t) && ['PAYMENT', 'CAPTURE'].includes(t.transaction?.type));
+        const capturedAmount = Math.round(sumOf(captured) * 100) / 100;
+        const alreadyRefunded = Math.round(sumOf(txns.filter((t) => succeeded(t) && t.transaction?.type === 'REFUND')) * 100) / 100;
+        const alreadyVoided = txns.some((t) => succeeded(t) && t.transaction?.type === 'VOID');
+
+        // Fail CLOSED when the gateway's answer cannot be read.
+        //
+        // This used to fall back to `orderResp.data.amount ?? payment.amount` -
+        // the row's own figure, which is exactly the source this check exists to
+        // stop trusting - and both guards below were gated on
+        // `capturedAmount > 0`, so a body carrying no recognisable transaction
+        // list skipped them entirely and sent any admin-typed amount to ARC with
+        // no ceiling at all. A 200 with `{}` is truthy, so the 502 above does
+        // not catch it.
+        if (capturedAmount <= 0) {
+            return res.status(502).json({
+                success: false,
+                error: 'ARC Pay did not report a captured payment for this order, so there is no balance to refund against. '
+                    + 'Check the order in ARC Pay before retrying.',
+            });
+        }
+        if (alreadyVoided || alreadyRefunded + 0.01 >= capturedAmount) {
             return res.status(400).json({
                 success: false,
                 error: 'This payment has already been returned in full.',
             });
         }
         const refundCeiling = Math.max(0, Math.round((capturedAmount - alreadyRefunded) * 100) / 100);
-        if (capturedAmount > 0 && refundAmount > refundCeiling + 0.001) {
+        if (refundAmount > refundCeiling + 0.001) {
             return res.status(400).json({
                 success: false,
                 error: `Refund amount exceeds the refundable balance (${refundCeiling.toFixed(2)} ${payment.currency || 'USD'})`,
             });
         }
+        // Does this refund exhaust what the gateway holds? Decides whether the
+        // rows below read `refunded` or `partially_refunded`.
+        const returnsEverything = refundAmount + 0.01 >= refundCeiling;
 
         const refundTxnId = `refund-admin-${Date.now()}`;
         const refundUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${arcOrderId}/transaction/${refundTxnId}`;
@@ -1190,7 +1224,14 @@ export async function handlePaymentRefund(req, res) {
         // payment could be refunded over and over.
         const refundedAt = new Date().toISOString();
         const { error: paymentWriteError } = await supabase.from('payments').update({
-            payment_status: 'refunded',
+            // Only once the gateway holds nothing more. Writing 'refunded' for a
+            // PARTIAL refund made the guard above refuse every later call, so
+            // the remainder could never be returned - and told reconcile and the
+            // cancel guard that money still held had already gone back.
+            // `payments.payment_status` has no 'partially_refunded' value in its
+            // CHECK, so a partial leaves the status alone and records the amount
+            // in metadata, which is where the history lives.
+            ...(returnsEverything ? { payment_status: 'refunded' } : {}),
             metadata: {
                 ...(payment.metadata || {}),
                 refunds: [
@@ -1209,7 +1250,13 @@ export async function handlePaymentRefund(req, res) {
         let bookingWriteError = null;
         if (payment.arc_order_id) {
             const { error } = await supabase.from('bookings')
-                .update({ payment_status: 'refunded', updated_at: refundedAt })
+                // `bookings.payment_status` DOES allow partially_refunded
+                // (migrations/add_partially_refunded_status.sql), so the row can
+                // say what actually happened.
+                .update({
+                    payment_status: returnsEverything ? 'refunded' : 'partially_refunded',
+                    updated_at: refundedAt,
+                })
                 .eq('booking_reference', payment.arc_order_id);
             bookingWriteError = error || null;
         }
