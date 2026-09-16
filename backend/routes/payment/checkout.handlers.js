@@ -1493,20 +1493,23 @@ export async function reconcileBookingPayment(booking, { fresh = false } = {}) {
     }
 
     if (!orderData) {
-        // "There is no such order" is an ANSWER, not an outage. ARC returns 400
-        // or 404 for an order it has never seen, and reporting that as
-        // unavailable makes the caller retry for ever - the abandoned-checkout
-        // job asked about the same two references every five minutes and could
-        // never move them on, which is the dead end it exists to close.
+        // No answer is not a yes. A row marked paid without a recorded capture
+        // used to be trusted here on its word, and a paid row can be written by
+        // paths that never asked the gateway. The caller may retry.
         //
-        // Anything else - no response at all, a 401, a 5xx - genuinely is "we
-        // could not find out", and the caller should ask again.
-        const answeredNoSuchOrder = gatewayStatus === 400 || gatewayStatus === 404;
+        // `gatewayUnavailable` stays set for EVERY non-200, including the 400
+        // or 404 ARC gives for an order it has never seen. It was briefly
+        // dropped for those, and that broke three callers at once - worst, the
+        // cancel route's `neverPaid` test begins with this flag, so both it and
+        // the 503 guard beneath it went dead and a cancel fell through to
+        // releasing the seats with nothing refunded. `gatewayStatus` is
+        // reported alongside so a caller that CAN read "no such order" as final
+        // - the abandoned-checkout job - decides that for itself.
         return fromRow(false, {
-            error: answeredNoSuchOrder ? 'No such order at the gateway' : 'Could not retrieve order from gateway',
-            ...(answeredNoSuchOrder ? {} : { gatewayUnavailable: true }),
+            error: 'Could not retrieve order from gateway',
+            gatewayUnavailable: true,
             ...(gatewayStatus ? { gatewayStatus } : {}),
-            ...(alreadyPaid ? { disagreement: 'row marked paid, gateway does not have the order' } : {}),
+            ...(alreadyPaid ? { disagreement: 'row marked paid, gateway not reachable to confirm' } : {}),
         });
     }
 

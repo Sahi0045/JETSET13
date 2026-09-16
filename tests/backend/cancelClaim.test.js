@@ -248,6 +248,39 @@ describe('a cancellation that does not happen hands the booking back', () => {
     expect(release.booking_details.gds_chain).toBeUndefined();
   });
 
+  /**
+   * ARC answering 400 or 404 for a booking that HAS a PNR and says paid is a
+   * disagreement, not permission to proceed.
+   *
+   * `neverPaid` above begins with `payment.gatewayUnavailable`, and a change
+   * that stopped setting that flag for 400/404 killed both it AND the 503 guard
+   * beneath it. The cancel then fell through with `heldAmount: undefined`:
+   * the airline reservation was released, the refund decided nothing was held,
+   * and the row was written cancelled while still saying paid. The customer
+   * lost the flight and the money.
+   */
+  for (const status of [400, 404]) {
+    it(`refuses rather than releasing the seats when the gateway answers ${status} for a paid booking`, async () => {
+      axios.get.mockResolvedValue({ status, data: {} });
+
+      const res = await cancel(booking());
+
+      expect(res.statusCode).toBe(503);
+      expect(res.body.code).toBe('PAYMENT_GATEWAY_UNAVAILABLE');
+      expectNothingMoved();
+    });
+  }
+
+  // The permissive reading is still allowed where it was meant to be: no
+  // reservation, and a row that agrees nothing was paid.
+  it('still treats it as never paid when there is no PNR and the row says unpaid', async () => {
+    axios.get.mockResolvedValue({ status: 404, data: {} });
+
+    const res = await cancel(booking({ pnr: null }, { payment_status: 'unpaid', status: 'pending' }));
+
+    expect(res.statusCode).not.toBe(503);
+  });
+
   it('when the airline will not cancel, restoring what held it before', async () => {
     cancelFlightOrder.mockRejectedValue(new Error('boom'));
     const prior = { state: 'committed', committedAt: '2026-09-14T10:00:00.000Z' };

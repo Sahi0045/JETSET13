@@ -351,25 +351,32 @@ describe('a fresh read', () => {
   });
 
   /**
-   * "There is no such order" is an answer, not an outage. ARC returns 400 or
-   * 404 for an order it has never seen, and calling that unavailable made the
-   * abandoned-checkout job ask about the same references every five minutes
-   * for ever without ever moving them on.
+   * Every non-200 stays an outage HERE, and the status is reported alongside so
+   * a caller that can read "no such order" as final decides that itself.
+   *
+   * Dropping the flag for 400/404 broke three callers at once. The worst: the
+   * cancel route's `neverPaid` test begins with `payment.gatewayUnavailable`,
+   * so both it and the 503 guard under it went dead, and a cancel on a paid,
+   * ticketed booking fell through to releasing the seats with nothing
+   * refunded.
    */
-  it('treats a 404 as the gateway saying there is no such order', async () => {
+  it('still reports a 404 as unavailable, with the status attached', async () => {
     axios.get.mockResolvedValue({ status: 404, data: {} });
 
     const result = await freshly(row());
 
     expect(result.paid).toBe(false);
-    expect(result.gatewayUnavailable).toBeUndefined();
+    expect(result.gatewayUnavailable).toBe(true);
     expect(result.gatewayStatus).toBe(404);
   });
 
-  it('treats a 400 the same way', async () => {
+  it('does the same for a 400', async () => {
     axios.get.mockResolvedValue({ status: 400, data: {} });
 
-    expect((await freshly(row())).gatewayUnavailable).toBeUndefined();
+    const result = await freshly(row());
+
+    expect(result.gatewayUnavailable).toBe(true);
+    expect(result.gatewayStatus).toBe(400);
   });
 
   it('still reports a real outage as one', async () => {

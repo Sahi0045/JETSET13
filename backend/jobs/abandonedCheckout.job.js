@@ -179,7 +179,16 @@ export async function settle(row, { now = Date.now(), reconcile = reconcileBooki
   const age = now - Date.parse(row.created_at);
 
   const payment = await reconcile(row);
-  if (payment.gatewayUnavailable) return { outcome: 'gateway-unavailable', final: false };
+  // ARC answering 400 or 404 means it has never seen this order, which for a
+  // row with no PNR is a definite "not paid" rather than an outage. Decided
+  // here rather than in reconcileBookingPayment, because the cancel route and
+  // the queue worker both need a non-200 to stay an outage: a cancel that reads
+  // it as "never paid" releases the seats and refunds nothing.
+  const noSuchOrder = payment.gatewayUnavailable
+    && [400, 404].includes(payment.gatewayStatus)
+    && !row?.booking_details?.pnr;
+  if (payment.gatewayUnavailable && !noSuchOrder) return { outcome: 'gateway-unavailable', final: false };
+  if (noSuchOrder) return { outcome: 'not-paid', final: age > PAYABLE_MS };
   if (!payment.paid) return { outcome: 'not-paid', final: age > PAYABLE_MS };
 
   if (age > AUTO_COMPLETE_WINDOW_MS) {
