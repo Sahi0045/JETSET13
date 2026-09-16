@@ -514,8 +514,21 @@ describe('concurrent booking attempts', () => {
       chain.single = vi.fn().mockResolvedValue({ data: paidRow(), error: null });
       chain.maybeSingle = chain.single;
       const down = (resolve) => resolve({ data: null, error: { message: 'connection reset' } });
-      // Only the claim's compare-and-set asks for rows back from a write.
+      const up = (resolve) => resolve({ data: [{ booking_reference: 'FLTTEST1' }], error: null });
       chain.select = vi.fn(() => ({ ...chain, then: down }));
+      // The claim's compare-and-set is the write that cannot be decided - not
+      // every write. Queueing compares and sets too now, and it must still
+      // land, or this case stops testing the thing it is named for: a booking
+      // that reaches the queue when nobody can say who holds the claim. The two
+      // are told apart by what they write, which is the only thing that
+      // distinguishes them at this level.
+      const claimUpdate = chain.update;
+      chain.update = vi.fn((patch) => {
+        if (patch?.booking_details?.gds_chain?.state !== 'queued') return claimUpdate(patch);
+        const landed = { ...chain, then: up };
+        for (const m of ['eq', 'is', 'select']) landed[m] = vi.fn(() => landed);
+        return landed;
+      });
       if (queueErrors) {
         const failing = { ...chain, then: down };
         for (const m of ['eq', 'is', 'select']) failing[m] = vi.fn(() => failing);

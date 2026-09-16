@@ -241,27 +241,51 @@ function cityNameFor(code) {
   }
 }
 
-async function patchBookingDetails(bookingReference, patch) {
+/**
+ * Change part of `booking_details` without losing what landed in between.
+ *
+ * PostgREST cannot write one key inside a jsonb column, so this reads the
+ * column, merges, and writes the whole thing back. It was the ONLY such writer
+ * with no compare-and-set - and the one that records the PNR
+ * (persistCommittedPnr), flags a booking for review, releases the chain and
+ * holds a duplicate payment. A cancellation or a payment reconcile landing
+ * between its read and its write was erased, which for the PNR means a
+ * reservation nobody can find again.
+ *
+ * `patch` may be an object, or a function of the details as they were just
+ * read, for a caller that needs to merge into a nested key rather than replace
+ * it. A write that matches no row lost a race, so it reads and decides again.
+ */
+export async function patchBookingDetails(bookingReference, patch, { attempts = 3 } = {}) {
   if (!supabase || !bookingReference) return null;
 
-  const { data: existing } = await supabase
-    .from('bookings')
-    .select('booking_details')
-    .eq('booking_reference', bookingReference)
-    .single();
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const { data: existing } = await supabase
+      .from('bookings')
+      .select('status, payment_status, booking_details')
+      .eq('booking_reference', bookingReference)
+      .single();
 
-  const { data, error } = await supabase
-    .from('bookings')
-    .update({ booking_details: { ...(existing?.booking_details || {}), ...patch } })
-    .eq('booking_reference', bookingReference)
-    .select()
-    .single();
+    const details = existing?.booking_details || {};
+    const changes = typeof patch === 'function' ? patch(details) : patch;
 
-  if (error) {
-    console.error('❌ Failed to patch booking_details:', error.message);
-    return null;
+    let write = supabase
+      .from('bookings')
+      .update({ booking_details: { ...details, ...changes } })
+      .eq('booking_reference', bookingReference);
+    if (existing) write = unchangedSince(write, existing);
+
+    const { data, error } = await write.select();
+    if (error) {
+      console.error('❌ Failed to patch booking_details:', error.message);
+      return null;
+    }
+    if (data?.length) return data[0];
+    console.warn('↻ booking_details changed while patching; reading again', { bookingReference, attempt });
   }
-  return data;
+
+  console.error('❌ booking_details not patched: the row kept changing', { bookingReference });
+  return null;
 }
 
 /**
@@ -298,11 +322,20 @@ async function persistCommittedPnr({ bookingReference, pnr, tstRefs, priced }) {
  * Used when the chain created a real PNR and then failed: the money and the
  * booking are both real but out of step, and no automatic action is safe.
  */
-async function flagForReview({ bookingReference, pnr, reason, ticketed, amadeus = null }) {
+export async function flagForReview({ bookingReference, pnr, reason, ticketed, tickets = null, amadeus = null }) {
   console.error('⚠️ Booking needs review', { bookingReference, pnr, reason, ticketed, amadeus });
 
-  const patched = await patchBookingDetails(bookingReference, {
+  const patched = await patchBookingDetails(bookingReference, (details) => ({
     pnr: pnr || undefined,
+    // The refund decision reads `gds.ticketed` and `tickets` - never
+    // `needs_review.ticketed`. A booking held AFTER its ticket was issued wrote
+    // only the latter, so `rowTicketed` stayed false and decideFlightRefund's
+    // guard - "the booking records a ticket, but the airline showed none when
+    // it was cancelled" - could not fire for the very bookings it is for. A
+    // later cancel whose retrieve missed the FA elements refunded in full
+    // against a live ticket.
+    ...(ticketed ? { gds: { ...(details.gds || {}), ticketed: true } } : {}),
+    ...(Array.isArray(tickets) && tickets.length > 0 ? { tickets } : {}),
     needs_review: {
       reason,
       ticketed: Boolean(ticketed),
@@ -314,7 +347,7 @@ async function flagForReview({ bookingReference, pnr, reason, ticketed, amadeus 
       // like a code regression. Amadeus error text carries no passenger data.
       ...(amadeus ? { amadeus } : {})
     }
-  });
+  }));
 
   // The airline holds a real booking, so the row has to say so - and say what
   // kind. Leaving it at 'pending' made a genuine PNR read as an incomplete
@@ -557,7 +590,7 @@ export function orderWithPayerProof(orderBody, details = {}) {
   return { ...orderBody, resultIndicator: proof };
 }
 
-async function queueBookingForRetry(bookingReference, orderBody) {
+export async function queueBookingForRetry(bookingReference, orderBody) {
   if (!supabase || !bookingReference) return false;
 
   const { data: row } = await supabase
@@ -576,7 +609,13 @@ async function queueBookingForRetry(bookingReference, orderBody) {
   if (queueAttempts > MAX_QUEUE_ATTEMPTS) return false;
 
   const queuedAt = new Date().toISOString();
-  const { error } = await supabase
+  // Pinned to the row this was built from. Every sibling writer compares and
+  // sets - claimBookingChain, refreshChainClaim, holdChainClaim, and the
+  // worker's own retryLater "so a request that has taken the booking since is
+  // never undone" - and this one did not. It runs after the claim is held, so
+  // it could replace another request's live `in_progress` claim with `queued`
+  // and demote a booking that was actively being confirmed.
+  let write = supabase
     .from('bookings')
     .update({
       booking_details: {
@@ -594,9 +633,20 @@ async function queueBookingForRetry(bookingReference, orderBody) {
       updated_at: queuedAt,
     })
     .eq('booking_reference', bookingReference);
+  write = unchangedSince(write, row);
+
+  const { data, error } = await write.select('booking_reference');
 
   if (error) {
     console.error('⚠️ Could not queue the booking, refunding instead:', error.message);
+    return false;
+  }
+  if (!data?.length) {
+    // Someone took the booking between the read above and this write. Saying
+    // "queued" would hand the customer a 202 for a booking this request no
+    // longer owns, so the caller falls back to refunding - which is refused in
+    // turn if the other request has committed a PNR.
+    console.warn('⚠️ Not queued: the booking changed hands while it was being queued', { bookingReference });
     return false;
   }
   return true;
@@ -2059,6 +2109,12 @@ router.post('/order', optionalProtect, async (req, res) => {
   // it failed: a verified payment gets reversed, a held claim released.
   let payment = null;
   let chainClaimed = false;
+  // The record locator the chain reported, kept where the outer catch can see
+  // it. `orderResponse` is declared inside the try and is block-scoped, so the
+  // catch could only ever learn about a commit from the row - and
+  // persistCommittedPnr is allowed to fail. A commit whose persist lost its
+  // race therefore read as "never booked" and was refunded automatically.
+  let committedPnr = null;
   try {
     // ---- Whose payment is this, and is it real? ------------------------------
     //
@@ -2681,6 +2737,10 @@ router.post('/order', optionalProtect, async (req, res) => {
         // ticketing is attempted. Persisting here is what makes a booking
         // recoverable if the rest of the chain, or this process, dies.
         onCommitted: async ({ pnr, tstRefs, priced }) => {
+          // In memory first. Persisting can fail - its failure is logged and
+          // swallowed by design - and when it does, this is the only thing
+          // between a committed PNR and an automatic reversal.
+          committedPnr = pnr || committedPnr;
           await persistCommittedPnr({
             bookingReference: req.body.bookingReference,
             pnr,
@@ -3064,8 +3124,12 @@ router.post('/order', optionalProtect, async (req, res) => {
     const ref = req.body?.bookingReference || null;
     try {
       const row = ref ? await findExistingBooking(ref) : null;
-      const pnr = row?.booking_details?.pnr;
-      if (pnr && row.status !== 'cancelled') {
+      // The row first, then what the chain itself reported. Without the
+      // fallback, a commit whose persist failed left this reading no PNR, and
+      // the branch below - "the airline holds seats, never refund that
+      // automatically" - was skipped for exactly the booking it exists for.
+      const pnr = row?.booking_details?.pnr || committedPnr;
+      if (pnr && row?.status !== 'cancelled') {
         // A PNR exists: the airline holds seats. Never refund that
         // automatically - a human decides.
         await flagForReview({
