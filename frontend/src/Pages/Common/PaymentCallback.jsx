@@ -130,13 +130,17 @@ export default function PaymentCallback() {
           // 2. Fallback to localStorage if DB didn't have data
           if (!bookingData?.selectedFlight && !bookingData?.flightData && !bookingData?.amount) {
             console.log('📦 Falling back to localStorage...');
-            const storedBookingData = localStorage.getItem(pendingBookingKey);
+            // A flight's draft is in this tab's storage (the review page).
+            const storedBookingData = (bookingType === 'flight' ? sessionStorage.getItem(pendingBookingKey) : null)
+              || localStorage.getItem(pendingBookingKey);
             const pendingSession = localStorage.getItem('pendingPaymentSession');
 
             try {
-              if (storedBookingData) {
-                bookingData = JSON.parse(storedBookingData);
-                console.log('📦 Booking data retrieved from localStorage');
+              const stored = storedBookingData ? JSON.parse(storedBookingData) : null;
+              // Only the draft saved for this payment.
+              if (stored && !(stored.orderId && orderId && stored.orderId !== orderId)) {
+                bookingData = stored;
+                console.log('📦 Booking data retrieved from browser storage');
               }
               if (pendingSession) {
                 sessionData = JSON.parse(pendingSession);
@@ -339,6 +343,7 @@ export default function PaymentCallback() {
 
             // Clean up pending data
             localStorage.removeItem(pendingBookingKey);
+            try { sessionStorage.removeItem(pendingBookingKey); } catch { /* storage blocked */ }
             localStorage.removeItem('pendingPaymentSession');
             navigate(confirmationRoute, {
               state: {

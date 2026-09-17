@@ -31,7 +31,7 @@ import FlightAppliedFilters from './FlightAppliedFilters';
 import FlightFareCalendar from './FlightFareCalendar';
 import { sortFlights } from './flightSort';
 import { buildSearchPayload, fieldCode, searchFromQuery, searchKeyOf, searchToQuery } from './searchQuery';
-import { buildDateStrip, filtersWithin, matchesFilters, priceStep, searchFailureMessage, shiftDateStrip, withDepartureDate } from './searchResults';
+import { airportClockLabel, buildDateStrip, filtersWithin, legDateLabel, matchesFilters, minutesBetweenAirportTimes, priceStep, searchFailureMessage, shiftDateStrip, withDepartureDate } from './searchResults';
 
 function FlightSearchPage() {
   const location = useLocation();
@@ -313,16 +313,16 @@ function FlightSearchPage() {
             logo: `https://pics.avs.io/200/200/${carrierCode.toUpperCase()}.png`
           },
           departure: {
-            time: new Date(firstSegment.departure.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-            date: new Date(firstSegment.departure.at).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+            time: airportClockLabel(firstSegment.departure.at),
+            date: legDateLabel(firstSegment.departure.at),
             rawDate: firstSegment.departure.at?.split('T')[0] || firstSegment.departure.at,
             airport: firstSegment.departure.iataCode,
             terminal: firstSegment.departure.terminal || '',
             cityName: cityMap[firstSegment.departure.iataCode] || firstSegment.departure.iataCode
           },
           arrival: {
-            time: new Date(lastSegment.arrival.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-            date: new Date(lastSegment.arrival.at).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+            time: airportClockLabel(lastSegment.arrival.at),
+            date: legDateLabel(lastSegment.arrival.at),
             rawDate: lastSegment.arrival.at?.split('T')[0] || lastSegment.arrival.at,
             airport: lastSegment.arrival.iataCode,
             terminal: lastSegment.arrival.terminal || '',
@@ -357,14 +357,14 @@ function FlightSearchPage() {
           refundable: flight._ama?.refundable ?? null,
           segments: segments.map(segment => ({
             departure: {
-              time: new Date(segment.departure.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+              time: airportClockLabel(segment.departure.at),
               airport: segment.departure.iataCode,
               terminal: segment.departure.terminal || '',
               cityName: cityMap[segment.departure.iataCode] || segment.departure.iataCode,
               at: segment.departure.at
             },
             arrival: {
-              time: new Date(segment.arrival.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+              time: airportClockLabel(segment.arrival.at),
               airport: segment.arrival.iataCode,
               terminal: segment.arrival.terminal || '',
               cityName: cityMap[segment.arrival.iataCode] || segment.arrival.iataCode,
@@ -396,7 +396,7 @@ function FlightSearchPage() {
           },
           departure: {
             time: flight.departure.time,
-            date: new Date(flight.departure.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+            date: legDateLabel(flight.departure.date),
             rawDate: flight.departure.date,
             airport: flight.departure.airport,
             terminal: flight.departure.terminal || '',
@@ -404,7 +404,7 @@ function FlightSearchPage() {
           },
           arrival: {
             time: flight.arrival.time,
-            date: new Date(flight.arrival.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+            date: legDateLabel(flight.arrival.date),
             rawDate: flight.arrival.date,
             airport: flight.arrival.airport,
             terminal: flight.arrival.terminal || '',
@@ -447,17 +447,20 @@ function FlightSearchPage() {
           segments: (() => {
             // Extract real segments from originalOffer for multi-stop flights
             const origSegs = flight.originalOffer?.itineraries?.[0]?.segments;
-            if (origSegs && origSegs.length > 1) {
+            // One real segment is used too: a single flight with a technical
+            // stop counts a stop, and the fallback below draws nothing for a
+            // flight with stops.
+            if (origSegs && (origSegs.length > 1 || (flight.stops || 0) > 0)) {
               return origSegs.map(segment => ({
                 departure: {
-                  time: new Date(segment.departure.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+                  time: airportClockLabel(segment.departure.at),
                   airport: segment.departure.iataCode,
                   terminal: segment.departure.terminal || '',
                   cityName: cityMap[segment.departure.iataCode] || segment.departure.iataCode,
                   at: segment.departure.at
                 },
                 arrival: {
-                  time: new Date(segment.arrival.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+                  time: airportClockLabel(segment.arrival.at),
                   airport: segment.arrival.iataCode,
                   terminal: segment.arrival.terminal || '',
                   cityName: cityMap[segment.arrival.iataCode] || segment.arrival.iataCode,
@@ -517,30 +520,35 @@ function FlightSearchPage() {
             if (!segs || segs.length === 0) return null;
             const first = segs[0];
             const last = segs[segs.length - 1];
-            const stopDetails = segs.slice(0, -1).map((seg, idx) => {
+            const layover = (from, to) => {
+              const minutes = minutesBetweenAirportTimes(from, to);
+              return Number.isFinite(minutes) ? `${Math.floor(minutes / 60)}h ${minutes % 60}m` : '';
+            };
+            // Technical stops inside a flight count too: the plane lands on the way.
+            const stopDetails = segs.flatMap((seg, idx) => {
+              const technical = (seg.stops || []).map((stop) => ({
+                airport: stop.iataCode, duration: layover(stop.arrivalAt, stop.departureAt), technical: true,
+              }));
               const next = segs[idx + 1];
-              const ms = new Date(next.departure.at) - new Date(seg.arrival.at);
-              const h = Math.floor(ms / 3600000);
-              const m = Math.floor((ms % 3600000) / 60000);
-              return { airport: seg.arrival.iataCode, duration: `${h}h ${m}m` };
+              return next ? [...technical, { airport: seg.arrival.iataCode, duration: layover(seg.arrival.at, next.departure.at) }] : technical;
             });
             return {
               departure: {
-                time: new Date(first.departure.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+                time: airportClockLabel(first.departure.at),
                 rawDate: first.departure.at?.split('T')[0],
                 airport: first.departure.iataCode,
                 terminal: first.departure.terminal || '',
                 cityName: cityMap[first.departure.iataCode] || first.departure.iataCode,
               },
               arrival: {
-                time: new Date(last.arrival.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+                time: airportClockLabel(last.arrival.at),
                 rawDate: last.arrival.at?.split('T')[0],
                 airport: last.arrival.iataCode,
                 terminal: last.arrival.terminal || '',
                 cityName: cityMap[last.arrival.iataCode] || last.arrival.iataCode,
               },
               duration: itin.duration,
-              stops: segs.length - 1,
+              stops: stopDetails.length,
               stopDetails,
               airline: {
                 code: first.carrierCode,
@@ -549,14 +557,14 @@ function FlightSearchPage() {
               },
               segments: segs.map(segment => ({
                 departure: {
-                  time: new Date(segment.departure.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+                  time: airportClockLabel(segment.departure.at),
                   airport: segment.departure.iataCode,
                   terminal: segment.departure.terminal || '',
                   cityName: cityMap[segment.departure.iataCode] || segment.departure.iataCode,
                   at: segment.departure.at,
                 },
                 arrival: {
-                  time: new Date(segment.arrival.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+                  time: airportClockLabel(segment.arrival.at),
                   airport: segment.arrival.iataCode,
                   terminal: segment.arrival.terminal || '',
                   cityName: cityMap[segment.arrival.iataCode] || segment.arrival.iataCode,
@@ -567,6 +575,11 @@ function FlightSearchPage() {
                   name: dynamicAirlineMap[segment.carrierCode] || segment.carrierCode,
                   logo: `https://pics.avs.io/200/200/${segment.carrierCode.toUpperCase()}.png`,
                 },
+                // Who flies it. A return sold as Delta and flown by Air France was
+                // shown as Delta: a different check-in desk, and a codeshare a US
+                // ticket agent has to disclose (14 CFR 257).
+                operatingCarrier: segment.operating?.carrierCode || null,
+                operatingAirlineName: segment.operating?.carrierCode ? (dynamicAirlineMap[segment.operating.carrierCode] || segment.operating.carrierCode) : null,
                 duration: segment.duration,
                 flightNumber: `${segment.carrierCode} ${segment.number}`,
                 aircraft: dynamicAircraftMap[segment.aircraft?.code] || segment.aircraft?.code || 'Unknown Aircraft',
@@ -588,7 +601,7 @@ function FlightSearchPage() {
           },
           departure: {
             time: flight.departure.time,
-            date: new Date(flight.departure.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+            date: legDateLabel(flight.departure.date),
             rawDate: flight.departure.date,
             airport: flight.departure.airport,
             terminal: flight.departure.terminal || '',
@@ -596,7 +609,7 @@ function FlightSearchPage() {
           },
           arrival: {
             time: flight.arrival.time,
-            date: new Date(flight.arrival.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+            date: legDateLabel(flight.arrival.date),
             rawDate: flight.arrival.date,
             airport: flight.arrival.airport,
             terminal: flight.arrival.terminal || '',

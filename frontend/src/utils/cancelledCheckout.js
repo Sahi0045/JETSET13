@@ -29,7 +29,7 @@ export const isCancelledReturn = (search) => new URLSearchParams(search || '').g
  * @param {Storage} [storage]
  * @returns {{ reviewState: { flightData: object, searchData: object|null }, travellers: object[], contact: object|null }|null}
  */
-export function readCancelledCheckout(storage = globalThis.localStorage) {
+export function readCancelledCheckout(storage = globalThis.sessionStorage) {
   try {
     const saved = JSON.parse(storage?.getItem(SAVED_BOOKING) || 'null');
     const flightData = saved?.selectedFlight;

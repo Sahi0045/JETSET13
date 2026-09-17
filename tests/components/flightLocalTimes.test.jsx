@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import FlightCard from '../../frontend/src/Pages/Common/flights/FlightCard.jsx';
 import FlightCancellationPolicy from '../../frontend/src/Pages/Common/flights/FlightCancellationPolicy.jsx';
-import { arrivalDayOffset, legDateLabel } from '../../frontend/src/Pages/Common/flights/searchResults.js';
+import { airportClockLabel, arrivalDayOffset, legDateLabel, minutesBetweenAirportTimes } from '../../frontend/src/Pages/Common/flights/searchResults.js';
 
 /**
  * Flight times are the airports' own clocks: Amadeus sends "2026-11-15T22:40:00"
@@ -90,5 +90,40 @@ describe('the cancellation deadline', () => {
     expect(screen.getByText('15 Nov')).toBeTruthy();
     expect(screen.getByText('14 Nov')).toBeTruthy();
     expect(screen.queryByText(/your time/)).toBeNull();
+  });
+});
+
+describe('an airport time on the results', () => {
+  // Formatted through the viewer's zone, 02:40 on 8 Mar 2026 - inside New
+  // York's spring-forward hour - printed as 03:40, and a layover across it lost
+  // an hour.
+  it('prints the airport clock as sent, in any viewer time zone', () => {
+    expect(airportClockLabel('2026-03-08T02:40:00')).toBe('02:40');
+    expect(airportClockLabel('2026-11-15T19:25:00')).toBe('19:25');
+    expect(airportClockLabel('')).toBe('');
+  });
+
+  it('measures a layover across a daylight-saving change in real clock minutes', () => {
+    expect(minutesBetweenAirportTimes('2026-03-08T01:30:00', '2026-03-08T03:30:00')).toBe(120);
+    expect(Number.isNaN(minutesBetweenAirportTimes('', '2026-03-08T03:30:00'))).toBe(true);
+  });
+});
+
+describe('who flies the return', () => {
+  // Only the first flight's operator was named: a return sold as Delta and
+  // flown by Air France read as Delta.
+  it('names the airline operating a return flight for the one that sold it', () => {
+    const card = {
+      ...flight({ time: '18:00', rawDate: '2026-11-15' }, { time: '06:10', rawDate: '2026-11-16' }),
+      returnLeg: {
+        departure: { time: '10:00', airport: 'LHR', rawDate: '2026-11-22' },
+        arrival: { time: '13:00', airport: 'JFK', rawDate: '2026-11-22' },
+        duration: 'PT8H', stops: 0,
+        segments: [{ airline: { code: 'DL', name: 'Delta' }, operatingCarrier: 'AF', operatingAirlineName: 'Air France', departure: {}, arrival: {} }],
+      },
+    };
+    render(<FlightCard flight={card} onViewPrices={() => {}} />);
+
+    expect(screen.getByText('Operated by Air France')).toBeTruthy();
   });
 });

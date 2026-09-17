@@ -1607,7 +1607,7 @@ const resolveToIATACode = (location) => {
   const lower = String(location).toLowerCase().trim();
   if (CITY_TO_IATA[lower]) return CITY_TO_IATA[lower];
 
-  return resolveToIata(location) ?? location;
+  return resolveToIata(location) ?? null;
 };
 
 // Transform Amadeus API response to frontend format
@@ -1671,30 +1671,40 @@ const transformAmadeusFlightData = (flights, dictionaries = {}) => {
 
       // Calculate stops and layover details
       const segments = firstItinerary.segments;
-      const stops = Math.max(0, segments.length - 1);
-
-      let stopDetails = [];
-      if (stops > 0) {
-        stopDetails = segments.slice(0, -1).map((seg, index) => {
-          const nextSeg = segments[index + 1];
-          const arrivalTime = new Date(seg.arrival.at);
-          const departureTime = new Date(nextSeg.departure.at);
-          const diffMs = departureTime - arrivalTime;
-
-          const hours = Math.floor(diffMs / 3600000);
-          const minutes = Math.floor((diffMs % 3600000) / 60000);
-          const durationStr = `${hours}h ${minutes}m`;
-
-          return {
-            airport: seg.arrival.iataCode,
-            terminal: seg.arrival.terminal || '',
-            arrivalAt: seg.arrival.at,
-            departureAt: nextSeg.departure.at,
-            duration: durationStr,
-            waitingTime: durationStr // explicit alias for clarity
-          };
+      // Connections, and technical stops within a flight: a plane that lands on
+      // the way is a stop to the traveller, and was shown as "Non stop".
+      const layoverOf = (arrivalAt, departureAt) => {
+        const diffMs = new Date(departureAt) - new Date(arrivalAt);
+        if (!Number.isFinite(diffMs)) return '';
+        return `${Math.floor(diffMs / 3600000)}h ${Math.floor((diffMs % 3600000) / 60000)}m`;
+      };
+      const stopDetails = [];
+      segments.forEach((seg, index) => {
+        for (const tech of seg.stops || []) {
+          const duration = tech.arrivalAt && tech.departureAt ? layoverOf(tech.arrivalAt, tech.departureAt) : '';
+          stopDetails.push({
+            airport: tech.iataCode,
+            terminal: '',
+            arrivalAt: tech.arrivalAt,
+            departureAt: tech.departureAt,
+            duration,
+            waitingTime: duration,
+            technical: true,
+          });
+        }
+        const nextSeg = segments[index + 1];
+        if (!nextSeg) return;
+        const durationStr = layoverOf(seg.arrival.at, nextSeg.departure.at);
+        stopDetails.push({
+          airport: seg.arrival.iataCode,
+          terminal: seg.arrival.terminal || '',
+          arrivalAt: seg.arrival.at,
+          departureAt: nextSeg.departure.at,
+          duration: durationStr,
+          waitingTime: durationStr // explicit alias for clarity
         });
-      }
+      });
+      const stops = stopDetails.length;
 
       // Get pricing info
       const price = {
@@ -1792,6 +1802,21 @@ router.post('/search', validate({ body: flightSearchSchema }), async (req, res) 
     const resolvedFrom = resolveToIATACode(from);
     const resolvedTo = resolveToIATACode(to);
     console.log(`📍 Resolved locations: from="${from}" -> "${resolvedFrom}", to="${to}" -> "${resolvedTo}"`);
+
+    // Text that names no place is not searched as a guess. It used to go to
+    // Amadeus as typed - or, before that, as the first suggestion for its first
+    // word - and the page headed "Flights from San Francisco, CA" listed
+    // departures from Ouagadougou.
+    const unknownPlace = !/^[A-Z]{3}$/.test(String(resolvedFrom || '')) ? from
+      : !/^[A-Z]{3}$/.test(String(resolvedTo || '')) ? to
+        : null;
+    if (unknownPlace) {
+      return res.status(400).json({
+        success: false,
+        code: 'UNKNOWN_PLACE',
+        error: `We could not find "${String(unknownPlace).slice(0, 60)}". Please choose the city or airport from the list as you type.`,
+      });
+    }
 
     // Prepare search parameters
     const searchParams = {

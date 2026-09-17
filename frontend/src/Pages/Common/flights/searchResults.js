@@ -28,6 +28,25 @@ export const legDateLabel = (isoDate) => {
 };
 
 /**
+ * "19:25" for an airport time ("2026-11-15T19:25:00"), as the airport's clock
+ * reads it - in 24 hours, as the outbound times on the same card are.
+ * Formatted through the viewer's time zone, a time inside their own
+ * spring-forward hour moved an hour (02:40 printed as 03:40 in New York on
+ * 8 Mar), and a layover across it lost one.
+ */
+export const airportClockLabel = (at) => {
+  const match = String(at || '').match(/T(\d{2}):(\d{2})/);
+  return match ? `${match[1]}:${match[2]}` : '';
+};
+
+/** Minutes between two airport times at the same airport, whatever the viewer's zone. */
+export const minutesBetweenAirportTimes = (from, to) => {
+  const start = Date.parse(`${String(from || '').slice(0, 19)}Z`);
+  const end = Date.parse(`${String(to || '').slice(0, 19)}Z`);
+  return Number.isFinite(start) && Number.isFinite(end) ? Math.round((end - start) / 60000) : NaN;
+};
+
+/**
  * "+1" when a leg lands on a later calendar day than it left, "-1" when it lands
  * the day before (westward over the date line), "" on the same day. Both dates
  * are local to their airports, which is what a boarding pass shows.

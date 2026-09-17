@@ -48,6 +48,44 @@ beforeEach(() => {
  * Economy, seats to "Available", and offers that failed to transform vanished
  * with nothing counting them.
  */
+
+/** A search reply whose first flight lands at Keflavik on the way (a technical stop). */
+const withTechnicalStop = (xml) => xml
+  .replace('<equipmentType>744</equipmentType></productDetail>', '<equipmentType>744</equipmentType><techStopNumber>1</techStopNumber></productDetail>')
+  .replace('<productDetailQualifier>AVR</productDetailQualifier></addProductDetail></flightInformation></flightDetails>',
+    '<productDetailQualifier>AVR</productDetailQualifier></addProductDetail></flightInformation>'
+    + '<technicalStop><stopDetails><dateQualifier>AA</dateQualifier><date>151126</date><firstTime>1605</firstTime><locationId>KEF</locationId></stopDetails>'
+    + '<stopDetails><dateQualifier>AD</dateQualifier><date>151126</date><firstTime>1640</firstTime></stopDetails></technicalStop></flightDetails>');
+
+describe('stops on a result card', () => {
+  it('counts a technical stop, so the flight is not shown as non-stop', async () => {
+    axios.post.mockResolvedValue(reply(withTechnicalStop(fixture('mptbs-nonstop-business'))));
+    const app = await makeApp();
+
+    const res = await request(app).post('/api/flights/search').send({ from: 'JFK', to: 'LHR', departDate: inDays(60), adults: 1 });
+
+    const card = res.body.data.find((c) => c.originalOffer.itineraries[0].segments[0].number === '3629');
+    expect(card.stops).toBe(1);
+    expect(card.stopDetails).toEqual([expect.objectContaining({ airport: 'KEF', technical: true, duration: '0h 35m' })]);
+  });
+});
+
+describe('a place the search cannot name', () => {
+  // Sent as typed - or as the first suggestion for its first word - it searched
+  // somewhere else under a heading naming what the customer typed.
+  it('is refused with a way forward, and nothing is searched', async () => {
+    axios.post.mockReset();
+    const app = await makeApp();
+
+    const res = await request(app).post('/api/flights/search').send({ from: 'Nowhere At All', to: 'LHR', departDate: inDays(60), adults: 1 });
+
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('UNKNOWN_PLACE');
+    expect(res.body.error).toMatch(/choose the city or airport from the list/);
+    expect(axios.post).not.toHaveBeenCalled();
+  });
+});
+
 describe('what a search result does not invent', () => {
   it('takes refundability from the fare rules and leaves unknowns unknown', async () => {
     axios.post.mockResolvedValue(reply(fixture('mptbs-oneway-jfk-lhr')));

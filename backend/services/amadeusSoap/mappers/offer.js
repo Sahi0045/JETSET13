@@ -62,6 +62,26 @@ const legElapsedMinutes = (group) => {
   return Number.parseInt(padded.slice(0, 2), 10) * 60 + Number.parseInt(padded.slice(2), 10);
 };
 
+/**
+ * Where a flight lands on the way without anyone changing plane.
+ *
+ * A technical stop is one flight number, one segment - and it was counted as
+ * nothing: AI2592 DEL-BOM on 27 Sep 2026, down at Indore 16:05-16:40, showed as
+ * "Non stop", passed the Non-stop filter and sorted first under it. The reply
+ * says so in `productDetail.techStopNumber` and a `technicalStop` beside the
+ * flight, whose AA entry is the arrival at the stop and AD the departure.
+ */
+const readTechnicalStops = (flight) => arr(flight?.technicalStop).map((stop) => {
+  const details = arr(stop?.stopDetails);
+  const arrival = details.find((d) => txt(d.dateQualifier) === 'AA') ?? details[0] ?? {};
+  const departure = details.find((d) => txt(d.dateQualifier) === 'AD') ?? {};
+  return {
+    iataCode: txt(arrival.locationId) || txt(departure.locationId) || null,
+    arrivalAt: txt(arrival.date) ? toIsoLocal(txt(arrival.date), txt(arrival.firstTime)) : null,
+    departureAt: txt(departure.date) ? toIsoLocal(txt(departure.date), txt(departure.firstTime)) : null,
+  };
+}).filter((stop) => stop.iataCode);
+
 const buildSegment = (flight, index) => {
   const info = flight.flightInformation ?? {};
   const dt = info.productDateTime ?? {};
@@ -107,7 +127,11 @@ const buildSegment = (flight, index) => {
     // filled in here: an absent duration is the honest answer, and the
     // itinerary total beside it is Amadeus's own elapsed time.
     duration: undefined,
-    numberOfStops: 0,
+    ...(() => {
+      const stops = readTechnicalStops(flight);
+      const declared = Number.parseInt(atTxt(info, 'productDetail.techStopNumber'), 10) || 0;
+      return { numberOfStops: Math.max(stops.length, declared), ...(stops.length ? { stops } : {}) };
+    })(),
     blacklistedInEU: false,
     _raw: {
       departureDate: depDate,
