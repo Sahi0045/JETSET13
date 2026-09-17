@@ -146,6 +146,14 @@ describe('running the check once', () => {
     );
   });
 
+  // Announced rows keep their flag, and the query read the 200 oldest: once
+  // there were 200, a new paid-not-ticketed booking was never read at all.
+  it('reads only bookings not yet announced', async () => {
+    const chain = mockRows([]);
+    await runOnce({ webhookUrl: 'https://hooks.slack.test/x', dryRun: true });
+    expect(chain.is).toHaveBeenCalledWith('booking_details->needs_review->>alerted_at', null);
+  });
+
   it('a dry run reports what it would send', async () => {
     mockRows(flagged());
     const result = await runOnce({ webhookUrl: 'https://hooks.slack.test/x', dryRun: true });

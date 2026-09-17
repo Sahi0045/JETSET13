@@ -206,3 +206,42 @@ describe('the commission element', () => {
     expect(xml.match(/<segmentName>FM<\/segmentName>/g)).toHaveLength(1);
   });
 });
+
+describe('the names on a travel document', () => {
+  // The name element strips accents and apostrophes; DOCS wrote them raw, so
+  // the host could refuse the element at commit - after payment - or hold a
+  // document whose name did not match the ticket.
+  it('writes them as the passenger name element does', () => {
+    const freetext = buildDocsFreetext({
+      firstName: 'José María', lastName: "O'Brien", gender: 'MALE', dateOfBirth: '1990-01-15',
+      documents: [{ documentType: 'PASSPORT', number: 'X1234567', nationality: 'IE', issuanceCountry: 'IE', expiryDate: '2030-01-01' }],
+    });
+    expect(freetext).toBe('P/IRL/X1234567/IRL/15JAN90/M/01JAN30/OBRIEN/JOSE MARIA/H');
+  });
+
+  it('does the same on a Secure Flight document with no passport', () => {
+    const freetext = buildDocsFreetext({ firstName: 'Zoë', lastName: "D'Souza", gender: 'FEMALE', dateOfBirth: '1990-01-15' }, { withoutDocument: true });
+    expect(freetext).toBe('////15JAN90/F//DSOUZA/ZOE');
+  });
+});
+
+describe('a wheelchair request', () => {
+  const body = (travelers) => buildAddElementsBody({
+    travelers, contact: { email: 'jane@example.com', phone: '12125550100' }, ticketingDate: null,
+  });
+  const adult = (over = {}) => ({ id: '1', firstName: 'Jane', lastName: 'Doe', gender: 'FEMALE', dateOfBirth: '1990-01-01', ptc: 'ADT', ...over });
+
+  // The review page offered the box and the request went nowhere.
+  it('is asked of every airline on the booking, for that traveller', () => {
+    const xml = body([adult({ requiresWheelchair: true }), adult({ id: '2', firstName: 'John' })]);
+    const wchr = xml.split('<dataElementsIndiv>').filter((element) => element.includes('<type>WCHR</type>'));
+    expect(wchr).toHaveLength(1);
+    expect(wchr[0]).toContain('<status>NN</status>');
+    expect(wchr[0]).toContain('<companyId>YY</companyId>');
+    expect(wchr[0]).not.toContain('<freetext>');
+  });
+
+  it('is not sent when nobody asked', () => {
+    expect(body([adult()])).not.toContain('WCHR');
+  });
+});

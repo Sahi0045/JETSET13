@@ -87,6 +87,8 @@ export function buildFlightOrderBody(orderData, { userId = null } = {}) {
       passportNumber: p.passportNumber,
       passportExpiry: p.passportExpiry,
       documentType: p.documentType,
+      // Ticked on the review page; `/order` asks the airline for it (SSR WCHR).
+      ...(p.requiresWheelchair === true ? { requiresWheelchair: true } : {}),
     })),
     passengerDetails,
     fareBreakdown: orderData.calculatedFare || null,

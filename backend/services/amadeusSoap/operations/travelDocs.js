@@ -12,6 +12,7 @@
  */
 
 import { toAlpha3 as countryAlpha3 } from '../../../../shared/countries.js';
+import { toPnrName } from '../../../../shared/passengerName.js';
 
 /**
  * ISO 3166 alpha-2 -> alpha-3. DOCS is a 3-letter field; the UI collects 2.
@@ -61,8 +62,8 @@ const DOC_TYPE = Object.freeze({ PASSPORT: 'P', IDENTITY_CARD: 'I', ID_CARD: 'I'
  */
 const secureFlightDocs = (traveler) => {
   const birth = toDDMMMYY(traveler.dateOfBirth);
-  const surname = String(traveler.lastName ?? '').trim().toUpperCase();
-  const given = String(traveler.firstName ?? '').trim().toUpperCase();
+  const surname = toPnrName(traveler.lastName);
+  const given = toPnrName(traveler.firstName);
   if (!birth || !surname || !given) return null;
   return `////${birth}/${genderCode(traveler.gender, traveler.ptc)}//${surname}/${given}`;
 };
@@ -87,8 +88,12 @@ export const buildDocsFreetext = (traveler = {}, { withoutDocument = false } = {
   const issuing = toAlpha3(doc.issuanceCountry ?? doc.nationality);
   const birth = toDDMMMYY(traveler.dateOfBirth);
   const expiry = toDDMMMYY(doc.expiryDate);
-  const surname = String(traveler.lastName ?? '').trim().toUpperCase();
-  const given = String(traveler.firstName ?? '').trim().toUpperCase();
+  // The names as the name element writes them (pnr.js). Raw, "D'Souza" and
+  // "José" went into the DOCS free text as D'SOUZA and JOSÉ while the passenger
+  // was DSOUZA / JOSE: an element the host can refuse at commit, after payment,
+  // or a document that does not match the ticket.
+  const surname = toPnrName(traveler.lastName);
+  const given = toPnrName(traveler.firstName);
 
   if (!nationality || !issuing || !birth || !expiry || !surname || !given) return null;
 

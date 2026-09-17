@@ -604,6 +604,8 @@ describe('after the PNR exists', () => {
     expect(sent.findIndex((body) => body.includes('<optionCode>13</optionCode>')))
       .toBeLessThan(sent.findIndex((body) => body.includes('<Queue_PlacePNR')));
     expect(result.pnr).toBe('ABC123');
+    // Said, not only logged: the customer still has the searched times.
+    expect(result.scheduleChanged).toEqual(['TK']);
   });
 
   it('sends no change advice when no segment was changed', async () => {

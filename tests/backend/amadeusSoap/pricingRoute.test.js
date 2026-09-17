@@ -120,7 +120,9 @@ describe('POST /api/flights/price', () => {
       axios.post.mockReset();
       axios.post
         .mockResolvedValueOnce(reply(fixture('informative-pricing')))
-        .mockResolvedValueOnce(reply(sellReply('OK')))
+        // Both flights of the connection: a reply confirming one of two is a
+        // refusal (readAirSellReply).
+        .mockResolvedValueOnce(reply(sellReply('OK', 'OK')))
         .mockResolvedValue(reply(signOut));
       const app = await makeApp();
 

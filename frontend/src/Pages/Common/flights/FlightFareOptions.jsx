@@ -34,6 +34,9 @@ function FlightFareOptions({ flight, onClose, onSelect }) {
   const [loading, setLoading] = useState(true);
   const [options, setOptions] = useState([]);
   const [error, setError] = useState(null);
+  // The fare being checked with the airline, and the ones it would not sell.
+  const [checkingKey, setCheckingKey] = useState(null);
+  const [withdrawn, setWithdrawn] = useState(() => new Set());
 
   useEffect(() => {
     if (!flight) return;
@@ -94,8 +97,48 @@ function FlightFareOptions({ flight, onClose, onSelect }) {
 
   if (!flight) return null;
 
+  /**
+   * Ask the airline whether it still sells this fare, before the review page.
+   *
+   * A fare withdrawn since the search was only found out on the review page,
+   * under "The airline can no longer sell this fare", after the customer had
+   * chosen it and started on the traveller forms. It is found here instead,
+   * and the customer stays on the results. Only that answer stops them: if the
+   * check cannot be made, the review page and checkout both check again.
+   */
+  const stillSold = async (offer) => {
+    if (!offer) return true;
+    try {
+      const res = await fetch(apiConfig.endpoints.flights.price, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ flightOffer: offer }),
+        signal: AbortSignal.timeout(15000),
+      });
+      const body = await res.json().catch(() => null);
+      return body?.code !== 'FARE_UNAVAILABLE';
+    } catch {
+      return true;
+    }
+  };
+
+  const keyOf = (opt) => (opt ? String(opt.id ?? opt.originalOffer?.id ?? 'original') : 'original');
+
+  const handleSelect = async (opt) => {
+    if (checkingKey) return;
+    const key = keyOf(opt);
+    setCheckingKey(key);
+    const sold = await stillSold(opt?.originalOffer || flight.originalOffer);
+    setCheckingKey(null);
+    if (!sold) {
+      setWithdrawn((previous) => new Set(previous).add(key));
+      return;
+    }
+    choose(opt);
+  };
+
   // Merge a chosen fare option onto the base (display) flight, keeping booking data
-  const handleSelect = (opt) => {
+  const choose = (opt) => {
     if (!opt) { onSelect(flight); return; }
     // A fare option is only bookable with its own offer. Falling back to the
     // clicked flight's offer showed one fare's price and booked another fare.
@@ -201,12 +244,19 @@ function FlightFareOptions({ flight, onClose, onSelect }) {
                       ))}
                     </div>
 
-                    <button
-                      onClick={() => handleSelect(opt)}
-                      className="mt-3 w-full py-2 rounded-lg bg-[#055B75] hover:bg-[#034457] text-white text-sm font-bold transition-colors"
-                    >
-                      BOOK
-                    </button>
+                    {withdrawn.has(keyOf(opt)) ? (
+                      <p className="mt-3 text-xs font-semibold text-amber-700" role="status">
+                        The airline has just stopped selling this fare. Choose another fare or flight.
+                      </p>
+                    ) : (
+                      <button
+                        onClick={() => handleSelect(opt)}
+                        disabled={Boolean(checkingKey)}
+                        className="mt-3 w-full py-2 rounded-lg bg-[#055B75] hover:bg-[#034457] disabled:opacity-60 text-white text-sm font-bold transition-colors inline-flex items-center justify-center gap-2"
+                      >
+                        {checkingKey === keyOf(opt) ? (<><Loader2 className="h-4 w-4 animate-spin" /> CHECKING…</>) : 'BOOK'}
+                      </button>
+                    )}
                   </div>
                 );
               })}
@@ -214,13 +264,19 @@ function FlightFareOptions({ flight, onClose, onSelect }) {
           ) : (
             <div className="text-center py-8">
               <p className="text-sm text-gray-500 mb-4">{error || 'No alternate fares available.'}</p>
-              <button
-                onClick={() => handleSelect(null)}
-                className="px-6 py-2.5 rounded-lg bg-[#055B75] hover:bg-[#034457] text-white text-sm font-bold transition-colors inline-flex items-center gap-2"
-              >
-                Continue with this fare
-                <span className="font-normal"><Price amount={flight.price} /></span>
-              </button>
+              {withdrawn.has(keyOf(null)) ? (
+                <p className="text-sm font-semibold text-amber-700" role="status">
+                  The airline has just stopped selling this fare. Choose another flight.
+                </p>
+              ) : (
+                <button
+                  onClick={() => handleSelect(null)}
+                  disabled={Boolean(checkingKey)}
+                  className="px-6 py-2.5 rounded-lg bg-[#055B75] hover:bg-[#034457] disabled:opacity-60 text-white text-sm font-bold transition-colors inline-flex items-center gap-2"
+                >
+                  {checkingKey ? (<><Loader2 className="h-4 w-4 animate-spin" /> Checking…</>) : (<>Continue with this fare <span className="font-normal"><Price amount={flight.price} /></span></>)}
+                </button>
+              )}
             </div>
           )}
         </div>

@@ -73,6 +73,17 @@ describe('marking a booking cancelled by hand', () => {
     expect(statusWrites()).toEqual([]);
   });
 
+  // The row says unpaid until the gateway is asked. A customer whose tab died on
+  // the way back from paying looks exactly like this, and a hand-set cancel hid
+  // their payment from every job and alarm.
+  it('is refused for a checkout that opened a payment page, which may have been paid', async () => {
+    const res = await put([flight({ arc_pay_checkout_url: 'https://arc.test/pay/SESSION1', session_id: 'SESSION1' }, { status: 'pending', payment_status: 'unpaid' })], { status: 'cancelled' });
+
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe('USE_CANCEL_AND_REFUND');
+    expect(statusWrites()).toEqual([]);
+  });
+
   it('is allowed for a checkout that was never paid and never booked', async () => {
     const res = await put([flight({}, { status: 'pending', payment_status: 'unpaid' })], { status: 'cancelled' });
 

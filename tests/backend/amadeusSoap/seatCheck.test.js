@@ -147,6 +147,26 @@ describe('confirming the seats before payment', () => {
     expect(sent('PNR_AddMultiElements')).toHaveLength(0);
   });
 
+  // A round trip whose return the airline refused: the outbound answered OK and
+  // the return only an itinerary-level 288, with no segment at all (the XSD
+  // lets segmentInformation be absent). "Every status is sold" was true of the
+  // one status there was, so the check said available, the customer paid, and
+  // the booking chain found the refusal and refunded.
+  it('refuses a round trip when the airline answered for the outbound only', async () => {
+    const confirmSeats = await load();
+    const isFareRefusal = await refusal();
+    replies(envelope('Air_SellFromRecommendationReply',
+      '<itineraryDetails><segmentInformation><actionDetails><quantity>1</quantity><statusCode>OK</statusCode></actionDetails></segmentInformation></itineraryDetails>'
+      + '<itineraryDetails><errorItinerarylevel><errorSpecification><errorDetails><errorCode>288</errorCode><errorCategory>EC</errorCategory></errorDetails></errorSpecification>'
+      + '<textInformation><freeText>UNABLE TO SATISFY, NEED CONFIRMED FLIGHT STATUS</freeText></textInformation></errorItinerarylevel></itineraryDetails>', true));
+
+    const error = await confirmSeats(offer()).catch((e) => e);
+
+    expect(error).toBeInstanceOf(Error);
+    expect(isFareRefusal(error)).toBe(true);
+    expect(sent('Fare_PricePNRWithBookingClass')).toHaveLength(0);
+  });
+
   it('does not call a reply without a seat status a refusal', async () => {
     const confirmSeats = await load();
     const isFareRefusal = await refusal();

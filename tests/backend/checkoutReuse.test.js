@@ -225,3 +225,27 @@ describe('a new payment page is opened, as before, when the open one is not this
     await opensItsOwn({ rows: [openCheckout()], fail: lookupFails });
   });
 });
+
+/**
+ * The address a signed-in customer's ticket goes to.
+ *
+ * The review page marks the lead traveller's email optional for a signed-in
+ * customer. Left blank, the booking had no address: no confirmation email, no
+ * e-ticket email, no email contact on the PNR - while the page promised both.
+ */
+describe('a signed-in customer who left the email blank', () => {
+  it('is booked under their account email', async () => {
+    const { res, table } = await checkout({ user: { ...CUSTOMER, email: 'account@example.com' }, body: { customerEmail: '' } });
+
+    expect(res.statusCode).toBe(200);
+    expect(table.row('FLTSECOND2').booking_details.customer_email).toBe('account@example.com');
+    const session = axios.post.mock.calls.find(([, sent]) => sent?.apiOperation === 'INITIATE_CHECKOUT')?.[1];
+    expect(session?.customer?.email).toBe('account@example.com');
+  });
+
+  it('keeps the address they typed when they typed one', async () => {
+    const { table } = await checkout({ user: { ...CUSTOMER, email: 'account@example.com' }, body: { customerEmail: 'trip@example.com' } });
+
+    expect(table.row('FLTSECOND2').booking_details.customer_email).toBe('trip@example.com');
+  });
+});

@@ -13,6 +13,7 @@ import { DEFAULT_PRICE_SETTINGS } from '../../config/priceDefaults.js';
 import { cancellationMessage, refundOutcome } from '../../../shared/cancellationOutcome.js';
 import { reconcileBookingPayment } from './checkout.handlers.js';
 import { errorSummary } from '../../utils/errorSummary.js';
+import { orderVoided, voidsPayment } from '../../utils/arcTransactions.js';
 
 const sanitizeRef = (v) => String(v ?? '').replace(/[^A-Za-z0-9_-]/g, '') || '__none__';
 
@@ -726,7 +727,7 @@ export async function inspectArcOrder(orderId) {
         const taken = txns.filter((t) => succeeded(t) && ['PAYMENT', 'CAPTURE', 'AUTHORIZATION'].includes(t.transaction?.type));
         const captured = sumOf(txns.filter((t) => succeeded(t) && ['PAYMENT', 'CAPTURE'].includes(t.transaction?.type)));
         const refunded = sumOf(txns.filter((t) => t.transaction?.type === 'REFUND' && t.result === 'SUCCESS'));
-        const voided = txns.some((t) => t.transaction?.type === 'VOID' && t.result === 'SUCCESS');
+        const voided = orderVoided(resp.data);
         const fullyRefunded = captured > 0 && refunded + 0.01 >= captured;
 
         return { reachable: true, orderStatus: resp.data.status || null, holdsPayment: taken.length > 0 && !voided && !fullyRefunded };
@@ -1169,7 +1170,7 @@ export async function handlePaymentRefund(req, res) {
         const captured = txns.filter((t) => succeeded(t) && ['PAYMENT', 'CAPTURE'].includes(t.transaction?.type));
         const capturedAmount = Math.round(sumOf(captured) * 100) / 100;
         const alreadyRefunded = Math.round(sumOf(txns.filter((t) => succeeded(t) && t.transaction?.type === 'REFUND')) * 100) / 100;
-        const alreadyVoided = txns.some((t) => succeeded(t) && t.transaction?.type === 'VOID');
+        const alreadyVoided = txns.some(voidsPayment);
 
         // Fail CLOSED when the gateway's answer cannot be read.
         //
@@ -1417,7 +1418,7 @@ export async function handlePaymentVoid(req, res) {
                 const txns = Array.isArray(orderResp.data.transaction) ? orderResp.data.transaction : [];
 
                 // Already voided/cancelled on the gateway?
-                const hasVoid = txns.some(t => t.transaction?.type === 'VOID' && (t.result === 'SUCCESS'));
+                const hasVoid = txns.some(voidsPayment);
                 if (orderStatus === 'CANCELLED' || hasVoid) {
                     await giveBack();
                     return res.status(400).json({ success: false, error: 'The payment is already voided on the gateway', orderStatus });
@@ -1601,7 +1602,7 @@ export async function handlePaymentRetrieve(req, res) {
                     localStatus = 'refunded';
                 } else if (arcStatus === 'PARTIALLY_REFUNDED' && localStatus !== 'partially_refunded') {
                     localStatus = 'partially_refunded';
-                } else if (arcStatus === 'VOID' && localStatus !== 'voided') {
+                } else if ((arcStatus === 'VOID' || arcStatus === 'CANCELLED') && localStatus !== 'voided') {
                     localStatus = 'voided';
                 }
 
@@ -1917,7 +1918,7 @@ export async function reverseArcPaymentForOrder(orderId, { amount, currency = 'U
         // a later full reversal report success having returned nothing more.
         // A successful VOID returns everything; refunds are summed against what
         // was captured, and only the remainder is refunded below.
-        const voided = txns.some(t => t.transaction?.type === 'VOID' && t.result === 'SUCCESS');
+        const voided = orderVoided(order);
         const alreadyRefunded = txns
             .filter(t => t.transaction?.type === 'REFUND' && t.result === 'SUCCESS')
             .reduce((sum, t) => sum + (parseFloat(t.transaction?.amount) || 0), 0);

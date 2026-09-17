@@ -73,6 +73,16 @@ export function statusChangeRefusal(booking, nextStatus) {
       return refusal(409, 'USE_CANCEL_AND_REFUND',
         'This booking holds a payment. Marking it cancelled would refund nothing. Use Cancel & Refund, which returns what is owed.');
     }
+    // A checkout that opened a payment page may have been paid without the row
+    // knowing yet: the customer's tab closed on the way back, or they are still
+    // on the page. The row says unpaid until the abandoned-checkout job asks the
+    // gateway, and a booking cancelled by hand before then was skipped by that
+    // job, refused by the order route and matched by neither alarm - money held,
+    // nobody told. Cancel & Refund asks the gateway first.
+    if (isFlight && (details.arc_pay_checkout_url || details.session_id || details.success_indicator)) {
+      return refusal(409, 'USE_CANCEL_AND_REFUND',
+        'A payment page was opened for this booking, so it may have been paid. Use Cancel & Refund, which asks the payment gateway before cancelling.');
+    }
     return null;
   }
 

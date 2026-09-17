@@ -452,8 +452,20 @@ function FlightCreateOrders() {
        * connection and try again", under a red Booking Failed, to a customer
        * whose booking was in all likelihood being confirmed at that moment.
        */
+      // A gateway answer with none of our codes is the same thing. The request
+      // passes Vercel's rewrite to the booking server, which gives up after
+      // 120 seconds, and a booking waiting for a slow airline's record locator
+      // can take longer: the page said "Booking Failed" while the server went
+      // on to issue the ticket, and a customer who paid again was held as a
+      // duplicate payment.
+      // Only an answer that is not ours: every answer the order route gives carries
+      // `success`, and a failed booking it refunded is a 502 too.
+      const answer = error.response?.data;
+      const gatewayCutOff = [502, 503, 504].includes(error.response?.status)
+        && !(answer && typeof answer === 'object' && 'success' in answer);
       const timedOut = error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT'
-        || (!error.response && /timeout/i.test(error.message || ''));
+        || (!error.response && /timeout/i.test(error.message || ''))
+        || gatewayCutOff;
       if (timedOut) {
         inProgressAttempts.current += 1;
         const gaveUp = inProgressAttempts.current > IN_PROGRESS_RETRIES;

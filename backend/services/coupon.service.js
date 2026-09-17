@@ -31,7 +31,13 @@ export async function evaluateCoupon(client, { code, orderTotal = 0, bookingType
   if (coupon.valid_until && new Date(coupon.valid_until) < now) {
     return { ok: false, status: 400, message: 'This coupon has expired.' };
   }
-  if (coupon.max_uses !== null && coupon.max_uses !== undefined && coupon.current_uses >= coupon.max_uses) {
+  // Uses are counted once the airline holds a booking (recordCouponUse), so a
+  // checkout still on its payment page, or paid and not yet booked, had not
+  // used its coupon yet: every open checkout passed both limits, and a
+  // one-per-customer coupon applied to two trips at once was given twice.
+  const pending = await pendingCouponCheckouts(client, coupon);
+  if (coupon.max_uses !== null && coupon.max_uses !== undefined
+    && Number(coupon.current_uses || 0) + pending.length >= coupon.max_uses) {
     return { ok: false, status: 400, message: 'This coupon has reached its maximum usage limit.' };
   }
   if (parseFloat(coupon.min_order_value) > 0 && parseFloat(orderTotal) < parseFloat(coupon.min_order_value)) {
@@ -50,6 +56,15 @@ export async function evaluateCoupon(client, { code, orderTotal = 0, bookingType
       .limit(1)
       .maybeSingle();
     if (existing) return { ok: false, status: 400, message: 'You have already used this coupon.' };
+    const mine = pending.some((row) => (userId && row.user_id === userId)
+      || (customerEmail && normalizeEmail(row.booking_details?.customer_email) === customerEmail));
+    if (mine) {
+      return {
+        ok: false,
+        status: 400,
+        message: 'This coupon is already on another booking you started in the last 15 minutes. Finish that payment, or try again once its payment page has closed.',
+      };
+    }
   }
 
   // Ceiling on what one booking may give away. A percentage coupon is unbounded
@@ -66,6 +81,48 @@ export async function evaluateCoupon(client, { code, orderTotal = 0, bookingType
 }
 
 const normalizeEmail = (value) => String(value ?? '').trim().toLowerCase() || null;
+
+// A hosted payment page lasts 15 minutes; a paid booking is booked, refunded or
+// flagged within the abandoned-checkout job's six hours.
+const OPEN_CHECKOUT_MS = 15 * 60 * 1000;
+const PAID_UNBOOKED_MS = 6 * 60 * 60 * 1000;
+
+/**
+ * Checkouts holding this coupon that have not used it yet: a payment page still
+ * open, or a payment taken and not yet booked. Neither is cancelled or refunded,
+ * and neither has a usage row.
+ */
+async function pendingCouponCheckouts(client, coupon, now = Date.now()) {
+  if (!coupon?.code) return [];
+  try {
+    const { data: rows, error } = await client
+      .from('bookings')
+      .select('booking_reference, user_id, status, payment_status, created_at, booking_details')
+      .eq('booking_details->verified_charge->coupon->>code', coupon.code)
+      .gte('created_at', new Date(now - PAID_UNBOOKED_MS).toISOString())
+      .limit(200);
+    if (error || !Array.isArray(rows) || rows.length === 0) return [];
+
+    const live = rows.filter((row) => {
+      if (row.status === 'cancelled') return false;
+      if (['refunded', 'partially_refunded'].includes(row.payment_status)) return false;
+      if (row.payment_status === 'paid') return !row.booking_details?.pnr;
+      return now - Date.parse(row.created_at) < OPEN_CHECKOUT_MS;
+    });
+    if (live.length === 0) return [];
+
+    const { data: used } = await client
+      .from('coupon_usage')
+      .select('booking_reference')
+      .eq('coupon_id', coupon.id)
+      .in('booking_reference', live.map((row) => row.booking_reference));
+    const recorded = new Set((used || []).map((row) => row.booking_reference));
+    return live.filter((row) => !recorded.has(row.booking_reference));
+  } catch {
+    // The limits already applied still apply; this only adds what is in flight.
+    return [];
+  }
+}
 
 /**
  * Record that a coupon was used on a booking - once per booking.
