@@ -3,6 +3,7 @@ import { supabase, ARC_PAY_CONFIG, getArcPayAuthConfig } from './arcpay.config.j
 import { getCallerInfo, generateLinkToken } from './payment.helpers.js';
 import { generatePaymentLinkTemplate } from '../../services/email/templates.js';
 import { reconcileBookingPayment } from './checkout.handlers.js';
+import { errorSummary } from '../../utils/errorSummary.js';
 
 
 /**
@@ -128,7 +129,7 @@ export async function handleCreatePaymentLink(req, res) {
             }
         });
     } catch (error) {
-        console.error('❌ Create payment link error:', error);
+        console.error('❌ Create payment link error:', errorSummary(error));
         return res.status(500).json({ success: false, error: 'Failed to create payment link', details: error.message });
     }
 }
@@ -163,7 +164,7 @@ export async function handleGetPaymentLink(req, res) {
 
         return res.json({ success: true, paymentLink });
     } catch (error) {
-        console.error('❌ Get payment link error:', error);
+        console.error('❌ Get payment link error:', errorSummary(error));
         return res.status(500).json({ success: false, error: 'Failed to get payment link' });
     }
 }
@@ -329,7 +330,7 @@ export async function handleProcessPaymentLink(req, res) {
             sessionData
         });
     } catch (error) {
-        console.error('❌ Process payment link error:', error);
+        console.error('❌ Process payment link error:', errorSummary(error));
         return res.status(500).json({
             success: false,
             error: 'Failed to process payment'
@@ -495,7 +496,7 @@ export async function handleListPaymentLinks(req, res) {
 
         return res.json({ success: true, data: enrichedLinks, total: enrichedLinks.length });
     } catch (error) {
-        console.error('❌ List payment links error:', error);
+        console.error('❌ List payment links error:', errorSummary(error));
         return res.status(500).json({ success: false, error: 'Failed to list payment links', details: error.message });
     }
 }

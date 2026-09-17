@@ -5,6 +5,7 @@ import { supabase } from './arcpay.config.js';
 import { JWT_SECRET, JWT_EXPIRE } from '../../config/jwt.js';
 import { isSuperAdmin, verifySupabaseToken } from '../../middleware/auth.middleware.js';
 import { sendTravelAgentInviteEmail } from '../../services/emailService.js';
+import { errorSummary } from '../../utils/errorSummary.js';
 
 const INVITE_TTL_MS = 48 * 60 * 60 * 1000; // 48 hours
 const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
@@ -148,7 +149,7 @@ export async function handleAgentLogin(req, res) {
             csrfToken
         });
     } catch (error) {
-        console.error('❌ Agent login error:', error);
+        console.error('❌ Agent login error:', errorSummary(error));
         return res.status(500).json({ success: false, error: 'Login failed' });
     }
 }
@@ -226,7 +227,7 @@ export async function handleCreateAgent(req, res) {
             agent,
         });
     } catch (error) {
-        console.error('❌ Create agent error:', error);
+        console.error('❌ Create agent error:', errorSummary(error));
         return res.status(500).json({ success: false, error: 'Failed to create agent', details: error.message });
     }
 }
@@ -251,7 +252,7 @@ export async function handleGetAgentInvite(req, res) {
         }
         return res.json({ success: true, name: agent.name, email: agent.email });
     } catch (error) {
-        console.error('❌ Get agent invite error:', error);
+        console.error('❌ Get agent invite error:', errorSummary(error));
         return res.status(500).json({ success: false, error: 'Failed to validate invitation' });
     }
 }
@@ -291,7 +292,7 @@ export async function handleAcceptAgentInvite(req, res) {
 
         return res.json({ success: true, message: 'Password set. You can now sign in.' });
     } catch (error) {
-        console.error('❌ Accept agent invite error:', error);
+        console.error('❌ Accept agent invite error:', errorSummary(error));
         return res.status(500).json({ success: false, error: 'Failed to set password' });
     }
 }
@@ -324,7 +325,7 @@ export async function handleResendAgentInvite(req, res) {
         await sendTravelAgentInviteEmail(agent.email, agent.name, inviteLink);
         return res.json({ success: true, message: 'Invite re-sent.' });
     } catch (error) {
-        console.error('❌ Resend agent invite error:', error);
+        console.error('❌ Resend agent invite error:', errorSummary(error));
         return res.status(500).json({ success: false, error: 'Failed to resend invite' });
     }
 }
@@ -413,7 +414,7 @@ export async function handleListAgents(req, res) {
 
         return res.json({ success: true, data: enrichedAgents, total: enrichedAgents.length });
     } catch (error) {
-        console.error('❌ List agents error:', error);
+        console.error('❌ List agents error:', errorSummary(error));
         return res.status(500).json({ success: false, error: 'Failed to list agents', details: error.message });
     }
 }
@@ -469,7 +470,7 @@ export async function handleAgentStats(req, res) {
             recentLinks: all.slice(0, 20),
         });
     } catch (error) {
-        console.error('❌ Agent stats error:', error);
+        console.error('❌ Agent stats error:', errorSummary(error));
         return res.status(500).json({ success: false, error: 'Failed to load agent stats' });
     }
 }
@@ -548,7 +549,7 @@ export async function handleAdminAgentDetail(req, res) {
             payouts: payouts || [],
         });
     } catch (error) {
-        console.error('❌ admin-agent-detail error:', error);
+        console.error('❌ admin-agent-detail error:', errorSummary(error));
         return res.status(500).json({ success: false, error: 'Failed to load agent detail' });
     }
 }
@@ -578,7 +579,7 @@ export async function handleRecordPayout(req, res) {
         if (error) throw error;
         return res.json({ success: true, payout: data, message: `Recorded $${amt.toFixed(2)} payout.` });
     } catch (error) {
-        console.error('❌ record-payout error:', error);
+        console.error('❌ record-payout error:', errorSummary(error));
         return res.status(500).json({ success: false, error: 'Failed to record payout' });
     }
 }
@@ -626,7 +627,7 @@ export async function handleUpdateAgent(req, res) {
         console.log('✅ Agent updated:', agent.email);
         return res.json({ success: true, agent });
     } catch (error) {
-        console.error('❌ Update agent error:', error);
+        console.error('❌ Update agent error:', errorSummary(error));
         return res.status(500).json({ success: false, error: 'Failed to update agent', details: error.message });
     }
 }
@@ -662,7 +663,7 @@ export async function handleDeleteAgent(req, res) {
         console.log('✅ Agent removed (disabled):', agent.email);
         return res.json({ success: true, agent, message: 'Agent removed.' });
     } catch (error) {
-        console.error('❌ Delete agent error:', error);
+        console.error('❌ Delete agent error:', errorSummary(error));
         return res.status(500).json({ success: false, error: 'Failed to deactivate agent', details: error.message });
     }
 }

@@ -122,7 +122,8 @@ router.all('/', optionalProtect, guestCancelLimiter, async (req, res) => {
         });
     }
 
-    console.log(`📥 Payment API Action: ${action}`, { method: req.method, query: req.query });
+    // Not the query: get-pending-booking carries the payer's resultIndicator in it.
+    console.log(`📥 Payment API Action: ${action}`, { method: req.method });
 
     try {
         return await handler(req, res);

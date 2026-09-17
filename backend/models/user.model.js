@@ -100,7 +100,8 @@ class User {
       
       // If we have data and at least one user record
       if (data && data.length > 0) {
-        console.log('Found user:', data[0]);
+        // Not the row: it holds the password hash and the profile's passport number.
+        console.log('Found user:', { id: data[0].id, role: data[0].role });
         
         return {
           ...data[0],
@@ -138,7 +139,7 @@ class User {
         throw error;
       }
       
-      console.log('Found user:', data);
+      console.log('Found user:', data ? { id: data.id, role: data.role } : null);
       
       if (data) {
         return {
