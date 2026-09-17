@@ -235,6 +235,36 @@ describe('the payment check before booking', () => {
     expect(askedGateway()).toBe(true);
   });
 
+  // "Transaction ID 1" on My Trips: the booking saved ARC's transaction `id`,
+  // which counts within the order. The bank's reference is `receipt`.
+  it('saves and answers with the bank reference, not the count or the indicator', async () => {
+    axios.get.mockReset();
+    axios.get.mockResolvedValue({
+      status: 200,
+      data: { status: 'CAPTURED', amount: 291, transaction: [{ result: 'SUCCESS', transaction: { id: '1', type: 'PAYMENT', amount: 291, receipt: '625923098465' } }] },
+    });
+    bookThen(() => booked);
+    const { app: server, table } = await appWith([checkoutRow({ booking_details: { payment_reconciled_at: new Date(Date.now() - 60 * 60000).toISOString() } })]);
+
+    const res = await request(server).post('/api/flights/order').send(order);
+
+    expect(res.body.success).toBe(true);
+    expect(res.body.transactionId).toBe('625923098465');
+    expect(table.row(REF).booking_details.transaction_id).toBe('625923098465');
+  });
+
+  // The usual path: the payment page reconciled moments ago, so the order
+  // route reads the reference from the row instead of asking again.
+  it('answers with the bank reference the payment page recorded', async () => {
+    bookThen(() => booked);
+    const { app: server, table } = await appWith([checkoutRow({ booking_details: { payment_reconciled_at: new Date().toISOString(), arc_transaction_id: '1', arc_receipt: '625923098465' } })]);
+
+    const res = await request(server).post('/api/flights/order').send(order);
+
+    expect(res.body.transactionId).toBe('625923098465');
+    expect(table.row(REF).booking_details.transaction_id).toBe('625923098465');
+  });
+
   it('trusts a payment the payment page confirmed moments ago', async () => {
     axios.get.mockReset();
     axios.get.mockResolvedValue(captured);

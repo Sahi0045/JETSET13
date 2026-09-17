@@ -423,7 +423,8 @@ export async function handleCompletePaymentLink(req, res) {
             .update({
                 payment_status: 'completed',
                 completed_at: now,
-                arc_transaction_id: payment.arcTransactionId || null
+                arc_transaction_id: payment.arcTransactionId || null,
+                metadata: { ...(paymentRecord.metadata || {}), arc_receipt: payment.arcReceipt || null }
             })
             .eq('id', paymentRecord.id);
 
