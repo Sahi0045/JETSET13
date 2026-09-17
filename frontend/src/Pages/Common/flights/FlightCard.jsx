@@ -73,11 +73,20 @@ function StopsLabel({ leg }) {
 }
 
 // One leg's timeline: departure — duration/stops — arrival
-function Leg({ leg, label }) {
+// Airlines flying this leg for another: every segment whose operator is not
+// the airline selling it. The card named the operator of the first flight only.
+const operatorsOf = (segments = []) => [...new Set(segments
+  .filter((seg) => seg?.operatingCarrier && seg.operatingCarrier !== seg.airline?.code)
+  .map((seg) => seg.operatingAirlineName || seg.operatingCarrier))];
+
+function Leg({ leg, label, operators = [] }) {
   const dayOffset = arrivalDayOffset(leg.departure?.rawDate, leg.arrival?.rawDate);
   return (
     <div>
       {label && <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1">{label}</div>}
+      {operators.length > 0 && (
+        <div className="text-[10px] text-amber-600 mb-1">Operated by {operators.join(', ')}</div>
+      )}
       <div className="flex items-center justify-between gap-2 sm:gap-4">
         {/* Departure */}
         <div className="text-left">
@@ -150,6 +159,9 @@ function SegmentList({ segments = [], stopDetails = [], cityMap = {} }) {
                 <span className="font-semibold text-gray-700">{seg.airline?.name || seg.airline?.code}</span>
                 <span className="mx-1">·</span>
                 <span>{seg.flightNumber}</span>
+                {seg.operatingCarrier && seg.operatingCarrier !== seg.airline?.code && (
+                  <span className="text-amber-600"> · Operated by {seg.operatingAirlineName || seg.operatingCarrier}</span>
+                )}
                 {seg.aircraft && seg.aircraft !== 'Unknown Aircraft' && (
                   <>
                     <span className="mx-1">·</span>
@@ -289,7 +301,7 @@ function FlightCard({ flight, onBook, onViewPrices, priceStats, cityMap = {} }) 
                 label="Onward"
               />
               <div className="border-t border-dashed border-gray-200" />
-              <Leg leg={flight.returnLeg} label="Return" />
+              <Leg leg={flight.returnLeg} label="Return" operators={operatorsOf(flight.returnLeg.segments)} />
             </div>
           ) : (
             <div className="flex-1">

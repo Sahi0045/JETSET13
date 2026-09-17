@@ -167,12 +167,18 @@ function FlightCreateOrders() {
 
       // Try to retrieve from localStorage as fallback
       try {
-        const storedBookingData = localStorage.getItem('pendingFlightBooking');
+        const storedBookingData = sessionStorage.getItem('pendingFlightBooking') || localStorage.getItem('pendingFlightBooking');
         const storedSessionData = localStorage.getItem('pendingPaymentSession');
+        const parsedBooking = storedBookingData ? JSON.parse(storedBookingData) : null;
+        const parsedSession = storedSessionData ? JSON.parse(storedSessionData) : {};
+        // A draft saved for another payment is not this order's: booking one
+        // trip's travellers under another trip's reference books the wrong people.
+        const draftForThisOrder = parsedBooking
+          && !(parsedBooking.orderId && parsedSession?.orderId && parsedBooking.orderId !== parsedSession.orderId);
 
-        if (storedBookingData) {
-          const bookingData = JSON.parse(storedBookingData);
-          const sessionData = storedSessionData ? JSON.parse(storedSessionData) : {};
+        if (draftForThisOrder) {
+          const bookingData = parsedBooking;
+          const sessionData = parsedSession;
 
 
           // Merge localStorage data with location.state (location.state takes priority for payment info)

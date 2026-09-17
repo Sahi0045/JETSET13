@@ -20,11 +20,15 @@ let lastSessionToken = null;
 // routine page load looked like a fresh login. A module-scoped flag cleared on
 // the next macrotask outlives the event instead of racing it.
 let isRehydrating = false;
-const establishServerSession = async (session) => {
-  if (!session?.access_token || session.access_token === lastSessionToken) return;
-  lastSessionToken = session.access_token;
+// The token is marked as sent only once the server has taken it. It was marked
+// before the request, so a request that failed was never made again for that
+// token: the page had a signed-in user, the server had no cookie, and checkout
+// answered "log in" to someone who was logged in.
+const establishServerSession = async (session, { force = false } = {}) => {
+  if (!session?.access_token) return false;
+  if (!force && session.access_token === lastSessionToken) return true;
   try {
-    await fetch(getApiUrl('auth/session'), {
+    const response = await fetch(getApiUrl('auth/session'), {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -33,8 +37,12 @@ const establishServerSession = async (session) => {
         refresh_token: session.refresh_token,
       }),
     });
+    if (!response.ok) return false;
+    lastSessionToken = session.access_token;
+    return true;
   } catch (e) {
     console.warn('Failed to establish server session cookie:', e?.message);
+    return false;
   }
 };
 
@@ -498,9 +506,23 @@ export const SupabaseAuthProvider = ({ children }) => {
     }
   }, []);
 
+  // Hand the server this browser's session again, refreshed. For a page that
+  // was told "log in" while it has a signed-in user: the server's cookie lapsed
+  // or never arrived, and signing out to fix it lost everything on the page.
+  const renewServerSession = useCallback(async () => {
+    try {
+      const { data } = await supabase.auth.refreshSession();
+      const current = data?.session ?? session;
+      return await establishServerSession(current, { force: true });
+    } catch {
+      return false;
+    }
+  }, [session]);
+
   const value = useMemo(() => ({
     user,
     session,
+    renewServerSession,
     loading,
     error,
     isAuthenticated: !!user,
@@ -512,7 +534,7 @@ export const SupabaseAuthProvider = ({ children }) => {
     resetPassword,
     updatePassword,
     supabase // Expose supabase client for advanced usage
-  }), [user, session, loading, error, signUp, signIn, signInWithOAuth, signOut, updateProfile, resetPassword, updatePassword]);
+  }), [user, session, loading, error, renewServerSession, signUp, signIn, signInWithOAuth, signOut, updateProfile, resetPassword, updatePassword]);
 
   return (
     <SupabaseAuthContext.Provider value={value}>

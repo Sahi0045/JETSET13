@@ -54,10 +54,14 @@ const airportCodeToCity = {
  * Resolve a city name to its nearest airport code and major city name
  */
 const resolveAirport = (city) => {
-    if (!city) return { cityCode: 'DEL', airportCity: 'New Delhi' };
+    // No code for a city this list does not know. Every unknown city - Houston,
+    // Denver, anywhere not listed - came back as New Delhi, so a visitor in the
+    // US clicking "London" searched DEL-LHR and the cheapest fares were priced
+    // from Delhi. An unknown origin makes the page ask for one instead.
+    if (!city) return { cityCode: '', airportCity: '' };
     const key = city.toLowerCase().trim();
-    const code = cityToAirportCode[key] || 'DEL';
-    const airportCity = airportCodeToCity[code] || city;
+    const code = cityToAirportCode[key] || '';
+    const airportCity = code ? (airportCodeToCity[code] || city) : city;
     return { cityCode: code, airportCity };
 };
 
@@ -135,19 +139,21 @@ const GeoService = {
         }
 
         // Final fallback: hardcoded defaults
-        console.warn('GeoService: Using default location (India)');
+        // Nowhere, rather than New Delhi: every visitor whose lookups failed was
+        // placed in India, and flight searches started from DEL.
+        console.warn('GeoService: location unknown');
         return {
-            country: 'India',
-            countryCode: 'IN',
-            city: 'New Delhi',
-            cityCode: 'DEL',
-            rawCity: 'New Delhi',
+            country: '',
+            countryCode: '',
+            city: '',
+            cityCode: '',
+            rawCity: '',
             // Prices in dollars, the currency every fare is charged in, and no
             // phone code: when every lookup failed the visitor was shown rupees
             // and handed India's +91, wherever they were.
             currency: 'USD',
             callingCode: '',
-            region: 'Delhi'
+            region: ''
         };
     }
 };

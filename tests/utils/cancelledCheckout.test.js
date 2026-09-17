@@ -19,6 +19,7 @@ const saved = {
 
 beforeEach(() => {
   localStorage.clear();
+  sessionStorage.clear();
 });
 
 describe('the cancel link', () => {
@@ -43,7 +44,7 @@ describe('the cancel link', () => {
 
 describe('readCancelledCheckout', () => {
   it('restores the flight, the search, the travellers and the contact details', () => {
-    localStorage.setItem('pendingFlightBooking', JSON.stringify(saved));
+    sessionStorage.setItem('pendingFlightBooking', JSON.stringify(saved));
 
     expect(readCancelledCheckout()).toEqual({
       reviewState: { flightData: saved.selectedFlight, searchData: saved.searchData },
@@ -52,13 +53,22 @@ describe('readCancelledCheckout', () => {
     });
   });
 
+  // The draft is this tab's. In the browser-wide slot it outlived a closed tab
+  // with passport numbers in it, and a second tab's payment overwrote the first
+  // tab's, so a cancel restored the other trip's travellers.
+  it('reads this tab\'s draft, never one left in the browser-wide storage', () => {
+    localStorage.setItem('pendingFlightBooking', JSON.stringify(saved));
+
+    expect(readCancelledCheckout()).toBeNull();
+  });
+
   it('restores nothing when nothing, or no bookable offer, was saved', () => {
     expect(readCancelledCheckout()).toBeNull();
 
-    localStorage.setItem('pendingFlightBooking', '{not json');
+    sessionStorage.setItem('pendingFlightBooking', '{not json');
     expect(readCancelledCheckout()).toBeNull();
 
-    localStorage.setItem('pendingFlightBooking', JSON.stringify({ ...saved, selectedFlight: { id: '1' } }));
+    sessionStorage.setItem('pendingFlightBooking', JSON.stringify({ ...saved, selectedFlight: { id: '1' } }));
     expect(readCancelledCheckout()).toBeNull();
   });
 });

@@ -486,3 +486,29 @@ describe('a booking request that times out', () => {
     expect(fetchMock.mock.calls.length).toBe(calls);
   });
 });
+
+/**
+ * The draft a page falls back on when it arrives without the order.
+ *
+ * One browser-wide slot: a second tab paying for another trip overwrote it, and
+ * the order page booked this payment's reference with that trip's travellers.
+ */
+describe('an order page with nothing but browser storage to go on', () => {
+  afterEach(() => {
+    sessionStorage.clear();
+    localStorage.clear();
+  });
+
+  it('does not book another payment\'s travellers under this order', async () => {
+    sessionStorage.setItem('pendingFlightBooking', JSON.stringify({ ...orderData, orderId: 'FLTOTHER', selectedFlight: orderData.selectedFlight }));
+    localStorage.setItem('pendingPaymentSession', JSON.stringify({ orderId: 'FLTTHIS', sessionId: 'S1' }));
+    const fetchMock = vi.fn(async () => reply(200, { success: true, pnr: 'ABC123' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { container } = renderOrderPage(null);
+
+    // What it does know - this payment's reference - and nothing booked.
+    await waitFor(() => expect(container.textContent).toMatch(/Your payment reference is FLTTHIS/));
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});

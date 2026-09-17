@@ -82,6 +82,12 @@ export function clearStoredBookings(storage = globalThis.localStorage) {
       // Storage blocked: there is nothing this page can remove.
     }
   }
+  // The flight draft now lives in the tab's own storage (the review page).
+  try {
+    globalThis.sessionStorage?.removeItem('pendingFlightBooking');
+  } catch {
+    // Storage blocked: there is nothing this page can remove.
+  }
 }
 
 /**

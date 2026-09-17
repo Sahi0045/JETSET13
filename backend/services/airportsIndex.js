@@ -119,7 +119,8 @@ export const searchLocations = (keyword, subType = 'CITY,AIRPORT', options = {})
 export const resolveToIata = (value) => {
   load();
   const raw = String(value ?? '').trim();
-  if (/^[A-Za-z]{3}$/.test(raw)) return raw.toUpperCase();
+  // A code only when there is such a code: "XQZ" went to Amadeus as a place.
+  if (/^[A-Za-z]{3}$/.test(raw) && byCode.has(raw.toUpperCase())) return raw.toUpperCase();
 
   // "New Delhi (DEL)" is what picking a suggestion puts in the field, and the
   // code in brackets is the answer. Searched as text, only its first word
@@ -128,8 +129,43 @@ export const resolveToIata = (value) => {
   const labelled = raw.match(/\(([A-Za-z]{3})\)$/);
   if (labelled) return labelled[1].toUpperCase();
 
-  const { data } = searchLocations(raw, 'CITY,AIRPORT', { limit: 1 });
-  return data[0]?.code ?? null;
+  return namedPlace(raw);
+};
+
+/**
+ * The place a typed name is the whole name of, or null.
+ *
+ * Typed text used to take the first search suggestion, which matches on the
+ * first word only: "San Francisco, CA" became OUA (Ouagadougou), "New Delhi
+ * India" NYC. A name now has to be a city's or an airport's name exactly - after
+ * dropping anything after a comma ("San Francisco, CA") or trailing words
+ * ("New Delhi India") - or nothing is guessed, and the search asks the customer
+ * to pick from the list.
+ */
+const namedPlace = (text) => {
+  const beforeComma = normalize(String(text).split(',')[0]).replace(/\s+/g, ' ');
+  const words = beforeComma.split(' ').filter(Boolean);
+  // A city's own code (the metro) first, then its best-known airport.
+  const best = (records) => records.sort((a, b) => (a.type === 'CITY' ? -1 : 0) - (b.type === 'CITY' ? -1 : 0) || b.score - a.score)[0].code;
+  const wordsOf = (value) => value.split(/[^a-z0-9]+/).filter(Boolean);
+
+  for (let length = words.length; length > 0; length -= 1) {
+    const candidate = words.slice(0, length).join(' ');
+    const exact = dataset.filter((record) => record._city === candidate
+      || record._aliases.includes(candidate)
+      || record._name === candidate);
+    if (exact.length > 0) return best(exact);
+
+    // Whole words of one city's name: "delhi" for New Delhi. Never a fragment
+    // of a word ("Bang"), and only when those words name a single city.
+    const whole = dataset.filter((record) => {
+      const named = [record._city, ...record._aliases].map(wordsOf);
+      return named.some((nameWords) => wordsOf(candidate).every((word) => nameWords.includes(word)));
+    });
+    const cities = new Set(whole.map((record) => record._city));
+    if (whole.length > 0 && cities.size === 1) return best(whole);
+  }
+  return null;
 };
 
 /** The ISO country code of an airport or city code, or null when it is unknown. */

@@ -59,6 +59,24 @@ describe('resolution', () => {
     expect(resolveToIata(input)).toBe(expected);
   });
 
+  // Typed text took the first suggestion for its first word: "San Francisco,
+  // CA" searched Ouagadougou, "New Delhi India" New York.
+  it.each([
+    ['San Francisco, CA', 'SFO'],
+    ['New Delhi India', 'DEL'],
+    ['Los Angeles', 'LAX'],
+  ])('resolves "%s" by the whole name, not its first word', (input, expected) => {
+    expect(resolveToIata(input)).toBe(expected);
+  });
+
+  it('does not treat three letters as a code when there is no such code', () => {
+    expect(resolveToIata('XQZ')).toBeNull();
+  });
+
+  it('does not guess from the start of a name', () => {
+    expect(resolveToIata('Bang')).toBeNull();
+  });
+
   it('returns null rather than guessing at an unknown place', () => {
     expect(resolveToIata('Nowhere At All')).toBeNull();
   });

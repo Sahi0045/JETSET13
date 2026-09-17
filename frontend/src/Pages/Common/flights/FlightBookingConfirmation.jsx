@@ -71,7 +71,7 @@ function FlightBookingConfirmation() {
   // request whenever it is off. The flight lives in router state, which the
   // trip through login does not carry, so it is kept for this tab and read back
   // on return - see utils/flightReviewResume.js.
-  const { user, loading: authLoading } = useSupabaseAuth();
+  const { user, loading: authLoading, renewServerSession } = useSupabaseAuth();
   // Asked only for a signed-out visitor. Until it answers "on" - and whenever it
   // cannot answer - they are sent to log in, exactly as before the switch.
   const guestSwitch = useGuestFlightBooking({ enabled: !authLoading && !user });
@@ -1092,10 +1092,25 @@ function FlightBookingConfirmation() {
         savedAt: Date.now()
       };
 
-      // Not logged: it carries names, dates of birth and passport numbers.
-      localStorage.setItem('pendingFlightBooking', JSON.stringify(bookingDataForStorage));
-
       const orderId = makeOrderRef('FLT');
+
+      // Not logged: it carries names, dates of birth and passport numbers.
+      //
+      // This tab's own storage, not the browser's. It only has to survive the
+      // round trip to ARC Pay, which happens in this tab. In localStorage it was
+      // one slot for the whole browser: it outlived a closed tab, passport
+      // numbers and all, and a second tab paying for another trip overwrote it,
+      // so the first tab's cancel restored the other trip's travellers. The
+      // order reference says which payment it belongs to.
+      const saveDraft = (reference) => {
+        try {
+          sessionStorage.setItem('pendingFlightBooking', JSON.stringify({ ...bookingDataForStorage, orderId: reference }));
+          localStorage.removeItem('pendingFlightBooking');
+        } catch {
+          // Storage blocked: the server keeps the booking for the order page.
+        }
+      };
+      saveDraft(orderId);
       const description = `Flight ${flightNumber || carrierCode} - ${departureAirport} to ${arrivalAirport}`;
 
       const checkoutResponse = await ArcPayService.createHostedCheckout({
@@ -1123,6 +1138,8 @@ function FlightBookingConfirmation() {
 
       if (checkoutResponse.success && checkoutResponse.checkoutUrl) {
         clearFlightReview();
+        // A page already open for this trip comes back under its own reference.
+        if (checkoutResponse.orderId && checkoutResponse.orderId !== orderId) saveDraft(checkoutResponse.orderId);
         localStorage.setItem('pendingPaymentSession', JSON.stringify({
           sessionId: checkoutResponse.sessionId,
           // Checkout's reference, which is not always the one made above: for a
@@ -1193,14 +1210,24 @@ function FlightBookingConfirmation() {
           });
           return;
         }
-        // Checkout found no session although this page has a signed-in user.
-        // Sending them to /login would bounce straight back here, so say what
-        // to do instead; the details they typed stay on the page.
-        setNotice({
+        // Checkout found no session although this page has a signed-in user:
+        // the server's sign-in cookie lapsed, or never arrived. The advice was
+        // "log out, log in again" - and logging out cleared the flight and every
+        // traveller typed. The session is handed to the server again instead,
+        // and the customer pays again with everything still on the page.
+        const renewed = typeof renewServerSession === 'function' && await renewServerSession();
+        setNotice(renewed ? {
+          tone: 'attention',
+          title: 'Your sign-in was refreshed',
+          message: 'Please press Pay again. Everything you entered is still here.',
+          reassure: true,
+        } : {
           tone: 'error',
           title: 'Please sign in again',
-          message: 'We could not confirm your sign-in. Log out, log in again, then retry. The details you entered stay on this page.',
+          message: 'We could not confirm your sign-in. Sign in again and you will come back to this booking; the flight you picked is kept.',
           reassure: true,
+          actionLabel: 'Sign in again',
+          onAction: () => sendToLogin(),
         });
         return;
       }
@@ -1319,6 +1346,9 @@ function FlightBookingConfirmation() {
                 />
                 <div className="text-xs font-semibold text-gray-700">{seg.carrierName || seg.carrier}</div>
                 <div className="text-[10px] text-gray-500">{seg.number}</div>
+                {seg.operatingCarrier && seg.operatingCarrier !== seg.carrier && (
+                  <div className="text-[10px] text-amber-600">Operated by {seg.operatingAirlineName || seg.operatingCarrier}</div>
+                )}
                 <div className="text-[10px] text-gray-400">{seg.aircraft !== 'Unknown' ? seg.aircraft : ''}</div>
               </div>
 

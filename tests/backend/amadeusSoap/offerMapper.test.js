@@ -12,6 +12,30 @@ const load = (name) => {
   return mapMasterPricerReply(reply, { config, searchSignature: 'test' });
 };
 
+
+/** A search reply whose first flight lands at Keflavik on the way (a technical stop). */
+const withTechnicalStop = (xml) => xml
+  .replace('<equipmentType>744</equipmentType></productDetail>', '<equipmentType>744</equipmentType><techStopNumber>1</techStopNumber></productDetail>')
+  .replace('<productDetailQualifier>AVR</productDetailQualifier></addProductDetail></flightInformation></flightDetails>',
+    '<productDetailQualifier>AVR</productDetailQualifier></addProductDetail></flightInformation>'
+    + '<technicalStop><stopDetails><dateQualifier>AA</dateQualifier><date>151126</date><firstTime>1605</firstTime><locationId>KEF</locationId></stopDetails>'
+    + '<stopDetails><dateQualifier>AD</dateQualifier><date>151126</date><firstTime>1640</firstTime></stopDetails></technicalStop></flightDetails>');
+
+// AI2592 DEL-BOM (27 Sep 2026) lands at Indore on the way. One flight number,
+// one segment - and it was mapped as non-stop.
+describe('a technical stop', () => {
+  it('is counted on its segment, with where and when the plane is down', () => {
+    const xml = withTechnicalStop(readFileSync(new URL('../../fixtures/amadeus/mptbs-nonstop-business.xml', import.meta.url), 'utf8'));
+    const { body } = unwrapEnvelope(parseSoap(xml));
+    const reply = body[Object.keys(body).find((k) => k !== 'Fault')];
+    const { offers } = mapMasterPricerReply(reply, { config, searchSignature: 'test' });
+    const segment = offers.find((o) => o.itineraries[0].segments[0].number === '3629').itineraries[0].segments[0];
+
+    expect(segment.numberOfStops).toBe(1);
+    expect(segment.stops).toEqual([{ iataCode: 'KEF', arrivalAt: '2026-11-15T16:05:00', departureAt: '2026-11-15T16:40:00' }]);
+  });
+});
+
 describe('price', () => {
   // recPriceInfo/monetaryDetail[1] is the total TAX, not the base fare. Reading
   // it as the base understates every fare shown to a customer and is written
