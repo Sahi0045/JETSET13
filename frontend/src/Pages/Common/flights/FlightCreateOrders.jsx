@@ -146,8 +146,6 @@ function FlightCreateOrders() {
   const orderProcessedRef = useRef(false);
 
   console.log('🔍 FlightCreateOrders - Component loaded');
-  console.log('📍 Location state:', location.state);
-  console.log('📍 Navigation location:', location);
 
   useEffect(() => {
     console.log('🔍 FlightCreateOrders - useEffect triggered');
@@ -176,8 +174,6 @@ function FlightCreateOrders() {
           const bookingData = JSON.parse(storedBookingData);
           const sessionData = storedSessionData ? JSON.parse(storedSessionData) : {};
 
-          console.log('📦 Retrieved booking data from localStorage:', bookingData);
-          console.log('📦 Retrieved session data from localStorage:', sessionData);
 
           // Merge localStorage data with location.state (location.state takes priority for payment info)
           orderData = {
@@ -205,7 +201,6 @@ function FlightCreateOrders() {
             customerEmail: bookingData?.passengerData?.[0]?.email || orderData?.customerEmail || ''
           };
 
-          console.log('✅ Merged order data:', orderData);
         }
       } catch (e) {
         console.error('❌ Error parsing localStorage data:', e);
@@ -220,7 +215,6 @@ function FlightCreateOrders() {
     const finalHasCriticalData = orderData?.selectedFlight || orderData?.originalOffer || orderData?.passengerData;
 
     if (orderData && finalHasCriticalData && orderData.orderId) {
-      console.log('📝 Processing order with data:', orderData);
       // Mark as processed to prevent duplicate calls (React StrictMode / re-renders)
       orderProcessedRef.current = true;
       processFlightOrder(orderData);
@@ -275,7 +269,6 @@ function FlightCreateOrders() {
       const amountPaid = flightBookingData.totalAmount;
       const fareBreakdown = flightBookingData.fareBreakdown;
 
-      console.log('Sending flight booking data:', flightBookingData);
       console.log('📋 Flight booking request details:', {
         hasFlightOffer: !!flightBookingData.flightOffer,
         flightOfferKeys: flightBookingData.flightOffer ? Object.keys(flightBookingData.flightOffer) : [],

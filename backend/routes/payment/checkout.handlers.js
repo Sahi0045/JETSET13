@@ -8,6 +8,7 @@ import { safeReturnUrl } from '../../utils/returnUrl.js';
 import { checkoutKey } from '../../utils/tripMatch.js';
 import { unchangedSince } from '../../utils/bookingDetailsGuard.js';
 import { toPnrName } from '../../../shared/passengerName.js';
+import { errorSummary } from '../../utils/errorSummary.js';
 
 const sanitizeRef = (v) => String(v ?? '').replace(/[^A-Za-z0-9_-]/g, '') || '__none__';
 
@@ -790,7 +791,11 @@ export async function handleHostedCheckout(req, res) {
 
                 // Only embed airline data for MPGS gateway
                 // Card brand interchange has VERY strict rules.
-                console.log('✈️ ARC Pay Airline Data mapped successfully:', JSON.stringify(requestBody.airline, null, 2));
+                // Counts, not the object: it names every traveller.
+                console.log('✈️ ARC Pay Airline Data mapped successfully:', {
+                    passengers: requestBody.airline?.passenger?.length ?? 0,
+                    legs: requestBody.airline?.itinerary?.leg?.length ?? 0,
+                });
             } catch (airlineError) {
                 // Expected when the data is incomplete or unconfigured: the charge
                 // is created without airline data. The reason is enough to log.
@@ -1020,7 +1025,7 @@ export async function handleGetPendingBooking(req, res) {
             pendingBookingData: booking.booking_details?.pending_booking_data || null
         });
     } catch (error) {
-        console.error('Get pending booking error:', error);
+        console.error('Get pending booking error:', errorSummary(error));
         return res.status(500).json({ success: false, error: 'Could not load this booking. Please try again.' });
     }
 }
@@ -1058,7 +1063,7 @@ export async function handleSessionCreate(req, res) {
         });
 
     } catch (error) {
-        console.error('❌ Session create error:', error);
+        console.error('❌ Session create error:', errorSummary(error));
         return res.status(500).json({
             success: false,
             error: 'Failed to create session'
@@ -1320,7 +1325,7 @@ export async function handlePaymentCallback(req, res) {
         }
 
     } catch (error) {
-        console.error('❌ Payment callback error:', error);
+        console.error('❌ Payment callback error:', errorSummary(error));
         return res.redirect('/payment/failed?error=processing_error');
     }
 }
@@ -1701,7 +1706,7 @@ export async function handleReconcileBookingPayment(req, res) {
             arcTransactionId: result.arcTransactionId
         });
     } catch (error) {
-        console.error('❌ [reconcile] error:', error);
+        console.error('❌ [reconcile] error:', errorSummary(error));
         return res.status(500).json({ success: false, error: 'Could not confirm this payment. Please try again.' });
     }
 }

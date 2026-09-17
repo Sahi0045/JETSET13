@@ -120,7 +120,7 @@ export default function PaymentCallback() {
                   bookingType: bookingType,
                   amount: dbResult.booking?.total_amount
                 };
-                console.log('✅ Booking data retrieved from DB', bookingData);
+                console.log('✅ Booking data retrieved from DB');
               }
             }
           } catch (dbError) {
@@ -173,7 +173,7 @@ export default function PaymentCallback() {
           // For flights, navigate to FlightCreateOrders to complete the booking
           if (bookingType === 'flight') {
             console.log('✈️ Navigating to flight order creation...');
-            console.log('📦 Full booking data retrieved:', bookingData);
+            console.log('📦 Booking data retrieved');
             console.log('🔍 Data breakdown:', {
               hasSelectedFlight: !!bookingData?.selectedFlight,
               hasOriginalOffer: !!bookingData?.originalOffer,
@@ -237,7 +237,7 @@ export default function PaymentCallback() {
           if (bookingType === 'cruise') {
             try {
               setStatus('Saving cruise booking...');
-              console.log('🚢 Saving cruise booking to database...', bookingData);
+              console.log('🚢 Saving cruise booking to database...');
 
               const userId = user?.id || null;
 
@@ -276,7 +276,7 @@ export default function PaymentCallback() {
           if (bookingType === 'hotel') {
             try {
               setStatus('Saving hotel booking...');
-              console.log('🏨 Saving hotel booking to database...', bookingData);
+              console.log('🏨 Saving hotel booking to database...');
 
               const userId = user?.id || null;
 

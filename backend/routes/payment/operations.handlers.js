@@ -12,6 +12,7 @@ import { unchangedSince } from '../../utils/bookingDetailsGuard.js';
 import { DEFAULT_PRICE_SETTINGS } from '../../config/priceDefaults.js';
 import { cancellationMessage, refundOutcome } from '../../../shared/cancellationOutcome.js';
 import { reconcileBookingPayment } from './checkout.handlers.js';
+import { errorSummary } from '../../utils/errorSummary.js';
 
 const sanitizeRef = (v) => String(v ?? '').replace(/[^A-Za-z0-9_-]/g, '') || '__none__';
 
@@ -162,7 +163,7 @@ export async function handleCancelBookingAction(req, res) {
         }
         return await cancelOtherBooking(res, booking, { reason, email });
     } catch (error) {
-        console.error('❌ Cancel booking error:', error);
+        console.error('❌ Cancel booking error:', errorSummary(error));
         return res.status(500).json({ success: false, error: 'Failed to cancel booking' });
     }
 }
@@ -1301,7 +1302,7 @@ export async function handlePaymentRefund(req, res) {
             }
         });
     } catch (error) {
-        console.error('❌ Payment refund error:', error);
+        console.error('❌ Payment refund error:', errorSummary(error));
         return res.status(500).json({ success: false, error: 'Failed to process refund', details: error.message });
     }
 }
@@ -1544,7 +1545,7 @@ export async function handlePaymentVoid(req, res) {
             }
         });
     } catch (error) {
-        console.error('❌ Payment void error:', error);
+        console.error('❌ Payment void error:', errorSummary(error));
         await giveBack().catch(() => {});
         return res.status(500).json({ success: false, error: 'Failed to void payment', details: error.message });
     }
@@ -1621,7 +1622,7 @@ export async function handlePaymentRetrieve(req, res) {
             orderData: arcPayData
         });
     } catch (error) {
-        console.error('❌ Payment retrieve error:', error);
+        console.error('❌ Payment retrieve error:', errorSummary(error));
         return res.status(500).json({ success: false, error: 'Failed to retrieve payment', details: error.message });
     }
 }
