@@ -74,7 +74,9 @@ export default function PaymentSuccess() {
   const inquiry = payment?.inquiry;
 
   const receiptNumber = `RCP-${(payment?.id || '').slice(-8).toUpperCase() || Date.now().toString().slice(-8)}`;
-  const transactionId = payment?.arc_transaction_id || payment?.id || 'N/A';
+  // The bank's reference for the payment. Not `arc_transaction_id`, ARC's
+  // count within the order, which is "1" on every first payment.
+  const transactionId = payment?.arc_receipt || null;
   const amountPaid = payment?.amount || pl?.amount || 0;
   const currency = payment?.currency || pl?.currency || 'USD';
   const customerName = payment?.customer_name || pl?.customer_name || inquiry?.customer_name || 'Valued Customer';
@@ -148,10 +150,12 @@ export default function PaymentSuccess() {
                 <span style={styles.metaLabel}>Date</span>
                 <span style={styles.metaValue}>{formatDate(paymentDate)}</span>
               </div>
-              <div style={styles.receiptMetaItem}>
-                <span style={styles.metaLabel}>Transaction ID</span>
-                <span style={{ ...styles.metaValue, fontFamily: 'monospace', fontSize: '12px' }}>{transactionId}</span>
-              </div>
+              {transactionId && (
+                <div style={styles.receiptMetaItem}>
+                  <span style={styles.metaLabel}>Transaction ID</span>
+                  <span style={{ ...styles.metaValue, fontFamily: 'monospace', fontSize: '12px' }}>{transactionId}</span>
+                </div>
+              )}
             </div>
 
             <div style={styles.divider}></div>

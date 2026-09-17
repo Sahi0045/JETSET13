@@ -372,7 +372,10 @@ function FlightCreateOrders() {
           orderId: orderDetails.reference,
           bookingReference: orderDetails.reference,
           pnr: orderDetails.pnr,
-          transactionId: orderData.transactionId || null,
+          // The bank's reference the server read from ARC Pay. This was the
+          // result indicator the payment page handed over - the value that
+          // proves the payment to our server, not a number a bank knows.
+          transactionId: body.transactionId || null,
           amount: amountPaid,
           orderCreatedAt: orderDetails.createdAt,
           status: orderDetails.status,

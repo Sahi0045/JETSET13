@@ -50,6 +50,14 @@ describe('toClientBooking', () => {
     expect(out.gds).toEqual({ ticketed: false });
   });
 
+  // "Transaction ID 1" on My Trips: `transaction_id` held ARC's count within
+  // the order, and older rows a success indicator or an invented TXN-<time>.
+  it('sends the bank reference as the transaction id, and nothing else under that name', () => {
+    expect(toClientBooking({ ...row, booking_details: { ...row.booking_details, transaction_id: '1', arc_transaction_id: '1', arc_receipt: '625923098465' } }).transactionId).toBe('625923098465');
+    expect(toClientBooking({ ...row, booking_details: { ...row.booking_details, transaction_id: '1' } }).transactionId).toBeNull();
+    expect(toClientBooking({ ...row, booking_details: { ...row.booking_details, transaction_id: '39fd3279460248e2' } }).transactionId).toBeNull();
+  });
+
   it('sends payment_status in the snake_case the single-booking endpoint uses', () => {
     expect(out.payment_status).toBe('paid');
     // The camelCase twin stays for the callers that already read it.

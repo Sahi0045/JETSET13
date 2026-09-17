@@ -55,7 +55,7 @@ const captured = (amount) => ({
     status: 'CAPTURED',
     amount,
     currency: 'USD',
-    transaction: [{ result: 'SUCCESS', transaction: { id: 'arc-txn-9', type: 'PAYMENT', amount, currency: 'USD' } }],
+    transaction: [{ result: 'SUCCESS', transaction: { id: 'arc-txn-9', type: 'PAYMENT', amount, currency: 'USD', receipt: '625923098465' } }],
   },
 });
 
@@ -133,6 +133,9 @@ describe('completing a verified payment', () => {
     const paymentWrite = wroteTo('payments')[0].payload;
     expect(paymentWrite.payment_status).toBe('completed');
     expect(paymentWrite.arc_transaction_id).toBe('arc-txn-9');
+    // The receipt page shows the bank's reference; the link's own token stays.
+    expect(paymentWrite.metadata.arc_receipt).toBe('625923098465');
+    expect(paymentWrite.metadata.payment_link_token).toBe('tok-1');
     expect(JSON.stringify(writes)).not.toContain('SI-REAL');
   });
 });

@@ -65,7 +65,8 @@ const captured = (amount = 291) => ({
     status: 'CAPTURED',
     amount,
     currency: 'USD',
-    transaction: [{ result: 'SUCCESS', transaction: { id: 'txn-1', type: 'PAYMENT', amount, currency: 'USD' } }],
+    // `receipt` as the test merchant returns it (FLTE00528103C4A42, 17 Sep 2026).
+    transaction: [{ result: 'SUCCESS', transaction: { id: 'txn-1', type: 'PAYMENT', amount, currency: 'USD', receipt: '625923098465' } }],
   },
 });
 
@@ -129,6 +130,29 @@ describe('answering from the gateway', () => {
     expect(updates[0].booking_details.arc_captured_amount).toBe(291);
     expect(updates[0].booking_details.arc_captured_currency).toBe('USD');
     expect(updates[0].booking_details.arc_transaction_id).toBe('txn-1');
+  });
+
+  // ARC's transaction `id` counts within the order - "1" on every first
+  // payment - and is what a void targets. The bank's reference is `receipt`,
+  // and that is the transaction id a customer was meant to see.
+  it('records the bank reference beside the transaction id, and answers with both', async () => {
+    axios.get.mockResolvedValue(captured(291));
+
+    const result = await reconcile(row({ total_amount: 291 }));
+
+    expect(result.arcReceipt).toBe('625923098465');
+    expect(result.arcTransactionId).toBe('txn-1');
+    expect(updates[0].booking_details.arc_receipt).toBe('625923098465');
+  });
+
+  it('answers with the recorded bank reference when the row is already reconciled', async () => {
+    const result = await reconcile(row({
+      payment_status: 'paid',
+      booking_details: { arc_captured_amount: 291, arc_captured_currency: 'USD', arc_transaction_id: '1', arc_receipt: '625923098465' },
+    }));
+
+    expect(result.arcReceipt).toBe('625923098465');
+    expect(axios.get).not.toHaveBeenCalled();
   });
 
   // The exploit, from the guard's point of view: the row says 5000, ARC says 291.
@@ -468,5 +492,15 @@ describe('recording a payment beside a booking that moved', () => {
 
     expect(result.paid).toBe(true);
     expect(updates.at(-1).payment_status).toBe('paid');
+  });
+});
+
+describe('the public receipt', () => {
+  it('shows the bank reference, kept in the payment metadata', async () => {
+    const { toPublicPayment } = await import('../../backend/routes/payment/checkout.handlers.js');
+    const out = toPublicPayment({ id: 'p1', amount: 100, arc_transaction_id: '1', metadata: { arc_receipt: '625923098465', payment_link_token: 'tok' } });
+
+    expect(out.arc_receipt).toBe('625923098465');
+    expect(JSON.stringify(out)).not.toContain('tok');
   });
 });

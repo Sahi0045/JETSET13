@@ -135,6 +135,8 @@ export function toPublicPayment(payment) {
         payment_status: payment.payment_status,
         payment_method: payment.payment_method ?? null,
         arc_transaction_id: payment.arc_transaction_id ?? null,
+        // The bank's reference for the payment; see reconcileBookingPayment.
+        arc_receipt: payment.metadata?.arc_receipt ?? null,
         created_at: payment.created_at ?? null,
         completed_at: payment.completed_at ?? null,
         customer_name: payment.customer_name ?? null,
@@ -1440,7 +1442,7 @@ export async function handleGetPaymentDetails(req, res) {
  * Extracted from the HTTP handler so the order route can ask the same question
  * before it sells a seat. Returns what a caller needs to decide and to price:
  *
- *   { paid, capturedAmount, capturedCurrency, arcTransactionId, orderStatus,
+ *   { paid, capturedAmount, capturedCurrency, arcTransactionId, arcReceipt, orderStatus,
  *     alreadyReconciled?, error? }
  *
  * `capturedAmount` is what ARC took, read from the captured transaction - never
@@ -1474,6 +1476,7 @@ export async function reconcileBookingPayment(booking, { fresh = false } = {}) {
         capturedAmount: hasKnownAmount ? known : null,
         capturedCurrency: details.arc_captured_currency || null,
         arcTransactionId: details.arc_transaction_id || null,
+        arcReceipt: details.arc_receipt || null,
         orderStatus: details.arc_order_status || null,
         ...extra,
     });
@@ -1584,7 +1587,13 @@ export async function reconcileBookingPayment(booking, { fresh = false } = {}) {
         });
     }
 
+    // Two different numbers. `id` is ARC's count of transactions within the
+    // order - the first payment on every order is "1" - and is what a void or
+    // refund targets. `receipt` is the bank's reference number (RRN), the one
+    // the card network knows the payment by: that is the transaction id a
+    // customer is shown, and it was showing "1".
     const arcTransactionId = captured?.transaction?.id || null;
+    const arcReceipt = captured?.transaction?.receipt || null;
     const capturedAmount = netCaptured;
     const capturedCurrency = captured?.transaction?.currency || orderData.currency || null;
 
@@ -1632,6 +1641,7 @@ export async function reconcileBookingPayment(booking, { fresh = false } = {}) {
                     booking_details: {
                         ...(fresh.booking_details || {}),
                         arc_transaction_id: arcTransactionId,
+                        arc_receipt: arcReceipt,
                         arc_order_status: orderData.status || 'CAPTURED',
                         arc_captured_amount: capturedAmount,
                         arc_captured_currency: capturedCurrency,
@@ -1655,6 +1665,7 @@ export async function reconcileBookingPayment(booking, { fresh = false } = {}) {
             capturedAmount,
             capturedCurrency,
             arcTransactionId,
+            arcReceipt,
             orderStatus: orderData.status || 'CAPTURED',
             heldAmount: netCaptured,
             everCaptured: true,
@@ -1665,7 +1676,7 @@ export async function reconcileBookingPayment(booking, { fresh = false } = {}) {
 
     console.log('✅ [reconcile] Booking marked paid from gateway:', booking.booking_reference);
     return {
-        paid: true, capturedAmount, capturedCurrency, arcTransactionId, orderStatus: orderData.status || 'CAPTURED',
+        paid: true, capturedAmount, capturedCurrency, arcTransactionId, arcReceipt, orderStatus: orderData.status || 'CAPTURED',
         heldAmount: netCaptured, everCaptured: true, refundedTotal: Math.round(refundedTotal * 100) / 100,
     };
 }

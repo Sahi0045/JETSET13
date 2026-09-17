@@ -3185,10 +3185,13 @@ router.post('/order', optionalProtect, async (req, res) => {
       pnr: pnrValue,
       orderId: arcOrderId,
       amadeusOrderId: orderIdValue, // the real Amadeus order id (for cancellation)
-      // The gateway's transaction id, from the reconcile above. The body's
-      // `transactionId` is ARC's success indicator - the secret that proves
-      // who paid - and when absent this used to invent a TXN-<timestamp>.
-      transactionId: payment?.arcTransactionId || null,
+      // The bank's reference for the payment (ARC's `receipt`), from the
+      // reconcile above - what the customer is shown as their transaction id.
+      // Not ARC's transaction `id`, which counts within the order and is "1"
+      // on every first payment. The body's `transactionId` is ARC's success
+      // indicator - the secret that proves who paid - and when absent this
+      // used to invent a TXN-<timestamp>.
+      transactionId: payment?.arcReceipt || null,
       // What the customer was actually charged, which is the fare plus the
       // admin-configured service fee. Refunds read `total_amount`
       // (operations.handlers.js:270), so writing the fare alone here refunds
@@ -3347,6 +3350,7 @@ router.post('/order', optionalProtect, async (req, res) => {
       mode: orderResponse.mode,
       ticketed: orderResponse.ticketed ?? false,
       tickets: orderResponse.tickets || [],
+      transactionId: payment?.arcReceipt || null,
       savedToDatabase: !!dbBooking,
       message: orderResponse.message || 'Flight order created successfully'
     });
@@ -3884,7 +3888,9 @@ export function toClientBooking(booking, { showPassports = false } = {}) {
     pnr: booking.booking_details?.pnr,
     orderId: booking.booking_details?.order_id,
     amadeusOrderId: booking.booking_details?.amadeus_order_id || booking.booking_details?.order_id || null,
-    transactionId: booking.booking_details?.transaction_id,
+    // Only the bank's reference. Older rows hold ARC's per-order count ("1"),
+    // a success indicator or an invented TXN-<timestamp> in `transaction_id`.
+    transactionId: booking.booking_details?.arc_receipt || null,
     origin: booking.booking_details?.origin,
     destination: booking.booking_details?.destination,
     departureDate: booking.booking_details?.departure_date,
