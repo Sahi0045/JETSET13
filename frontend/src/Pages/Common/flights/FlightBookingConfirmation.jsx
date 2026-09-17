@@ -1068,7 +1068,9 @@ function FlightBookingConfirmation() {
       // The lead traveller's calling code, as digits, goes with their number:
       // without it the booking wrote every phone as +1.
       const finalContact = {
-        email: bookingDetails?.contact?.email || passengerData?.[0]?.email || "",
+        // A signed-in customer who leaves the lead email blank still gets their
+        // ticket: it goes to the account's address, as the contact box shows.
+        email: bookingDetails?.contact?.email || passengerData?.[0]?.email || user?.email || "",
         phone: bookingDetails?.contact?.phone || passengerData?.[0]?.mobile || "",
         countryCode: callingCodeDigits(passengerData?.[0]?.countryCode)
       };
@@ -1821,7 +1823,7 @@ function FlightBookingConfirmation() {
                           id={`traveller-${passenger.id}-email`}
                           type="email"
                           className="form-input"
-                          placeholder="email@example.com"
+                          placeholder={index === 0 && user?.email ? user.email : "email@example.com"}
                           value={passenger.email}
                           onChange={(e) => handlePassengerChange(passenger.id, 'email', e.target.value)}
                           readOnly={!editMode}
@@ -1966,7 +1968,7 @@ function FlightBookingConfirmation() {
                     <input
                       type="text"
                       className="form-input bg-gray-50"
-                      value={bookingDetails?.contact?.email || ""}
+                      value={bookingDetails?.contact?.email || user?.email || ""}
                       readOnly
                     />
                   </div>

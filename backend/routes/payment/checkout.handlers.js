@@ -9,6 +9,7 @@ import { checkoutKey } from '../../utils/tripMatch.js';
 import { unchangedSince } from '../../utils/bookingDetailsGuard.js';
 import { toPnrName } from '../../../shared/passengerName.js';
 import { errorSummary } from '../../utils/errorSummary.js';
+import { orderVoided } from '../../utils/arcTransactions.js';
 
 const sanitizeRef = (v) => String(v ?? '').replace(/[^A-Za-z0-9_-]/g, '') || '__none__';
 
@@ -371,7 +372,7 @@ export async function handleHostedCheckout(req, res) {
             currency: requestedCurrency = ARC_SETTLEMENT_CURRENCY,
             orderId,
             bookingType = 'flight',
-            customerEmail,
+            customerEmail: requestedEmail,
             customerName,
             customerPhone,
             description,
@@ -380,6 +381,15 @@ export async function handleHostedCheckout(req, res) {
             bookingData,
             flightData
         } = req.body;
+
+        // The address the booking reference and the e-ticket go to. The review
+        // page marks it optional for a signed-in customer, and a customer who
+        // left it blank got no confirmation and no e-ticket email at all - the
+        // row had no address and nothing looked further. A signed-in customer's
+        // account has one.
+        const customerEmail = isUsableEmail(requestedEmail) || !resolveBookingUserId(req) || !isUsableEmail(req.user?.email)
+            ? requestedEmail
+            : req.user.email;
 
         // Validate required fields. Said in words for the customer: the page
         // shows this text, and "Missing required fields: amount and orderId are
@@ -1528,7 +1538,7 @@ export async function reconcileBookingPayment(booking, { fresh = false } = {}) {
     // successful VOID returns the lot. Reading the first SUCCESS capture alone
     // counted money as available for a booking after it had been refunded.
     const sumOf = (list) => list.reduce((s, t) => s + (Number(t.transaction?.amount) || 0), 0);
-    const voided = txns.some(t => t.transaction?.type === 'VOID' && t.result === 'SUCCESS');
+    const voided = orderVoided(orderData);
     const capturedTotal = captures.length ? sumOf(captures) : (orderData.status === 'CAPTURED' ? Number(orderData.amount) || 0 : 0);
     const refundedTotal = sumOf(txns.filter(t => t.transaction?.type === 'REFUND' && t.result === 'SUCCESS'));
     const netCaptured = voided ? 0 : Math.round((capturedTotal - refundedTotal) * 100) / 100;

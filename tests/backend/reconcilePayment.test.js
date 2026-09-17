@@ -237,6 +237,24 @@ describe('answering from the gateway', () => {
 
     expect((await reconcile(row({ total_amount: 291 }))).paid).toBe(false);
   });
+
+  // The gateway names a void by what it voided. A voided order on the test
+  // merchant (16 Sep 2026) reads PAYMENT then VOID_PAYMENT, with order status
+  // CANCELLED - and `type === 'VOID'` read that as money still held.
+  it('is not paid when the payment was voided as the gateway records it', async () => {
+    axios.get.mockResolvedValue({
+      status: 200,
+      data: {
+        status: 'CANCELLED',
+        transaction: [
+          { result: 'SUCCESS', transaction: { id: 'txn-1', type: 'PAYMENT', amount: 291 } },
+          { result: 'SUCCESS', transaction: { id: 'void-1', type: 'VOID_PAYMENT', amount: 291 } },
+        ],
+      },
+    });
+
+    expect((await reconcile(row({ total_amount: 291 }))).paid).toBe(false);
+  });
 });
 
 /**

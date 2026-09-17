@@ -221,6 +221,9 @@ export async function runOnce({ webhookUrl = process.env.ALERT_SLACK_WEBHOOK_URL
     .from('bookings')
     .select('booking_reference, status, payment_status, total_amount, created_at, booking_details')
     .or('booking_details->needs_review.not.is.null,and(booking_details->gds->>ticketed.eq.false,booking_details->>pnr.not.is.null)')
+    // Announced rows keep their flag, so without this the 200 oldest were read
+    // every run: once 200 flagged rows existed, no new one was ever seen.
+    .is('booking_details->needs_review->>alerted_at', null)
     .order('created_at', { ascending: true })
     .limit(200);
 

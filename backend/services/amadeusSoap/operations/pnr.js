@@ -194,19 +194,19 @@ const remarkElement = ({ number, text }) => wrap('dataElementsIndiv', [
  * association Amadeus cannot tell whose document it is, and the error names a
  * passenger number: "SSR DOCS MISSING FOR P1".
  */
-const ssrElement = ({ number, paxNumber, type, freetext }) => wrap('dataElementsIndiv', [
+const ssrElement = ({ number, paxNumber, type, freetext = '', status = 'HK' }) => wrap('dataElementsIndiv', [
   wrap('elementManagementData', [
     wrap('reference', [el('qualifier', 'OT'), el('number', String(number))]),
     el('segmentName', 'SSR'),
   ]),
   wrap('serviceRequest', wrap('ssr', [
     el('type', type),
-    el('status', 'HK'),
+    el('status', status),
     el('quantity', '1'),
     el('companyId', 'YY'),
     ...(freetext.length > 70
       ? [el('freetext', freetext.slice(0, 70)), el('freetext', freetext.slice(70, 140))]
-      : [el('freetext', freetext)]),
+      : freetext ? [el('freetext', freetext)] : []),
   ])),
   // `PR`, not `PT`. The XSD says a reference number "refers to an existing PNR
   // segment/element that has been previously transmitted in a previous Server
@@ -350,6 +350,12 @@ export const buildAddElementsBody = (p) => {
       ['CTCM', buildContactPhoneFreetext(contact.phone)],
       ['FOID', buildFoidFreetext(traveler)],
     ].map(([type, freetext]) => (freetext ? ssrElement({ number: ++number, paxNumber, type, freetext }) : ''))),
+    // A wheelchair to and from the aircraft, asked of every airline on the
+    // record. NN: a request the airline confirms, unlike DOCS, which is
+    // information and goes as HK.
+    ...assignPassengers(travelers).map(({ traveler, paxNumber }) => (traveler.requiresWheelchair === true
+      ? ssrElement({ number: ++number, paxNumber, type: 'WCHR', status: 'NN' })
+      : '')),
   ].filter(Boolean).join('');
 
   const body = [

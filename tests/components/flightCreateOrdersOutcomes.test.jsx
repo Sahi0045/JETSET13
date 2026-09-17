@@ -135,6 +135,29 @@ describe('a booking another request is already confirming', () => {
     expect(container.textContent).toMatch(/Reservation Held/);
   });
 
+  // Vercel's rewrite to the booking server gives up after 120 seconds, and a
+  // booking waiting for a slow airline takes longer. Its gateway error carries
+  // none of our codes, and the page said "Booking Failed" while the ticket was
+  // being issued.
+  it('reads a gateway cut-off as still confirming, not as a failed booking', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(reply(504, { error: { code: '504', message: 'An error occurred with your deployment' } }))
+      .mockResolvedValueOnce(reply(200, { success: true, pnr: 'ABC123', bookingReference: 'FLT1', ticketed: true, mode: 'ALREADY_BOOKED' }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { container } = renderOrderPage();
+
+    await flush();
+    await flush();
+    expect(container.textContent).not.toMatch(/Booking Failed/);
+    expect(screen.queryByRole('button', { name: /Try again/ })).toBeNull();
+
+    await flush(8000);
+    await flush();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(container.textContent).not.toMatch(/Booking Failed/);
+  });
+
   it('stops after a few tries and says the customer will be emailed', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     const fetchMock = vi.fn(async () => inProgress());

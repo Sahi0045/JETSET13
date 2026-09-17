@@ -125,7 +125,7 @@ export const buildAirSellBody = (p) => {
  *
  * @returns {{sold: boolean, statuses: string[], refused: string[]}}
  */
-export const readAirSellReply = (reply) => {
+export const readAirSellReply = (reply, { expectedSegments } = {}) => {
   const statuses = [];
 
   const visit = (node, depth = 0) => {
@@ -141,8 +141,13 @@ export const readAirSellReply = (reply) => {
   visit(at(reply, 'itineraryDetails') ?? reply);
 
   const refused = statuses.filter((s) => REFUSED.has(s));
+  // One status per segment asked for. A round trip whose return the airline
+  // refused came back with the outbound's OK and, for the return, only an
+  // itinerary-level error and no segment at all - and "every status is sold"
+  // was true of the one status there was.
+  const answeredAll = !Number.isFinite(expectedSegments) || statuses.length >= expectedSegments;
   return {
-    sold: statuses.length > 0 && statuses.every((s) => SOLD.has(s)),
+    sold: statuses.length > 0 && answeredAll && statuses.every((s) => SOLD.has(s)),
     statuses,
     refused,
   };

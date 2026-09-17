@@ -657,6 +657,9 @@ const createFlightOrder = async (orderData, options = {}) => {
     // Carried through for SSR DOCS. Dropping it here is what left every
     // international booking unticketable.
     documents: traveler.documents,
+    // Asked of the airline as SSR WCHR. The review page offered the box and the
+    // request went nowhere: no SSR, no email, nothing staff could see.
+    requiresWheelchair: traveler.requiresWheelchair === true,
   }));
 
   const contactSource = payload.contacts?.[0] ?? payload.travelers?.[0]?.contact ?? {};
@@ -697,6 +700,13 @@ const createFlightOrder = async (orderData, options = {}) => {
     // These two values are the only modes this provider can ever return.
     mode: result.ticketed ? 'LIVE_GDS_BOOKING' : 'LIVE_GDS_BOOKING_UNTICKETED',
     ticketed: result.ticketed,
+    // A segment the airline changed was accepted with change advice (TK). It
+    // was only a log line: the customer kept the searched times on the
+    // booking, the email and the e-ticket, and could miss a retimed flight.
+    needsReview: result.order?.needsReview
+      ?? (result.scheduleChanged
+        ? { reason: 'schedule_changed_by_airline', statuses: result.scheduleChanged, at: new Date().toISOString() }
+        : null),
     // Against the travellers the booking stores, by their own ids. A ticket
     // names a PNR tattoo, not a traveller - and an infant's names its adult's -
     // so it is matched through the PNR's own passenger list (attributeTickets).

@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import FlightCard from '../../frontend/src/Pages/Common/flights/FlightCard.jsx';
 import FlightFareOptions from '../../frontend/src/Pages/Common/flights/FlightFareOptions.jsx';
@@ -56,6 +56,39 @@ describe('the fare options', () => {
 
     await screen.findByRole('button', { name: 'BOOK' });
     expect(screen.queryByText('CHEAPEST')).toBeNull();
+  });
+
+  // A fare the airline withdrew since the search was only found on the review
+  // page, after the customer had chosen it. It is found when BOOK is pressed.
+  describe('pressing BOOK', () => {
+    const answers = (price) => {
+      globalThis.fetch = vi.fn((url) => Promise.resolve({
+        ok: true,
+        status: String(url).includes('upsell') ? 200 : (price.code ? 409 : 200),
+        json: () => Promise.resolve(String(url).includes('upsell') ? { success: true, data: [] } : price),
+      }));
+    };
+
+    it('keeps the customer here when the airline no longer sells the fare', async () => {
+      answers({ success: false, code: 'FARE_UNAVAILABLE' });
+      const onSelect = vi.fn();
+      render(<FlightFareOptions flight={flight()} onClose={() => {}} onSelect={onSelect} />);
+
+      fireEvent.click(await screen.findByRole('button', { name: 'BOOK' }));
+
+      expect(await screen.findByText(/The airline has just stopped selling this fare/)).toBeTruthy();
+      expect(onSelect).not.toHaveBeenCalled();
+    });
+
+    it('goes on to the review page when the airline still sells it', async () => {
+      answers({ success: true, data: { flightOffers: [{ price: { total: '400.00' } }] } });
+      const onSelect = vi.fn();
+      render(<FlightFareOptions flight={flight()} onClose={() => {}} onSelect={onSelect} />);
+
+      fireEvent.click(await screen.findByRole('button', { name: 'BOOK' }));
+
+      await waitFor(() => expect(onSelect).toHaveBeenCalledTimes(1));
+    });
   });
 
   it('marks the cheapest of several', async () => {

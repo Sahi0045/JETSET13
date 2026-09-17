@@ -131,6 +131,32 @@ async function invokeOrchestratedCancel(bookingReference, reason, req, { email }
 // offered it for a booking that had just been refunded, or failed to be.
 async function refundOnFulfillmentFailure(res, { orderId, bookingReference, amount, currency = 'USD', errorMsg, status = 502, customerMessage, reason, code = 'BOOKING_FAILED' }) {
   console.warn('🚑 Ticket not booked after payment — reversing charge. order:', orderId, '| reason:', errorMsg);
+  // Recorded before the gateway is asked, so no other request books this
+  // payment while it is on its way back: claimBookingChain and holdChainClaim
+  // both refuse a booking with `fulfillment_failed`. The caller has already
+  // released its claim, and the reversal takes seconds.
+  const failingRef = bookingReference || orderId;
+  try {
+    if (supabase && failingRef) {
+      const { data: failing } = await supabase
+        .from('bookings')
+        .select('id, booking_details')
+        .or((r => `booking_reference.eq.${r},booking_details->>order_id.eq.${r}`)(sanitizeRef(failingRef)))
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (failing && !failing.booking_details?.fulfillment_failed) {
+        await supabase.from('bookings').update({
+          booking_details: {
+            ...failing.booking_details,
+            fulfillment_failed: { at: new Date().toISOString(), error: errorMsg, reversal: { action: 'IN_PROGRESS' } },
+          },
+        }).eq('id', failing.id);
+      }
+    }
+  } catch (e) {
+    console.error('⚠️ Could not record the failure before reversing the payment:', e.message);
+  }
   const reversal = await reverseArcPaymentForOrder(orderId, {
     amount,
     currency,
@@ -356,6 +382,11 @@ export async function flagForReview({ bookingReference, pnr, reason, ticketed, t
     // against a live ticket.
     ...(ticketed ? { gds: { ...(details.gds || {}), ticketed: true } } : {}),
     ...(Array.isArray(tickets) && tickets.length > 0 ? { tickets } : {}),
+    // The chain has stopped: what it did is being handed to a person. Left
+    // `committed`, a retry would be told the booking is still being confirmed.
+    ...(details.gds_chain?.state === 'committed'
+      ? { gds_chain: { ...details.gds_chain, state: 'finished', finishedAt: new Date().toISOString() } }
+      : {}),
     needs_review: {
       reason,
       ticketed: Boolean(ticketed),
@@ -517,6 +548,11 @@ async function claimBookingChain(bookingReference) {
   if (chain?.state === 'cancelled') {
     console.warn('⛔ Chain refused: the booking was cancelled', bookingReference);
     return { claimed: false, cancelled: true };
+  }
+  // A failure is recorded before its payment is reversed (refundOnFulfillmentFailure).
+  if (details.fulfillment_failed) {
+    console.warn('⛔ Chain refused: this booking already failed and its payment is being returned', bookingReference);
+    return { claimed: false, failed: true };
   }
 
   // A claim only blocks while it is live (CHAIN_CLAIM_TTL_MS). One left behind
@@ -849,13 +885,18 @@ export async function holdChainClaim(bookingReference, attempt, claimedAt) {
   if (!supabase || !bookingReference) return 'held';
   const { data: row, error: readError } = await supabase
     .from('bookings')
-    .select('booking_details')
+    .select('status, booking_details')
     .eq('booking_reference', bookingReference)
     .single();
   if (readError && readError.code !== 'PGRST116') return 'unavailable';
   if (!row) return 'lost';
 
   const details = row.booking_details || {};
+  // Another request's booking failed and its payment is being, or has been,
+  // reversed. It releases the claim before the reversal, so a retry could take
+  // the claim in between and hold it here - and commit a PNR, and issue a
+  // ticket, on a payment already on its way back to the card.
+  if (details.fulfillment_failed || row.status === 'cancelled') return 'lost';
   const chain = details.gds_chain;
   if (chain?.state !== 'in_progress' || !chain.startedAt) return 'lost';
   if (attempt != null && Number(chain.attempt) !== Number(attempt)) return 'lost';
@@ -892,7 +933,13 @@ const CONFIRMATION_EMAIL_CLAIM_TTL_MS = 5 * 60_000;
  * reservation it announced. Any other flag is a booking a human is sorting
  * out, and the success path sends that booking no confirmation.
  */
-const EMAILED_REVIEW_REASONS = new Set(['ticket_numbers_not_retrieved', UNTICKETED_REVIEW_REASON]);
+// Reasons a person follows up on while the customer still gets their booking
+// email: a schedule change is told to the customer by the team, but the
+// booking and its ticket are real.
+// How long a recorded capture is trusted before the order route asks ARC again.
+const PAYMENT_TRUST_MS = 10 * 60 * 1000;
+
+const EMAILED_REVIEW_REASONS = new Set(['ticket_numbers_not_retrieved', UNTICKETED_REVIEW_REASON, 'schedule_changed_by_airline']);
 
 /**
  * Does this booking still owe its customer the confirmation email?
@@ -1373,6 +1420,13 @@ export async function handleDuplicateBookingMerge(bookingData, rowTemplate) {
       ...existingDetails,
       ...rowTemplate.booking_details,
       original_user_id: rowTemplate.booking_details.original_user_id || existingDetails.original_user_id || null,
+      // The chain is over once its outcome is saved. Left `committed`, the
+      // booking read as still being confirmed for a claim's lifetime, and a
+      // retry in that window is told to wait rather than shown the booking.
+      // A claim renewal already on its way matches `committed` and misses.
+      ...(existingDetails.gds_chain?.state === 'committed'
+        ? { gds_chain: { ...existingDetails.gds_chain, state: 'finished', finishedAt: new Date().toISOString() } }
+        : {}),
     };
 
     const update = {
@@ -2280,6 +2334,19 @@ router.post('/order', optionalProtect, async (req, res) => {
     // CONFIRMED for any row with a PNR, ticketed or not.
     if (existing.booking_details?.pnr) {
       const details = existing.booking_details;
+      // Committed and still working: the request that holds this booking is
+      // queueing it and issuing the ticket. Answered as it was before the
+      // commit - "already being confirmed" - and with no email. The retry used
+      // to send the "reservation held, no ticket yet" email here and record it
+      // as the booking's one email, so the confirmation the chain sent a moment
+      // later, ticket number and all, was refused as already sent.
+      if (liveChainState(details.gds_chain) === 'committed') {
+        return res.status(409).json({
+          success: false,
+          error: 'This booking is already being confirmed. Please wait a moment before trying again.',
+          code: 'BOOKING_IN_PROGRESS'
+        });
+      }
       const tickets = Array.isArray(details.tickets) ? details.tickets : [];
       const ticketed = details.gds?.ticketed === true || tickets.length > 0;
       console.log('↩️ Already booked, returning the stored order', details.pnr);
@@ -2349,7 +2416,18 @@ router.post('/order', optionalProtect, async (req, res) => {
     // row was still unpaid, and `payment_status` alone can be written by paths
     // that never asked ARC. Reconciling also covers the paid customer whose tab
     // died before the browser-driven reconcile ran.
-    payment = await reconcileBookingPayment(existing);
+    //
+    // Asked afresh when the row's "paid" is not recent. It was taken as the
+    // answer whenever it said paid, and a payment returned without the row
+    // hearing of it - a reversal whose booking write failed, a void recorded
+    // nowhere, a refund made in the ARC portal - was booked later by the queue,
+    // the abandoned-checkout job or a retry: a PNR and a ticket against nothing.
+    // The customer's own order, moments after the payment page confirmed the
+    // capture, still reads that confirmation.
+    const reconciledAt = Date.parse(existing.booking_details?.payment_reconciled_at ?? '');
+    const staleReconcile = Number.isFinite(reconciledAt) && Date.now() - reconciledAt > PAYMENT_TRUST_MS;
+    const replay = Boolean(req.headers?.['x-booking-queue-replay']);
+    payment = await reconcileBookingPayment(existing, { fresh: staleReconcile || replay });
     if (!payment.paid) {
       console.warn('⛔ Order refused: payment not captured', {
         bookingReference: existing.booking_reference,
@@ -2598,6 +2676,19 @@ router.post('/order', optionalProtect, async (req, res) => {
         code: 'BOOKING_CANCELLED'
       });
     }
+    if (!claim.claimed && claim.failed) {
+      const message = 'This booking could not be completed and our team is reviewing it, so it was not sent to the airline again. '
+        + 'Nothing more has been charged. If you have not heard from us within 2 business days, '
+        + `call (877) 538-7380 with booking reference ${req.body.bookingReference}.`;
+      return res.status(409).json({
+        success: false,
+        code: 'BOOKING_FAILED',
+        needsReview: true,
+        bookingReference: req.body.bookingReference,
+        error: message,
+        message,
+      });
+    }
     if (!claim.claimed) {
       return res.status(409).json({
         success: false,
@@ -2686,6 +2777,7 @@ router.post('/order', optionalProtect, async (req, res) => {
         gender: String(traveler.gender).trim().toUpperCase().startsWith('F') ? 'FEMALE' : 'MALE',
         // Checked against the fare above; the chain books each traveller on it.
         ...(traveler.ptc ? { ptc: traveler.ptc } : {}),
+        ...(traveler.requiresWheelchair === true ? { requiresWheelchair: true } : {}),
         name: {
           firstName: String(traveler.firstName).trim(),
           lastName: String(traveler.lastName).trim()

@@ -139,6 +139,9 @@ export async function runOnce({ webhookUrl = process.env.ALERT_SLACK_WEBHOOK_URL
     .from('bookings')
     .select('booking_reference, status, payment_status, total_amount, created_at, booking_details')
     .not('booking_details->cancellation', 'is', null)
+    // Every cancellation keeps its record for years. Without this the 200 oldest
+    // were read every run, and once 200 existed a failed refund was never seen.
+    .is('booking_details->cancellation->>alerted_at', null)
     .order('created_at', { ascending: true })
     .limit(200);
 

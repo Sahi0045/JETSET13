@@ -478,7 +478,7 @@ export const runBookingChain = async (p) => {
       bodyXml: buildAirSellBody({ segments: ama.segments, seats: seatCount(travelers) }),
     });
 
-    const sold = readAirSellReply(sellReply);
+    const sold = readAirSellReply(sellReply, { expectedSegments: ama.segments.length });
     if (!sold.sold) {
       // UC between search and sell is normal, not exceptional: the fare class
       // sold out in the seconds since the customer chose it. It has to read as
@@ -813,6 +813,10 @@ export const runBookingChain = async (p) => {
       priced: { total: priced.total, currency: priced.currency },
       lastTicketingDate: priced.fares[0]?.lastTicketingDate ?? offer.lastTicketingDate ?? null,
       sessionId: ctx.sessionId,
+      // The airline changed a segment and the change was accepted. The booking
+      // and its emails still show the searched times, so a person has to tell
+      // the customer (index.js turns this into a review flag).
+      scheduleChanged: changed.length > 0 ? changed : null,
       issueInNewSession,
       notReadyRefusals,
     };
@@ -872,7 +876,7 @@ export const confirmSeats = async (flightOffer) => {
 
   return withSession(async (ctx) => {
     const reply = replyOf(await ctx.call('Air_SellFromRecommendation', buildAirSellBody({ segments: ama.segments, seats })));
-    const sold = readAirSellReply(reply);
+    const sold = readAirSellReply(reply, { expectedSegments: ama.segments.length });
     if (sold.sold) {
       log.info({ flights, seats, statuses: sold.statuses }, 'seat check: the airline will sell these seats');
       // Still in the session that holds them: price what was just sold.
@@ -881,13 +885,16 @@ export const confirmSeats = async (flightOffer) => {
     }
 
     const inspected = inspectReply(reply, 'Air_SellFromRecommendation');
-    if (sold.refused.length > 0) {
+    // Sold for some flights and not answered for the rest: the airline will not
+    // sell the whole trip, which is a refusal, not a reply to try again.
+    const partlySold = sold.statuses.length > 0 && sold.statuses.length < ama.segments.length;
+    if (sold.refused.length > 0 || partlySold) {
       const amadeusCode = inspected.error?.amadeusCode ?? null;
       log.warn({ flights, seats, statuses: sold.statuses, amadeusCode }, 'seat check: the airline refused these seats');
       throw new AmadeusSoapError({
         error: 'That flight is no longer available at this price - please search again',
         code: 409,
-        technicalError: `seat check: segment status ${sold.statuses.join(',')}${amadeusCode ? ` (${amadeusCode})` : ''}`,
+        technicalError: `seat check: segment status ${sold.statuses.join(',')}${partlySold ? ` for ${sold.statuses.length} of ${ama.segments.length} flights` : ''}${amadeusCode ? ` (${amadeusCode})` : ''}`,
         operation: 'Air_SellFromRecommendation',
         amadeusCode,
       });

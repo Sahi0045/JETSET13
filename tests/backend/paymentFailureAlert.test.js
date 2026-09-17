@@ -132,6 +132,14 @@ describe('running the check once', () => {
     );
   });
 
+  // Every cancellation keeps its record for years, and the query read the 200
+  // oldest: once there were 200, a new failed refund was never read at all.
+  it('reads only cancellations not yet announced', async () => {
+    const chain = mockRows([]);
+    await runOnce({ webhookUrl: 'https://hooks.slack.test/x', dryRun: true });
+    expect(chain.is).toHaveBeenCalledWith('booking_details->cancellation->>alerted_at', null);
+  });
+
   it('a dry run reports what it would send, sending and stamping nothing', async () => {
     const chain = mockRows([booking({ booking_reference: 'FLTOWED' })]);
     const result = await runOnce({ webhookUrl: 'https://hooks.slack.test/x', dryRun: true });
