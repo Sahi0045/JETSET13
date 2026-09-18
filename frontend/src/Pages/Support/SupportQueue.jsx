@@ -29,6 +29,9 @@ const TABS = [
   { key: 'all', label: 'All bookings' },
 ];
 
+/** The owner's own tab, for inviting and removing support accounts. */
+const STAFF_TAB = { key: 'staff', label: 'Support accounts' };
+
 /** Who is signed in, as the sign-in page recorded it. Not a credential. */
 const signedInRole = () => {
   try {
@@ -261,7 +264,7 @@ function SupportQueue() {
 
       <main className="max-w-6xl mx-auto px-4 py-6">
         <div className="flex flex-wrap items-center gap-2 mb-4">
-          {TABS.map((item) => (
+          {[...TABS, ...(canInvite ? [STAFF_TAB] : [])].map((item) => (
             <button
               key={item.key}
               type="button"
@@ -273,6 +276,7 @@ function SupportQueue() {
               {item.label}{item.key === 'open' && openCount !== null ? ` (${openCount})` : ''}
             </button>
           ))}
+          {tab !== 'staff' && (
           <form
             className="ml-auto flex items-center gap-2"
             onSubmit={(event) => { event.preventDefault(); setSearch(searchInput.trim()); }}
@@ -286,6 +290,7 @@ function SupportQueue() {
             />
             <button type="submit" className="px-3 py-2 rounded-lg bg-[#0890BC] text-white text-sm font-semibold">Search</button>
           </form>
+          )}
         </div>
 
         {message && (
@@ -296,10 +301,10 @@ function SupportQueue() {
           </div>
         )}
 
-        {loading && <p className="text-gray-500">Loading…</p>}
+        {tab !== 'staff' && loading && <p className="text-gray-500">Loading…</p>}
         {error && !loading && <p className="text-red-700 font-semibold">{error}</p>}
 
-        {!loading && !error && bookings.length === 0 && (
+        {tab !== 'staff' && !loading && !error && bookings.length === 0 && (
           <div className="bg-white border border-[#D1E9F0] rounded-xl p-8 text-center">
             <p className="text-lg font-semibold text-gray-900">
               {tab === 'open' ? 'Nothing needs attention' : 'Nothing to show'}
@@ -311,7 +316,7 @@ function SupportQueue() {
         )}
 
         <div className="space-y-4">
-          {bookings.map((booking) => {
+          {(tab === 'staff' ? [] : bookings).map((booking) => {
             const attention = booking.attention;
             const resolved = booking.reviewResolution;
             const age = hoursSince(booking.bookingDate);
@@ -386,8 +391,8 @@ function SupportQueue() {
             );
           })}
         </div>
-        {canInvite && (
-          <section className="mt-8 bg-white border border-[#D1E9F0] rounded-xl p-4">
+        {canInvite && tab === 'staff' && (
+          <section className="bg-white border border-[#D1E9F0] rounded-xl p-4">
             <h2 className="text-base font-bold text-gray-900 mb-1">Support accounts</h2>
             <p className="text-sm text-gray-500 mb-3">
               Invite someone by email. They get a link, choose their own password, and the account activates - you never send a password.
