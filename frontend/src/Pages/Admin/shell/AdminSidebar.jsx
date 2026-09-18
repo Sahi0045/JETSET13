@@ -4,7 +4,7 @@ import {
   LuLayoutDashboard, LuMessageSquare, LuBriefcase, LuTag,
   LuCreditCard, LuRefreshCw, LuUsers, LuCloudUpload, LuFilePen,
   LuChartColumn, LuTimer, LuListChecks, LuFlag, LuSettings2, LuLogOut,
-  LuShield, LuPlane
+  LuShield, LuPlane, LuHeadphones
 } from 'react-icons/lu';
 
 // Role visibility: ADMINS = admin + super admin; SUPER = super admin only;
@@ -47,6 +47,9 @@ const NAV_GROUPS = [
     items: [
       { to: '/admin/admins', icon: LuShield, label: 'Admins', roles: SUPER },
       { to: '/admin/agents', icon: LuUsers, label: 'Agents', roles: SUPER },
+      // The support desk is its own page (support accounts cannot open this
+      // panel), so this leaves the panel rather than routing inside it.
+      { to: '/desk', icon: LuHeadphones, label: 'Support Desk', roles: ADMINS, external: true },
       { to: '/admin/bulk', icon: LuListChecks, label: 'Bulk Actions', roles: ADMINS },
       { to: '/admin/bulk-upload', icon: LuCloudUpload, label: 'Bulk Upload', roles: ADMINS },
       { to: '/admin/templates', icon: LuFilePen, label: 'Templates', roles: ADMINS },
@@ -96,6 +99,16 @@ function AdminSidebar({ collapsed, mobileOpen, onCloseMobile, onLogout }) {
               <div className="aps-nav-group-title">{group.title}</div>
               {group.items.map((item) => {
                 const Icon = item.icon;
+                // A link out of the panel is a plain anchor: NavLink would try
+                // to route it inside the admin shell, which does not own it.
+                if (item.external) {
+                  return (
+                    <a key={item.to} href={item.to} onClick={onCloseMobile} className="aps-nav-item" title={item.label}>
+                      <Icon className="aps-nav-icon" aria-hidden="true" />
+                      <span className="aps-nav-label">{item.label}</span>
+                    </a>
+                  );
+                }
                 return (
                   <NavLink
                     key={item.to}
