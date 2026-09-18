@@ -5,6 +5,7 @@ import dotenv from 'dotenv';
 import authRoutes from './routes/auth.routes.js';
 import hotelRoutes from './routes/hotel.routes.js';
 import flightRoutes from './routes/flight.routes.js';
+import staffRoutes from './routes/staff.routes.js';
 import cruiseRoutes from './routes/cruise.routes.js';
 import packageRoutes from './routes/package.routes.js';
 import emailRoutes from './routes/email.routes.js';
@@ -144,6 +145,8 @@ app.post('/api/jobs/check-quote-expiration', checkQuoteExpirationHandler);
 app.use('/api/auth', authRoutes);
 app.use('/api/hotels', hotelRoutes);
 app.use('/api/flights', flightRoutes);
+// Back-office accounts: invite a support person, and the link they open.
+app.use('/api/staff', staffRoutes);
 app.use('/api/cruises', cruiseRoutes);
 app.use('/api/packages', packageRoutes);
 app.use('/api/email', emailRoutes);

@@ -1167,8 +1167,15 @@ export function generatePasswordResetTemplate({ resetLink, expiresInHours = 1 } 
  */
 export function generateAgentInviteTemplate({ name, inviteLink, role = 'visa', expiresInHours = 48 } = {}) {
   const isVisa = role === 'visa';
-  const duties = isVisa
+  const isSupport = role === 'support';
+  const duties = isSupport
     ? [
+      ['Work the bookings that need a person', 'The ones our alarms flag: paid but not ticketed, a refund that did not go through, a refund to claim from the airline.'],
+      ['Settle the money', 'Cancel and refund, void a payment, or finish a refund that failed - all from the desk.'],
+      ['Record what you did', 'A short note on each booking, so the next person knows.'],
+    ]
+    : isVisa
+      ? [
       ['Review the applications assigned to you', 'Documents, eligibility and anything that needs chasing with the applicant.'],
       ['Submit to the consulate', 'Under the service tier the customer paid for.'],
       ['Keep the status current', 'The customer sees the tracker you update.'],
@@ -1180,13 +1187,13 @@ export function generateAgentInviteTemplate({ name, inviteLink, role = 'visa', e
     ];
 
   return renderBrandedEmail({
-    preheader: `Set your password to access the Jetsetters ${isVisa ? 'visa panel' : 'agent portal'}`,
-    headerLabel: isVisa ? 'Visa team invitation' : 'Travel agent invitation',
-    emoji: isVisa ? '🛂' : '✈️',
+    preheader: `Set your password to access the Jetsetters ${isSupport ? 'support desk' : isVisa ? 'visa panel' : 'agent portal'}`,
+    headerLabel: isSupport ? 'Support desk invitation' : isVisa ? 'Visa team invitation' : 'Travel agent invitation',
+    emoji: isSupport ? '🎧' : isVisa ? '🛂' : '✈️',
     heading: `Welcome${name ? `, ${firstNameOf(name, '')}` : ''}!`,
-    subheading: isVisa ? 'You have been added as a visa processing agent' : 'You have been added as a travel sales agent',
+    subheading: isSupport ? 'You have been added to the customer support desk' : isVisa ? 'You have been added as a visa processing agent' : 'You have been added as a travel sales agent',
     contentHtml: `
-      ${paragraph(`A Jetsetters super admin has invited you to the ${isVisa ? 'visa' : 'travel sales'} team. Set your password below — you will sign in with this email address.`)}
+      ${paragraph(`A Jetsetters admin has invited you to the ${isSupport ? 'customer support' : isVisa ? 'visa' : 'travel sales'} team. Set your password below — you will sign in with this email address.`)}
       ${stepList('What you will be doing', duties)}
       ${highlightBox(
     `This invitation expires in <strong>${expiresInHours} hours</strong>. If you were not expecting it, you can ignore this email.`,

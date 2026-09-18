@@ -162,6 +162,18 @@ export const sendAgentInviteEmail = async (email, name, inviteLink) => {
  * @param {string} name       - agent's display name
  * @param {string} inviteLink - one-time set-password link (token in query)
  */
+/** The support desk's invitation: the same email, its own duties. */
+export const sendStaffInviteEmail = async (email, name, inviteLink) => {
+  try {
+    const subject = 'You have been invited to the Jetsetters support desk';
+    const html = generateAgentInviteTemplate({ name, inviteLink, role: 'support' });
+    return await sendEmail({ to: email, subject, html });
+  } catch (error) {
+    console.error('Error in sendStaffInviteEmail:', error.message);
+    throw error;
+  }
+};
+
 export const sendTravelAgentInviteEmail = async (email, name, inviteLink) => {
   try {
     const subject = 'You\'ve been invited as a Jetsetters Travel Agent';
