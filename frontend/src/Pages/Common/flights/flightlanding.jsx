@@ -155,7 +155,7 @@ function FlightLanding() {
         <div className="bg-grain absolute inset-0 z-[1]"></div>
 
         {/* Content */}
-        <div className="relative z-10 w-full px-4 sm:px-6 md:px-12 pt-6 md:pt-8 pb-12 md:pb-16">
+        <div className="relative z-10 w-full px-4 sm:px-6 md:px-12 pt-6 md:pt-8 pb-8 md:pb-10">
           <div className="container mx-auto">
             <div className="max-w-6xl mx-auto text-center">
               {/* Kicker */}
@@ -215,7 +215,7 @@ function FlightLanding() {
       {/* ──────────────── Lowest fares ──────────────── */}
       {/* Prices first: someone landing here is shopping for a fare, not a
           photograph. The gallery follows. */}
-      <section className="relative bg-ivory pt-16 md:pt-20 pb-10">
+      <section className="relative bg-ivory pt-8 md:pt-12 pb-10">
         <div className="container mx-auto px-4">
           <CheapestFlights onBookFlight={handleBookFlight} />
 
