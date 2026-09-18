@@ -25,6 +25,7 @@ const flagged = {
   bookingDate: '2026-09-17T10:00:00Z',
   customerName: 'Jane Doe',
   customerEmail: 'jane@example.com',
+  customerPhone: '+1 (415) 555 0100',
   pnr: 'HELD42',
   ticketed: false,
   ticketNumbers: [],
@@ -100,6 +101,31 @@ describe('the queue', () => {
     await waitFor(() => expect(container.textContent).toMatch(/FLTHELD9/));
     expect(screen.getByRole('button', { name: /Cancel & refund/ })).toBeTruthy();
     expect(container.querySelector('a[href*="/admin"]')).toBeNull();
+  });
+
+  it('lets the desk ring or write to the customer without leaving the page', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => reply({ success: true, data: [flagged] })));
+    const { container } = renderQueue();
+
+    await waitFor(() => expect(container.textContent).toMatch(/FLTHELD9/));
+    const call = [...container.querySelectorAll('a')].find((a) => a.href.startsWith('tel:'));
+    // Spaces and brackets do not dial.
+    expect(call.getAttribute('href')).toBe('tel:+14155550100');
+
+    const mail = [...container.querySelectorAll('a')].find((a) => a.href.startsWith('mailto:'));
+    expect(mail.getAttribute('href')).toContain('jane%40example.com');
+    // The customer is told which booking this is about.
+    expect(decodeURIComponent(mail.getAttribute('href'))).toContain('FLTHELD9');
+    expect(decodeURIComponent(mail.getAttribute('href'))).toContain('HELD42');
+  });
+
+  it('says when a booking carries no way to reach the customer', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => reply({ success: true, data: [{ ...flagged, customerEmail: '', customerPhone: '' }] })));
+    const { container } = renderQueue();
+
+    await waitFor(() => expect(container.textContent).toMatch(/FLTHELD9/));
+    expect(container.textContent).toMatch(/no phone on the booking/);
+    expect(container.querySelector('a[href^="tel:"]')).toBeNull();
   });
 
   it('says so when nothing needs attention', async () => {

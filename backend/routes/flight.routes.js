@@ -4488,11 +4488,14 @@ export function searchFilterKey(params = {}, unticketable = [], interline = {}) 
 
 function normalizeBookingRow(b) {
   const amount = b.total_amount || b.booking_details?.amount || b.booking_details?.flight_offer?.price?.total || 0;
-  let customerName = 'N/A', customerEmail = '';
+  let customerName = 'N/A', customerEmail = '', customerPhone = '';
   if (Array.isArray(b.passenger_details) && b.passenger_details.length) {
     const p = b.passenger_details[0];
     customerName = `${p.firstName || p.first_name || ''} ${p.lastName || p.last_name || ''}`.trim() || 'N/A';
     customerEmail = p.email || '';
+    // Checkout stores the number the customer gave as `mobile`; the desk could
+    // see an email address and no way to ring anybody.
+    customerPhone = p.mobile || p.phone || p.phoneNumber || '';
   } else if (b.booking_details?.guest_info) {
     const g = b.booking_details.guest_info;
     customerName = `${g.firstName || g.first_name || ''} ${g.lastName || g.last_name || ''}`.trim() || customerName;
@@ -4500,6 +4503,10 @@ function normalizeBookingRow(b) {
   } else if (b.booking_details?.contact?.email) {
     customerEmail = b.booking_details.contact.email;
   }
+  // The address checkout actually charged and emails, when the traveller form
+  // left its optional email box empty.
+  customerEmail = customerEmail || b.booking_details?.customer_email || '';
+  customerPhone = customerPhone || b.booking_details?.contact?.phone || '';
   const d = b.booking_details || {};
   const service =
     b.travel_type === 'hotel' ? (d.hotel_name || d.location || 'Hotel') :
@@ -4511,7 +4518,7 @@ function normalizeBookingRow(b) {
     bookingReference: b.booking_reference,
     status: b.status, paymentStatus: b.payment_status,
     totalAmount: parseFloat(amount) || 0, currency: d.currency || 'USD',
-    bookingDate: b.created_at, customerName, customerEmail,
+    bookingDate: b.created_at, customerName, customerEmail, customerPhone,
     service,
     bookingDetails: adminSafeDetails(d), passengerDetails: b.passenger_details, isPackage: false,
     arcOrderId: d.arc_order_id || d.order_id || b.booking_reference,
