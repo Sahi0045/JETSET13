@@ -17,6 +17,7 @@ import authRoutes from "./backend/routes/auth.routes.js";
 import userRoutes from "./backend/routes/user.routes.js";
 import emailRoutes from "./backend/routes/email.routes.js";
 import flightRoutes from "./backend/routes/flight.routes.js";
+import staffRoutes from "./backend/routes/staff.routes.js";
 import airportRoutes from "./backend/routes/airport.routes.js";
 import hotelRoutes from "./backend/routes/hotel.routes.js";
 import paymentRoutes from "./backend/routes/payment.routes.js";
@@ -139,6 +140,8 @@ app.use("/api/users/me/travellers", savedTravellersRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/hotels", hotelRoutes);
 app.use("/api/flights", flightRoutes);
+// Back-office accounts: invite a support person, and the link they open.
+app.use("/api/staff", staffRoutes);
 // Airport autocomplete. Was mounted only in the dev and Vercel entries, so it
 // 404'd under `npm start` - the class of bug AGENTS.md:195 records for /api/gdpr.
 app.use("/api/airports", airportRoutes);

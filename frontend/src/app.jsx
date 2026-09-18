@@ -590,6 +590,10 @@ const SupportQueue = React.lazy(() =>
   import('./Pages/Support/SupportQueue')
     .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Support desk..." /> }))
 );
+const SupportSetPassword = React.lazy(() =>
+  import('./Pages/Support/SupportSetPassword')
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Invitation..." /> }))
+);
 
 const HotelBookingSuccess = React.lazy(() =>
   import('./Pages/Common/rentals/HotelBookingSuccess')
@@ -799,6 +803,7 @@ const App = () => {
 
           {/* Support desk — the queue the Slack alarms feed. */}
           <Route path="/desk/login" element={<SupportLogin />} />
+          <Route path="/desk/set-password" element={<SupportSetPassword />} />
           <Route path="/desk" element={
             <StaffRoute>
               <SupportQueue />

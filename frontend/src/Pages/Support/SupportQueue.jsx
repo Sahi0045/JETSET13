@@ -6,6 +6,7 @@ import { attentionLabel } from '../../../../shared/reviewQueue';
 import { canVoidPayment } from '../../utils/adminBookingActions';
 import { needsManualRefund } from '../../utils/bookingStatus';
 import { formatUsd } from '../../utils/bookingCharge';
+import { isFullAdmin } from '../../../../shared/staffRoles';
 
 /**
  * The customer support desk: the bookings the Slack alarms named.
@@ -27,6 +28,15 @@ const TABS = [
   { key: 'handled', label: 'Handled' },
   { key: 'all', label: 'All bookings' },
 ];
+
+/** Who is signed in, as the sign-in page recorded it. Not a credential. */
+const signedInRole = () => {
+  try {
+    return JSON.parse(localStorage.getItem('adminUser') || '{}')?.role ?? null;
+  } catch {
+    return null;
+  }
+};
 
 const hoursSince = (iso) => {
   const at = Date.parse(iso ?? '');
@@ -65,6 +75,11 @@ function SupportQueue() {
   // { type: 'cancel' | 'void' | 'refund', booking, reason?, amount? }
   const [action, setAction] = useState(null);
   const [saving, setSaving] = useState(false);
+  // Only the owner sees this: invite a support person, or take the desk away.
+  const canInvite = isFullAdmin(signedInRole());
+  const [staff, setStaff] = useState([]);
+  const [invite, setInvite] = useState({ email: '', firstName: '' });
+  const [inviting, setInviting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -91,6 +106,59 @@ function SupportQueue() {
   }, [tab, search, navigate]);
 
   useEffect(() => { load(); }, [load]);
+
+  const loadStaff = useCallback(async () => {
+    if (!canInvite) return;
+    try {
+      const response = await adminFetch(getApiUrl('staff'));
+      const result = await response.json().catch(() => ({}));
+      if (result.success) setStaff(result.data || []);
+    } catch {
+      // The queue is the page's job; a staff list that will not load is not
+      // worth an error banner over the bookings.
+    }
+  }, [canInvite]);
+
+  useEffect(() => { loadStaff(); }, [loadStaff]);
+
+  const sendInvite = async (event) => {
+    event.preventDefault();
+    setInviting(true);
+    try {
+      const response = await adminFetch(getApiUrl('staff/invite'), {
+        method: 'POST',
+        body: JSON.stringify({ email: invite.email.trim(), firstName: invite.firstName.trim() }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (response.ok && result.success) {
+        setMessage({ tone: 'success', text: result.message });
+        setInvite({ email: '', firstName: '' });
+        loadStaff();
+      } else {
+        setMessage({ tone: 'error', text: result.error || 'Could not send the invitation.' });
+      }
+    } catch {
+      setMessage({ tone: 'error', text: 'Could not send the invitation.' });
+    } finally {
+      setInviting(false);
+      setTimeout(() => setMessage(null), 10000);
+    }
+  };
+
+  const revoke = async (person) => {
+    setInviting(true);
+    try {
+      const response = await adminFetch(getApiUrl(`staff/${person.id}/revoke`), { method: 'POST' });
+      const result = await response.json().catch(() => ({}));
+      setMessage(response.ok && result.success
+        ? { tone: 'success', text: `${person.email} no longer has the desk.` }
+        : { tone: 'error', text: result.error || 'Could not remove the access.' });
+      loadStaff();
+    } finally {
+      setInviting(false);
+      setTimeout(() => setMessage(null), 10000);
+    }
+  };
 
   const markHandled = async () => {
     if (!handling?.note?.trim()) return;
@@ -318,6 +386,60 @@ function SupportQueue() {
             );
           })}
         </div>
+        {canInvite && (
+          <section className="mt-8 bg-white border border-[#D1E9F0] rounded-xl p-4">
+            <h2 className="text-base font-bold text-gray-900 mb-1">Support accounts</h2>
+            <p className="text-sm text-gray-500 mb-3">
+              Invite someone by email. They get a link, choose their own password, and the account activates - you never send a password.
+            </p>
+            <form onSubmit={sendInvite} className="flex flex-wrap items-end gap-2 mb-4">
+              <label className="text-xs font-semibold text-gray-600">
+                Email
+                <input
+                  type="email"
+                  required
+                  value={invite.email}
+                  onChange={(event) => setInvite({ ...invite, email: event.target.value })}
+                  aria-label="Email to invite"
+                  className="mt-1 block w-64 max-w-full border border-[#B9D0DC] rounded-lg p-2.5 text-sm font-normal"
+                />
+              </label>
+              <label className="text-xs font-semibold text-gray-600">
+                First name
+                <input
+                  value={invite.firstName}
+                  onChange={(event) => setInvite({ ...invite, firstName: event.target.value })}
+                  aria-label="First name"
+                  className="mt-1 block w-40 max-w-full border border-[#B9D0DC] rounded-lg p-2.5 text-sm font-normal"
+                />
+              </label>
+              <button type="submit" disabled={inviting} className="px-3 py-2.5 rounded-lg bg-[#055B75] text-white text-sm font-semibold disabled:opacity-50">
+                {inviting ? 'Sending…' : 'Send invitation'}
+              </button>
+            </form>
+
+            {staff.length > 0 && (
+              <ul className="divide-y divide-[#E3F1F6]">
+                {staff.map((person) => (
+                  <li key={person.id} className="py-2 flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-semibold text-gray-900">{person.email}</span>
+                    <Pill tone={person.status === 'active' ? 'success' : 'warning'}>
+                      {person.status === 'active' ? 'Active' : 'Invited, not accepted yet'}
+                    </Pill>
+                    <button
+                      type="button"
+                      onClick={() => revoke(person)}
+                      disabled={inviting}
+                      className="ml-auto text-sm font-semibold text-red-700 border border-red-200 rounded-lg px-3 py-1.5 disabled:opacity-50"
+                    >
+                      Remove access
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        )}
       </main>
 
       {action && (
