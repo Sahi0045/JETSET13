@@ -6,7 +6,7 @@ import fetch from 'node-fetch';
 import { get as cacheGet, set as cacheSet, withCache, CacheKeys, TTL } from '../services/cache.service.js';
 import { validate } from '../middleware/validate.js';
 import { z } from 'zod';
-import { protect, admin, optionalProtect } from '../middleware/auth.middleware.js';
+import { protect, admin, bookingStaff, optionalProtect } from '../middleware/auth.middleware.js';
 import { resolveBookingUserId } from '../utils/bookingOwner.js';
 import { handleCancelBookingAction, reverseArcPaymentForOrder, settleManualFlightRefund } from './payment/operations.handlers.js';
 import { emailMatchesBooking, isBookingOwner } from '../utils/bookingAccess.js';
@@ -25,6 +25,8 @@ import { itinerariesFromOffer, returnDateOf } from '../../shared/bookingItinerar
 import { flightsKey, travellerNamesKey } from '../utils/tripMatch.js';
 import { needsDateOfBirth } from '../../shared/travellerDetails.js';
 import { statusChangeRefusal } from '../../shared/bookingStatusChange.js';
+import { attentionOf, reviewResolution, ticketsOf, isTicketed } from '../../shared/reviewQueue.js';
+import { errorSummary } from '../utils/errorSummary.js';
 import { flightSearchLimiter, guestBookingLimiter } from '../middleware/security.js';
 import { liveChainState } from '../utils/bookingChainClaim.js';
 
@@ -4513,6 +4515,14 @@ function normalizeBookingRow(b) {
     service,
     bookingDetails: adminSafeDetails(d), passengerDetails: b.passenger_details, isPackage: false,
     arcOrderId: d.arc_order_id || d.order_id || b.booking_reference,
+    // The desk's own fields. The panel showed a "PNR:" line this row never
+    // carried, and never showed why a booking was flagged or which tickets a
+    // cancelled one still has to claim back - all of which Slack had named.
+    pnr: d.pnr || null,
+    ticketed: isTicketed(d),
+    ticketNumbers: ticketsOf(d).map((ticket) => ticket.number),
+    attention: attentionOf(b),
+    reviewResolution: reviewResolution(b),
     // Being booked, waiting in the queue, or being cancelled right now
     // (utils/bookingChainClaim.js). The panel hides Void for such a booking, as
     // the server refuses it; worked out here, where the claim's lifetime is known.
@@ -4553,10 +4563,10 @@ async function fetchPackageBookings() {
 }
 
 // GET /api/flights/admin-bookings-all — every booking across all four services.
-router.get('/admin-bookings-all', protect, admin, async (req, res) => {
+router.get('/admin-bookings-all', protect, bookingStaff, async (req, res) => {
   try {
     if (!supabase) return res.status(503).json({ success: false, error: 'Database not configured' });
-    const { type, status, payment_status, search, page = 1, limit = 50 } = req.query;
+    const { type, status, payment_status, search, attention, page = 1, limit = 50 } = req.query;
 
     let rows = [];
     if (type !== 'package') {
@@ -4572,6 +4582,10 @@ router.get('/admin-bookings-all', protect, admin, async (req, res) => {
 
     if (status && status !== 'all') rows = rows.filter((b) => b.status === status);
     if (payment_status && payment_status !== 'all') rows = rows.filter((b) => b.paymentStatus === payment_status);
+    // The Slack queue, as a list. `attention=open` is what the support page
+    // opens on; `attention=handled` is what the desk has already dealt with.
+    if (attention === 'open') rows = rows.filter((b) => b.attention);
+    if (attention === 'handled') rows = rows.filter((b) => b.reviewResolution);
     if (search) {
       const s = String(search).toLowerCase();
       rows = rows.filter((b) =>
@@ -4699,7 +4713,7 @@ router.get('/admin-customers', protect, admin, async (req, res) => {
 // confirmed told the customer it was ticketed. A status set by hand now has to
 // describe the booking (shared/bookingStatusChange.js), and cancelling anything
 // that holds seats or money goes through Cancel & Refund.
-router.put('/admin-bookings/:id', protect, admin, async (req, res) => {
+router.put('/admin-bookings/:id', protect, bookingStaff, async (req, res) => {
   try {
     if (!supabase) {
       return res.status(503).json({ success: false, error: 'Database not configured' });
@@ -4770,7 +4784,7 @@ router.put('/admin-bookings/:id', protect, admin, async (req, res) => {
 });
 
 // POST cancel booking (admin) — cancel via Amadeus + ARC Pay refund/void + DB update
-router.post('/admin-bookings/:id/cancel', protect, admin, async (req, res) => {
+router.post('/admin-bookings/:id/cancel', protect, bookingStaff, async (req, res) => {
   try {
     if (!supabase) {
       return res.status(503).json({ success: false, error: 'Database not configured' });
@@ -4827,7 +4841,7 @@ router.post('/admin-bookings/:id/cancel', protect, admin, async (req, res) => {
 // or was held for review - and record what ARC Pay shows. `mode: 'sync'` reads
 // a refund made in the ARC portal; `mode: 'refund'` makes one. See
 // settleManualFlightRefund.
-router.post('/admin-bookings/:id/refund', protect, admin, async (req, res) => {
+router.post('/admin-bookings/:id/refund', protect, bookingStaff, async (req, res) => {
   try {
     if (!supabase) {
       return res.status(503).json({ success: false, error: 'Database not configured' });
@@ -4844,6 +4858,75 @@ router.post('/admin-bookings/:id/refund', protect, admin, async (req, res) => {
   } catch (error) {
     console.error('❌ Admin manual refund error:', error);
     return res.status(500).json({ success: false, error: 'Could not finish the refund' });
+  }
+});
+
+/**
+ * POST /api/flights/admin-bookings/:id/resolve-review — "I have dealt with this".
+ *
+ * The alarms announce a booking once and stamp `alerted_at`; nothing ever took
+ * the flag off again, so a booking someone had already ticketed by hand looked
+ * exactly like one nobody had touched, for ever. This records who dealt with it,
+ * when, and what they did, and takes it out of the desk's queue.
+ *
+ * It changes no money and no booking status: those have their own routes, which
+ * write their own records. A booking with nothing to resolve is refused rather
+ * than silently stamped.
+ */
+router.post('/admin-bookings/:id/resolve-review', protect, bookingStaff, async (req, res) => {
+  try {
+    if (!supabase) return res.status(503).json({ success: false, error: 'Database not configured' });
+
+    const note = String(req.body?.note ?? '').trim();
+    if (!note) {
+      const text = 'Please say what you did, so the next person knows.';
+      return res.status(400).json({ success: false, code: 'NOTE_REQUIRED', error: text, message: text });
+    }
+
+    const { data: booking, error: readError } = await supabase
+      .from('bookings').select('*').eq('id', req.params.id).single();
+    if (readError && readError.code !== 'PGRST116') {
+      return res.status(500).json({ success: false, error: 'Could not read the booking' });
+    }
+    if (!booking) return res.status(404).json({ success: false, error: 'Booking not found' });
+
+    const details = booking.booking_details || {};
+    if (details.needs_review?.resolved_at) {
+      const text = 'This booking was already marked as handled.';
+      return res.status(409).json({ success: false, code: 'ALREADY_RESOLVED', error: text, message: text });
+    }
+    if (!attentionOf(booking)) {
+      const text = 'There is nothing to handle on this booking.';
+      return res.status(409).json({ success: false, code: 'NOTHING_TO_RESOLVE', error: text, message: text });
+    }
+
+    const at = new Date().toISOString();
+    const by = req.user?.email || req.user?.id || 'staff';
+    const { error } = await supabase
+      .from('bookings')
+      .update({
+        booking_details: {
+          ...details,
+          // Created when it is missing: the alarm names paid-but-not-ticketed
+          // bookings that were never flagged, and those need a record too.
+          needs_review: {
+            ...(details.needs_review || { reason: 'PNR committed, never ticketed', ticketed: false, at }),
+            resolved_at: at,
+            resolved_by: by,
+            resolution: note,
+          },
+        },
+        updated_at: at,
+      })
+      .eq('id', booking.id);
+
+    if (error) return res.status(500).json({ success: false, error: 'Could not record it' });
+
+    console.log('✅ Booking marked handled by the desk:', { reference: booking.booking_reference, by });
+    return res.json({ success: true, resolvedAt: at, resolvedBy: by, note, message: 'Marked as handled' });
+  } catch (error) {
+    console.error('❌ Resolve review error:', errorSummary(error));
+    return res.status(500).json({ success: false, error: 'Could not record it' });
   }
 });
 

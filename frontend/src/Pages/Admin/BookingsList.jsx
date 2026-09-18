@@ -7,6 +7,7 @@ import './AdminPanel.css';
 import { adminFetch, readAdminResponse } from '../../utils/adminAuth';
 import { needsManualRefund } from '../../utils/bookingStatus';
 import { canVoidPayment, statusOptionsFor } from '../../utils/adminBookingActions';
+import { attentionLabel } from '../../../../shared/reviewQueue';
 
 const BookingsList = () => {
     const [searchParams] = useSearchParams();
@@ -21,6 +22,9 @@ const BookingsList = () => {
     // Filters
     const [typeFilter, setTypeFilter] = useState('all');
     const [statusFilter, setStatusFilter] = useState('all');
+    // The Slack queue, as a filter: 'open' is what still needs a person,
+    // 'handled' what the desk has already dealt with (shared/reviewQueue.js).
+    const [attentionFilter, setAttentionFilter] = useState('all');
     const [paymentFilter, setPaymentFilter] = useState('all');
     const [searchQuery, setSearchQuery] = useState(initialSearch);
     const [searchInput, setSearchInput] = useState(initialSearch);
@@ -92,6 +96,7 @@ const BookingsList = () => {
             if (typeFilter !== 'all') params.append('type', typeFilter);
             if (statusFilter !== 'all') params.append('status', statusFilter);
             if (paymentFilter !== 'all') params.append('payment_status', paymentFilter);
+            if (attentionFilter !== 'all') params.append('attention', attentionFilter);
             if (searchQuery) params.append('search', searchQuery);
             params.append('page', currentPage);
             params.append('limit', 25);
@@ -111,7 +116,7 @@ const BookingsList = () => {
         } finally {
             setLoading(false);
         }
-    }, [typeFilter, statusFilter, paymentFilter, searchQuery, currentPage]);
+    }, [typeFilter, statusFilter, paymentFilter, attentionFilter, searchQuery, currentPage]);
 
     // Export every booking matching the current filters (not just the page) to CSV.
     const exportCSV = async () => {
@@ -474,6 +479,20 @@ const BookingsList = () => {
                         <option value="voided">Voided</option>
                     </select>
 
+                    <select
+                        value={attentionFilter}
+                        onChange={(e) => { setAttentionFilter(e.target.value); setCurrentPage(1); }}
+                        aria-label="Attention filter"
+                        style={{
+                            padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0',
+                            fontSize: '13px', backgroundColor: '#fff', cursor: 'pointer', minWidth: '160px'
+                        }}
+                    >
+                        <option value="all">All bookings</option>
+                        <option value="open">Needs attention</option>
+                        <option value="handled">Handled</option>
+                    </select>
+
                     <form onSubmit={handleSearch} style={{ display: 'flex', gap: '8px', flex: 1, minWidth: '200px' }}>
                         <input
                             type="text"
@@ -570,6 +589,16 @@ const BookingsList = () => {
                                                 </div>
                                                 {booking.pnr && (
                                                     <div style={{ fontSize: '11px', color: '#64748b' }}>PNR: {booking.pnr}</div>
+                                                )}
+                                                {booking.attention && (
+                                                    <div style={{ fontSize: '11px', color: '#b45309', fontWeight: 600 }}>
+                                                        ⚠ {attentionLabel(booking.attention)}: {booking.attention.reason}
+                                                    </div>
+                                                )}
+                                                {booking.reviewResolution && (
+                                                    <div style={{ fontSize: '11px', color: '#047857' }}>
+                                                        ✓ Handled by {booking.reviewResolution.by}: {booking.reviewResolution.note}
+                                                    </div>
                                                 )}
                                             </td>
                                             <td style={tdStyle}>

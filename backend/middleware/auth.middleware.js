@@ -5,6 +5,7 @@ import User from '../models/user.model.js';
 import supabase from '../config/supabase.js';
 import { JWT_SECRET } from '../config/jwt.js';
 import { siteOrigins } from '../utils/returnUrl.js';
+import { isBookingStaff } from '../../shared/staffRoles.js';
 
 // Simple in-memory cache for Google/Firebase JWKS certificates
 let googleCertsCache = { certs: null, fetchedAt: 0 };
@@ -399,6 +400,21 @@ export const admin = (req, res, next) => {
     next();
   } else {
     res.status(403).json({ message: 'Not authorized as an admin' });
+  }
+};
+
+/**
+ * Booking staff middleware — admin, superadmin or support.
+ *
+ * Support works the bookings the Slack alarms name: they see them, settle the
+ * money and record what they did. Everything else in the panel - settings,
+ * coupons, fees, staff accounts - stays behind `admin` above.
+ */
+export const bookingStaff = (req, res, next) => {
+  if (isBookingStaff(req.user?.role)) {
+    next();
+  } else {
+    res.status(403).json({ message: 'Not authorized for the booking desk' });
   }
 };
 

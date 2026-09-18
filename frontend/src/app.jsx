@@ -580,6 +580,17 @@ const AdminLogin = React.lazy(() =>
     .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Admin Login..." /> }))
 );
 
+// The support desk: its own page and its own accounts (role `support`), which
+// work bookings and their money and nothing else.
+const SupportLogin = React.lazy(() =>
+  import('./Pages/Support/SupportLogin')
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Support sign-in..." /> }))
+);
+const SupportQueue = React.lazy(() =>
+  import('./Pages/Support/SupportQueue')
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Support desk..." /> }))
+);
+
 const HotelBookingSuccess = React.lazy(() =>
   import('./Pages/Common/rentals/HotelBookingSuccess')
     .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Hotel Booked..." /> }))
@@ -634,6 +645,13 @@ const AuthCallback = React.lazy(() =>
 // Import ProtectedRoute
 const ProtectedRoute = React.lazy(() =>
   import('./components/ProtectedRoute')
+    .catch(() => ({ default: ({ children }) => children }))
+);
+
+// The support desk's own gate: any back-office role may open it, and the server
+// checks the role again on every call the page makes.
+const StaffRoute = React.lazy(() =>
+  import('./components/StaffRoute')
     .catch(() => ({ default: ({ children }) => children }))
 );
 
@@ -777,6 +795,14 @@ const App = () => {
             <ProtectedRoute requireAuth={true} requireAdmin={true}>
               <AdminPanel />
             </ProtectedRoute>
+          } />
+
+          {/* Support desk — the queue the Slack alarms feed. */}
+          <Route path="/desk/login" element={<SupportLogin />} />
+          <Route path="/desk" element={
+            <StaffRoute>
+              <SupportQueue />
+            </StaffRoute>
           } />
 
           {/* Travel agent portal — scoped, separate endpoint for sales agents */}

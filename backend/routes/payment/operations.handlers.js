@@ -3,6 +3,23 @@ import fetch from 'node-fetch';
 import FlightProvider from '../../services/flightProvider.js';
 import { supabase, ARC_PAY_CONFIG, getArcPayAuthConfig } from './arcpay.config.js';
 import { getCaller, requireAdmin } from './agents.handlers.js';
+import { isBookingStaff } from '../../../shared/staffRoles.js';
+
+/**
+ * Gate: the booking desk — admin, super admin or support.
+ *
+ * Refunds and voids are how support settles a customer's money, so these three
+ * handlers ask for the desk rather than for `admin` (shared/staffRoles.js).
+ * Everything else an admin can do still asks `requireAdmin`.
+ */
+async function requireBookingStaff(req, res) {
+    const caller = await getCaller(req);
+    if (!isBookingStaff(caller?.role) && !isBookingStaff(req.user?.role)) {
+        res.status(403).json({ success: false, error: 'Not authorized.' });
+        return false;
+    }
+    return true;
+}
 import { arcSucceeded } from './payment.helpers.js';
 import { resolveBookingUserId } from '../../utils/bookingOwner.js';
 import { emailIsBookers, hasBookingOwner, isBookingOwner } from '../../utils/bookingAccess.js';
@@ -111,7 +128,7 @@ export async function handleCancelBookingAction(req, res) {
         // admin panel) passed no email and no session at all. The other cancel
         // tests' fixtures had the column, which is how it shipped.
         const caller = await getCaller(req);
-        const isStaff = [caller?.role, req.user?.role].some((role) => ['admin', 'superadmin'].includes(role));
+        const isStaff = [caller?.role, req.user?.role].some(isBookingStaff);
         if (!isStaff) {
             const sessionUserId = resolveBookingUserId(req);
             const owned = hasBookingOwner(booking);
@@ -1096,7 +1113,7 @@ export async function handlePaymentRefund(req, res) {
     // dispatched from the public `?action=` router with NO `protect` middleware,
     // so it must gate itself — previously it did not, leaving an unauthenticated
     // ARC Pay refund endpoint reachable by anyone.
-    if (!(await requireAdmin(req, res))) return;
+    if (!(await requireBookingStaff(req, res))) return;
 
     try {
         console.log('💰 Handling PAYMENT-REFUND operation');
@@ -1315,7 +1332,7 @@ export async function handlePaymentVoid(req, res) {
 
     // AUTHORIZATION: voiding a gateway transaction is admin-only. Same reason as
     // handlePaymentRefund — the `?action=` router applies no auth middleware.
-    if (!(await requireAdmin(req, res))) return;
+    if (!(await requireBookingStaff(req, res))) return;
 
     // The claim this void holds on a flight booking, when it took one. Handed
     // back on every way out that does not void, so a refused or failed void
@@ -1557,7 +1574,7 @@ export async function handlePaymentRetrieve(req, res) {
     // the full payments row and the live gateway order - cardholder name,
     // billing address, the success indicator - and its only caller is the
     // admin panel's "Check status" button. It was open to anyone with an id.
-    if (!(await requireAdmin(req, res))) return;
+    if (!(await requireBookingStaff(req, res))) return;
 
     try {
         console.log('🔍 Handling PAYMENT-RETRIEVE operation');
