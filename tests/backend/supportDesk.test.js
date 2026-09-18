@@ -148,6 +148,25 @@ describe('GET /admin-bookings-all', () => {
   });
 });
 
+describe('reaching the customer', () => {
+  it('sends the phone the traveller gave, and the address checkout charged', async () => {
+    const withContact = flagged({
+      id: 'b-contact',
+      booking_reference: 'FLTCALL1',
+      passenger_details: [{ firstName: 'Jane', lastName: 'Doe', email: '', mobile: '+1 415 555 0100' }],
+      booking_details: { customer_email: 'paid@example.com' },
+    });
+    const { app } = await appWith([withContact]);
+
+    const res = await request(app).get('/api/flights/admin-bookings-all');
+
+    const row = res.body.data.find((b) => b.bookingReference === 'FLTCALL1');
+    expect(row.customerPhone).toBe('+1 415 555 0100');
+    // The traveller left the optional email box empty; checkout charged this one.
+    expect(row.customerEmail).toBe('paid@example.com');
+  });
+});
+
 describe('POST /admin-bookings/:id/resolve-review', () => {
   it('records who dealt with it and what they did, and clears it from the queue', async () => {
     ROLE.value = 'support';

@@ -41,6 +41,31 @@ const signedInRole = () => {
   }
 };
 
+/**
+ * What the desk writes to a customer, ready to edit.
+ *
+ * The page showed an email address and a name and nothing to do with them:
+ * ringing or writing meant copying the address into another window. A mailto
+ * carries the booking's own reference, so the customer knows what it is about
+ * and the reply lands in the desk's own inbox.
+ */
+const mailtoFor = (booking) => {
+  const subject = `Your Jetsetters booking ${booking.bookingReference}`;
+  const lines = [
+    `Hello ${booking.customerName && booking.customerName !== 'N/A' ? booking.customerName.split(' ')[0] : 'there'},`,
+    '',
+    `I am writing about your booking ${booking.bookingReference}${booking.pnr ? ` (airline reference ${booking.pnr})` : ''}.`,
+    '',
+    '',
+    'Jetsetters customer support',
+    '(877) 538-7380',
+  ];
+  return `mailto:${encodeURIComponent(booking.customerEmail)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(lines.join('\n'))}`;
+};
+
+/** Digits only: a number with spaces or brackets does not dial. */
+const telFor = (phone) => `tel:${String(phone).replace(/[^\d+]/g, '')}`;
+
 const hoursSince = (iso) => {
   const at = Date.parse(iso ?? '');
   if (!Number.isFinite(at)) return null;
@@ -343,13 +368,35 @@ function SupportQueue() {
                 )}
 
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
-                  <Field label="Customer">{booking.customerName || '—'}<br /><span className="font-normal text-gray-500 text-xs">{booking.customerEmail}</span></Field>
+                  <Field label="Customer">
+                    {booking.customerName || '—'}
+                    <br />
+                    <span className="font-normal text-gray-500 text-xs">{booking.customerEmail || 'no email on the booking'}</span>
+                    <br />
+                    <span className="font-normal text-gray-500 text-xs">{booking.customerPhone || 'no phone on the booking'}</span>
+                  </Field>
                   <Field label="PNR">{booking.pnr || 'Not assigned'}</Field>
                   <Field label="Tickets">{booking.ticketNumbers?.length ? booking.ticketNumbers.join(', ') : (booking.ticketed ? 'Issued' : 'None')}</Field>
                   <Field label="Paid">{booking.totalAmount > 0 ? formatUsd(booking.totalAmount) : '—'}<br /><span className="font-normal text-gray-500 text-xs">{booking.status} · {booking.paymentStatus}</span></Field>
                 </div>
 
                 <div className="flex flex-wrap gap-2">
+                  {booking.customerPhone && (
+                    <a
+                      href={telFor(booking.customerPhone)}
+                      className="px-3 py-2 rounded-lg border border-[#B9D0DC] text-[#055B75] text-sm font-semibold"
+                    >
+                      Call {booking.customerPhone}
+                    </a>
+                  )}
+                  {booking.customerEmail && (
+                    <a
+                      href={mailtoFor(booking)}
+                      className="px-3 py-2 rounded-lg border border-[#B9D0DC] text-[#055B75] text-sm font-semibold"
+                    >
+                      Email customer
+                    </a>
+                  )}
                   {attention && (
                     <button
                       type="button"
