@@ -115,8 +115,17 @@ router.post('/invite', protect, admin, async (req, res) => {
     console.log('✅ Support desk invitation sent:', email);
     return res.json({ success: true, emailed: true, message: `Invitation sent to ${email}. It expires in 48 hours.` });
   } catch (error) {
-    console.error('❌ Staff invite error:', errorSummary(error));
-    return res.status(500).json({ success: false, error: 'Could not send the invitation' });
+    // The reason, not just "could not": the first invitation ever sent was
+    // refused by the database (`support` was missing from the users_role_check
+    // constraint) and the desk showed a dead end with nothing to act on. This
+    // endpoint is admin-only, so the cause is safe to show.
+    const summary = errorSummary(error);
+    console.error('❌ Staff invite error:', summary);
+    return res.status(500).json({
+      success: false,
+      error: 'Could not send the invitation',
+      detail: summary.message || null,
+    });
   }
 });
 
