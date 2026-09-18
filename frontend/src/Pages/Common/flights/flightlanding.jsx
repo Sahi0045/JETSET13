@@ -181,7 +181,7 @@ function FlightLanding() {
 
             {/* Booking card — relative z-30 keeps its open dropdowns above the
                 content below (the reveal-up transform creates a stacking context) */}
-            <div id="flight-search" className="reveal-up relative z-30 mt-11 md:mt-14 max-w-5xl mx-auto" style={{ animationDelay: '0.28s' }}>
+            <div id="flight-search" className="reveal-up relative z-30 mt-11 md:mt-14 max-w-6xl mx-auto" style={{ animationDelay: '0.28s' }}>
               <FlightSearchForm onSearch={handleSearch} initialData={prefill ?? undefined} />
             </div>
 

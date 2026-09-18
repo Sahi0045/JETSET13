@@ -422,7 +422,7 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
   ];
 
   return (
-    <div className="w-full max-w-5xl mx-auto text-left font-sans">
+    <div className="w-full max-w-6xl mx-auto text-left font-sans">
       {/* ===== Unified booking widget (MakeMyTrip-style) ===== */}
       <div className="relative bg-white rounded-[22px] shadow-[0_30px_60px_-28px_rgba(8,40,52,0.42)] ring-1 ring-black/[0.05] overflow-visible">
 
@@ -546,7 +546,7 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
                   <p className="leading-none"><span className="font-grotesk text-[20px] font-semibold text-ink">{departParts.day}</span> <span className="text-[15px] text-gray-600">{departParts.month}'{departParts.yy}</span></p>
                   <span className="block text-xs text-gray-500 mt-1">{departParts.weekday}</span>
                 </>
-              ) : <p className="text-sm text-gray-400 mt-2">Select date</p>}
+              ) : <p className="font-grotesk text-[20px] font-semibold text-gray-300 mt-0.5">Select date</p>}
               {showDepartCalendar && (
                 // Keys stop here too: Enter on a day would otherwise reach the
                 // field's own Enter handler and close the calendar unchosen.
@@ -584,7 +584,7 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
                   <p className="leading-none"><span className="font-grotesk text-[20px] font-semibold text-ink">{returnParts.day}</span> <span className="text-[15px] text-gray-600">{returnParts.month}'{returnParts.yy}</span></p>
                   <span className="block text-xs text-gray-500 mt-1">{returnParts.weekday}</span>
                 </>
-              ) : <p className="text-xs text-gray-400 mt-1 leading-snug max-w-[150px]">Tap to add a return date for bigger discounts</p>}
+              ) : <p className="font-grotesk text-[20px] font-semibold text-gray-300 mt-0.5">Add a date</p>}
               {showReturnCalendar && (
                 <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
                   <CustomFlightCalendar
@@ -656,7 +656,13 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
 
         {/* Search: on the same line as the card, at the end of the reading
             order, rather than hanging off the bottom edge */}
-        <div className="flex flex-wrap items-center justify-end gap-3 px-4 sm:px-6 py-4">
+        <div className="flex flex-wrap items-center gap-3 px-4 sm:px-6 py-4">
+          <p className="text-[13px] text-gray-500">
+            {formData.tripType === 'roundTrip' ? 'Round trip' : 'One way'}
+            {' · '}{totalTravellers} {totalTravellers > 1 ? 'travellers' : 'traveller'}
+            {' · '}{classLabels[formData.travelClass || 'ECONOMY']}
+          </p>
+          <span className="flex-1" aria-hidden="true"></span>
           <button
             type="button"
             onClick={handleSearch}
