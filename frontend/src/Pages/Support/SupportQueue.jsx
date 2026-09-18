@@ -138,7 +138,7 @@ function SupportQueue() {
         setInvite({ email: '', firstName: '' });
         loadStaff();
       } else {
-        setMessage({ tone: 'error', text: result.error || 'Could not send the invitation.' });
+        setMessage({ tone: 'error', text: [result.error, result.detail].filter(Boolean).join(' — ') || 'Could not send the invitation.' });
       }
     } catch {
       setMessage({ tone: 'error', text: 'Could not send the invitation.' });
