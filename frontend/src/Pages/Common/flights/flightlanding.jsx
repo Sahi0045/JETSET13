@@ -147,6 +147,10 @@ function FlightLanding() {
         >
           <div className="absolute inset-0 bg-gradient-to-r from-ivory/95 via-ivory/55 to-transparent"></div>
           <div className="absolute inset-0 bg-gradient-to-t from-ivory/70 via-transparent to-transparent"></div>
+          {/* The photograph used to stop dead at the section edge, leaving a
+              ruled line across the page. It now dissolves into the ground the
+              next section stands on. */}
+          <div className="absolute inset-x-0 -bottom-px h-56 md:h-72 bg-gradient-to-t from-ivory via-ivory/90 to-transparent"></div>
         </div>
         <div className="bg-grain absolute inset-0 z-[1]"></div>
 
@@ -211,7 +215,7 @@ function FlightLanding() {
       {/* ──────────────── Lowest fares ──────────────── */}
       {/* Prices first: someone landing here is shopping for a fare, not a
           photograph. The gallery follows. */}
-      <section className="relative bg-grain bg-ivory pt-16 md:pt-20 pb-10">
+      <section className="relative bg-ivory pt-16 md:pt-20 pb-10">
         <div className="container mx-auto px-4">
           <CheapestFlights onBookFlight={handleBookFlight} />
 
@@ -316,7 +320,7 @@ function FlightLanding() {
       </section>
 
       {/* ──────────────── Popular Destinations ──────────────── */}
-      <section className="relative bg-grain bg-ivory pt-16 md:pt-20 pb-20">
+      <section className="relative bg-ivory pt-16 md:pt-20 pb-20">
         <div className="container mx-auto px-4">
           <div className="text-center max-w-3xl mx-auto mb-14">
             <p className="kicker text-brand-teal mb-5">Top Trending Destinations</p>
