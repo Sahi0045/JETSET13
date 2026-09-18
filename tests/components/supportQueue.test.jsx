@@ -110,6 +110,40 @@ describe('the queue', () => {
   });
 });
 
+describe('the owner\'s own tab', () => {
+  it('is where the invite box lives, not under every booking in the queue', async () => {
+    // The box used to sit below the list: with nine bookings flagged, the
+    // owner scrolled past all of them and reported it as missing.
+    localStorage.setItem('adminUser', JSON.stringify({ role: 'admin' }));
+    vi.stubGlobal('fetch', vi.fn(async (url) => (String(url).includes('staff')
+      ? reply({ success: true, data: [{ id: 's1', email: 'desk@jetsetterss.com', status: 'invited' }] })
+      : reply({ success: true, data: [flagged] }))));
+
+    const { container } = renderQueue();
+
+    const tab = await screen.findByRole('button', { name: /Support accounts/ });
+    expect(container.textContent).not.toMatch(/Send invitation/);
+
+    fireEvent.click(tab);
+
+    expect(await screen.findByRole('button', { name: /Send invitation/ })).toBeTruthy();
+    expect(screen.getByLabelText('Email to invite')).toBeTruthy();
+    // The queue's bookings are not under it.
+    expect(container.textContent).not.toMatch(/FLTHELD9/);
+    expect(container.textContent).toMatch(/desk@jetsetterss.com/);
+  });
+
+  it('is not offered to a support account', async () => {
+    localStorage.setItem('adminUser', JSON.stringify({ role: 'support' }));
+    vi.stubGlobal('fetch', vi.fn(async () => reply({ success: true, data: [flagged] })));
+
+    const { container } = renderQueue();
+
+    await waitFor(() => expect(container.textContent).toMatch(/FLTHELD9/));
+    expect(screen.queryByRole('button', { name: /Support accounts/ })).toBeNull();
+  });
+});
+
 describe('the gate', () => {
   const renderGate = () => render(
     <MemoryRouter initialEntries={['/desk']}>
