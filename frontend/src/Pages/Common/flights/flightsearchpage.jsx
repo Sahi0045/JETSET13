@@ -1015,7 +1015,7 @@ function FlightSearchPage() {
 
       {/* Date Navigation Bar */}
       <div className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-20">
-        <div className="container mx-auto max-w-6xl px-4 py-3">
+        <div className="container mx-auto max-w-[1400px] px-5 py-3">
           {/* Date selector */}
           <div className="flex items-center justify-center bg-white rounded-lg relative">
             <button
@@ -1081,7 +1081,7 @@ function FlightSearchPage() {
       </div>
 
       <div className="bg-[#F0FAFC] min-h-screen pb-12 pt-6">
-        <div className="container mx-auto max-w-6xl px-4">
+        <div className="container mx-auto max-w-[1400px] px-5">
           {/* Route header */}
           <div className="mb-4">
             <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
@@ -1206,7 +1206,7 @@ function FlightSearchPage() {
                     </button>
                   </div>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="bg-white rounded-2xl border border-[#EFE9DD] overflow-hidden shadow-[0_10px_26px_-20px_rgba(12,42,51,0.45)]">
                     {currentItems.map((flight, index) => (
                       <FlightCard
                         key={flight.id ?? index}
@@ -1339,7 +1339,7 @@ function FlightSearchPage() {
         </div>
       )}
 
-      {/* Branded-fare options modal (opened by VIEW PRICES) */}
+      {/* Branded-fare options modal (opened by Select flight) */}
       {fareFlight && (
         <FlightFareOptions
           flight={fareFlight}

@@ -60,13 +60,19 @@ function amenityIcon(a) {
 }
 
 function StopsLabel({ leg }) {
+  // A pill rather than a word: stops are what people scan a results list for,
+  // and non-stop should look different from a connection at a glance.
   if (!leg.stops || leg.stops === 0) {
-    return <span className="text-emerald-600 font-medium">Non stop</span>;
+    return (
+      <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-emerald-700">
+        Non-stop
+      </span>
+    );
   }
   const layovers = leg.stopDetails || [];
-  const via = layovers.length > 0 ? ` via ${layovers.map(l => l.airport).join(', ')}` : '';
+  const via = layovers.length > 0 ? ` · ${layovers.map(l => l.airport).join(', ')}` : '';
   return (
-    <span className="text-amber-600 font-medium">
+    <span className="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-bold text-amber-700">
       {leg.stops} {leg.stops === 1 ? 'stop' : 'stops'}{via}
     </span>
   );
@@ -90,7 +96,7 @@ function Leg({ leg, label, operators = [] }) {
       <div className="flex items-center justify-between gap-2 sm:gap-4">
         {/* Departure */}
         <div className="text-left">
-          <div className="text-lg sm:text-xl font-bold text-gray-900 leading-none">{leg.departure?.time || 'N/A'}</div>
+          <div className="font-grotesk text-2xl sm:text-[28px] font-semibold text-ink leading-none tracking-tight">{leg.departure?.time || 'N/A'}</div>
           <div className="text-[11px] text-gray-500 mt-1">{legDateLabel(leg.departure?.rawDate)}</div>
           <div className="text-xs text-gray-500 mt-0.5">
             <span className="font-semibold text-gray-700">{leg.departure?.airport}</span>
@@ -101,8 +107,8 @@ function Leg({ leg, label, operators = [] }) {
 
         {/* Middle */}
         <div className="flex-1 flex flex-col items-center px-1">
-          <div className="text-[11px] text-gray-400 mb-1 flex items-center gap-1">
-            <Clock className="h-3 w-3" />
+          <div className="text-[13px] font-bold text-ink mb-1.5 flex items-center gap-1.5">
+            <Clock className="h-3.5 w-3.5 text-gray-400" />
             {formatDuration(leg.duration)}
           </div>
           <div className="w-full flex items-center gap-1">
@@ -114,12 +120,12 @@ function Leg({ leg, label, operators = [] }) {
             </span>
             <Plane className="h-3 w-3 text-gray-400 rotate-90 flex-shrink-0" />
           </div>
-          <div className="text-[11px] mt-1 text-center"><StopsLabel leg={leg} /></div>
+          <div className="mt-2 text-center"><StopsLabel leg={leg} /></div>
         </div>
 
         {/* Arrival */}
         <div className="text-right">
-          <div className="text-lg sm:text-xl font-bold text-gray-900 leading-none">
+          <div className="font-grotesk text-2xl sm:text-[28px] font-semibold text-ink leading-none tracking-tight">
             {leg.arrival?.time || 'N/A'}
             {dayOffset && (
               <sup className="ml-0.5 text-[10px] font-semibold text-amber-600" title="Arrives on a different day">{dayOffset}</sup>
@@ -256,7 +262,7 @@ function FlightCard({ flight, onBook, onViewPrices, priceStats, cityMap = {} }) 
   const taxesAndFees = Math.max(0, totalFare - baseFare);
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 hover:border-[#65B3CF] hover:shadow-md transition-all duration-300">
+    <div className="bg-white border-b border-gray-100 last:border-b-0 hover:bg-[#FAFBFB] transition-colors duration-200">
       {/* ===== Main row ===== */}
       <div className="p-4 sm:p-5">
         <div className="flex flex-col lg:flex-row lg:items-center gap-4">
@@ -314,7 +320,7 @@ function FlightCard({ flight, onBook, onViewPrices, priceStats, cityMap = {} }) 
           {/* Price + CTA */}
           <div className="flex flex-row lg:flex-col items-center lg:items-end justify-between lg:justify-center gap-3 lg:gap-2 lg:w-[180px] lg:flex-shrink-0 lg:border-l lg:border-gray-100 lg:pl-5">
             <div className="text-left lg:text-right relative">
-              <div className="text-xl sm:text-2xl font-bold text-[#055B75] leading-none">
+              <div className="font-grotesk text-[26px] font-bold text-ink leading-none tracking-tight">
                 <Price amount={flight.price} />
               </div>
               <div className="text-[11px] text-gray-400 mt-1">{pricedForLabel(flight.originalOffer)}</div>
@@ -358,9 +364,9 @@ function FlightCard({ flight, onBook, onViewPrices, priceStats, cityMap = {} }) 
             </div>
             <button
               onClick={handleCta}
-              className="px-6 py-2.5 bg-[#055B75] hover:bg-[#034457] text-white rounded-lg text-sm font-bold tracking-wide shadow-sm hover:shadow-md transition-all whitespace-nowrap"
+              className="px-7 py-3 bg-[#055B75] hover:bg-[#034457] text-white rounded-full text-sm font-bold tracking-wide shadow-sm hover:shadow-md transition-all whitespace-nowrap"
             >
-              VIEW PRICES
+              Select flight
             </button>
           </div>
         </div>
@@ -388,7 +394,7 @@ function FlightCard({ flight, onBook, onViewPrices, priceStats, cityMap = {} }) 
       </div>
 
       {/* ===== Footer strip ===== */}
-      <div className="flex items-center justify-between gap-2 px-4 sm:px-5 py-2.5 border-t border-gray-100 bg-gray-50/60 rounded-b-xl">
+      <div className="flex items-center justify-between gap-2 px-4 sm:px-5 py-2.5 border-t border-gray-100 bg-[#FCFBF8]">
         <div className="flex items-center gap-3 sm:gap-4 text-[11px] text-gray-500 flex-wrap min-w-0">
           <span className="inline-flex items-center gap-1">
             <Luggage className="h-3.5 w-3.5 text-gray-400" />
