@@ -1029,36 +1029,49 @@ function FlightSearchPage() {
             {/* Centred only where it fits. At phone width a centred row wider
                 than the screen starts off its left edge, where no scroll can
                 reach: the first two dates could not be tapped. */}
-            <div ref={dateStripRef} className="flex flex-1 min-w-0 items-center justify-start md:justify-center space-x-2 overflow-x-auto hide-scrollbar mx-2 sm:mx-4">
-              {dateRange.map((date, index) => (
-                <button
-                  key={index}
-                  onClick={() => !date.isPast && handleDateSelect(date)}
-                  disabled={date.isPast}
-                  className={`
-                      date-button flex flex-col items-center p-2 rounded-lg min-w-[80px]
-                      ${date.selected ? 'selected bg-[#055B75] text-white shadow-md' : 'hover:bg-[#F0FAFC]'}
-                      ${date.isWeekend && !date.selected ? 'text-[#055B75]' : ''}
-                      ${date.isLowestPrice && !date.selected ? 'border border-[#65B3CF] bg-[#F0FAFC]' : ''}
-                      ${date.isPast ? 'opacity-50 cursor-not-allowed' : ''}
-                    `}
-                >
-                  <span className={`text-sm font-medium ${date.selected ? 'text-blue-100' : ''}`}>
-                    {date.day}
-                  </span>
-                  <span className={`text-lg font-bold ${date.selected ? 'text-white' : ''}`}>
-                    {date.date}
-                  </span>
-                  {date.price && (
-                    <span className="price text-sm font-medium">
-                      <Price amount={{ amount: date.price, currency: date.currency || 'USD' }} />
-                      {date.isLowestPrice && !date.selected && (
-                        <span className="ml-1 text-xs">↓</span>
-                      )}
+            {/* Height carries the fare, so the cheapest day is visible before
+                you read a single number. Seven identical tiles all reading the
+                same price told you nothing. */}
+            <div ref={dateStripRef} className="flex flex-1 min-w-0 items-end justify-start md:justify-center gap-1.5 overflow-x-auto hide-scrollbar mx-2 sm:mx-4 h-[92px]">
+              {dateRange.map((date, index) => {
+                const prices = dateRange.map((d) => Number(d.price) || 0).filter(Boolean);
+                const top = prices.length ? Math.max(...prices) : 0;
+                const mine = Number(date.price) || 0;
+                // A floor, so the cheapest day is still a bar and not a line.
+                const height = mine && top ? Math.max(18, Math.round((mine / top) * 54)) : 10;
+                return (
+                  <button
+                    key={index}
+                    onClick={() => !date.isPast && handleDateSelect(date)}
+                    disabled={date.isPast}
+                    title={date.price ? undefined : 'No fare found for this day'}
+                    className={`date-button group flex flex-col justify-end items-center gap-1 min-w-[78px] h-full px-1 rounded-lg
+                      ${date.selected ? 'selected' : ''}
+                      ${date.isPast ? 'opacity-45 cursor-not-allowed' : 'hover:bg-[#F3EEE4]/70'}`}
+                  >
+                    <span
+                      aria-hidden="true"
+                      style={{ height: `${height}px` }}
+                      className={`w-full rounded-t-md transition-colors
+                        ${date.selected ? 'bg-[#055B75]'
+                          : date.isLowestPrice ? 'bg-emerald-600'
+                          : mine ? 'bg-[#E4EAEA] group-hover:bg-[#CBDBDE]'
+                          : 'bg-[repeating-linear-gradient(45deg,#EDEFEF_0_4px,#F6F7F7_4px_8px)]'}`}
+                    />
+                    <span className={`price text-[12px] tabular-nums leading-none
+                      ${date.selected ? 'font-bold text-[#0C2A33]'
+                        : date.isLowestPrice ? 'font-bold text-emerald-700' : 'text-gray-600'}`}>
+                      {date.price
+                        ? <Price amount={{ amount: date.price, currency: date.currency || 'USD' }} />
+                        : <span className="text-gray-400">—</span>}
                     </span>
-                  )}
-                </button>
-              ))}
+                    <span className={`flex items-baseline gap-1 text-[11.5px] leading-none ${date.selected ? 'font-bold text-[#0C2A33]' : 'text-gray-500'}`}>
+                      <span>{date.day}</span>
+                      <span>{date.date}</span>
+                    </span>
+                  </button>
+                );
+              })}
             </div>
 
             <button
