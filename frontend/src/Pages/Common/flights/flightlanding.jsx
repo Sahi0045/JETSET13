@@ -142,7 +142,7 @@ function FlightLanding() {
         <div
           className="absolute inset-0 z-0 bg-cover bg-center bg-no-repeat"
           style={{
-            backgroundImage: "url('https://images.unsplash.com/photo-1436491865332-7a61a109cc05?q=80&w=2074&auto=format&fit=crop')",
+            backgroundImage: "url('/images/destinations/photo-1436491865332-7a61a109cc05.webp')",
           }}
         >
           <div className="absolute inset-0 bg-gradient-to-r from-ivory/95 via-ivory/55 to-transparent"></div>
@@ -239,12 +239,12 @@ function FlightLanding() {
             <div className="md:w-1/2 w-full">
               <div className="relative">
                 <img loading="lazy" decoding="async"
-                  src="https://images.unsplash.com/photo-1436491865332-7a61a109cc05?q=80&w=1474&auto=format&fit=crop"
+                  src="/images/destinations/photo-1436491865332-7a61a109cc05.webp"
                   alt="Airplane flying in sky"
                   className="w-full h-[300px] md:h-[420px] object-cover relative z-10 rounded-[1.5rem] shadow-large"
                   onError={(e) => {
                     e.target.onerror = null;
-                    e.target.src = 'https://images.unsplash.com/photo-1569154941061-e231b4725ef1?q=80&w=1470&auto=format&fit=crop';
+                    e.target.src = '/images/destinations/photo-1569154941061-e231b4725ef1.webp';
                   }}
                 />
               </div>
@@ -282,9 +282,9 @@ function FlightLanding() {
           percentage off - only the seat hold, which the checkout really does. */}
       <section className="relative isolate flex items-center overflow-hidden min-h-[520px] md:min-h-[560px]">
         <img
-          src="https://images.unsplash.com/photo-1530521954074-e64f6810b32d?q=70&w=2600&auto=format&fit=crop"
+          src="/images/destinations/photo-1474302770737-173ee21bab63.webp"
           alt="A traveller waiting at the gate as an aircraft climbs away"
-          className="absolute inset-0 -z-10 h-full w-full object-cover object-[78%_22%]"
+          className="absolute inset-0 -z-10 h-full w-full object-cover object-[center_58%]"
           loading="lazy"
           decoding="async"
         />

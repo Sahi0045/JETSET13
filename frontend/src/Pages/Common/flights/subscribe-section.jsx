@@ -134,7 +134,7 @@ export default function SubscribeSection() {
 
   return (
     <div className="container mx-auto px-4 py-12">
-      <div className="bg-[url('https://images.unsplash.com/photo-1503220317375-aaad61436b1b?q=80&w=2070&auto=format&fit=crop')] bg-cover bg-center rounded-xl overflow-hidden shadow-2xl relative">
+      <div className="bg-[url('/images/destinations/photo-1503220317375-aaad61436b1b.webp')] bg-cover bg-center rounded-xl overflow-hidden shadow-2xl relative">
         {/* Overlay */}
         <div className="absolute inset-0 bg-gradient-to-r from-[#055B75]/95 to-[#034457]/90 backdrop-blur-sm"></div>
 
@@ -219,7 +219,7 @@ export default function SubscribeSection() {
                       </svg>
                     ) : (
                       <img loading="lazy" decoding="async"
-                        src={subscriptionAirplane || "https://images.unsplash.com/photo-1556388158-158ea5ccacbd?q=80&w=320&auto=format&fit=crop"}
+                        src={subscriptionAirplane || "/images/destinations/photo-1556388158-158ea5ccacbd.webp"}
                         alt="Airplane"
                         className="w-10 h-10 object-contain mr-3"
                       />

@@ -84,3 +84,27 @@ on Lato.
   festival band carries no percentage claim.
 - Browser check on the built app before any deploy: load the page, click through a search, read
   the console.
+
+## Images (added 2026-09-19)
+
+The flight pages hotlinked 59 photographs from the Unsplash CDN. They are now
+served by us:
+
+- `scripts/media/localise-unsplash.mjs` downloads each photograph once as WebP
+  into `public/images/destinations/` and rewrites the source files to the local
+  path. Re-running it repairs anything missing from disk.
+- `public/images/destinations/credits.json` records, per photograph, the source
+  page, the licence and its URL, the date retrieved, the size and dimensions.
+  The Unsplash licence permits commercial use without attribution; the record
+  exists so the provenance can be answered years later.
+- Six of the hotlinked photographs were already 404 on the CDN — the live site
+  was falling back for them. They are replaced with working ones.
+- The festival band's photograph was a recognisable face. Unsplash does not
+  guarantee model releases, and a face in a promotional banner is the one place
+  that matters, so it is now an aircraft at sunset with nobody in frame.
+- Destination cards hold up to three views of the same city and cross-fade
+  between them every five seconds, pausing for `prefers-reduced-motion`. A view
+  joins the rotation only once it has loaded, so a card never fades to blank.
+
+Total weight: 6.4 MB for 75 photographs, ~85 KB each for a card, ~400 KB for
+the two that run the full width of the page.

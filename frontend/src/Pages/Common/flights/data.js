@@ -7,56 +7,56 @@ export const destinations = [
     name: "New York",
     code: "JFK",
     region: "United States",
-    image: "https://images.unsplash.com/photo-1496442226666-8d4d0e62e6e9?q=80&w=2074&auto=format&fit=crop",
+    image: "/images/destinations/photo-1496442226666-8d4d0e62e6e9.webp",
   },
   {
     id: 2,
     name: "London",
     code: "LHR",
     region: "United Kingdom",
-    image: "https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?q=80&w=2074&auto=format&fit=crop",
+    image: "/images/destinations/photo-1513635269975-59663e0ac1ad.webp",
   },
   {
     id: 3,
     name: "Paris",
     code: "CDG",
     region: "France",
-    image: "https://images.unsplash.com/photo-1502602898657-3e91760cbb34?q=80&w=2074&auto=format&fit=crop",
+    image: "/images/destinations/photo-1502602898657-3e91760cbb34.webp",
   },
   {
     id: 4,
     name: "Tokyo",
     code: "HND",
     region: "Japan",
-    image: "https://images.unsplash.com/photo-1503899036084-c55cdd92da26?q=80&w=2074&auto=format&fit=crop",
+    image: "/images/destinations/photo-1503899036084-c55cdd92da26.webp",
   },
   {
     id: 5,
     name: "Dubai",
     code: "DXB",
     region: "UAE",
-    image: "https://images.unsplash.com/photo-1512453979798-5ea266f8880c?q=80&w=2074&auto=format&fit=crop",
+    image: "/images/destinations/photo-1512453979798-5ea266f8880c.webp",
   },
   {
     id: 6,
     name: "Singapore",
     code: "SIN",
     region: "Singapore",
-    image: "https://images.unsplash.com/photo-1508964942454-1a56651d54ac?q=80&w=2074&auto=format&fit=crop",
+    image: "/images/destinations/photo-1508964942454-1a56651d54ac.webp",
   },
   {
     id: 7,
     name: "Sydney",
     code: "SYD",
     region: "Australia",
-    image: "https://images.unsplash.com/photo-1506973035872-a4ec16b8e8d9?q=80&w=2074&auto=format&fit=crop",
+    image: "/images/destinations/photo-1506973035872-a4ec16b8e8d9.webp",
   },
   {
     id: 8,
     name: "Barcelona",
     code: "BCN",
     region: "Spain",
-    image: "https://images.unsplash.com/photo-1583422409516-2895a77efded?q=80&w=2074&auto=format&fit=crop",
+    image: "/images/destinations/photo-1583422409516-2895a77efded.webp",
   }
 ];
 
@@ -577,7 +577,7 @@ export const cheapFlightsBySource = {
       region: "United Kingdom",
       price: "$450",
       date: "Wed, 05 Feb",
-      image: "https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?q=80&w=1200&auto=format&fit=crop",
+      image: "/images/destinations/photo-1513635269975-59663e0ac1ad.webp",
     },
     {
       id: 2,
@@ -585,7 +585,7 @@ export const cheapFlightsBySource = {
       region: "France",
       price: "$480",
       date: "Sat, 28 Dec",
-      image: "https://images.unsplash.com/photo-1502602898657-3e91760cbb34?q=80&w=1200&auto=format&fit=crop",
+      image: "/images/destinations/photo-1502602898657-3e91760cbb34.webp",
     },
     {
       id: 3,
@@ -593,7 +593,7 @@ export const cheapFlightsBySource = {
       region: "Spain",
       price: "$520",
       date: "Thu, 02 Jan",
-      image: "https://images.unsplash.com/photo-1583422409516-2895a77efded?q=80&w=1200&auto=format&fit=crop",
+      image: "/images/destinations/photo-1583422409516-2895a77efded.webp",
     }
   ],
   "London": [
@@ -603,7 +603,7 @@ export const cheapFlightsBySource = {
       region: "France",
       price: "£89",
       date: "Mon, 15 Jan",
-      image: "https://images.unsplash.com/photo-1502602898657-3e91760cbb34?q=80&w=1200&auto=format&fit=crop",
+      image: "/images/destinations/photo-1502602898657-3e91760cbb34.webp",
     },
     {
       id: 5,
@@ -611,7 +611,7 @@ export const cheapFlightsBySource = {
       region: "Netherlands",
       price: "£120",
       date: "Tue, 09 Feb",
-      image: "https://images.unsplash.com/photo-1534351590666-13e3e96b5017?q=80&w=1200&auto=format&fit=crop",
+      image: "/images/destinations/photo-1534351590666-13e3e96b5017.webp",
     },
     {
       id: 6,
@@ -619,7 +619,7 @@ export const cheapFlightsBySource = {
       region: "Italy",
       price: "£150",
       date: "Wed, 22 Mar",
-      image: "https://images.unsplash.com/photo-1552832230-c0197dd311b5?q=80&w=1200&auto=format&fit=crop",
+      image: "/images/destinations/photo-1552832230-c0197dd311b5.webp",
     }
   ],
   "Tokyo": [
@@ -629,7 +629,7 @@ export const cheapFlightsBySource = {
       region: "South Korea",
       price: "¥35,000",
       date: "Thu, 28 Jan",
-      image: "https://images.unsplash.com/photo-1538485399081-7c8070d2b08f?q=80&w=1200&auto=format&fit=crop",
+      image: "/images/destinations/photo-1506351421178-63b52a2d2562.webp",
     },
     {
       id: 8,
@@ -637,7 +637,7 @@ export const cheapFlightsBySource = {
       region: "Singapore",
       price: "¥45,000",
       date: "Fri, 15 Feb",
-      image: "https://images.unsplash.com/photo-1525625293386-38f0e1d2b5e5?q=80&w=1200&auto=format&fit=crop",
+      image: "/images/destinations/photo-1496939376851-89342e90adcd.webp",
     }
   ]
 };
@@ -711,7 +711,7 @@ export const paymentMethods = [
 ];
 
 // Hero image for the flight landing page
-export const heroImage = "https://images.unsplash.com/photo-1436491865332-7a61a109cc05?q=80&w=2074&auto=format&fit=crop";
+export const heroImage = "/images/destinations/photo-1436491865332-7a61a109cc05.webp";
 
 // Airplane SVG path for subscription section
 export const subscriptionAirplane = "M15.5 4.5a2 2 0 0 1 2 2v10.2a.5.5 0 0 1-.39.5h-.01a.5.5 0 0 1-.5-.45L16 13.4V7a1 1 0 0 0-1-1h-3.8a.5.5 0 0 1-.36-.85l1.48-1.48a2 2 0 0 1 1.41-.59h1.77Zm-4.78.5-.94.93a.5.5 0 0 1-.54.13.5.5 0 0 1-.32-.46v-.6h-3a1 1 0 0 0-1 1v1.5a.5.5 0 0 1-.5.5h-.5a.5.5 0 0 1-.5-.5V6a2 2 0 0 1 2-2h3v-.5a.5.5 0 0 1 .84-.36l.92.92a.5.5 0 0 1 0 .71.5.5 0 0 1-.36.14.44.44 0 0 1-.1 0Zm-3.22 4 .4.0v-1h-.4c-.46 0-.74.54-.47.9l.47.1Zm9 1a2 2 0 0 1 2 2v3.8a.5.5 0 0 1-.85.36l-1.48-1.48a.5.5 0 0 1-.15-.35H13.4V13a1 1 0 0 0-1-1h-2v-1a2 2 0 0 1 2-2h3.5Z";
