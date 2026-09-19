@@ -35,7 +35,7 @@ describe('the date strip at phone width', () => {
   // Centred and wider than the screen, its first dates were off the left edge
   // where no scroll could reach.
   it('starts at the left where it does not fit, and brings the searched date into view', () => {
-    expect(results).toMatch(/ref=\{dateStripRef\} className="flex flex-1 min-w-0 items-center justify-start md:justify-center/);
+    expect(results).toMatch(/ref=\{dateStripRef\} className="flex flex-1 min-w-0 items-end justify-start md:justify-center/);
     expect(results).toMatch(/selected\.scrollIntoView\(\{ inline: 'center', block: 'nearest' \}\)/);
   });
 });

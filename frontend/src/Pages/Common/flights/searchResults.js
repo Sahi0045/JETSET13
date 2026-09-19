@@ -47,6 +47,38 @@ export const minutesBetweenAirportTimes = (from, to) => {
 };
 
 /**
+ * Where a connection stops and for how long, read from the segments themselves.
+ *
+ * The card knew the number of stops and, sometimes, an airport code: "1 stop ·
+ * AUH" tells a traveller almost nothing. The wait between one segment landing
+ * and the next leaving is right there in the times we already hold, and it is
+ * the thing that decides whether a connection is worth taking.
+ */
+export const layoversOf = (segments = [], cityMap = {}) => {
+  if (!Array.isArray(segments) || segments.length < 2) return [];
+  return segments.slice(0, -1).map((segment, i) => {
+    const airport = segment.arrival?.airport || segment.arrival?.iataCode || '';
+    const minutes = minutesBetweenAirportTimes(
+      segment.arrival?.at,
+      segments[i + 1]?.departure?.at,
+    );
+    return {
+      airport,
+      city: cityMap[airport] || segment.arrival?.cityName || airport,
+      minutes: Number.isFinite(minutes) && minutes > 0 ? minutes : null,
+    };
+  });
+};
+
+/** 155 -> "2h 35m", 45 -> "45m". Blank when we do not know. */
+export const layoverLabel = (minutes) => {
+  if (!Number.isFinite(minutes) || minutes <= 0) return '';
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return h ? `${h}h${m ? ` ${m}m` : ''}` : `${m}m`;
+};
+
+/**
  * "+1" when a leg lands on a later calendar day than it left, "-1" when it lands
  * the day before (westward over the date line), "" on the same day. Both dates
  * are local to their airports, which is what a boarding pass shows.

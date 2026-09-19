@@ -23,6 +23,7 @@ import apiConfig from '@/config/api';
 import LoadingSpinner from '../../../Components/LoadingSpinner';
 import FlightCard from './FlightCard';
 import FlightFilterSidebar from './FlightFilterSidebar';
+import FlightFilterBar from './FlightFilterBar';
 import FlightModifyBar from './FlightModifyBar';
 import FlightSortTabs from './FlightSortTabs';
 import FlightMobileSortFilter from './FlightMobileSortFilter';
@@ -1015,7 +1016,7 @@ function FlightSearchPage() {
 
       {/* Date Navigation Bar */}
       <div className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-20">
-        <div className="container mx-auto max-w-6xl px-4 py-3">
+        <div className="container mx-auto max-w-[1400px] px-5 py-3">
           {/* Date selector */}
           <div className="flex items-center justify-center bg-white rounded-lg relative">
             <button
@@ -1029,36 +1030,49 @@ function FlightSearchPage() {
             {/* Centred only where it fits. At phone width a centred row wider
                 than the screen starts off its left edge, where no scroll can
                 reach: the first two dates could not be tapped. */}
-            <div ref={dateStripRef} className="flex flex-1 min-w-0 items-center justify-start md:justify-center space-x-2 overflow-x-auto hide-scrollbar mx-2 sm:mx-4">
-              {dateRange.map((date, index) => (
-                <button
-                  key={index}
-                  onClick={() => !date.isPast && handleDateSelect(date)}
-                  disabled={date.isPast}
-                  className={`
-                      date-button flex flex-col items-center p-2 rounded-lg min-w-[80px]
-                      ${date.selected ? 'selected bg-[#055B75] text-white shadow-md' : 'hover:bg-[#F0FAFC]'}
-                      ${date.isWeekend && !date.selected ? 'text-[#055B75]' : ''}
-                      ${date.isLowestPrice && !date.selected ? 'border border-[#65B3CF] bg-[#F0FAFC]' : ''}
-                      ${date.isPast ? 'opacity-50 cursor-not-allowed' : ''}
-                    `}
-                >
-                  <span className={`text-sm font-medium ${date.selected ? 'text-blue-100' : ''}`}>
-                    {date.day}
-                  </span>
-                  <span className={`text-lg font-bold ${date.selected ? 'text-white' : ''}`}>
-                    {date.date}
-                  </span>
-                  {date.price && (
-                    <span className="price text-sm font-medium">
-                      <Price amount={{ amount: date.price, currency: date.currency || 'USD' }} />
-                      {date.isLowestPrice && !date.selected && (
-                        <span className="ml-1 text-xs">↓</span>
-                      )}
+            {/* Height carries the fare, so the cheapest day is visible before
+                you read a single number. Seven identical tiles all reading the
+                same price told you nothing. */}
+            <div ref={dateStripRef} className="flex flex-1 min-w-0 items-end justify-start md:justify-center gap-1.5 overflow-x-auto hide-scrollbar mx-2 sm:mx-4 h-[92px]">
+              {dateRange.map((date, index) => {
+                const prices = dateRange.map((d) => Number(d.price) || 0).filter(Boolean);
+                const top = prices.length ? Math.max(...prices) : 0;
+                const mine = Number(date.price) || 0;
+                // A floor, so the cheapest day is still a bar and not a line.
+                const height = mine && top ? Math.max(18, Math.round((mine / top) * 54)) : 10;
+                return (
+                  <button
+                    key={index}
+                    onClick={() => !date.isPast && handleDateSelect(date)}
+                    disabled={date.isPast}
+                    title={date.price ? undefined : 'No fare found for this day'}
+                    className={`date-button group flex flex-col justify-end items-center gap-1 min-w-[78px] h-full px-1 rounded-lg
+                      ${date.selected ? 'selected' : ''}
+                      ${date.isPast ? 'opacity-45 cursor-not-allowed' : 'hover:bg-[#F3EEE4]/70'}`}
+                  >
+                    <span
+                      aria-hidden="true"
+                      style={{ height: `${height}px` }}
+                      className={`w-full rounded-t-md transition-colors
+                        ${date.selected ? 'bg-[#055B75]'
+                          : date.isLowestPrice ? 'bg-emerald-600'
+                          : mine ? 'bg-[#E4EAEA] group-hover:bg-[#CBDBDE]'
+                          : 'bg-[repeating-linear-gradient(45deg,#EDEFEF_0_4px,#F6F7F7_4px_8px)]'}`}
+                    />
+                    <span className={`price text-[12px] tabular-nums leading-none
+                      ${date.selected ? 'font-bold text-[#0C2A33]'
+                        : date.isLowestPrice ? 'font-bold text-emerald-700' : 'text-gray-600'}`}>
+                      {date.price
+                        ? <Price amount={{ amount: date.price, currency: date.currency || 'USD' }} />
+                        : <span className="text-gray-400">—</span>}
                     </span>
-                  )}
-                </button>
-              ))}
+                    <span className={`flex items-baseline gap-1 text-[11.5px] leading-none ${date.selected ? 'font-bold text-[#0C2A33]' : 'text-gray-500'}`}>
+                      <span>{date.day}</span>
+                      <span>{date.date}</span>
+                    </span>
+                  </button>
+                );
+              })}
             </div>
 
             <button
@@ -1081,7 +1095,7 @@ function FlightSearchPage() {
       </div>
 
       <div className="bg-[#F0FAFC] min-h-screen pb-12 pt-6">
-        <div className="container mx-auto max-w-6xl px-4">
+        <div className="container mx-auto max-w-[1400px] px-5">
           {/* Route header */}
           <div className="mb-4">
             <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
@@ -1133,21 +1147,21 @@ function FlightSearchPage() {
               )}
             </div>
           ) : (
-            <div className="flex flex-col md:flex-row gap-6">
-              <FlightFilterSidebar
-                filters={filters}
-                priceRangeBounds={priceRangeBounds}
-                airlines={allAirlines}
-                airlineStats={airlineStats}
-                airportStats={airportStats}
-                onFilterChange={handleFilterChange}
-                onToggleAirline={toggleAirlineFilter}
-                onToggleAirport={toggleAirportFilter}
-                onResetAll={handleResetAllFilters}
-              />
-
+            <div className="flex flex-col gap-2">
               {/* Results */}
               <div className="flex-1 min-w-0">
+                {/* Filters, above the list rather than beside it: the rail took
+                    a third of the page for controls used once. */}
+                <FlightFilterBar
+                  filters={filters}
+                  priceRangeBounds={priceRangeBounds}
+                  airlines={allAirlines}
+                  airlineStats={airlineStats}
+                  onFilterChange={handleFilterChange}
+                  onToggleAirline={toggleAirlineFilter}
+                  onResetAll={handleResetAllFilters}
+                  resultCount={totalItems}
+                />
                 {/* Mobile: single-line filter + sort bar */}
                 <FlightMobileSortFilter
                   filters={filters}
@@ -1206,7 +1220,7 @@ function FlightSearchPage() {
                     </button>
                   </div>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="bg-white rounded-2xl border border-[#EFE9DD] overflow-hidden shadow-[0_10px_26px_-20px_rgba(12,42,51,0.45)]">
                     {currentItems.map((flight, index) => (
                       <FlightCard
                         key={flight.id ?? index}
@@ -1339,7 +1353,7 @@ function FlightSearchPage() {
         </div>
       )}
 
-      {/* Branded-fare options modal (opened by VIEW PRICES) */}
+      {/* Branded-fare options modal (opened by Select flight) */}
       {fareFlight && (
         <FlightFareOptions
           flight={fareFlight}
