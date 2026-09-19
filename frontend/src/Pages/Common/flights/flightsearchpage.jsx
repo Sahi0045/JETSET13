@@ -1033,43 +1033,46 @@ function FlightSearchPage() {
             {/* Height carries the fare, so the cheapest day is visible before
                 you read a single number. Seven identical tiles all reading the
                 same price told you nothing. */}
-            <div ref={dateStripRef} className="flex flex-1 min-w-0 items-end justify-start md:justify-center gap-1.5 overflow-x-auto hide-scrollbar mx-2 sm:mx-4 h-[92px]">
+            {/* One line of days: the date and its fare, nothing taller.
+                The green marks the cheapest day only when the week actually
+                has a cheaper one - seven identical green blocks were a wall
+                that said nothing. */}
+            <div ref={dateStripRef} className="flex flex-1 min-w-0 items-center justify-start md:justify-center gap-1.5 overflow-x-auto hide-scrollbar mx-2 sm:mx-4">
               {dateRange.map((date, index) => {
-                const prices = dateRange.map((d) => Number(d.price) || 0).filter(Boolean);
-                const top = prices.length ? Math.max(...prices) : 0;
-                const mine = Number(date.price) || 0;
-                // A floor, so the cheapest day is still a bar and not a line.
-                const height = mine && top ? Math.max(18, Math.round((mine / top) * 54)) : 10;
+                const fares = dateRange.map((d) => Number(d.price) || 0).filter(Boolean);
+                const spread = fares.length > 1 && Math.max(...fares) > Math.min(...fares);
+                const cheapest = spread && date.isLowestPrice && !date.selected;
                 return (
                   <button
                     key={index}
                     onClick={() => !date.isPast && handleDateSelect(date)}
                     disabled={date.isPast}
-                    title={date.price ? undefined : 'No fare found for this day'}
-                    className={`date-button group flex flex-col justify-end items-center gap-1 min-w-[78px] h-full px-1 rounded-lg
-                      ${date.selected ? 'selected' : ''}
-                      ${date.isPast ? 'opacity-45 cursor-not-allowed' : 'hover:bg-[#F3EEE4]/70'}`}
+                    className={`date-button flex min-w-[104px] flex-col items-center gap-0.5 rounded-xl border px-3 py-2 transition-colors
+                      ${date.selected
+                        ? 'selected border-[#055B75] bg-[#055B75] text-white'
+                        : cheapest
+                          ? 'border-emerald-200 bg-emerald-50/60 hover:border-emerald-400'
+                          : 'border-[#EFE9DD] bg-white hover:border-[#B9D0DC]'}
+                      ${date.isPast ? 'opacity-45 cursor-not-allowed' : ''}`}
                   >
-                    <span
-                      aria-hidden="true"
-                      style={{ height: `${height}px` }}
-                      className={`w-full rounded-t-md transition-colors
-                        ${date.selected ? 'bg-[#055B75]'
-                          : date.isLowestPrice ? 'bg-emerald-600'
-                          : mine ? 'bg-[#E4EAEA] group-hover:bg-[#CBDBDE]'
-                          : 'bg-[repeating-linear-gradient(45deg,#EDEFEF_0_4px,#F6F7F7_4px_8px)]'}`}
-                    />
-                    <span className={`price text-[12px] tabular-nums leading-none
-                      ${date.selected ? 'font-bold text-[#0C2A33]'
-                        : date.isLowestPrice ? 'font-bold text-emerald-700' : 'text-gray-600'}`}>
+                    <span className={`flex items-baseline gap-1 text-[12.5px] leading-none
+                      ${date.selected ? 'text-white/85' : 'text-gray-500'}`}>
+                      <span>{date.day}</span>
+                      <span className={date.selected ? 'font-bold text-white' : 'font-bold text-ink'}>{date.date}</span>
+                    </span>
+                    <span className={`price text-[13px] tabular-nums leading-none
+                      ${date.selected ? 'font-bold text-white'
+                        : cheapest ? 'font-bold text-emerald-700'
+                        : date.price ? 'font-semibold text-gray-600' : 'text-gray-300'}`}>
                       {date.price
                         ? <Price amount={{ amount: date.price, currency: date.currency || 'USD' }} />
-                        : <span className="text-gray-400">—</span>}
+                        : '—'}
                     </span>
-                    <span className={`flex items-baseline gap-1 text-[11.5px] leading-none ${date.selected ? 'font-bold text-[#0C2A33]' : 'text-gray-500'}`}>
-                      <span>{date.day}</span>
-                      <span>{date.date}</span>
-                    </span>
+                    {cheapest && (
+                      <span className="text-[9.5px] font-bold uppercase tracking-[0.12em] leading-none text-emerald-600">
+                        Cheapest
+                      </span>
+                    )}
                   </button>
                 );
               })}
