@@ -23,6 +23,7 @@ import apiConfig from '@/config/api';
 import LoadingSpinner from '../../../Components/LoadingSpinner';
 import FlightCard from './FlightCard';
 import FlightFilterSidebar from './FlightFilterSidebar';
+import FlightFilterBar from './FlightFilterBar';
 import FlightModifyBar from './FlightModifyBar';
 import FlightSortTabs from './FlightSortTabs';
 import FlightMobileSortFilter from './FlightMobileSortFilter';
@@ -1146,21 +1147,21 @@ function FlightSearchPage() {
               )}
             </div>
           ) : (
-            <div className="flex flex-col md:flex-row gap-6">
-              <FlightFilterSidebar
-                filters={filters}
-                priceRangeBounds={priceRangeBounds}
-                airlines={allAirlines}
-                airlineStats={airlineStats}
-                airportStats={airportStats}
-                onFilterChange={handleFilterChange}
-                onToggleAirline={toggleAirlineFilter}
-                onToggleAirport={toggleAirportFilter}
-                onResetAll={handleResetAllFilters}
-              />
-
+            <div className="flex flex-col gap-2">
               {/* Results */}
               <div className="flex-1 min-w-0">
+                {/* Filters, above the list rather than beside it: the rail took
+                    a third of the page for controls used once. */}
+                <FlightFilterBar
+                  filters={filters}
+                  priceRangeBounds={priceRangeBounds}
+                  airlines={allAirlines}
+                  airlineStats={airlineStats}
+                  onFilterChange={handleFilterChange}
+                  onToggleAirline={toggleAirlineFilter}
+                  onResetAll={handleResetAllFilters}
+                  resultCount={totalItems}
+                />
                 {/* Mobile: single-line filter + sort bar */}
                 <FlightMobileSortFilter
                   filters={filters}

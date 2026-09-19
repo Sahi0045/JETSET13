@@ -22,14 +22,19 @@ vi.mock('../../frontend/src/Pages/Common/PageWrapper', () => ({ default: (Page) 
 vi.mock('../../frontend/src/Pages/Common/flights/FlightCard', () => ({
   default: ({ flight }) => <div data-testid="flight-card">{flight.id}</div>,
 }));
+// The sidebar now only serves the phone drawer; the desktop filters live in
+// FlightFilterBar. The buttons the tests press moved with them.
 vi.mock('../../frontend/src/Pages/Common/flights/FlightFilterSidebar', () => ({
-  default: ({ onFilterChange, onResetAll, variant }) => (variant === 'mobile' ? null : (
+  default: () => null,
+}));
+vi.mock('../../frontend/src/Pages/Common/flights/FlightFilterBar', () => ({
+  default: ({ onFilterChange, onResetAll }) => (
     <>
       <button type="button" onClick={() => onFilterChange('stops', '0')}>Only non-stop</button>
       <button type="button" onClick={() => onFilterChange('price', [0, 1])}>Cheap only</button>
       <button type="button" onClick={onResetAll}>Reset filters</button>
     </>
-  )),
+  ),
 }));
 vi.mock('../../frontend/src/Pages/Common/flights/FlightModifyBar', () => ({
   default: ({ onSearch }) => (
