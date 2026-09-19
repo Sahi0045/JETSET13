@@ -21,6 +21,9 @@ export default {
                 // `font-serif` is intentionally mapped to the brand sans (Lato) so headings
                 // that use it stay consistent with the rest of the site — it is NOT an actual serif.
                 serif: ['Lato', 'Inter', ...defaultTheme.fontFamily.sans],
+                // Display face for the flights home page headings only. Added
+                // beside Lato, never in place of it, so no other page moves.
+                grotesk: ['Bricolage Grotesque', 'Lato', 'Inter', ...defaultTheme.fontFamily.sans],
             },
             colors: {
                 // Warm editorial canvas + ink (luxury homepage)

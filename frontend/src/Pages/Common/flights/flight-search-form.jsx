@@ -422,9 +422,9 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
   ];
 
   return (
-    <div className="w-full max-w-5xl mx-auto text-left font-sans">
+    <div className="w-full max-w-6xl mx-auto text-left font-sans">
       {/* ===== Unified booking widget (MakeMyTrip-style) ===== */}
-      <div className="relative bg-white rounded-3xl shadow-[0_28px_70px_-16px_rgba(8,40,52,0.45)] ring-1 ring-black/[0.06] pb-14">
+      <div className="relative bg-white rounded-[22px] shadow-[0_30px_60px_-28px_rgba(8,40,52,0.42)] ring-1 ring-black/[0.05] overflow-visible">
 
         {/* Booking category tabs */}
         <div className="flex items-center justify-center gap-1 px-2 sm:px-4 pt-3 border-b border-gray-100 overflow-x-auto hide-scrollbar">
@@ -473,19 +473,20 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
           </div>
 
           {/* Fields */}
-          <div className={`flex flex-col lg:flex-row rounded-xl border border-gray-200 ${anyCalendarOpen ? 'relative z-20' : ''}`}>
+          <div className={`flex flex-col lg:flex-row border-y border-gray-100 -mx-4 sm:-mx-6 ${anyCalendarOpen ? 'relative z-20' : ''}`}>
             {/* From */}
             <label className="relative flex-[1.4] px-5 py-4 cursor-text hover:bg-[#055B75]/[0.03] focus-within:bg-[#055B75]/[0.04] focus-within:ring-2 focus-within:ring-inset focus-within:ring-[#055B75]/30 transition-colors block">
-              <span className="block text-sm text-gray-500 mb-1">From</span>
+              <span className="block text-[10.5px] font-bold uppercase tracking-[0.14em] text-gray-400 mb-1.5">From</span>
               <input
                 type="text" name="from" value={formData.from || ""}
                 onChange={handleInputChange} onBlur={() => handleInputBlur("from")}
                 placeholder="City or airport"
-                className="w-full border-0 p-0 bg-transparent outline-none focus:ring-0 text-2xl md:text-[27px] leading-tight font-black text-gray-900 placeholder:text-gray-300 placeholder:font-medium placeholder:text-base"
+                autoComplete="off" autoCorrect="off" spellCheck={false}
+                className="w-full border-0 p-0 bg-transparent outline-none focus:ring-0 font-grotesk text-[20px] leading-tight font-semibold text-ink placeholder:text-gray-300 placeholder:font-normal placeholder:text-[15px]"
               />
               <span className="block text-xs text-gray-500 mt-1 truncate">{fromSubtitle || ' '}</span>
               {showFromSuggestions && fromSuggestions.length > 0 && (
-                <div className="absolute z-30 left-3 top-full w-[280px] max-w-[88vw] bg-white rounded-lg shadow-xl border border-gray-200 max-h-60 overflow-auto">
+                <div className="absolute z-[60] left-3 top-full mt-1 w-[280px] max-w-[88vw] bg-white rounded-lg shadow-xl border border-gray-200 max-h-60 overflow-auto">
                   {fromSuggestions.map((c, i) => (
                     <div key={i} className="px-4 py-2.5 hover:bg-gray-50 cursor-pointer border-b last:border-0 border-gray-100"
                       onClick={() => handleSuggestionClick(c.name, "from")}>
@@ -500,16 +501,17 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
 
             {/* To — extra left gutter on desktop keeps the input clear of the swap control */}
             <label className="relative flex-[1.4] px-5 lg:pl-10 py-4 cursor-text hover:bg-[#055B75]/[0.03] focus-within:bg-[#055B75]/[0.04] focus-within:ring-2 focus-within:ring-inset focus-within:ring-[#055B75]/30 transition-colors block border-t lg:border-t-0 lg:border-l border-gray-200">
-              <span className="block text-sm text-gray-500 mb-1">To</span>
+              <span className="block text-[10.5px] font-bold uppercase tracking-[0.14em] text-gray-400 mb-1.5">To</span>
               <input
                 type="text" name="to" value={formData.to || ""}
                 onChange={handleInputChange} onBlur={() => handleInputBlur("to")}
                 placeholder="City or airport"
-                className="w-full border-0 p-0 bg-transparent outline-none focus:ring-0 text-2xl md:text-[27px] leading-tight font-black text-gray-900 placeholder:text-gray-300 placeholder:font-medium placeholder:text-base"
+                autoComplete="off" autoCorrect="off" spellCheck={false}
+                className="w-full border-0 p-0 bg-transparent outline-none focus:ring-0 font-grotesk text-[20px] leading-tight font-semibold text-ink placeholder:text-gray-300 placeholder:font-normal placeholder:text-[15px]"
               />
               <span className="block text-xs text-gray-500 mt-1 truncate">{toSubtitle || ' '}</span>
               {showToSuggestions && toSuggestions.length > 0 && (
-                <div className="absolute z-30 left-3 top-full w-[280px] max-w-[88vw] bg-white rounded-lg shadow-xl border border-gray-200 max-h-60 overflow-auto">
+                <div className="absolute z-[60] left-3 top-full mt-1 w-[280px] max-w-[88vw] bg-white rounded-lg shadow-xl border border-gray-200 max-h-60 overflow-auto">
                   {toSuggestions.map((c, i) => (
                     <div key={i} className="px-4 py-2.5 hover:bg-gray-50 cursor-pointer border-b last:border-0 border-gray-100"
                       onClick={() => handleSuggestionClick(c.name, "to")}>
@@ -540,13 +542,13 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
               className={`relative flex-1 px-5 py-4 cursor-pointer hover:bg-[#055B75]/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#055B75]/40 transition-colors border-t lg:border-t-0 lg:border-l border-gray-200 ${showDepartCalendar ? 'z-50' : ''}`}
               onClick={() => { setShowDepartCalendar((v) => !v); setShowReturnCalendar(false); }}
               onKeyDown={onKeyActivate(() => { setShowDepartCalendar((v) => !v); setShowReturnCalendar(false); })}>
-              <span className="block text-sm text-gray-500 mb-1">Departure</span>
+              <span className="block text-[10.5px] font-bold uppercase tracking-[0.14em] text-gray-400 mb-1.5">Departure</span>
               {departParts ? (
                 <>
-                  <p className="leading-none"><span className="text-[27px] font-black text-gray-900">{departParts.day}</span> <span className="text-base text-gray-700 align-top">{departParts.month}'{departParts.yy}</span></p>
+                  <p className="leading-none"><span className="font-grotesk text-[20px] font-semibold text-ink">{departParts.day}</span> <span className="text-[15px] text-gray-600">{departParts.month}'{departParts.yy}</span></p>
                   <span className="block text-xs text-gray-500 mt-1">{departParts.weekday}</span>
                 </>
-              ) : <p className="text-sm text-gray-400 mt-2">Select date</p>}
+              ) : <p className="font-grotesk text-[20px] font-semibold text-gray-300 mt-0.5">Select date</p>}
               {showDepartCalendar && (
                 // Keys stop here too: Enter on a day would otherwise reach the
                 // field's own Enter handler and close the calendar unchosen.
@@ -578,13 +580,13 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
                 if (formData.tripType !== 'roundTrip') handleTripTypeChange('roundTrip');
                 setShowReturnCalendar((v) => !v); setShowDepartCalendar(false);
               })}>
-              <span className="block text-sm text-gray-500 mb-1">Return</span>
+              <span className="block text-[10.5px] font-bold uppercase tracking-[0.14em] text-gray-400 mb-1.5">Return</span>
               {formData.tripType === 'roundTrip' && returnParts ? (
                 <>
-                  <p className="leading-none"><span className="text-[27px] font-black text-gray-900">{returnParts.day}</span> <span className="text-base text-gray-700 align-top">{returnParts.month}'{returnParts.yy}</span></p>
+                  <p className="leading-none"><span className="font-grotesk text-[20px] font-semibold text-ink">{returnParts.day}</span> <span className="text-[15px] text-gray-600">{returnParts.month}'{returnParts.yy}</span></p>
                   <span className="block text-xs text-gray-500 mt-1">{returnParts.weekday}</span>
                 </>
-              ) : <p className="text-xs text-gray-400 mt-1 leading-snug max-w-[150px]">Tap to add a return date for bigger discounts</p>}
+              ) : <p className="font-grotesk text-[20px] font-semibold text-gray-300 mt-0.5">Add a date</p>}
               {showReturnCalendar && (
                 <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
                   <CustomFlightCalendar
@@ -603,10 +605,10 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
               className={`relative flex-[1.2] px-5 py-4 cursor-pointer hover:bg-[#055B75]/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#055B75]/40 transition-colors border-t lg:border-t-0 lg:border-l border-gray-200 ${showTravellers ? 'z-50' : ''}`}
               onClick={() => { setShowTravellers((v) => !v); setShowDepartCalendar(false); setShowReturnCalendar(false); }}
               onKeyDown={onKeyActivate(() => { setShowTravellers((v) => !v); setShowDepartCalendar(false); setShowReturnCalendar(false); })}>
-              <span className="block text-sm text-gray-500 mb-1">Travellers &amp; Class</span>
+              <span className="block text-[10.5px] font-bold uppercase tracking-[0.14em] text-gray-400 mb-1.5">Travellers &amp; Class</span>
               <p className="leading-none">
-                <span className="text-[27px] font-black text-gray-900">{totalTravellers}</span>{' '}
-                <span className="text-base text-gray-700">{totalTravellers > 1 ? 'Travellers' : 'Traveller'}</span>
+                <span className="font-grotesk text-[20px] font-semibold text-ink">{totalTravellers}</span>{' '}
+                <span className="text-[15px] text-gray-600">{totalTravellers > 1 ? 'Travellers' : 'Traveller'}</span>
               </p>
               <span className="block text-xs text-gray-500 mt-1 truncate">{classLabels[formData.travelClass || 'ECONOMY']}</span>
 
@@ -654,15 +656,24 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
               search or the booking, so the discounts it promised never applied. */}
         </div>
 
-        {/* Search button */}
-        <button
-          type="button"
-          onClick={handleSearch}
-          aria-label="Search flights"
-          className="absolute left-1/2 -translate-x-1/2 -bottom-6 h-12 px-16 rounded-full bg-gradient-to-r from-[#055B75] to-[#0890BC] text-white text-lg font-bold tracking-[0.15em] shadow-lg hover:shadow-xl hover:-translate-y-1 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#055B75]/30 transition-all duration-300 flex items-center justify-center"
-        >
-          SEARCH
-        </button>
+        {/* Search: on the same line as the card, at the end of the reading
+            order, rather than hanging off the bottom edge */}
+        <div className="flex flex-wrap items-center gap-3 px-4 sm:px-6 py-4">
+          <p className="text-[13px] text-gray-500">
+            {formData.tripType === 'roundTrip' ? 'Round trip' : 'One way'}
+            {' · '}{totalTravellers} {totalTravellers > 1 ? 'travellers' : 'traveller'}
+            {' · '}{classLabels[formData.travelClass || 'ECONOMY']}
+          </p>
+          <span className="flex-1" aria-hidden="true"></span>
+          <button
+            type="button"
+            onClick={handleSearch}
+            aria-label="Search flights"
+            className="h-12 px-10 rounded-full bg-[#055B75] hover:bg-[#044A5F] text-white text-[15px] font-bold tracking-[0.06em] shadow-md hover:shadow-lg focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#055B75]/30 transition-all duration-300 flex items-center justify-center w-full sm:w-auto"
+          >
+            Search flights
+          </button>
+        </div>
       </div>
     </div>
   );
