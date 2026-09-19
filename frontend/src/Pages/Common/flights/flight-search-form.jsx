@@ -481,11 +481,12 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
                 type="text" name="from" value={formData.from || ""}
                 onChange={handleInputChange} onBlur={() => handleInputBlur("from")}
                 placeholder="City or airport"
+                autoComplete="off" autoCorrect="off" spellCheck={false}
                 className="w-full border-0 p-0 bg-transparent outline-none focus:ring-0 font-grotesk text-[20px] leading-tight font-semibold text-ink placeholder:text-gray-300 placeholder:font-normal placeholder:text-[15px]"
               />
               <span className="block text-xs text-gray-500 mt-1 truncate">{fromSubtitle || ' '}</span>
               {showFromSuggestions && fromSuggestions.length > 0 && (
-                <div className="absolute z-30 left-3 top-full w-[280px] max-w-[88vw] bg-white rounded-lg shadow-xl border border-gray-200 max-h-60 overflow-auto">
+                <div className="absolute z-[60] left-3 top-full mt-1 w-[280px] max-w-[88vw] bg-white rounded-lg shadow-xl border border-gray-200 max-h-60 overflow-auto">
                   {fromSuggestions.map((c, i) => (
                     <div key={i} className="px-4 py-2.5 hover:bg-gray-50 cursor-pointer border-b last:border-0 border-gray-100"
                       onClick={() => handleSuggestionClick(c.name, "from")}>
@@ -505,11 +506,12 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
                 type="text" name="to" value={formData.to || ""}
                 onChange={handleInputChange} onBlur={() => handleInputBlur("to")}
                 placeholder="City or airport"
+                autoComplete="off" autoCorrect="off" spellCheck={false}
                 className="w-full border-0 p-0 bg-transparent outline-none focus:ring-0 font-grotesk text-[20px] leading-tight font-semibold text-ink placeholder:text-gray-300 placeholder:font-normal placeholder:text-[15px]"
               />
               <span className="block text-xs text-gray-500 mt-1 truncate">{toSubtitle || ' '}</span>
               {showToSuggestions && toSuggestions.length > 0 && (
-                <div className="absolute z-30 left-3 top-full w-[280px] max-w-[88vw] bg-white rounded-lg shadow-xl border border-gray-200 max-h-60 overflow-auto">
+                <div className="absolute z-[60] left-3 top-full mt-1 w-[280px] max-w-[88vw] bg-white rounded-lg shadow-xl border border-gray-200 max-h-60 overflow-auto">
                   {toSuggestions.map((c, i) => (
                     <div key={i} className="px-4 py-2.5 hover:bg-gray-50 cursor-pointer border-b last:border-0 border-gray-100"
                       onClick={() => handleSuggestionClick(c.name, "to")}>
