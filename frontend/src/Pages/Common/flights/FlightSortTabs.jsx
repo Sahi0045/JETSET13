@@ -34,7 +34,7 @@ function FlightSortTabs({ flights = [], sortOrder, onSortChange }) {
   const isOtherActive = OTHER_SORTS.some(o => o.value === sortOrder);
 
   const tabs = [
-    { key: 'price', label: 'Cheapest', Icon: TrendingDown, flight: cheapest, sub: cheapest ? formatMinutes(legMinutes(cheapest)) : '' },
+    { key: 'price', label: 'Cheapest first', Icon: TrendingDown, flight: cheapest, sub: cheapest ? formatMinutes(legMinutes(cheapest)) : '' },
     { key: 'nonstop_first', label: 'Non-stop first', Icon: Plane, flight: nonstop, sub: nonstopCount > 0 ? `${nonstopCount} non-stop` : 'None today' },
     { key: 'recommended', label: 'Best overall', Icon: ThumbsUp, flight: recommended, sub: recommended ? formatMinutes(legMinutes(recommended)) : '' },
   ];
@@ -71,8 +71,10 @@ function FlightSortTabs({ flights = [], sortOrder, onSortChange }) {
               type="button"
               disabled={disabled}
               onClick={() => onSortChange(key)}
-              className={`flex-shrink-0 w-[62%] sm:w-auto sm:flex-1 snap-start text-left px-4 py-3 rounded-2xl border bg-white transition-all ${
-                active ? 'border-[#055B75] shadow-[inset_0_0_0_1px_#055B75]' : 'border-[#EFE9DD] hover:border-[#B9D0DC]'
+              className={`flex-shrink-0 w-[62%] sm:w-auto sm:flex-1 snap-start text-left px-4 py-3 rounded-2xl border transition-all ${
+                active
+                  ? 'border-[#055B75] bg-[#055B75]/[0.07] ring-2 ring-[#055B75] ring-offset-0'
+                  : 'border-[#EFE9DD] bg-white hover:border-[#B9D0DC]'
               } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               <div className="flex items-center gap-1.5 mb-1">
@@ -82,11 +84,14 @@ function FlightSortTabs({ flights = [], sortOrder, onSortChange }) {
                 </span>
               </div>
               <div className="flex items-baseline gap-2 whitespace-nowrap">
-                <span className="font-grotesk text-lg font-semibold text-ink tracking-tight">
+                <span className={`font-grotesk text-lg font-semibold tracking-tight ${active ? 'text-[#055B75]' : 'text-ink'}`}>
                   {flight ? <Price amount={flight.price} /> : '—'}
                 </span>
                 {sub && <span className="text-[12px] text-gray-500">{sub}</span>}
               </div>
+              {active && (
+                <div className="mt-1 text-[11px] font-semibold text-[#055B75]">Sorting the list by this</div>
+              )}
             </button>
           );
         })}
