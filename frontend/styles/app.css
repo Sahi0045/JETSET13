@@ -217,21 +217,15 @@
   }
 
   /* Enhanced date calendar styles */
+  /* The strip is a fare chart now: height carries the price and the bar
+     carries the colour, so the tile itself stays out of the way. It used to
+     fill with a gradient and lift on hover, which fought the bars. */
   .date-button {
-    @apply transition-all duration-300 ease-in-out transform hover:scale-105;
-  }
-
-  .date-button:hover:not(:disabled) {
-    @apply -translate-y-1 shadow-md;
-  }
-
-  .date-button.selected {
-    @apply bg-gradient-to-br from-primary-600 to-primary-700 shadow-lg;
-    box-shadow: 0 4px 6px -1px rgba(0, 102, 178, 0.2), 0 2px 4px -1px rgba(0, 102, 178, 0.1);
+    @apply transition-colors duration-200;
   }
 
   .date-button.weekend:not(.selected):not(:disabled) {
-    @apply bg-gray-50 border-gray-200;
+    @apply bg-transparent;
   }
 
   .date-button.lowest-price:not(.selected):not(:disabled) .price {

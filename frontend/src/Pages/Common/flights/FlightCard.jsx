@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import Price from '../../../Components/Price';
 import { formatCheckedBag } from '../../../utils/baggage';
-import { arrivalDayOffset, legDateLabel, seatsLeftLabel } from './searchResults';
+import { arrivalDayOffset, layoverLabel, layoversOf, legDateLabel, seatsLeftLabel } from './searchResults';
 
 const AIRLINE_LOGO_FALLBACK = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiByeD0iOCIgZmlsbD0iIzM3NzNmNCIvPgo8dGV4dCB4PSIyMCIgeT0iMjgiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxOCIgZmlsbD0id2hpdGUiIHRleHQtYW5jaG9yPSJtaWRkbGUiPuKciO+4jzwvdGV4dD4KPHN2Zz4K';
 
@@ -59,15 +59,37 @@ function amenityIcon(a) {
   return AMENITY_ICON[a.amenityType] || (amenityLabel(a) === 'Date change' ? RefreshCw : Check);
 }
 
-function StopsLabel({ leg }) {
+function StopsLabel({ leg, cityMap = {} }) {
+  // A pill rather than a word: stops are what people scan a results list for,
+  // and non-stop should look different from a connection at a glance.
   if (!leg.stops || leg.stops === 0) {
-    return <span className="text-emerald-600 font-medium">Non stop</span>;
+    return (
+      <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-emerald-700">
+        Non-stop
+      </span>
+    );
   }
-  const layovers = leg.stopDetails || [];
-  const via = layovers.length > 0 ? ` via ${layovers.map(l => l.airport).join(', ')}` : '';
+  // Where it stops and how long it waits, worked out from the segments. The
+  // label fell back to a bare airport code, or to nothing at all.
+  const computed = layoversOf(leg.segments, cityMap);
+  const fromDetails = (leg.stopDetails || []).map((l) => ({ airport: l.airport, city: cityMap[l.airport] || l.airport, minutes: null, text: l.duration }));
+  const layovers = computed.length ? computed : fromDetails;
+
+  const one = layovers.length === 1 ? layovers[0] : null;
+  const wait = one ? (layoverLabel(one.minutes) || one.text || '') : '';
+
   return (
-    <span className="text-amber-600 font-medium">
-      {leg.stops} {leg.stops === 1 ? 'stop' : 'stops'}{via}
+    <span className="inline-flex max-w-full items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-bold text-amber-700">
+      <span className="whitespace-nowrap">{leg.stops} {leg.stops === 1 ? 'stop' : 'stops'} ·</span>
+      {one ? (
+        <span className="truncate font-semibold text-amber-800/90">
+          {one.city}{wait ? ` · ${wait} wait` : ''}
+        </span>
+      ) : layovers.length > 1 ? (
+        <span className="truncate font-semibold text-amber-800/90">
+          {layovers.map((l) => l.airport).filter(Boolean).join(', ')}
+        </span>
+      ) : null}
     </span>
   );
 }
@@ -79,7 +101,7 @@ const operatorsOf = (segments = []) => [...new Set(segments
   .filter((seg) => seg?.operatingCarrier && seg.operatingCarrier !== seg.airline?.code)
   .map((seg) => seg.operatingAirlineName || seg.operatingCarrier))];
 
-function Leg({ leg, label, operators = [] }) {
+function Leg({ leg, label, operators = [], cityMap = {} }) {
   const dayOffset = arrivalDayOffset(leg.departure?.rawDate, leg.arrival?.rawDate);
   return (
     <div>
@@ -90,7 +112,7 @@ function Leg({ leg, label, operators = [] }) {
       <div className="flex items-center justify-between gap-2 sm:gap-4">
         {/* Departure */}
         <div className="text-left">
-          <div className="text-lg sm:text-xl font-bold text-gray-900 leading-none">{leg.departure?.time || 'N/A'}</div>
+          <div className="font-grotesk text-2xl sm:text-[28px] font-semibold text-ink leading-none tracking-tight">{leg.departure?.time || 'N/A'}</div>
           <div className="text-[11px] text-gray-500 mt-1">{legDateLabel(leg.departure?.rawDate)}</div>
           <div className="text-xs text-gray-500 mt-0.5">
             <span className="font-semibold text-gray-700">{leg.departure?.airport}</span>
@@ -101,25 +123,29 @@ function Leg({ leg, label, operators = [] }) {
 
         {/* Middle */}
         <div className="flex-1 flex flex-col items-center px-1">
-          <div className="text-[11px] text-gray-400 mb-1 flex items-center gap-1">
-            <Clock className="h-3 w-3" />
+          <div className="text-[13px] font-bold text-ink mb-1.5 flex items-center gap-1.5">
+            <Clock className="h-3.5 w-3.5 text-gray-400" />
             {formatDuration(leg.duration)}
           </div>
           <div className="w-full flex items-center gap-1">
             <span className="h-2 w-2 rounded-full border-2 border-gray-300 flex-shrink-0" />
             <span className="flex-1 h-px bg-gray-300 relative">
-              {leg.stops > 0 && (
-                <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-1.5 w-1.5 rounded-full bg-amber-500" />
-              )}
+              {leg.stops > 0 && Array.from({ length: Math.min(leg.stops, 3) }).map((_, i, all) => (
+                <span
+                  key={i}
+                  style={{ left: `${((i + 1) / (all.length + 1)) * 100}%` }}
+                  className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 h-2 w-2 rounded-full border-2 border-white bg-amber-500"
+                />
+              ))}
             </span>
             <Plane className="h-3 w-3 text-gray-400 rotate-90 flex-shrink-0" />
           </div>
-          <div className="text-[11px] mt-1 text-center"><StopsLabel leg={leg} /></div>
+          <div className="mt-2 flex justify-center text-center"><StopsLabel leg={leg} cityMap={cityMap} /></div>
         </div>
 
         {/* Arrival */}
         <div className="text-right">
-          <div className="text-lg sm:text-xl font-bold text-gray-900 leading-none">
+          <div className="font-grotesk text-2xl sm:text-[28px] font-semibold text-ink leading-none tracking-tight">
             {leg.arrival?.time || 'N/A'}
             {dayOffset && (
               <sup className="ml-0.5 text-[10px] font-semibold text-amber-600" title="Arrives on a different day">{dayOffset}</sup>
@@ -256,7 +282,7 @@ function FlightCard({ flight, onBook, onViewPrices, priceStats, cityMap = {} }) 
   const taxesAndFees = Math.max(0, totalFare - baseFare);
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 hover:border-[#65B3CF] hover:shadow-md transition-all duration-300">
+    <div className="bg-white border-b border-gray-100 last:border-b-0 hover:bg-[#FAFBFB] transition-colors duration-200">
       {/* ===== Main row ===== */}
       <div className="p-4 sm:p-5">
         <div className="flex flex-col lg:flex-row lg:items-center gap-4">
@@ -297,16 +323,18 @@ function FlightCard({ flight, onBook, onViewPrices, priceStats, cityMap = {} }) 
           {flight.returnLeg ? (
             <div className="flex-1 space-y-3">
               <Leg
-                leg={{ departure: flight.departure, arrival: flight.arrival, duration: flight.duration, stops: flight.stops, stopDetails: flight.stopDetails }}
+                leg={{ departure: flight.departure, arrival: flight.arrival, duration: flight.duration, stops: flight.stops, stopDetails: flight.stopDetails, segments: flight.segments }}
                 label="Onward"
+                cityMap={cityMap}
               />
               <div className="border-t border-dashed border-gray-200" />
-              <Leg leg={flight.returnLeg} label="Return" operators={operatorsOf(flight.returnLeg.segments)} />
+              <Leg leg={flight.returnLeg} label="Return" operators={operatorsOf(flight.returnLeg.segments)} cityMap={cityMap} />
             </div>
           ) : (
             <div className="flex-1">
               <Leg
-                leg={{ departure: flight.departure, arrival: flight.arrival, duration: flight.duration, stops: flight.stops, stopDetails: flight.stopDetails }}
+                leg={{ departure: flight.departure, arrival: flight.arrival, duration: flight.duration, stops: flight.stops, stopDetails: flight.stopDetails, segments: flight.segments }}
+                cityMap={cityMap}
               />
             </div>
           )}
@@ -314,7 +342,7 @@ function FlightCard({ flight, onBook, onViewPrices, priceStats, cityMap = {} }) 
           {/* Price + CTA */}
           <div className="flex flex-row lg:flex-col items-center lg:items-end justify-between lg:justify-center gap-3 lg:gap-2 lg:w-[180px] lg:flex-shrink-0 lg:border-l lg:border-gray-100 lg:pl-5">
             <div className="text-left lg:text-right relative">
-              <div className="text-xl sm:text-2xl font-bold text-[#055B75] leading-none">
+              <div className="font-grotesk text-[26px] font-bold text-ink leading-none tracking-tight">
                 <Price amount={flight.price} />
               </div>
               <div className="text-[11px] text-gray-400 mt-1">{pricedForLabel(flight.originalOffer)}</div>
@@ -358,9 +386,9 @@ function FlightCard({ flight, onBook, onViewPrices, priceStats, cityMap = {} }) 
             </div>
             <button
               onClick={handleCta}
-              className="px-6 py-2.5 bg-[#055B75] hover:bg-[#034457] text-white rounded-lg text-sm font-bold tracking-wide shadow-sm hover:shadow-md transition-all whitespace-nowrap"
+              className="px-7 py-3 bg-[#055B75] hover:bg-[#034457] text-white rounded-full text-sm font-bold tracking-wide shadow-sm hover:shadow-md transition-all whitespace-nowrap"
             >
-              VIEW PRICES
+              Select flight
             </button>
           </div>
         </div>
@@ -388,7 +416,7 @@ function FlightCard({ flight, onBook, onViewPrices, priceStats, cityMap = {} }) 
       </div>
 
       {/* ===== Footer strip ===== */}
-      <div className="flex items-center justify-between gap-2 px-4 sm:px-5 py-2.5 border-t border-gray-100 bg-gray-50/60 rounded-b-xl">
+      <div className="flex items-center justify-between gap-2 px-4 sm:px-5 py-2.5 border-t border-gray-100 bg-[#FCFBF8]">
         <div className="flex items-center gap-3 sm:gap-4 text-[11px] text-gray-500 flex-wrap min-w-0">
           <span className="inline-flex items-center gap-1">
             <Luggage className="h-3.5 w-3.5 text-gray-400" />
