@@ -134,9 +134,11 @@ function FlightCreateOrders() {
   // Waiting to try a BOOKING_UNAVAILABLE order again.
   const [retryingUnavailable, setRetryingUnavailable] = useState(false);
   const unavailableAttempts = useRef(0);
-  // Set when the server answered BOOKING_NEEDS_REVIEW: { pnr, reference }. The
-  // payment is held and a person has the booking - for a PNR the airline
-  // confirmed no seat on, or a retry of a booking under review.
+  // Set when the server answered BOOKING_NEEDS_REVIEW: { pnr, reference,
+  // payment } - for a PNR the airline confirmed no seat on, or a retry of a
+  // booking under review. `payment` is what the server read from the booking's
+  // payment record ('held', 'returned', 'partly_returned', 'unconfirmed'); the
+  // page says the payment is held only when it says 'held'.
   const [underReview, setUnderReview] = useState(null);
   const orderDataRef = useRef(null);
   const inProgressAttempts = useRef(0);
@@ -560,6 +562,7 @@ function FlightCreateOrders() {
         setUnderReview({
           pnr: error.response.data.pnr || null,
           reference: error.response.data.bookingReference || orderData?.orderId || null,
+          payment: error.response.data.paymentState || null,
         });
         return;
       }
@@ -922,21 +925,39 @@ function FlightCreateOrders() {
                   // BOOKING_NEEDS_REVIEW. It was a red "Booking Failed" with
                   // "Start a new search". Only a PNR the answer names is called
                   // a reservation: a retry's answer names none.
+                  //
+                  // What the money did is the server's to say (paymentState,
+                  // read from the booking's payment record). "Your payment is
+                  // held ... do not book this trip again" was said for every
+                  // answer, including a booking already refunded - false twice
+                  // over, and it kept that customer from rebooking a trip they
+                  // no longer held. Held only when held; refunded when refunded;
+                  // otherwise neither is claimed.
                   <div className="space-y-4" role="status">
                     <div className="mx-auto w-16 h-16 rounded-full bg-amber-50 flex items-center justify-center">
                       <Clock className="w-8 h-8 text-amber-600" />
                     </div>
-                    <h2 className="text-xl font-semibold text-gray-800">Our team is reviewing your booking</h2>
+                    <h2 className="text-xl font-semibold text-gray-800">
+                      {['returned', 'partly_returned'].includes(underReview.payment)
+                        ? 'This booking was not completed'
+                        : 'Our team is reviewing your booking'}
+                    </h2>
                     {error && (
                       <div className="bg-amber-50 text-amber-800 p-4 rounded-lg text-sm">
                         {error}
                       </div>
                     )}
                     <p className="text-gray-600">
-                      {underReview.pnr
-                        ? `Your payment is held against your reservation (airline reference ${underReview.pnr}) while our team works on it.`
-                        : 'Your payment is held with this booking while our team reviews it.'}
-                      {' '}Our team will contact you. Please do not book this trip again in the meantime: a second booking is a second charge.
+                      {underReview.payment === 'held'
+                        ? `${underReview.pnr
+                          ? `Your payment is held against your reservation (airline reference ${underReview.pnr}) while our team works on it.`
+                          : 'Your payment is held with this booking while our team reviews it.'} `
+                          + 'Our team will contact you. Please do not book this trip again in the meantime: a second booking is a second charge.'
+                        : underReview.payment === 'returned'
+                          ? 'Your payment for this booking has been refunded.'
+                          : underReview.payment === 'partly_returned'
+                            ? 'Part of your payment for this booking has been refunded.'
+                            : 'Our team will contact you about this booking and your payment.'}
                     </p>
                     {underReview.reference && (
                       <p className="text-sm text-gray-500">

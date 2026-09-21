@@ -331,6 +331,9 @@ describe('a booking the airline confirmed no seat on', () => {
     expect(res.body.error).toBe(NO_SEAT);
     expect(res.body.message).toBe(NO_SEAT);
     expect(res.body.needsReview).toBe(true);
+    // The gateway confirmed the capture and nothing was refunded: the order
+    // page may say the payment is held against the reservation.
+    expect(res.body.paymentState).toBe('held');
     expect(JSON.stringify(res.body)).not.toMatch(/seats are reserved|holding your seats|email you as soon as it is issued/i);
     expect(send).not.toHaveBeenCalled();
     // A person is paged instead: the flag the alarm and the desk read.

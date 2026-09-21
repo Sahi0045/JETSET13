@@ -28,7 +28,7 @@ import { buildFlightOrderBody, orderDataFromCheckoutRow } from '../../shared/fli
 import { statusChangeRefusal } from '../../shared/bookingStatusChange.js';
 import {
   attentionOf, reviewResolution, ticketsOf, isTicketed, NO_CONFIRMED_SEAT_REVIEW_REASON, noConfirmedSeatOf,
-  ticketNumbersMissingOf,
+  ticketNumbersMissingOf, unrecordedCancellationOf,
 } from '../../shared/reviewQueue.js';
 import { errorSummary } from '../utils/errorSummary.js';
 import { flightSearchLimiter, guestBookingLimiter } from '../middleware/security.js';
@@ -1202,6 +1202,50 @@ async function sendHeldForReviewEmail(bookingReference, body) {
  * same flights is no less a duplicate.
  */
 const DUPLICATE_LOOKBACK_MS = 30 * DAY_MS;
+
+/**
+ * What happened to a booking's money, as its record says - for an answer that
+ * tells the customer.
+ *
+ * A retry of a booking under review was answered "Your payment is held with
+ * this booking ... do not book this trip again" whatever the row said: this
+ * branch never read the payment. A flagged row can have been refunded since it
+ * was flagged - the Payments tab writes payment_status and nothing else - and
+ * for that customer both sentences were false.
+ *
+ * A cancellation that moved the money and could not record it leaves the row
+ * reading paid (flagUnrecordedCancellation), and the customer was told "we will
+ * confirm what happened to your payment": neither held nor returned is known.
+ *
+ * @returns {'held'|'returned'|'partly_returned'|'unconfirmed'}
+ */
+export function paymentStateOf(booking) {
+  const payment = String(booking?.payment_status ?? '').toLowerCase();
+  if (['refunded', 'reversed'].includes(payment)) return 'returned';
+  if (payment === 'partially_refunded') return 'partly_returned';
+  if (unrecordedCancellationOf(booking)) return 'unconfirmed';
+  return ['paid', 'completed'].includes(payment) ? 'held' : 'unconfirmed';
+}
+
+/**
+ * The refusal a retry of a booking under review gets, worded by what its
+ * payment record says (paymentStateOf). "Our team is reviewing it" and "If you
+ * have not heard from us" are for a payment still held, or one whose fate a
+ * person is confirming: a refunded booking is on no desk list and no alarm.
+ */
+function notSentAgainMessage(bookingReference, paymentState) {
+  const call = `call (877) 538-7380 with booking reference ${bookingReference}`;
+  if (paymentState === 'returned') {
+    return 'This booking could not be completed, so it was not sent to the airline again. '
+      + `Your payment for it has been refunded. If you have any questions, ${call}.`;
+  }
+  if (paymentState === 'partly_returned') {
+    return 'This booking could not be completed, so it was not sent to the airline again. '
+      + `Part of your payment for it has been refunded. Please ${call} about the rest.`;
+  }
+  return 'This booking could not be completed and our team is reviewing it, so it was not sent to the airline again. '
+    + `Nothing more has been charged. If you have not heard from us within 2 business days, ${call}.`;
+}
 
 /** What the customer is told when their payment is held as a second payment for one trip. */
 function duplicatePaymentAnswer(bookingReference) {
@@ -2556,14 +2600,16 @@ router.post('/order', optionalProtect, async (req, res) => {
     const failedBefore = existing.booking_details?.fulfillment_failed;
     const review = existing.booking_details?.needs_review;
     if (failedBefore || (review && !EMAILED_REVIEW_REASONS.has(review.reason))) {
-      const message = 'This booking could not be completed and our team is reviewing it, so it was not sent to the airline again. '
-        + 'Nothing more has been charged. If you have not heard from us within 2 business days, '
-        + `call (877) 538-7380 with booking reference ${existing.booking_reference}.`;
+      // Said from the row, not assumed: the order page says "your payment is
+      // held ... do not book this trip again" only when this says 'held'.
+      const paymentState = paymentStateOf(existing);
+      const message = notSentAgainMessage(existing.booking_reference, paymentState);
       return res.status(409).json({
         success: false,
         code: failedBefore ? 'BOOKING_FAILED' : 'BOOKING_NEEDS_REVIEW',
         needsReview: true,
         bookingReference: existing.booking_reference,
+        paymentState,
         error: message,
         message,
       });
@@ -3216,6 +3262,9 @@ router.post('/order', optionalProtect, async (req, res) => {
             needsReview: true,
             bookingReference: req.body.bookingReference,
             pnr: providerError.pnr || null,
+            // The gateway confirmed the capture above, and a committed PNR is
+            // never refunded here: the money is held against it.
+            paymentState: payment?.paid === true ? 'held' : 'unconfirmed',
             error: message,
             message
           });
