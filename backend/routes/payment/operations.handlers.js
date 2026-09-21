@@ -805,6 +805,11 @@ async function cancelFlightBooking(res, booking, { reason, email }) {
                 + `payment ${cancellationResult.paymentAction} ${cancellationResult.refundAmount || 0} ${currency}; `
                 + 'check the airline and ARC Pay and record it by hand',
             source: 'cancellation',
+            // Said outright, so the alarm announces it even on a ticketed
+            // booking. A retry that voided the tickets leaves none to claim,
+            // and "ticketed, so done" kept exactly that booking from anyone.
+            unrecorded: true,
+            ticketsVoided: cancellationResult.ticketsVoided,
             at: now,
             paymentAction: cancellationResult.paymentAction,
             refundAmount: cancellationResult.refundAmount || 0,

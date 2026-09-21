@@ -23,7 +23,9 @@ import supabase from '../config/supabase.js';
 import { postToSlack } from './slackAlert.js';
 import { unchangedSince } from '../utils/bookingDetailsGuard.js';
 import { queueEnvironment } from '../utils/queueEnvironment.js';
-import { TICKET_NUMBERS_MISSING, needsAirlineRefundClaim, ticketsOf } from '../../shared/reviewQueue.js';
+import {
+  TICKET_NUMBERS_MISSING, isUnrecordedCancellation, needsAirlineRefundClaim, ticketsOf,
+} from '../../shared/reviewQueue.js';
 
 /**
  * Whether the Slack alarms may run in this process: on the stack that names
@@ -67,6 +69,10 @@ export function selectUnannounced(rows = []) {
     // A cancellation with a refund still to claim from the airline. It is
     // cancelled and ticketed, so both checks below would skip it - and did.
     if (needsAirlineRefundClaim(booking)) return true;
+    // A cancellation carried out but not recorded. A retry that voided the
+    // tickets leaves none to claim, and the booking still reads ticketed, so
+    // the checks below skipped it: seats and money moved, nobody told.
+    if (isUnrecordedCancellation(booking)) return true;
 
     // The ticket turned up later, by retry or by hand. Not the chain's own
     // "issued, but the numbers did not all arrive": that row is ticketed by
@@ -163,18 +169,51 @@ export function describeTicketNumbersMissing(booking) {
   ].join('\n');
 }
 
+/**
+ * One line per cancellation carried out but not recorded. What the cancel did,
+ * as its flag says - the row itself may still read confirmed and paid.
+ */
+export function describeUnrecordedCancellation(booking) {
+  const details = booking.booking_details || {};
+  const review = details.needs_review || {};
+  const hours = Math.round((Date.now() - Date.parse(review.at || booking.created_at)) / 36e5);
+  const tickets = review.tickets || [];
+  return [
+    `*${booking.booking_reference}* — the record reads ${booking.status}/${booking.payment_status}, ${booking.total_amount} USD`,
+    `PNR ${details.pnr || 'none'} · payment ${review.paymentAction || 'unknown'} ${review.refundAmount ?? 0} USD`
+      + ` · tickets voided: ${review.ticketsVoided === true ? 'yes' : 'no'}`
+      + (tickets.length ? ` · to claim from the airline: ${tickets.join(', ')}` : ''),
+    `flagged ${hours}h ago`,
+  ].join('\n');
+}
+
 const ticketNumbersMissing = (booking) => !needsAirlineRefundClaim(booking)
   && booking?.booking_details?.needs_review?.reason === TICKET_NUMBERS_MISSING;
 
 export function buildMessage(bookings) {
-  const claims = bookings.filter(needsAirlineRefundClaim);
+  // Its own section before anything else: the seats and the money moved and
+  // the record says neither. Under "paid but not ticketed" it read "ticket it,
+  // or refund it" - a second refund of money already returned.
+  const unrecorded = bookings.filter(isUnrecordedCancellation);
+  const rest = bookings.filter((booking) => !isUnrecordedCancellation(booking));
+  const claims = rest.filter(needsAirlineRefundClaim);
   // A ticketed booking whose numbers did not arrive is NOT "paid but not
   // ticketed". Listed under that heading it read "no ticket was issued ...
   // ticket it, or refund it" beside "ticketed: yes" - an instruction to issue a
   // second ticket against one payment, or refund a live ticket.
-  const numbersMissing = bookings.filter(ticketNumbersMissing);
-  const unticketed = bookings.filter((booking) => !needsAirlineRefundClaim(booking) && !ticketNumbersMissing(booking));
+  const numbersMissing = rest.filter(ticketNumbersMissing);
+  const unticketed = rest.filter((booking) => !needsAirlineRefundClaim(booking) && !ticketNumbersMissing(booking));
   const sections = [];
+  if (unrecorded.length) {
+    sections.push(
+      `:warning: *${unrecorded.length} cancellation${unrecorded.length > 1 ? 's' : ''} carried out but not recorded*`,
+      'The airline reservation was released and the payment action below was taken, but the booking record could not be written. '
+        + 'Check the airline and ARC Pay and record what happened by hand. Do not cancel or refund it again until you have: '
+        + 'the money may already have gone back.',
+      '',
+      ...unrecorded.map(describeUnrecordedCancellation),
+    );
+  }
   if (unticketed.length) {
     sections.push(
       `:rotating_light: *${unticketed.length} booking${unticketed.length > 1 ? 's' : ''} paid but not ticketed*`,

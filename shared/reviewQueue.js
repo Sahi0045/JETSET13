@@ -63,15 +63,42 @@ export function needsAirlineRefundClaim(booking) {
 }
 
 /**
+ * A cancellation that released the seats and moved the money, and whose record
+ * could not be written (payment/operations.handlers.js flagUnrecordedCancellation).
+ *
+ * The booking may still read confirmed and paid, and ticketed. A retry that
+ * voided its tickets leaves nothing to claim, so every other rule here skipped
+ * it as "ticketed, so done" - and one with tickets left to claim was labelled
+ * a refund to claim, when the first thing to do is find out what happened.
+ */
+export function isUnrecordedCancellation(booking) {
+  const review = detailsOf(booking)?.needs_review;
+  return review?.source === 'cancellation' && review.unrecorded === true;
+}
+
+/**
  * What still needs doing on this booking, or null.
  *
- * @returns {null | { kind: 'not_ticketed'|'review'|'airline_refund', reason: string,
- *                    since: string|null, tickets?: string[] }}
+ * @returns {null | { kind: 'not_ticketed'|'review'|'airline_refund'|'unrecorded_cancellation',
+ *                    reason: string, since: string|null, tickets?: string[] }}
  */
 export function attentionOf(booking) {
   const details = detailsOf(booking);
   const review = details?.needs_review || null;
   if (review?.resolved_at) return null;
+
+  // Before anything reads the booking's status or tickets: neither says what
+  // happened, which is the point of this flag.
+  if (isUnrecordedCancellation(booking)) {
+    return {
+      kind: 'unrecorded_cancellation',
+      reason: review.reason || 'cancellation carried out but not recorded',
+      since: review.at || null,
+      ...(Array.isArray(review.tickets) && review.tickets.length
+        ? { tickets: review.tickets.map((ticket) => ticket?.number ?? ticket) }
+        : {}),
+    };
+  }
 
   // A cancelled booking whose tickets were past the void window: the airline
   // owes the money back and somebody has to claim it. This one IS on a
@@ -110,6 +137,7 @@ export function attentionOf(booking) {
 /** The sentence the panel puts on the row. */
 export const attentionLabel = (attention) => {
   if (!attention) return null;
+  if (attention.kind === 'unrecorded_cancellation') return 'Cancelled, but not recorded';
   if (attention.kind === 'airline_refund') return 'Refund to claim from the airline';
   if (attention.kind === 'not_ticketed') return 'Paid, seats held, no ticket';
   return 'Flagged for review';

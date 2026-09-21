@@ -2,8 +2,8 @@ import axios from 'axios';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRequest, createResponse } from './helpers/express.helpers.js';
 import { fakeBookingsTable } from './helpers/fakeBookings.js';
-import { selectUnannounced } from '../../backend/jobs/needsReviewAlert.job.js';
-import { attentionOf } from '../../shared/reviewQueue.js';
+import { buildMessage, selectUnannounced } from '../../backend/jobs/needsReviewAlert.job.js';
+import { attentionLabel, attentionOf } from '../../shared/reviewQueue.js';
 
 /**
  * A cancellation that released the seats and moved the money, then could not
@@ -107,5 +107,43 @@ describe('a cancellation carried out but not recorded', () => {
     const row = table.row(REF);
     expect(row.booking_details.needs_review.tickets).toEqual(['057-2412345678']);
     expect(selectUnannounced([row])).toHaveLength(1);
+  });
+
+  /**
+   * The finding's own scenario: a TICKETED booking whose tickets the retry
+   * voided. Nothing is left to claim, so the flag carries no tickets - and the
+   * alarm then skipped it as "ticketed, so done". Nobody was paged about a
+   * booking whose seats and money had moved while its record said neither.
+   */
+  describe('on a ticketed booking whose tickets were voided', () => {
+    const voidedAndTakenOver = async () => {
+      table = fakeBookingsTable([flight({ gds: { ticketed: true }, tickets: [{ number: '057-2412345678' }] })], { tables: { price_settings: [], payments: [] } });
+      takenOverDuringCancel({ success: true, hadTickets: true, voided: true, requiresAirlineRefund: [] });
+      const res = await cancel();
+      expect(res.statusCode).toBe(500);
+      return table.row(REF);
+    };
+
+    it('marks the flag unrecorded, and the alarm announces it', async () => {
+      const row = await voidedAndTakenOver();
+      expect(row.booking_details.needs_review).toMatchObject({ source: 'cancellation', unrecorded: true, ticketsVoided: true });
+      expect(selectUnannounced([row])).toHaveLength(1);
+    });
+
+    it('is announced as an unrecorded cancellation, never as "ticket it, or refund it"', async () => {
+      const row = await voidedAndTakenOver();
+      const text = buildMessage([row]);
+      expect(text).toMatch(/cancellation carried out but not recorded/i);
+      expect(text).toMatch(/do not cancel or refund it again/i);
+      expect(text).not.toMatch(/paid but not ticketed|ticket it, or refund it|refund to claim/i);
+    });
+
+    it('is not labelled a refund to claim from the airline in the admin list', async () => {
+      const row = await voidedAndTakenOver();
+      const attention = attentionOf(row);
+      expect(attention).not.toBeNull();
+      expect(attention.kind).not.toBe('airline_refund');
+      expect(attentionLabel(attention)).toBe('Cancelled, but not recorded');
+    });
   });
 });
