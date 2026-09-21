@@ -22,6 +22,9 @@ const sanitizeRef = (v) => String(v ?? '').replace(/[^A-Za-z0-9_-]/g, '') || '__
  */
 export const CHECKOUT_REUSE_WINDOW_MS = 5 * 60 * 1000;
 
+/** What hosted checkout sells. `flight` is the one whose fare the airline prices. */
+const HOSTED_CHECKOUT_TYPES = ['flight', 'hotel', 'cruise', 'package'];
+
 // Scheme and host. Not `URL.origin`, which is the string "null" for the mobile
 // app's own schemes (jetsettermobile://), so every app URL would look alike.
 const urlOrigin = (value) => {
@@ -404,6 +407,19 @@ export async function handleHostedCheckout(req, res) {
             });
         }
 
+        // A product this site sells, or nothing. Only `'flight'` has its fare
+        // priced by the airline and its payer checked for a login below, so a
+        // body saying "flights" or "Flight" skipped both and sent its own
+        // amount to ARC. Every client sends one of these four literals.
+        if (!HOSTED_CHECKOUT_TYPES.includes(bookingType)) {
+            console.warn('⛔ Checkout refused: unknown booking type', { orderId, bookingType: String(bookingType).slice(0, 20) });
+            return res.status(400).json({
+                success: false,
+                code: 'BOOKING_TYPE_UNKNOWN',
+                error: 'We could not start the payment for this booking. Please go back and try again. Nothing has been charged.'
+            });
+        }
+
         // The charge currency is never the caller's. Clients send their display
         // currency here - the web flight payment falls back to
         // currencyService.getCurrency(), which is whatever the visitor is
@@ -424,11 +440,24 @@ export async function handleHostedCheckout(req, res) {
         // checkout - resetting it to unpaid and minting a new payment secret for
         // whoever asked. Only a fresh reference, or the same customer starting
         // their own unpaid checkout again, may open a session.
-        const { data: existingRow } = await supabase
+        //
+        // A read that fails is not a row that is absent. Its error was not read,
+        // so a failed lookup skipped this guard, and the upsert below then wrote
+        // pending/unpaid and a fresh booking_details over whatever the reference
+        // held - a paid booking's capture, its PNR, its payment secret.
+        const { data: existingRow, error: existingError } = await supabase
             .from('bookings')
             .select('user_id, status, payment_status, booking_details')
             .eq('booking_reference', orderId)
             .maybeSingle();
+        if (existingError) {
+            console.error('❌ Refusing checkout: could not check the order reference', { orderId, code: existingError.code, reason: existingError.message });
+            return res.status(503).json({
+                success: false,
+                code: 'CHECKOUT_NOT_RECORDED',
+                error: 'We could not start your payment just now. Please try again in a moment, or call (877) 538-7380 and we will book it for you.',
+            });
+        }
         if (existingRow) {
             const details = existingRow.booking_details || {};
             const sessionUserId = resolveBookingUserId(req);
