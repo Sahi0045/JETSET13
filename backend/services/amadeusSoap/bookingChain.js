@@ -122,8 +122,34 @@ const anyLocatorMissing = (pnrReply) => {
 /** Each air segment's status: HK, or TK when the airline has changed it. */
 const airSegmentStatuses = (pnrReply) => airSegmentValues(pnrReply, 'relatedProduct.status');
 
-/** A segment the airline changed: confirmed (TK), waitlisted (TL) or requested (TN). */
-const SCHEDULE_CHANGE_STATUSES = new Set(['TK', 'TL', 'TN']);
+/**
+ * A segment the airline changed and still confirms (TK). Accepted with change
+ * advice, then ticketed.
+ *
+ * TL and TN used to be in here as well, and they are not seats: TL is the
+ * airline's schedule change landing on a WAITLIST, TN on a request it has not
+ * answered. Accepted like TK, they were queued, ticketed and emailed as
+ * confirmed - a ticket for a seat the airline had not given the passenger.
+ */
+const SCHEDULE_CHANGE_STATUSES = new Set(['TK']);
+
+/**
+ * Segment statuses at commit that are not a seat.
+ *
+ * The sell refuses a waitlist before anything is saved (airSell.js: "A
+ * waitlist is not a seat"), but the airline can still move a segment between
+ * the sell and the end transact. TL/TN (waitlisted/requested after a schedule
+ * change), HL/HN/NN/WL (the same without one), and UC, UN, UU, US, NO, HX, UNS
+ * (unable, not operating, no action, cancelled) all say the airline is not
+ * holding a confirmed seat. Every commit reply captured from this office - 138
+ * segments across LH, KU, EN, GF, CZ, BF, EK, KE, LY and MU on PDT, 15-17 Sep
+ * 2026 - answered HK, so this never meets a normal booking.
+ *
+ * The PNR exists by then and the customer has paid, so it is not refunded
+ * blind: the chain stops before change advice, queueing and issuance, and the
+ * order route holds it for a person (the `committed` branch).
+ */
+const NOT_A_SEAT_AT_COMMIT = new Set(['TL', 'TN', 'HL', 'HN', 'NN', 'WL', 'UC', 'UN', 'UU', 'US', 'NO', 'HX', 'UNS']);
 
 /**
  * Issuance the airline refused only because its side is not ready yet. Seen on
@@ -739,7 +765,22 @@ export const runBookingChain = async (p) => {
     // returning TK for that flight before it could be proved end to end, so this
     // runs only when a segment carries a changed status.
     let bookedReply = commitReply;
-    const changed = airSegmentStatuses(commitReply).filter((status) => SCHEDULE_CHANGE_STATUSES.has(status));
+    const statuses = airSegmentStatuses(commitReply);
+    const notSeats = statuses.filter((status) => NOT_A_SEAT_AT_COMMIT.has(status));
+    if (notSeats.length > 0) {
+      log.error({ pnr, statuses }, 'the airline is not holding a confirmed seat on every flight; not ticketing');
+      throw new BookingChainError({
+        step: 'segmentStatus',
+        pnr,
+        committed,
+        ticketed: false,
+        error: 'The airline has not confirmed a seat on every flight - our team will contact you',
+        code: 502,
+        technicalError: `segment status ${statuses.join(',')} at commit: ${notSeats.join(',')} is not a confirmed seat `
+          + '(waitlisted, requested, unable or cancelled); not accepted, queued or ticketed',
+      });
+    }
+    const changed = statuses.filter((status) => SCHEDULE_CHANGE_STATUSES.has(status));
     if (changed.length > 0) {
       log.warn({ pnr, changed }, 'a segment was changed by the airline; accepting it with change advice');
       bookedReply = await callStep(ctx, {

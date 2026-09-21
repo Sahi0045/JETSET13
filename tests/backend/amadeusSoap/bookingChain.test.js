@@ -617,6 +617,43 @@ describe('after the PNR exists', () => {
     expect(commitOptions()).toEqual(['0', '11']);
   });
 
+  // TL is waitlisted and TN only requested, each after a schedule change; HL,
+  // HN, UN and the rest say the same without one. None of them is a seat. They
+  // were accepted with change advice like TK and then queued, ticketed and
+  // emailed as confirmed - or, with auto-ticketing off, emailed as a held
+  // reservation under a "schedule changed" flag that tells the desk to mention
+  // new times, not that the customer has no seat. The sell refuses HL and WL for
+  // this reason (airSell.js); the commit has to as well.
+  it.each(['TL', 'TN', 'HL', 'HN', 'UN', 'UC', 'NO', 'HX'])(
+    'hands a segment the airline left at %s at commit to a person, and never tickets it',
+    async (status) => {
+      vi.stubEnv('AMADEUS_WS_AUTO_TICKET', 'true');
+      vi.stubEnv('AMADEUS_WS_TICKET_RETRIEVE_INITIAL_MS', '0');
+      const { runBookingChain } = await loadChain();
+      const onCommitted = vi.fn();
+      queueReplies(sellOk, addOk, fopOk, priceOk, tstOk, withSegmentStatus(status), withSegmentStatus(status), fopOk, issueOk, retrieveWithTicket);
+
+      const failure = await runBookingChain({ offer: offer(), travelers, onCommitted }).catch((error) => error);
+
+      // Post-commit: the order route holds it for staff, never refunds it blind.
+      expect(failure).toMatchObject({ name: 'BookingChainError', committed: true, ticketed: false, pnr: 'ABC123' });
+      expect(failure.technicalError).toContain(status);
+      // The PNR was still handed over before anything else was decided.
+      expect(onCommitted).toHaveBeenCalledWith(expect.objectContaining({ pnr: 'ABC123' }));
+      const sent = axios.post.mock.calls.map(([, body]) => String(body));
+      expect(sent.some((body) => body.includes('<DocIssuance_IssueTicket'))).toBe(false);
+      expect(commitOptions()).toEqual(['0', '11']);
+    },
+  );
+
+  it('does the same with auto-ticketing off, rather than answer a held reservation', async () => {
+    const { runBookingChain } = await loadChain();
+    queueReplies(sellOk, addOk, fopOk, priceOk, tstOk, withSegmentStatus('TL'), withSegmentStatus('HL'), fopOk);
+
+    await expect(runBookingChain({ offer: offer(), travelers }))
+      .rejects.toMatchObject({ committed: true, ticketed: false, pnr: 'ABC123' });
+  });
+
   // The route reads `committed` to decide whether refunding is safe. A ticketed
   // booking that gets refunded leaves the customer flying for free and the
   // airline billing us.
