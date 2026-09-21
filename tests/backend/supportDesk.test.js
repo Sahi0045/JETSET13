@@ -88,7 +88,11 @@ describe('what still needs a person', () => {
       status: 'cancelled',
       payment_status: 'paid',
       booking_details: {
-        needs_review: { source: 'cancellation', reason: 'past the void window', at: '2026-09-17T10:00:00Z' },
+        // What cancelFlightBooking writes: the tickets it could not void, on
+        // the review flag itself (payment/operations.handlers.js).
+        needs_review: {
+          source: 'cancellation', reason: 'past the void window', at: '2026-09-17T10:00:00Z', tickets: ['220-7491175301'],
+        },
         tickets: [{ number: '220-7491175301' }],
       },
     };

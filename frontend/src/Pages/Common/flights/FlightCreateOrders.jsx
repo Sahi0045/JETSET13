@@ -33,7 +33,9 @@ const TERMINAL_ERROR_CODES = new Set([
   'PAYER_NOT_VERIFIED',   // this browser cannot prove it made the payment
   'ORDER_FAILED',         // an unexpected error; the payment was reversed or flagged
   'BOOKING_FAILED',       // the booking failed after payment; the payment was reversed or is being refunded
-  'BOOKING_NEEDS_REVIEW', // the booking failed and our team is sorting out the payment by hand
+  // Not BOOKING_NEEDS_REVIEW: the payment is still held, a person has the
+  // booking, and "Start a new search" sent a charged customer to buy again. It
+  // has its own screen (`underReview`).
 ]);
 
 /**
@@ -81,10 +83,15 @@ const UNAVAILABLE_RETRY_MS = 15000;
  *              auto-ticketing is off; also the needs-review case)
  *   queued   - GDS was saturated; the booking is queued and nothing has been
  *              sent to the airline yet
+ *   returned / partly_returned - a PNR and no ticket, whose payment the
+ *              booking's record says went back (the server's paymentState): a
+ *              reload for a held PNR refunded without being cancelled. It
+ *              read "Reservation Held - your seats are reserved".
  */
 function outcomeOf(body) {
   if (body?.queued === true) return 'queued';
   if (body?.ticketed === true) return 'ticketed';
+  if (['returned', 'partly_returned'].includes(body?.paymentState)) return body.paymentState;
   return 'held';
 }
 
@@ -132,6 +139,12 @@ function FlightCreateOrders() {
   // Waiting to try a BOOKING_UNAVAILABLE order again.
   const [retryingUnavailable, setRetryingUnavailable] = useState(false);
   const unavailableAttempts = useRef(0);
+  // Set when the server answered BOOKING_NEEDS_REVIEW: { pnr, reference,
+  // payment } - for a PNR the airline confirmed no seat on, or a retry of a
+  // booking under review. `payment` is what the server read from the booking's
+  // payment record ('held', 'returned', 'partly_returned', 'unconfirmed'); the
+  // page says the payment is held only when it says 'held'.
+  const [underReview, setUnderReview] = useState(null);
   const orderDataRef = useRef(null);
   const inProgressAttempts = useRef(0);
   const retryTimer = useRef(null);
@@ -240,6 +253,7 @@ function FlightCreateOrders() {
     setError(null);
     setErrorCode(null);
     setRefundAttempt(null);
+    setUnderReview(null);
     setOrderReference(orderData?.orderId || '');
     orderDataRef.current = orderData;
 
@@ -389,6 +403,11 @@ function FlightCreateOrders() {
           // `needsReview` meant the "our team is finishing your ticket" line
           // never showed there.
           needs_review: needsReview ? { reason: null } : null,
+          // A payment the booking's record says went back, for the
+          // confirmation page (paymentReturned): it said "Total Paid ...
+          // Payment received" of a refunded booking.
+          ...(body.paymentState === 'returned' ? { payment_status: 'refunded' }
+            : body.paymentState === 'partly_returned' ? { payment_status: 'partially_refunded' } : {}),
           mode: body.mode || null,
           message: body.message || '',
           // Include formatted travelers
@@ -541,6 +560,22 @@ function FlightCreateOrders() {
         }
       }
       setRetryingUnavailable(false);
+
+      // Charged, and with a person: the airline confirmed no seat on this PNR,
+      // or this is a retry of a booking under review. Not a failure to start
+      // again from - a second trip bought now is a second charge that no
+      // duplicate check catches - so it gets its own screen, in the server's
+      // words.
+      if (failureCode === 'BOOKING_NEEDS_REVIEW') {
+        setErrorCode(failureCode);
+        setError(error.response.data.error || error.response.data.message || null);
+        setUnderReview({
+          pnr: error.response.data.pnr || null,
+          reference: error.response.data.bookingReference || orderData?.orderId || null,
+          payment: error.response.data.paymentState || null,
+        });
+        return;
+      }
 
       // Extract more detailed error message with priority order
       let errorMessage = 'Failed to process order';
@@ -712,6 +747,20 @@ function FlightCreateOrders() {
                         <h2 className="text-xl font-semibold text-gray-800">Booking Received</h2>
                         <p className="text-gray-600">
                           Your payment is complete and your booking is in the queue. We are confirming your seats with the airline now; this can take a few minutes.
+                        </p>
+                      </>
+                    ) : ['returned', 'partly_returned'].includes(outcome) ? (
+                      // Refunded without being cancelled: no held seat and no
+                      // payment to speak of, as the under-review screen says it.
+                      <>
+                        <div className="mx-auto w-16 h-16 rounded-full bg-amber-50 flex items-center justify-center">
+                          <Clock className="w-8 h-8 text-amber-600" />
+                        </div>
+                        <h2 className="text-xl font-semibold text-gray-800">This booking was not completed</h2>
+                        <p className="text-gray-600">
+                          {outcome === 'returned'
+                            ? 'Your payment for this booking has been refunded.'
+                            : 'Part of your payment for this booking has been refunded.'}
                         </p>
                       </>
                     ) : (
@@ -886,6 +935,62 @@ function FlightCreateOrders() {
                       Questions? Call <a href="tel:+18775387380" className="font-semibold text-blue-700">(877) 538-7380</a> or email{' '}
                       <a href="mailto:support@jetsetterss.com" className="font-semibold text-blue-700 break-all">support@jetsetterss.com</a>
                       {missingOrder.reference ? ' with this reference.' : '.'}
+                    </p>
+                    <div className="pt-2">
+                      <button
+                        onClick={() => navigate(authUser ? '/my-trips' : '/')}
+                        className="w-full py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+                      >
+                        {authUser ? 'Go to My Trips' : 'Back to home'}
+                      </button>
+                    </div>
+                  </div>
+                ) : underReview ? (
+                  // BOOKING_NEEDS_REVIEW. It was a red "Booking Failed" with
+                  // "Start a new search". Only a PNR the answer names is called
+                  // a reservation: a retry's answer names none.
+                  //
+                  // What the money did is the server's to say (paymentState,
+                  // read from the booking's payment record). "Your payment is
+                  // held ... do not book this trip again" was said for every
+                  // answer, including a booking already refunded - false twice
+                  // over, and it kept that customer from rebooking a trip they
+                  // no longer held. Held only when held; refunded when refunded;
+                  // otherwise neither is claimed.
+                  <div className="space-y-4" role="status">
+                    <div className="mx-auto w-16 h-16 rounded-full bg-amber-50 flex items-center justify-center">
+                      <Clock className="w-8 h-8 text-amber-600" />
+                    </div>
+                    <h2 className="text-xl font-semibold text-gray-800">
+                      {['returned', 'partly_returned'].includes(underReview.payment)
+                        ? 'This booking was not completed'
+                        : 'Our team is reviewing your booking'}
+                    </h2>
+                    {error && (
+                      <div className="bg-amber-50 text-amber-800 p-4 rounded-lg text-sm">
+                        {error}
+                      </div>
+                    )}
+                    <p className="text-gray-600">
+                      {underReview.payment === 'held'
+                        ? `${underReview.pnr
+                          ? `Your payment is held against your reservation (airline reference ${underReview.pnr}) while our team works on it.`
+                          : 'Your payment is held with this booking while our team reviews it.'} `
+                          + 'Our team will contact you. Please do not book this trip again in the meantime: a second booking is a second charge.'
+                        : underReview.payment === 'returned'
+                          ? 'Your payment for this booking has been refunded.'
+                          : underReview.payment === 'partly_returned'
+                            ? 'Part of your payment for this booking has been refunded.'
+                            : 'Our team will contact you about this booking and your payment.'}
+                    </p>
+                    {underReview.reference && (
+                      <p className="text-sm text-gray-500">
+                        Booking reference: <span className="font-semibold text-gray-800">{underReview.reference}</span>
+                      </p>
+                    )}
+                    <p className="text-sm text-gray-500">
+                      Questions? Call <a href="tel:+18775387380" className="font-semibold text-blue-700">(877) 538-7380</a> or email{' '}
+                      <a href="mailto:support@jetsetterss.com" className="font-semibold text-blue-700 break-all">support@jetsetterss.com</a>.
                     </p>
                     <div className="pt-2">
                       <button

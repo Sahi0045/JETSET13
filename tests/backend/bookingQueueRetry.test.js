@@ -133,6 +133,233 @@ describe('an answer that says "not now"', () => {
   });
 });
 
+/**
+ * A "not now" whose re-queue did not land.
+ *
+ * Before answering a retryable 503 the route lets its claim go, and that
+ * writes the chain `failed` (releaseBookingChain). retryLater then puts it
+ * back to `queued` - and reported 'queued' whether or not that write landed.
+ * When it did not, the row was left `failed` with its order still stored:
+ * findRunnable reads only `queued` and stale `in_progress`, the
+ * abandoned-checkout job skips anything with a queued order, and neither alarm
+ * matches a row with no PNR and no flag. Charged, not booked, nobody told.
+ */
+describe('a re-queue that did not land', () => {
+  const released = () => queuedRow({
+    state: 'failed', failedStep: 'duplicate-check', finishedAt: new Date().toISOString(), startedAt: undefined, queueAttempts: 2,
+  });
+
+  it('is picked up again once the retry delay has passed, not left where no job looks', async () => {
+    const { replay, findRunnable, RETRY_DELAY_MS, sendEmail } = await load([released()], {
+      fail: ({ patch }) => patch?.booking_details?.gds_chain?.state === 'queued',
+    });
+
+    const outcome = await replay(snapshot(table.row(REF)), {
+      baseUrl: 'http://x',
+      fetchImpl: answer(503, { success: false, code: 'BOOKING_UNAVAILABLE', retryable: true }),
+    });
+
+    expect(outcome).toBe('retry');
+    expect(sendEmail).not.toHaveBeenCalled();
+    expect(table.row(REF).booking_details.queued_order).toEqual(ORDER);
+    // Not at once: the same wait a re-queue would have had.
+    expect(await findRunnable({ now: Date.now(), env: 'production' })).toEqual([]);
+    const later = Date.now() + RETRY_DELAY_MS + 1_000;
+    expect((await findRunnable({ now: later, env: 'production' })).map((row) => row.booking_reference)).toEqual([REF]);
+  });
+
+  it('is queued again when the first write lost a race to a write that left the booking free', async () => {
+    let raced = false;
+    const { replay } = await load([released()], {
+      fail: ({ patch }) => {
+        // Something else touches the chain between the read and the write -
+        // and leaves it just as free. The write matches nothing; the booking
+        // is read again and queued.
+        if (!raced && patch?.booking_details?.gds_chain?.state === 'queued') {
+          raced = true;
+          table.row(REF).booking_details.gds_chain = {
+            state: 'failed', failedStep: 'unexpected-error', finishedAt: new Date().toISOString(), startedAt: minuteAgo(),
+          };
+        }
+        return false;
+      },
+    });
+
+    const outcome = await replay(snapshot(table.row(REF)), {
+      baseUrl: 'http://x',
+      fetchImpl: answer(503, { success: false, code: 'BOOKING_UNAVAILABLE', retryable: true }),
+    });
+
+    expect(outcome).toBe('retry');
+    expect(table.row(REF).booking_details.gds_chain).toMatchObject({ state: 'queued', queueAttempts: 1 });
+  });
+
+  // Picked up, since round 2, but only to drop the stored order (see 'a
+  // finished booking that still holds its stored order' below).
+  it('is not replayed while a human, a refund or a returned payment owns it', async () => {
+    const later = Date.now() + 10 * 60_000;
+    const owned = [
+      { ...released(), booking_reference: 'FLTQRH', booking_details: { ...released().booking_details, needs_review: { reason: 'x', at: minuteAgo() } } },
+      { ...released(), booking_reference: 'FLTQRF', booking_details: { ...released().booking_details, fulfillment_failed: { at: minuteAgo() } } },
+      { ...released(), booking_reference: 'FLTQRP', payment_status: 'refunded' },
+    ];
+    const { findRunnable, queueActionFor } = await load(owned);
+
+    const picked = await findRunnable({ now: later, env: 'production' });
+    expect(picked.map((row) => queueActionFor(row, { now: later }))).toEqual(['clear', 'clear', 'clear']);
+  });
+});
+
+/** The worker's own tick, with the order route answered by `route`. */
+const stubAmadeus = () => {
+  vi.stubEnv('AMADEUS_WS_ENDPOINT', 'https://node.test.invalid/1ASIWJETJEC');
+  vi.stubEnv('AMADEUS_WS_USERNAME', 'WSTEST');
+  vi.stubEnv('AMADEUS_WS_PASSWORD', 'pw');
+  vi.stubEnv('AMADEUS_WS_OFFICE_ID', 'SCK1S2400');
+};
+const tickWith = async (rows, { route = answer(200, { success: true, pnr: 'ABC123' }), ...options } = {}) => {
+  stubAmadeus();
+  const loaded = await load(rows, options);
+  vi.stubGlobal('fetch', route);
+  const worker = loaded.startBookingQueueWorker({ port: 5004, intervalMs: 3_600_000 });
+  try {
+    await worker.tick();
+  } finally {
+    worker.stop();
+    vi.unstubAllGlobals();
+  }
+  return { ...loaded, route };
+};
+const daysAgo = (days) => new Date(Date.now() - days * 24 * 3_600_000).toISOString();
+const hoursAgo = (hours) => new Date(Date.now() - hours * 3_600_000).toISOString();
+/** A chain the route let go of (`failed`) that nothing queued again. */
+const strandedRow = (chain = {}, details = {}, over = {}) => queuedRow(
+  { state: 'failed', failedStep: 'unexpected-error', startedAt: undefined, ...chain },
+  { queued_env: queueEnvironment(), ...details },
+  over,
+);
+
+/**
+ * Round 1 replayed a failed chain of ANY age - and one with no finishedAt at
+ * once. On deploy every stranded row would have gone through /order: a payment
+ * staff had settled by hand booked weeks late, or a refunded one emailed "we
+ * could not confirm your booking". The codebase's rule for a paid booking that
+ * never got booked is abandonedCheckout's: book or refund within six hours,
+ * past that a human decides. The queue now follows it.
+ */
+describe('a failed chain the queue would replay', () => {
+  it('is never replayed when it finished thirty days ago: a person is told instead', async () => {
+    const { route, sendEmail } = await tickWith([strandedRow({ finishedAt: daysAgo(30) })]);
+
+    expect(route).not.toHaveBeenCalled();
+    const details = table.row(REF).booking_details;
+    expect(details.needs_review).toMatchObject({ source: 'booking-queue', ticketed: false });
+    expect(details.needs_review.reason).toMatch(/not replayed/);
+    expect(details.queued_order).toBeUndefined();
+    expect(emailed(sendEmail)).toMatch(/Our team has been alerted/);
+  });
+
+  it('is never replayed when it records no time at all', async () => {
+    const { route } = await tickWith([strandedRow({ finishedAt: undefined })]);
+
+    expect(route).not.toHaveBeenCalled();
+    expect(table.row(REF).booking_details.needs_review.reason).toMatch(/not replayed/);
+  });
+
+  it('is replayed within six hours, reading when it was queued when it records no finish', async () => {
+    const { route } = await tickWith([strandedRow({ finishedAt: undefined, queuedAt: hoursAgo(1) })]);
+
+    expect(route).toHaveBeenCalledTimes(1);
+    expect(table.row(REF).booking_details.needs_review).toBeUndefined();
+  });
+
+  it('is replayed when it finished two hours ago', async () => {
+    const { route } = await tickWith([strandedRow({ finishedAt: hoursAgo(2) })]);
+
+    expect(route).toHaveBeenCalledTimes(1);
+  });
+
+  it('turns at the abandoned-checkout window, not at some other number', async () => {
+    const { AUTO_COMPLETE_WINDOW_MS } = await import('../../backend/jobs/abandonedCheckout.job.js');
+    const { queueActionFor } = await load([]);
+    const now = Date.now();
+    const finished = (ms) => strandedRow({ finishedAt: new Date(now - ms).toISOString() });
+
+    expect(queueActionFor(finished(AUTO_COMPLETE_WINDOW_MS - 60_000), { now })).toBe('replay');
+    expect(queueActionFor(finished(AUTO_COMPLETE_WINDOW_MS + 60_000), { now })).toBe('hand-over');
+  });
+});
+
+/**
+ * clearQueuedOrder gave up on one failed read (silently) and on one write
+ * error, and after a final failure nothing selected the row again. The row
+ * kept the passengers' passport numbers and dates of birth, and the admin's
+ * Void Payment refuses a booking still holding a queued order (BOOKING_BUSY).
+ * A finished row still holding one is now picked up - to clear it, never to
+ * replay it.
+ */
+describe('a finished booking that still holds its stored order', () => {
+  const finished = {
+    'a person owns it': strandedRow({ finishedAt: minuteAgo() }, { needs_review: { reason: 'queued booking could not be completed', source: 'booking-queue', at: minuteAgo() } }),
+    'a refund has been started': strandedRow({ finishedAt: minuteAgo() }, { fulfillment_failed: { at: minuteAgo() } }),
+    'the payment went back': strandedRow({ finishedAt: minuteAgo() }, {}, { payment_status: 'refunded' }),
+  };
+
+  it.each(Object.keys(finished))('is cleared, and never replayed, when %s', async (name) => {
+    const before = snapshot(finished[name]);
+    const { route, sendEmail } = await tickWith([finished[name]]);
+
+    expect(route).not.toHaveBeenCalled();
+    expect(sendEmail).not.toHaveBeenCalled();
+    const details = table.row(REF).booking_details;
+    expect(details.queued_order).toBeUndefined();
+    expect(details.queued_env).toBeUndefined();
+    expect(details.needs_review).toEqual(before.booking_details.needs_review);
+  });
+
+  it('is cleared after a failed read, which is logged and read again', async () => {
+    let failedReads = 0;
+    await tickWith([finished['a person owns it']], {
+      fail: ({ filters, patch }) => {
+        const clearRead = !patch && filters.some(([op, column]) => op === 'eq' && column === 'booking_reference');
+        if (clearRead && failedReads === 0) {
+          failedReads += 1;
+          return true;
+        }
+        return false;
+      },
+    });
+
+    expect(failedReads).toBe(1);
+    expect(table.row(REF).booking_details.queued_order).toBeUndefined();
+  });
+
+  it('is cleared after a failed write, which is tried again', async () => {
+    let failedWrites = 0;
+    await tickWith([finished['a person owns it']], {
+      fail: ({ patch }) => {
+        const clearing = patch?.booking_details && !('queued_order' in patch.booking_details);
+        if (clearing && failedWrites === 0) {
+          failedWrites += 1;
+          return true;
+        }
+        return false;
+      },
+    });
+
+    expect(failedWrites).toBe(1);
+    expect(table.row(REF).booking_details.queued_order).toBeUndefined();
+  });
+
+  it('is left alone while a chain is still running on it', async () => {
+    const running = strandedRow({ state: 'in_progress', startedAt: new Date().toISOString() }, { needs_review: { reason: 'x', at: minuteAgo() } });
+    const { route } = await tickWith([running]);
+
+    expect(route).not.toHaveBeenCalled();
+    expect(table.row(REF).booking_details.queued_order).toEqual(ORDER);
+  });
+});
+
 describe('a final failure', () => {
   it('is flagged for review when the route recorded nothing, so the alarm announces it', async () => {
     const { replay, sendEmail } = await load([queuedRow()]);
@@ -185,6 +412,45 @@ describe('a final failure', () => {
 
     expect(emailed(sendEmail)).not.toMatch(/alerted/);
     expect(emailed(sendEmail)).toMatch(/call \(877\) 538-7380/);
+  });
+});
+
+/**
+ * The stored order carries the passengers' dates of birth and passport numbers,
+ * and clearQueuedOrder is the only code that removes it. Its write is pinned to
+ * the row it read, and when that lost a race it logged and gave up. On a final
+ * failure nothing selects the row again - its chain is `failed` and it carries a
+ * review flag - so the passport data stayed for good, and the GDPR erasure job
+ * (gdpr.controller.js) defers any booking still holding a queued order, so the
+ * customer's erasure request was refused on every run after.
+ */
+describe('dropping the stored order', () => {
+  it('is read and tried again when the booking changed under it', async () => {
+    let raced = false;
+    const { replay } = await load([queuedRow()], {
+      fail: ({ patch }) => {
+        const clearing = patch?.booking_details && !('queued_order' in patch.booking_details);
+        if (clearing && !raced) {
+          raced = true;
+          // A payment reconcile lands between the read and the write.
+          table.row(REF).booking_details.arc_captured_amount = 291;
+        }
+        return false;
+      },
+    });
+
+    const outcome = await replay(snapshot(table.row(REF)), {
+      baseUrl: 'http://x',
+      fetchImpl: answer(403, { success: false, code: 'PAYER_NOT_VERIFIED' }),
+    });
+
+    expect(outcome).toBe('failed');
+    const details = table.row(REF).booking_details;
+    expect(details.queued_order).toBeUndefined();
+    expect(details.queued_env).toBeUndefined();
+    // Merged onto what was written in between, not over it.
+    expect(details.arc_captured_amount).toBe(291);
+    expect(details.needs_review.reason).toMatch(/PAYER_NOT_VERIFIED/);
   });
 });
 

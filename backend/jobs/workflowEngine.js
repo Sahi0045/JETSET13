@@ -9,6 +9,7 @@
 import supabase from '../config/supabase.js';
 import { sendEmail } from '../services/emailService.js';
 import { generateSlaAlertTemplate } from '../services/email/templates.js';
+import { queueEnvironment } from '../utils/queueEnvironment.js';
 
 // ─── Config ───────────────────────────────────────────────────
 const SLA_HOURS      = { visa: 72, flight: 24, hotel: 24, package: 48 };
@@ -105,18 +106,25 @@ async function checkSLABreaches() {
 
         // Notify admin/supervisor
         const adminEmail = process.env.ADMIN_EMAIL || 'jetsetters721@gmail.com';
-        await sendEmail({
-          to:      adminEmail,
-          subject: `SLA breach - ${inq.customer_name} (${inq.inquiry_type})`,
-          html: generateSlaAlertTemplate({
-            kind: 'breach',
-            customerName: inq.customer_name,
-            inquiryType: inq.inquiry_type,
-            status: inq.status,
-            sla,
-            inquiryId: inq.id,
-          }),
-        });
+        // Per inquiry: sendEmail throws on a send Resend refused, and one
+        // refused notice must not end the run for every inquiry behind it.
+        try {
+          await sendEmail({
+            to:      adminEmail,
+            subject: `SLA breach - ${inq.customer_name} (${inq.inquiry_type})`,
+            html: generateSlaAlertTemplate({
+              kind: 'breach',
+              customerName: inq.customer_name,
+              inquiryType: inq.inquiry_type,
+              status: inq.status,
+              sla,
+              inquiryId: inq.id,
+            }),
+          });
+        } catch (e) {
+          console.error(`[Workflow] SLA breach notice NOT sent for inquiry ${inq.id.slice(-8)}:`, e.message);
+          continue;
+        }
 
         await logAudit('sla_breach_detected', inq.id, { elapsed_hours: elapsed.toFixed(1), sla_hours: sla });
         console.log(`[Workflow] SLA breach notification sent for inquiry ${inq.id.slice(-8)}`);
@@ -149,17 +157,22 @@ async function checkEscalations() {
       }).eq('id', inq.id);
 
       const adminEmail = process.env.ADMIN_EMAIL || 'jetsetters721@gmail.com';
-      await sendEmail({
-        to:      adminEmail,
-        subject: `Escalation - ${inq.customer_name} (48h no action)`,
-        html: generateSlaAlertTemplate({
-          kind: 'escalation',
-          customerName: inq.customer_name,
-          inquiryType: inq.inquiry_type,
-          status: inq.status,
-          inquiryId: inq.id,
-        }),
-      });
+      // Per inquiry, for the same reason as the SLA notice above.
+      try {
+        await sendEmail({
+          to:      adminEmail,
+          subject: `Escalation - ${inq.customer_name} (48h no action)`,
+          html: generateSlaAlertTemplate({
+            kind: 'escalation',
+            customerName: inq.customer_name,
+            inquiryType: inq.inquiry_type,
+            status: inq.status,
+            inquiryId: inq.id,
+          }),
+        });
+      } catch (e) {
+        console.error(`[Workflow] Escalation notice NOT sent for inquiry ${inq.id.slice(-8)}:`, e.message);
+      }
 
       await logAudit('escalated', inq.id, { reason: '48h_no_action' });
       console.log(`[Workflow] Escalated inquiry ${inq.id.slice(-8)}`);
@@ -199,7 +212,26 @@ async function runDataRetention() {
 // ─── Engine Start ─────────────────────────────────────────────
 let _timer = null;
 
-export async function startWorkflowEngine() {
+export async function startWorkflowEngine({ env = process.env } = {}) {
+  /**
+   * Production only, unless asked for by name.
+   *
+   * Local development and production share one database, and `npm run dev`
+   * starts this engine. With no check here every developer's laptop reassigned
+   * production inquiries and set them `in_progress`, stamped
+   * `sla_breach_notified` before sending (so the SLA email production would
+   * have sent was spent by the laptop), escalated them to `urgent`, and in the
+   * 02:00 hour hard-deleted anonymised inquiries and password-reset rows. The
+   * retention job beside it was given this guard for exactly that reason
+   * (dataRetention.job.js); this one was not. "Production" is the stack that
+   * names itself so (utils/queueEnvironment.js), not NODE_ENV, which `npm
+   * start` sets on any machine.
+   */
+  if (queueEnvironment(env) !== 'production' && env.WORKFLOW_ENGINE !== 'true') {
+    console.log(`[Workflow] Asleep: this is '${queueEnvironment(env)}', not production (set WORKFLOW_ENGINE=true to run it here)`);
+    return;
+  }
+
   console.log('[Workflow] Engine started — interval:', CHECK_INTERVAL / 60_000, 'min');
 
   const runAll = async () => {

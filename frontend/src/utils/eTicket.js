@@ -17,6 +17,8 @@
  *     validatingCarrier: 'AI'|null, issuedOn: '2026-09-04'|null }
  */
 
+import { NO_CONFIRMED_SEAT_REVIEW_REASON, liveTicketNumbersMissingOf, noConfirmedSeatOf } from '../../../shared/reviewQueue';
+
 /**
  * A booking reaches the UI in two different shapes, and both are live:
  *
@@ -40,6 +42,45 @@ const REVIEW_PATHS = [
   (b) => b?.booking_details?.needs_review,
   (b) => b?.bookingDetails?.needs_review,
 ];
+
+/**
+ * The review flag the order route writes when the airline left a flight
+ * waitlisted, requested, unable or cancelled at commit (the chain's step
+ * 'segmentStatus'). There is a PNR, but no confirmed seat, and the server will
+ * not ticket it. The one value lives in shared/reviewQueue.js, which the route
+ * and the alarm read too.
+ *
+ * Exported here rather than from bookingStatus.js, which imports this file and
+ * re-exports it: the document reads it too.
+ */
+export { NO_CONFIRMED_SEAT_REVIEW_REASON };
+
+/**
+ * A state the server worked out for the page, or undefined when this copy of
+ * the booking does not carry it.
+ *
+ * Both booking reads send the review flag cut down to its reason
+ * (toClientBooking), and an earlier flag can sit under a later one: a refused
+ * cancel writes its own on top of "no confirmed seat". So the server walks the
+ * flags (shared/reviewQueue.js flagInForce) and names the state; the top reason
+ * alone told the page the seat was held again.
+ */
+const sentByServer = (bookingData, name) => {
+  for (const read of REVIEW_PATHS) {
+    const value = read(bookingData)?.[name];
+    if (typeof value === 'boolean') return value;
+  }
+  return undefined;
+};
+
+/**
+ * Whether the airline left this booking's PNR without a confirmed seat: as the
+ * server worked it out, or - for a copy that does not say, such as a raw row -
+ * by the same walk over the flags the server makes.
+ */
+export function hasNoConfirmedSeat(bookingData) {
+  return sentByServer(bookingData, 'no_confirmed_seat') ?? Boolean(noConfirmedSeatOf(bookingData));
+}
 
 /** Whether the booking was cancelled, from whichever shape it arrived in. */
 export function isCancelledBooking(bookingData) {
@@ -76,9 +117,11 @@ export function ticketState(bookingData) {
   if (isCancelledBooking(bookingData)) return 'cancelled';
   if (resolveTickets(bookingData).length > 0) return 'issued';
 
-  for (const read of REVIEW_PATHS) {
-    if (read(bookingData)?.reason === 'ticket_numbers_not_retrieved') return 'pending';
-  }
+  // Under a refused cancel's flag too (sentByServer): the ticket was issued
+  // whatever flag sits on top now, and the top reason alone read "none" - but
+  // not once a cancel voided it (liveTicketNumbersMissingOf).
+  const numbersMissing = sentByServer(bookingData, 'ticket_numbers_missing') ?? Boolean(liveTicketNumbersMissingOf(bookingData));
+  if (numbersMissing) return 'pending';
 
   return 'none';
 }
@@ -136,13 +179,19 @@ export function pnrOf(bookingData) {
  * the airline, one held back as a second payment, and one never paid for. Only
  * a PNR holds a seat.
  *
- * @returns {'cancelled'|'ticketed'|'ticket_pending'|'held'|'queued'|'not_booked'}
+ * And not every PNR does: one the airline left without a confirmed seat
+ * (hasNoConfirmedSeat) printed "Your seat is held under the PNR below" too.
+ *
+ * @returns {'cancelled'|'ticketed'|'ticket_pending'|'held'|'no_confirmed_seat'|'queued'|'not_booked'}
  */
 export function documentState(bookingData) {
   const tickets = ticketState(bookingData);
   if (tickets === 'cancelled') return 'cancelled';
   if (tickets === 'issued') return 'ticketed';
-  if (pnrOf(bookingData)) return tickets === 'pending' ? 'ticket_pending' : 'held';
+  if (pnrOf(bookingData)) {
+    if (tickets === 'pending') return 'ticket_pending';
+    return hasNoConfirmedSeat(bookingData) ? 'no_confirmed_seat' : 'held';
+  }
   const status = String(bookingData?.status ?? '').toLowerCase();
   return bookingData?.queued === true || status === 'pending_confirmation' ? 'queued' : 'not_booked';
 }
@@ -150,10 +199,18 @@ export function documentState(bookingData) {
 /**
  * Whether Manage Booking offers the document at all: only for a booking the
  * airline holds. Without a PNR there is nothing to carry - no ticket and no
- * reservation - and a PDF headed "Booking Confirmation" says otherwise.
+ * reservation - and a PDF headed "Booking Confirmation" says otherwise. Nor
+ * with a PNR the airline confirmed no seat on: there is no seat to prove.
+ *
+ * Nor a held seat whose payment went back: the Payments tab refunds without
+ * cancelling, and the PDF said "Your seat is held under the PNR below. We will
+ * email your e-ticket once it is issued" - no ticket is issued on it.
  */
 export function canDownloadDocument(bookingData) {
-  return ['ticketed', 'ticket_pending', 'held'].includes(documentState(bookingData));
+  const state = documentState(bookingData);
+  const payment = String(bookingData?.payment_status ?? bookingData?.paymentStatus ?? '').toLowerCase();
+  if (state === 'held' && ['refunded', 'partially_refunded', 'reversed'].includes(payment)) return false;
+  return ['ticketed', 'ticket_pending', 'held'].includes(state);
 }
 
 /** Whether the money is actually confirmed, rather than assumed. */

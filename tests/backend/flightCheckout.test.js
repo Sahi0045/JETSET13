@@ -166,6 +166,134 @@ describe('verifyFlightCharge', () => {
     expect(result.code).toBe('PRICE_CONFIG_UNAVAILABLE');
   });
 
+  /**
+   * The flights the travellers are checked against are the flights sold.
+   *
+   * Documents, ages and passport expiry are decided from `itineraries`; the
+   * flights priced, sold and booked are `_ama.segments`. The mapper builds the
+   * two from the same reply, one for one, and nothing checked they still
+   * agreed: an offer showing a domestic hop over a real international
+   * `_ama` passed without passports, and one with no itineraries skipped every
+   * age and passport-expiry check. Refused before pricing.
+   */
+  describe('an offer whose flights shown are not the flights sold', () => {
+    const sold = [{ legIndex: 0, boardPoint: 'JFK', offPoint: 'LHR', departureDate: '151126', marketingCarrier: 'BA', flightNumber: '178', rbd: 'Y' }];
+    const shown = (from, to, at = '2026-11-15T19:25:00') => [{
+      segments: [{ id: '1', carrierCode: 'BA', number: '178', departure: { iataCode: from, at }, arrival: { iataCode: to } }],
+    }];
+    const withFlights = (itineraries) => {
+      const booking = bookingFor(1);
+      booking.originalOffer = { ...booking.originalOffer, itineraries, _ama: { segments: sold } };
+      return booking;
+    };
+
+    it('refuses a trip shown as somewhere else', async () => {
+      const priceOffer = pricedAt(400);
+      const result = await verify({ amount: 401, bookingData: withFlights(shown('JFK', 'BOS')), priceOffer });
+
+      expect(result.code).toBe('OFFER_MISSING');
+      expect(priceOffer).not.toHaveBeenCalled();
+    });
+
+    it('refuses a trip shown on another day', async () => {
+      const priceOffer = pricedAt(400);
+      const result = await verify({ amount: 401, bookingData: withFlights(shown('JFK', 'LHR', '2026-12-15T19:25:00')), priceOffer });
+
+      expect(result.code).toBe('OFFER_MISSING');
+      expect(priceOffer).not.toHaveBeenCalled();
+    });
+
+    it('refuses a trip shown with no flights at all', async () => {
+      const priceOffer = pricedAt(400);
+      const result = await verify({ amount: 401, bookingData: withFlights([]), priceOffer });
+
+      expect(result.code).toBe('OFFER_MISSING');
+      expect(priceOffer).not.toHaveBeenCalled();
+    });
+
+    it('prices a trip shown as it is sold', async () => {
+      const priceOffer = pricedAt(400);
+      const result = await verify({ amount: 401, bookingData: withFlights(shown('JFK', 'LHR')), priceOffer });
+
+      expect(priceOffer).toHaveBeenCalledTimes(1);
+      expect(result.ok).toBe(true);
+    });
+
+    // The check must never refuse a genuine offer. Every offer the mapper makes
+    // from the recorded search replies - one-way, round trip, connections,
+    // families - goes through it.
+    it.each([
+      'mptbs-oneway-jfk-lhr', 'mptbs-roundtrip', 'mptbs-roundtrip-uneven-availability', 'mptbs-nonstop-business',
+      'mptbs-family-del-bom', 'mptbs-infant-family-del-bom', 'mptbs-shared-price-combinations',
+    ])('lets every offer mapped from %s through', async (name) => {
+      const { mapMasterPricerReply } = await import('../../backend/services/amadeusSoap/mappers/offer.js');
+      const { parseSoap, unwrapEnvelope } = await import('../../backend/services/amadeusSoap/parseXml.js');
+      const xml = readFileSync(new URL(`../fixtures/amadeus/${name}.xml`, import.meta.url), 'utf8');
+      const { body } = unwrapEnvelope(parseSoap(xml));
+      const { offers } = mapMasterPricerReply(body[Object.keys(body).find((k) => k !== 'Fault')], {
+        config: { wsap: '1ASIWJETJEC', officeId: 'SCK1S2400', currency: 'USD' },
+        searchSignature: 'test',
+      });
+      expect(offers.length).toBeGreaterThan(0);
+
+      for (const offer of offers) {
+        const priceOffer = vi.fn().mockRejectedValue(new Error('stop here'));
+        const booking = {
+          originalOffer: offer,
+          passengerData: offer.travelerPricings.map((p, i) => ({ firstName: `P${i}`, lastName: 'Doe', gender: 'female', dateOfBirth: '1990-01-01', type: p.travelerType })),
+        };
+        await verify({ amount: 1, bookingData: booking, priceOffer });
+        expect(priceOffer, `offer ${offer.id} was refused before pricing`).toHaveBeenCalledTimes(1);
+      }
+    });
+  });
+
+  // Pricing is where the seats are sold and released at the airline. A
+  // checkout that cannot be charged for want of the fee settings is refused
+  // before that, not after a sell it could never use.
+  it('refuses without price settings before the fare is priced', async () => {
+    rows.price_settings = null;
+    const priceOffer = pricedAt(400);
+
+    const result = await verify({ amount: 401, bookingData: bookingFor(1), priceOffer });
+
+    expect(result.code).toBe('PRICE_CONFIG_UNAVAILABLE');
+    expect(priceOffer).not.toHaveBeenCalled();
+  });
+
+  // Every flight checkout stops while the row is missing or duplicated
+  // (`.single()` answers PGRST116 for both), and nothing was logged: on-call saw
+  // a total outage with no line pointing at the table. Still refused - the
+  // review page reads the same row, and a fee picked from one of two rows could
+  // differ from the total the page showed - but said, with what the driver said.
+  it('logs why the price settings could not be read', async () => {
+    const { verifyFlightCharge } = await import('../../backend/services/flightCheckout.service.js');
+    const client = clientFor();
+    const from = client.from;
+    client.from = vi.fn((table) => {
+      const query = from(table);
+      if (table === 'price_settings') {
+        query.single = vi.fn(async () => ({
+          data: null,
+          error: { code: 'PGRST116', message: 'JSON object requested, multiple (or no) rows returned', details: 'The result contains 2 rows' },
+        }));
+      }
+      return query;
+    });
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    try {
+      const result = await verifyFlightCharge({ client, amount: 401, bookingData: bookingFor(1), priceOffer: pricedAt(400) });
+
+      expect(result.code).toBe('PRICE_CONFIG_UNAVAILABLE');
+      const line = logged.mock.calls.find((args) => JSON.stringify(args).includes('price_settings'));
+      expect(line, 'no log line names the price_settings table').toBeTruthy();
+      expect(JSON.stringify(line)).toContain('The result contains 2 rows');
+    } finally {
+      logged.mockRestore();
+    }
+  });
+
   it('applies a coupon it evaluated itself', async () => {
     rows.coupons = { id: 'c1', code: 'FLY10', discount_type: 'percentage', discount_value: 10, min_order_value: 0, max_uses: null, applicable_to: 'all', is_active: true };
 
@@ -174,6 +302,44 @@ describe('verifyFlightCharge', () => {
     expect(result.ok).toBe(true);
     expect(result.charge.discount).toBe(40.2);
     expect(result.coupon.code).toBe('FLY10');
+  });
+
+  // A coupon that cannot be read is not a coupon that does not apply, and not
+  // an unexplained failure either. The read's error escaped as a bare 500
+  // "Failed to create hosted checkout", which none of the review page's
+  // recovery branches read, so every retry failed the same way unexplained.
+  it('says the coupon could not be checked when the coupons table cannot be read', async () => {
+    const { verifyFlightCharge } = await import('../../backend/services/flightCheckout.service.js');
+    const client = clientFor();
+    const from = client.from;
+    client.from = vi.fn((table) => {
+      const query = from(table);
+      if (table === 'coupons') query.maybeSingle = vi.fn(async () => ({ data: null, error: { message: 'connection reset' } }));
+      return query;
+    });
+
+    const result = await verifyFlightCharge({ client, amount: 361.8, bookingData: bookingFor(2), couponCode: 'FLY10', priceOffer: pricedAt(400) });
+
+    expect(result.ok).toBe(false);
+    expect(result.status).toBe(503);
+    expect(result.code).toBe('COUPON_UNAVAILABLE');
+    expect(result.message).toMatch(/coupon/i);
+  });
+
+  // So the customer's own abandoned payment page for this same trip is not
+  // taken for the coupon being on another booking (coupon.service.js).
+  it('tells the coupon check which trip this is', async () => {
+    const actual = await vi.importActual('../../backend/services/coupon.service.js');
+    const evaluateCoupon = vi.fn(async () => ({ ok: true, coupon: { id: 'c1', code: 'FLY10' }, discountAmount: 0 }));
+    vi.doMock('../../backend/services/coupon.service.js', () => ({ ...actual, evaluateCoupon }));
+    const booking = bookingFor(1);
+    booking.originalOffer.itineraries = [{ segments: [{ carrierCode: 'BA', number: '178', departure: { iataCode: 'JFK', at: '2026-11-15T19:25:00' }, arrival: { iataCode: 'LHR' } }] }];
+
+    await verify({ amount: 401, bookingData: booking, couponCode: 'FLY10', priceOffer: pricedAt(400) });
+    vi.doUnmock('../../backend/services/coupon.service.js');
+
+    expect(evaluateCoupon.mock.calls[0][1].trip).toBe(actual.couponTripKey(booking.originalOffer, booking.passengerData));
+    expect(evaluateCoupon.mock.calls[0][1].trip).toBeTruthy();
   });
 
   // A payment page cannot be opened for $0.00. The page sent 0 and was answered
@@ -495,10 +661,11 @@ describe('priceOfferForCheckout tells a refused fare from an outage', () => {
     });
 
     const pricedOk = () => vi.fn().mockResolvedValue({ success: true, data: { flightOffers: [{ price: { total: '400.00' } }] } });
-    const withSeatCheck = (confirmSeats, seatCheckBeforePayment = true) => {
+    const withSeatCheck = (confirmSeats, seatCheckBeforePayment = true, bookingEnabled = true) => {
       vi.stubEnv('FLIGHTS_API_BASE', '');
       vi.stubEnv('VERCEL', '');
       vi.stubEnv('AMADEUS_WS_SEAT_CHECK_BEFORE_PAYMENT', String(seatCheckBeforePayment));
+      vi.stubEnv('AMADEUS_WS_BOOKING_ENABLED', String(bookingEnabled));
       vi.doMock('../../backend/services/flightProvider.js', () => ({
         default: { priceFlightOffer: pricedOk(), confirmSeats },
       }));
@@ -517,6 +684,22 @@ describe('priceOfferForCheckout tells a refused fare from an outage', () => {
       withSeatCheck(confirmSeats, false);
       expect(await price()).toBeNull();
       expect(confirmSeats).not.toHaveBeenCalled();
+    });
+
+    // With booking off, verifyFlightCharge answers BOOKING_DISABLED for every
+    // checkout - but only after this returns, so the seats were sold and
+    // released at the airline first, for a checkout that could never become a
+    // booking. Each one counted against the office's look-to-book ratio.
+    it('does not sell the seats while booking is switched off', async () => {
+      const confirmSeats = vi.fn();
+      withSeatCheck(confirmSeats, true, false);
+      const { priceOfferForCheckout } = await import('../../backend/services/flightCheckout.service.js');
+
+      const priced = await priceOfferForCheckout({ id: '1' });
+
+      expect(confirmSeats).not.toHaveBeenCalled();
+      // And the answer still says so, for verifyFlightCharge to refuse on.
+      expect(priced._ama.bookingEnabled).toBe(false);
     });
   });
 });

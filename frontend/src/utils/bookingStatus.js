@@ -1,4 +1,4 @@
-import { isPaid, ticketState } from './eTicket';
+import { NO_CONFIRMED_SEAT_REVIEW_REASON, hasNoConfirmedSeat, isPaid, ticketState } from './eTicket';
 import {
   REFUND_DONE_ACTIONS,
   REFUND_REVIEW_ACTIONS,
@@ -29,6 +29,31 @@ const reviewOf = (booking) =>
   booking?.needs_review || booking?.booking_details?.needs_review || booking?.bookingDetails?.needs_review || null;
 
 const pnrOf = (booking) => booking?.pnr || booking?.booking_details?.pnr || booking?.bookingDetails?.pnr || null;
+
+/**
+ * The review flag the order route writes when the airline left a flight
+ * waitlisted, requested, unable or cancelled at commit. There is a PNR, but no
+ * confirmed seat. One value, in shared/reviewQueue.js; eTicket.js exports it
+ * for the pages, and whether a booking carries it is hasNoConfirmedSeat's to say.
+ */
+export { NO_CONFIRMED_SEAT_REVIEW_REASON };
+
+/**
+ * Whether the booking's payment record says its money went back, in full
+ * ('all') or in part ('part'), or null.
+ *
+ * A booking can be refunded without being cancelled: the Payments tab writes
+ * payment_status and nothing else. Every sentence below that spoke of the
+ * payment - "Our team is looking after your payment", "Awaiting payment",
+ * "Payment received", "do not book this trip again" - was said without
+ * reading it, and was false of that booking.
+ */
+export function paymentReturned(booking) {
+  const payment = String(booking?.payment_status ?? booking?.paymentStatus ?? '').toLowerCase();
+  if (['refunded', 'reversed'].includes(payment)) return 'all';
+  if (payment === 'partially_refunded') return 'part';
+  return null;
+}
 
 const money = (amount, currency) => {
   try {
@@ -92,12 +117,22 @@ export function needsManualRefund(booking) {
   return ['failed', 'review', 'pending'].includes(refundStatus(booking)?.key);
 }
 
+/** Flagged for review, and neither cancelled nor ticketed since. */
+const flaggedOpen = (booking) => Boolean(reviewOf(booking))
+  && String(booking?.status || '').toUpperCase() !== 'CANCELLED' && ticketState(booking) !== 'issued';
+
 /** Does someone need to act on this booking? */
 export function needsAttention(booking) {
   const status = String(booking?.status || '').toUpperCase();
   if (status === 'FAILED') return true;
   if (['failed', 'review', 'pending'].includes(refundStatus(booking)?.key)) return true;
-  return Boolean(reviewOf(booking)) && status !== 'CANCELLED' && ticketState(booking) !== 'issued';
+  // A flight refunded without being cancelled (paymentReturned) waits on
+  // nobody: its flag stays, and it was badged "Needs attention" and listed
+  // under Failed while the same booking unflagged read "Refunded". Its
+  // sentence still says what happened (attentionMessage).
+  const isFlight = String(booking?.type || booking?.travel_type || '').toLowerCase() === 'flight';
+  if (isFlight && paymentReturned(booking)) return false;
+  return flaggedOpen(booking);
 }
 
 /**
@@ -120,7 +155,38 @@ export function attentionMessage(booking) {
     }
     return null;
   }
-  if (!needsAttention(booking)) return null;
+  if (!needsAttention(booking) && !flaggedOpen(booking)) return null;
+  // Said from the payment record: a flagged booking refunded since reads
+  // refunded, and "our team is looking after your payment" was false of it.
+  const returned = paymentReturned(booking);
+  // A ticket was issued (ticketState 'pending': its number not read back), so
+  // the booking was completed; money went back on it. Read before the
+  // sentences below, which said "This booking was not completed" of it.
+  if (returned && ticketState(booking) === 'pending') {
+    return `Your ticket has been issued, and ${returned === 'all' ? 'your payment' : 'part of your payment'} for it has been refunded. `
+      + 'Its ticket number has not reached us; if you need it, or have any questions, call (877) 538-7380 with your booking reference.';
+  }
+  if (returned === 'all') {
+    return 'This booking was not completed, and your payment for it has been refunded. '
+      + 'If you have any questions, call (877) 538-7380 with your booking reference.';
+  }
+  if (returned === 'part') {
+    return 'This booking was not completed. Part of your payment for it has been refunded; '
+      + 'please call (877) 538-7380 with your booking reference about the rest.';
+  }
+  // A PNR is not a seat: "your seats are reserved" was false of this one. And
+  // a second trip bought meanwhile is not caught as a duplicate. Read through
+  // hasNoConfirmedSeat, not the top flag: a refused cancel flags it again on top.
+  if (hasNoConfirmedSeat(booking)) {
+    return 'The airline has not confirmed a seat on every flight, so no ticket has been issued. Our team will contact you. '
+      + 'Please do not book this trip again in the meantime.';
+  }
+  // Issued, with its number not read back (ticketState 'pending'): "your
+  // ticket has not been issued yet" sat beside "Issued, number pending" and a
+  // document saying the ticket was issued.
+  if (ticketState(booking) === 'pending') {
+    return 'Your ticket has been issued, but its ticket number has not reached us yet. Our team is getting it from the airline.';
+  }
   return pnrOf(booking)
     ? 'Your seats are reserved, but your ticket has not been issued yet. Our team is working on it and will email you.'
     : 'Your booking could not be completed with the airline. Our team is looking after your payment and will email you.';
@@ -141,6 +207,10 @@ export function bookingStatusBadge(booking) {
     const tickets = ticketState(booking);
     if (tickets === 'issued') return { label: 'Ticketed', tone: 'success' };
     if (tickets === 'pending') return { label: 'Ticket issued', tone: 'success' };
+    // Refunded without being cancelled (paymentReturned): not being confirmed,
+    // not a held reservation, and not awaiting a payment it already made.
+    const returned = paymentReturned(booking);
+    if (returned) return { label: returned === 'all' ? 'Refunded' : 'Partly refunded', tone: 'neutral' };
     // Paid, and waiting in the queue for an Amadeus slot: nothing has been sent
     // to the airline yet, so it is neither a reservation nor a failure.
     if (!pnrOf(booking) && (booking?.queued === true || status === 'pending_confirmation')) {

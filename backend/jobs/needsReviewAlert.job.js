@@ -22,6 +22,19 @@
 import supabase from '../config/supabase.js';
 import { postToSlack } from './slackAlert.js';
 import { unchangedSince } from '../utils/bookingDetailsGuard.js';
+import { queueEnvironment } from '../utils/queueEnvironment.js';
+import {
+  NO_CONFIRMED_SEAT_REVIEW_REASON, TICKET_NUMBERS_MISSING, flagsInForce, isFailedCancellation, isTicketed,
+  isUnrecordedCancellation, needsAirlineRefundClaim, ticketNumbersMissingOf, ticketsOf, unrecordedCancellationOf,
+} from '../../shared/reviewQueue.js';
+
+/**
+ * Whether the Slack alarms may run in this process: on the stack that names
+ * itself production (utils/queueEnvironment.js - not NODE_ENV, which `npm
+ * start` sets on any machine), or where ALERT_JOBS=true asks for them by name.
+ * Shared with the failed-refund alarm so the two cannot disagree.
+ */
+export const alarmsMayRun = (env = process.env) => queueEnvironment(env) === 'production' || env.ALERT_JOBS === 'true';
 
 const DEFAULT_INTERVAL_MS = 15 * 60 * 1000;
 const FIRST_RUN_DELAY_MS = 60 * 1000;      // let the app finish booting first
@@ -57,10 +70,21 @@ export function selectUnannounced(rows = []) {
     // A cancellation with a refund still to claim from the airline. It is
     // cancelled and ticketed, so both checks below would skip it - and did.
     if (needsAirlineRefundClaim(booking)) return true;
+    // A cancellation carried out but not recorded. A retry that voided the
+    // tickets leaves none to claim, and the booking still reads ticketed, so
+    // the checks below skipped it: seats and money moved, nobody told.
+    if (isUnrecordedCancellation(booking)) return true;
+    // A cancel the airline refused. The PNR is live and the customer was told
+    // our team had been alerted, but a ticketed booking - one whose void went
+    // through for some tickets only, too - was skipped below as done.
+    if (isFailedCancellation(booking)) return true;
 
-    // The ticket turned up later, by retry or by hand.
-    if (details.gds?.ticketed === true) return false;
-    if (Array.isArray(details.tickets) && details.tickets.length > 0) return false;
+    // The ticket turned up later, by retry or by hand. Not the chain's own
+    // "issued, but the numbers did not all arrive": that row is ticketed by
+    // definition, and skipping it here meant nobody was ever told.
+    const numbersMissing = review?.reason === TICKET_NUMBERS_MISSING;
+    if (!numbersMissing && details.gds?.ticketed === true) return false;
+    if (!numbersMissing && Array.isArray(details.tickets) && details.tickets.length > 0) return false;
 
     // Already dealt with: a cancelled or refunded booking has been resolved and
     // nobody needs paging about it. The first dry run flagged FLTMTPRZA5T -
@@ -111,11 +135,12 @@ export function describeBooking(booking) {
  * `needs_review.tickets`). That flag was written and never read: this job
  * skipped cancelled rows, and the failed-refund alarm lists only refunds that
  * failed, so the claim reached nobody.
+ *
+ * The rule lives in shared/reviewQueue.js, which the admin "Needs attention"
+ * list uses too: written twice, the two disagreed, and a claim Slack announced
+ * once was missing from the only durable list of them.
  */
-export function needsAirlineRefundClaim(booking) {
-  const review = booking?.booking_details?.needs_review;
-  return review?.source === 'cancellation' && Array.isArray(review.tickets) && review.tickets.length > 0;
-}
+export { needsAirlineRefundClaim };
 
 /** One line per airline claim. Ticket numbers, never passenger names. */
 export function describeAirlineClaim(booking) {
@@ -131,16 +156,272 @@ export function describeAirlineClaim(booking) {
   ].join('\n');
 }
 
+/**
+ * One line per ticketed booking whose ticket numbers did not all come back.
+ * Expected against got, so the desk knows how many numbers it is looking for;
+ * "unknown" when the chain did not record the count, never a guess.
+ */
+export function describeTicketNumbersMissing(booking) {
+  const details = booking.booking_details || {};
+  const review = details.needs_review || {};
+  const hours = Math.round((Date.now() - Date.parse(review.at || booking.created_at)) / 36e5);
+  const expected = Number.isFinite(review.expected) ? review.expected : 'unknown';
+  const got = Number.isFinite(review.got) ? review.got : ticketsOf(details).length;
+  return [
+    `*${booking.booking_reference}* — ${booking.status}/${booking.payment_status}, ${booking.total_amount} USD`,
+    `PNR ${details.pnr || 'none'} · ticket numbers expected ${expected}, got ${got}`,
+    `flagged ${hours}h ago`,
+  ].join('\n');
+}
+
+/**
+ * A numbers-missing flag with SOME numbers: fewer FA lines than travellers.
+ *
+ * The chain writes it after an issue the airline accepted whose numbers are
+ * still landing, and also when a new session finds a PNR ticketed for only
+ * some travellers after our own issue call was refused (bookingChain.js
+ * issueInFreshSessions) - it cannot tell the two apart. With no number at all
+ * the flag only ever follows an accepted issue (readTicketNumbers), so that
+ * one keeps "the ticket IS issued".
+ */
+export function isPartlyTicketed(booking) {
+  const details = booking?.booking_details || {};
+  const review = details.needs_review || {};
+  const got = Number.isFinite(review.got) ? review.got : ticketsOf(details).length;
+  return got > 0 && Number.isFinite(review.expected) && got < review.expected;
+}
+
+/**
+ * One line per partly ticketed booking, per traveller as far as the booking
+ * knows: each FA line by ticket number and PNR passenger reference (never a
+ * name - alerts get forwarded), and how many travellers have none.
+ */
+export function describeTicketNumbersPartial(booking) {
+  const details = booking.booking_details || {};
+  const review = details.needs_review || {};
+  const hours = Math.round((Date.now() - Date.parse(review.at || booking.created_at)) / 36e5);
+  const tickets = ticketsOf(details);
+  const got = Number.isFinite(review.got) ? review.got : tickets.length;
+  const missing = review.expected - got;
+  const passenger = (ticket) => {
+    const ref = ticket.pnrTravelerId ?? null;
+    if (ref == null) return '';
+    return String(ref).endsWith('-INF') ? ` (PNR passenger ${String(ref).slice(0, -4)}, infant)` : ` (PNR passenger ${ref})`;
+  };
+  return [
+    `*${booking.booking_reference}* — ${booking.status}/${booking.payment_status}, ${booking.total_amount} USD`,
+    `PNR ${details.pnr || 'none'} · ticket numbers expected ${review.expected}, got ${got}`,
+    `FA lines (ticketed, do not reissue): ${tickets.map((ticket) => `${ticket.number}${passenger(ticket)}`).join(', ') || 'none recorded'}`,
+    `no FA line (check, issue for that passenger only): ${missing} traveller${missing > 1 ? 's' : ''}`,
+    `flagged ${hours}h ago`,
+  ].join('\n');
+}
+
+/**
+ * One line per cancellation carried out but not recorded. What the cancel did,
+ * as its flag says - the row itself may still read confirmed and paid. The flag
+ * may sit under a later one (unrecordedCancellationOf); that one is named too.
+ */
+export function describeUnrecordedCancellation(booking) {
+  const details = booking.booking_details || {};
+  const latest = details.needs_review || {};
+  const review = unrecordedCancellationOf(booking) || latest;
+  const hours = Math.round((Date.now() - Date.parse(review.at || booking.created_at)) / 36e5);
+  const tickets = review.tickets || [];
+  return [
+    `*${booking.booking_reference}* — the record reads ${booking.status}/${booking.payment_status}, ${booking.total_amount} USD`,
+    `PNR ${details.pnr || 'none'} · payment ${review.paymentAction || 'unknown'} ${review.refundAmount ?? 0} USD`
+      + ` · tickets voided: ${review.ticketsVoided === true ? 'yes' : 'no'}`
+      + (tickets.length ? ` · to claim from the airline: ${tickets.join(', ')}` : ''),
+    ...(latest !== review
+      ? [`since then: ${latest.reason || 'flagged again'}${latest.detail ? ` (${latest.detail})` : ''}`]
+      : []),
+    `flagged ${hours}h ago`,
+  ].join('\n');
+}
+
+const ticketDigits = (number) => String(number ?? '').replace(/\D/g, '');
+
+/** Ticket numbers from several lists, each once, in the order first seen. */
+const unionTickets = (...lists) => {
+  const seen = new Set();
+  return lists.flatMap((list) => (Array.isArray(list) ? list : [])).filter((number) => {
+    const digits = ticketDigits(number);
+    if (!digits || seen.has(digits)) return false;
+    seen.add(digits);
+    return true;
+  });
+};
+
+/**
+ * One line per cancellation the airline did not carry out. Which tickets were
+ * voided and which are still live, as the cancels recorded them; when the
+ * latest did not say, what is known not to be voided is listed as such, never
+ * guessed live or void.
+ *
+ * Voided is every ticket ANY attempt voided: the booking's own list (the
+ * cancel handler adds each attempt's voids to booking_details.voided_tickets)
+ * and the lists on every flag in the chain. It read the latest flag alone, and
+ * a later refused cancel that voided nothing writes a flag with no lists: Slack
+ * said "tickets voided: none recorded · on the booking: A, B" of two void
+ * tickets, and a person working by hand could claim their value from the
+ * airline, or under-refund a fare whose tickets were void.
+ */
+export function describeFailedCancellation(booking) {
+  const details = booking.booking_details || {};
+  const review = details.needs_review || {};
+  const hours = Math.round((Date.now() - Date.parse(review.at || booking.created_at)) / 36e5);
+  // A void is a fact about the ticket, so resolved flags count too.
+  const flags = flagsInForce(booking, { pastResolved: true });
+  const voided = unionTickets(details.voided_tickets, ...flags.map((flag) => flag.voided_tickets));
+  const voidedDigits = new Set(voided.map(ticketDigits));
+  const notVoided = (list) => list.filter((number) => !voidedDigits.has(ticketDigits(number)));
+  // Whether a ticket was issued, by any record of it. With no number on the
+  // booking and none in the cancel's lists, this printed "no tickets issued"
+  // of a booking the chain ticketed and could not read the numbers back for
+  // (ticket_numbers_not_retrieved, found under the refused cancel's flag too):
+  // staff told there is no ticket could cancel and refund in full over live
+  // tickets. A void is of an issued ticket, so it counts. So does a ticket any
+  // attempt named as not voided, not only the latest: the line said
+  // "ticketed: NO" beside an earlier attempt's live ticket it listed.
+  const numbersMissing = Boolean(ticketNumbersMissingOf(booking));
+  const ticketed = isTicketed(details) || numbersMissing || flags.some((flag) => flag.ticketed === true)
+    || voided.length > 0 || flags.some((flag) => Array.isArray(flag.unvoided_tickets) && flag.unvoided_tickets.length > 0);
+  let tickets;
+  if (Array.isArray(review.unvoided_tickets)) {
+    // This attempt's own report: every ticket on the PNR it did not void.
+    tickets = `tickets voided: ${voided.join(', ') || 'none'} · still live: ${notVoided(review.unvoided_tickets).join(', ') || 'none'}`;
+  } else {
+    const others = notVoided(unionTickets(ticketsOf(details).map((ticket) => ticket.number), ...flags.map((flag) => flag.unvoided_tickets)));
+    tickets = voided.length || others.length
+      ? `tickets voided: ${voided.join(', ') || 'none recorded'} · not recorded as voided: ${others.join(', ') || 'none'}`
+      : ticketed ? 'ticket numbers not recorded: read the FA lines' : 'no tickets issued';
+  }
+  // Numbers the chain could not read back are missing from every list above.
+  const incomplete = numbersMissing && tickets.startsWith('tickets voided') ? ' · not every ticket number is recorded: read the FA lines' : '';
+  return [
+    `*${booking.booking_reference}* — ${booking.status}/${booking.payment_status}, ${booking.total_amount} USD`,
+    `PNR ${details.pnr || review.pnr || 'none'} · ticketed: ${ticketed ? 'yes' : 'NO'} · ${tickets}${incomplete}`,
+    `airline: ${review.detail || 'no detail recorded'}`,
+    `flagged ${hours}h ago`,
+  ].join('\n');
+}
+
+const ticketNumbersMissing = (booking) => !needsAirlineRefundClaim(booking)
+  && booking?.booking_details?.needs_review?.reason === TICKET_NUMBERS_MISSING;
+
+// A PNR the airline confirmed no seat on (the chain's step 'segmentStatus').
+const noConfirmedSeat = (booking) => !needsAirlineRefundClaim(booking)
+  && booking?.booking_details?.needs_review?.reason === NO_CONFIRMED_SEAT_REVIEW_REASON;
+
 export function buildMessage(bookings) {
-  const claims = bookings.filter(needsAirlineRefundClaim);
-  const unticketed = bookings.filter((booking) => !needsAirlineRefundClaim(booking));
+  // Its own section before anything else: the seats and the money moved and
+  // the record says neither. Under "paid but not ticketed" it read "ticket it,
+  // or refund it" - a second refund of money already returned.
+  const unrecorded = bookings.filter(isUnrecordedCancellation);
+  // A cancel the airline refused: under "paid but not ticketed" it read
+  // "ticket it, or refund it" - a refund against a live PNR.
+  const cancelFailed = bookings.filter((booking) => !isUnrecordedCancellation(booking) && isFailedCancellation(booking));
+  // Refunded before its cancel was refused: the Payments tab writes
+  // payment_status alone. "No refund was made ... Do NOT refund until it is
+  // cancelled" was said of it too, of money already returned.
+  const refundedBefore = (booking) => ['refunded', 'partially_refunded', 'reversed']
+    .includes(String(booking.payment_status || '').toLowerCase());
+  const cancelFailedPaid = cancelFailed.filter((booking) => !refundedBefore(booking));
+  const cancelFailedRefunded = cancelFailed.filter(refundedBefore);
+  const rest = bookings.filter((booking) => !isUnrecordedCancellation(booking) && !isFailedCancellation(booking));
+  const claims = rest.filter(needsAirlineRefundClaim);
+  // A ticketed booking whose numbers did not arrive is NOT "paid but not
+  // ticketed". Listed under that heading it read "no ticket was issued ...
+  // ticket it, or refund it" beside "ticketed: yes" - an instruction to issue a
+  // second ticket against one payment, or refund a live ticket.
+  // Only some travellers with a number is not "the ticket IS issued": a
+  // traveller with no FA line may hold no ticket (isPartlyTicketed).
+  const numbersMissing = rest.filter((booking) => ticketNumbersMissing(booking) && !isPartlyTicketed(booking));
+  const partlyTicketed = rest.filter((booking) => ticketNumbersMissing(booking) && isPartlyTicketed(booking));
+  // Nor is a PNR with no confirmed seat. Under that heading it read "ticket it,
+  // or refund it": ticketing issues a ticket for a seat the airline has not
+  // given, and a refund with the PNR still live leaves its confirmed flights
+  // held with nothing paid for them.
+  const seatless = rest.filter(noConfirmedSeat);
+  const unticketed = rest.filter((booking) => !needsAirlineRefundClaim(booking) && !ticketNumbersMissing(booking)
+    && !noConfirmedSeat(booking));
   const sections = [];
+  if (unrecorded.length) {
+    sections.push(
+      `:warning: *${unrecorded.length} cancellation${unrecorded.length > 1 ? 's' : ''} carried out but not recorded*`,
+      'The airline reservation was released and the payment action below was taken, but the booking record could not be written. '
+        + 'Check the airline and ARC Pay and record what happened by hand. Do not cancel or refund it again until you have: '
+        + 'the money may already have gone back.',
+      '',
+      ...unrecorded.map(describeUnrecordedCancellation),
+    );
+  }
+  if (cancelFailedPaid.length) {
+    sections.push(
+      `:x: *${cancelFailedPaid.length} cancellation${cancelFailedPaid.length > 1 ? 's' : ''} the airline did not carry out*`,
+      'The customer asked to cancel and was told our team would complete it. '
+        + 'The airline did not cancel the PNR, so it is still live, and no refund was made. '
+        + 'Cancel the PNR with the airline first. Do NOT refund until it is cancelled: '
+        + 'a refund against a live PNR pays out for flights the customer still holds. '
+        + 'A traveller whose ticket was voided cannot fly on it.',
+      '',
+      ...cancelFailedPaid.map(describeFailedCancellation),
+    );
+  }
+  if (cancelFailedRefunded.length) {
+    sections.push(
+      `:x: *${cancelFailedRefunded.length} cancellation${cancelFailedRefunded.length > 1 ? 's' : ''} the airline did not carry out, `
+        + 'on a payment already refunded*',
+      'The customer asked to cancel and was told our team would complete it. '
+        + 'The airline did not cancel the PNR, so it is still live. This cancel made no refund, but the payment had already '
+        + 'been refunded before it, in full or in part: the payment status on each line says which. Do NOT refund it again. '
+        + 'Cancel the PNR with the airline: while it is live, it holds flights that are no longer paid for in full. '
+        + 'A traveller whose ticket was voided cannot fly on it.',
+      '',
+      ...cancelFailedRefunded.map(describeFailedCancellation),
+    );
+  }
+  if (seatless.length) {
+    sections.push(
+      `:no_entry: *${seatless.length} booking${seatless.length > 1 ? 's' : ''} paid, with no confirmed seat from the airline*`,
+      'The airline has not confirmed a seat on every flight (waitlisted, requested, unable or cancelled at commit). '
+        + 'The PNR is live, nothing is ticketed, and the customer has paid and was told a person will contact them. '
+        + 'Do NOT ticket this PNR: that issues a ticket for a seat the airline has not given. '
+        + 'Secure the seat with the airline, or cancel the PNR and then refund. '
+        + 'Do not refund while the PNR is live: its confirmed flights would stay held with nothing paid for them.',
+      '',
+      ...seatless.map(describeBooking),
+    );
+  }
   if (unticketed.length) {
     sections.push(
       `:rotating_light: *${unticketed.length} booking${unticketed.length > 1 ? 's' : ''} paid but not ticketed*`,
       'The customer has paid and no ticket was issued. Each one needs a human: ticket it, or refund it.',
       '',
       ...unticketed.map(describeBooking),
+    );
+  }
+  if (numbersMissing.length) {
+    sections.push(
+      `:ticket: *${numbersMissing.length} booking${numbersMissing.length > 1 ? 's' : ''} ticketed, ticket numbers not read back*`,
+      'The ticket IS issued: the airline accepted the issue, the customer has paid and holds a live ticket. '
+        + 'Only the ticket numbers did not reach us. Read them from the PNR (its FA lines) and record them on the booking. '
+        + 'Do NOT reissue and do NOT refund: a second ticket charges the fare twice, and a refund leaves a live ticket unpaid for.',
+      '',
+      ...numbersMissing.map(describeTicketNumbersMissing),
+    );
+  }
+  if (partlyTicketed.length) {
+    sections.push(
+      `:busts_in_silhouette: *${partlyTicketed.length} booking${partlyTicketed.length > 1 ? 's' : ''} with ticket numbers for only some travellers*`,
+      'Some travellers have an FA line (a ticket) on the PNR and some do not. The numbers may still be landing, '
+        + 'or the ticket was issued for only some of them: this is also flagged when our own issue call was refused. '
+        + 'A traveller with an FA line IS ticketed: do NOT reissue them, a second ticket charges the fare twice. '
+        + 'A traveller with no FA line may NOT be ticketed: check the PNR, and issue for that passenger only. '
+        + 'Do NOT refund: the travellers with a ticket hold live tickets.',
+      '',
+      ...partlyTicketed.map(describeTicketNumbersPartial),
     );
   }
   if (claims.length) {
@@ -251,11 +532,21 @@ export async function runOnce({ webhookUrl = process.env.ALERT_SLACK_WEBHOOK_URL
   return { announced: stuck.length };
 }
 
-export function startNeedsReviewAlertJob({ intervalMs = DEFAULT_INTERVAL_MS } = {}) {
+export function startNeedsReviewAlertJob({ intervalMs = DEFAULT_INTERVAL_MS, env = process.env } = {}) {
   if (!supabase) return { stop: () => {} };
 
-  if (!process.env.ALERT_SLACK_WEBHOOK_URL) {
+  if (!env.ALERT_SLACK_WEBHOOK_URL) {
     log('asleep: set ALERT_SLACK_WEBHOOK_URL to turn on paid-but-not-ticketed alerts');
+    return { stop: () => {} };
+  }
+
+  // Production only, unless asked for by name. Local development and
+  // production share the database, and each booking is announced exactly
+  // once: a laptop with the webhook in its environment would post production's
+  // bookings and stamp `alerted_at` on them, and production's own run would
+  // then say nothing about them, ever. The webhook alone was the only gate.
+  if (!alarmsMayRun(env)) {
+    log(`asleep: this is '${queueEnvironment(env)}', not production (set ALERT_JOBS=true to run it here)`);
     return { stop: () => {} };
   }
 

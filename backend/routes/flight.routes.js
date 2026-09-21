@@ -24,8 +24,12 @@ import { UNTICKETED_REVIEW_REASON } from '../jobs/needsReviewAlert.job.js';
 import { itinerariesFromOffer, returnDateOf } from '../../shared/bookingItineraries.js';
 import { flightsKey, travellerNamesKey } from '../utils/tripMatch.js';
 import { needsDateOfBirth } from '../../shared/travellerDetails.js';
+import { buildFlightOrderBody, orderDataFromCheckoutRow } from '../../shared/flightOrderBody.js';
 import { statusChangeRefusal } from '../../shared/bookingStatusChange.js';
-import { attentionOf, reviewResolution, ticketsOf, isTicketed } from '../../shared/reviewQueue.js';
+import {
+  attentionOf, reviewResolution, ticketsOf, isTicketed, NO_CONFIRMED_SEAT_REVIEW_REASON, noConfirmedSeatOf,
+  liveTicketNumbersMissingOf, unrecordedCancellationOf,
+} from '../../shared/reviewQueue.js';
 import { errorSummary } from '../utils/errorSummary.js';
 import { flightSearchLimiter, guestBookingLimiter } from '../middleware/security.js';
 import { liveChainState } from '../utils/bookingChainClaim.js';
@@ -69,6 +73,18 @@ const flightSearchSchema = z
   .superRefine((body, ctx) => {
     const problem = searchDateProblem(body);
     if (problem) ctx.addIssue({ code: 'custom', path: [problem.field], message: problem.message });
+    // This WSAP's Master Pricer request has no price ceiling. maxPrice was
+    // accepted, put in the cache key and never sent, so fares far over the cap
+    // came back as if they met it - each through a fresh live search. Neither
+    // app sends it (both filter the results they are given), so it is refused
+    // rather than pretended.
+    if (body.maxPrice !== undefined && body.maxPrice !== null && body.maxPrice !== '') {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['maxPrice'],
+        message: 'Flight search cannot filter by price. Leave maxPrice out and filter the results by price instead.',
+      });
+    }
   });
 
 const router = express.Router();
@@ -138,22 +154,30 @@ async function refundOnFulfillmentFailure(res, { orderId, bookingReference, amou
   // both refuse a booking with `fulfillment_failed`. The caller has already
   // released its claim, and the reversal takes seconds.
   const failingRef = bookingReference || orderId;
+  // Both writes below put back the whole booking_details column from a copy
+  // just read, and neither was pinned to it: a record locator a running chain
+  // committed in between, a payment reconcile or a review stamp was erased -
+  // for the locator, "a reservation nobody can find again". Each is now
+  // written only onto the row it was built from (utils/bookingDetailsGuard.js),
+  // and a lost race reads again and writes again.
   try {
     if (supabase && failingRef) {
-      const { data: failing } = await supabase
-        .from('bookings')
-        .select('id, booking_details')
-        .or((r => `booking_reference.eq.${r},booking_details->>order_id.eq.${r}`)(sanitizeRef(failingRef)))
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (failing && !failing.booking_details?.fulfillment_failed) {
-        await supabase.from('bookings').update({
+      for (let attempt = 1; attempt <= 3; attempt += 1) {
+        const { data: failing } = await supabase
+          .from('bookings')
+          .select('id, status, payment_status, booking_details')
+          .or((r => `booking_reference.eq.${r},booking_details->>order_id.eq.${r}`)(sanitizeRef(failingRef)))
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (!failing || failing.booking_details?.fulfillment_failed) break;
+        const { data: written } = await unchangedSince(supabase.from('bookings').update({
           booking_details: {
             ...failing.booking_details,
             fulfillment_failed: { at: new Date().toISOString(), error: errorMsg, reversal: { action: 'IN_PROGRESS' } },
           },
-        }).eq('id', failing.id);
+        }).eq('id', failing.id), failing).select('id');
+        if (written?.length) break;
       }
     }
   } catch (e) {
@@ -169,7 +193,7 @@ async function refundOnFulfillmentFailure(res, { orderId, bookingReference, amou
   // Record the failure on the booking row created at hosted-checkout (if any).
   try {
     const ref = bookingReference || orderId;
-    if (supabase && ref) {
+    for (let attempt = 1; supabase && ref && attempt <= 3; attempt += 1) {
       const { data: bk } = await supabase
         .from('bookings')
         .select('*')
@@ -177,33 +201,40 @@ async function refundOnFulfillmentFailure(res, { orderId, bookingReference, amou
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
-      if (bk) {
-        // A reversal the gateway refused - or could not attempt - leaves the
-        // customer charged with no booking. Writing that row `cancelled` hid it
-        // from the paid-but-not-ticketed alarm, which skips cancelled rows, and
-        // nothing ever read `fulfillment_failed`, so the one case that needs a
-        // human reached no one. It keeps its status and is flagged instead.
-        // Every caller runs after the payment was verified, so "not reversed"
-        // means the money is still held.
-        const stuck = !reversal.reversed;
-        const now = new Date().toISOString();
-        await supabase.from('bookings').update({
-          ...(stuck ? {} : { status: 'cancelled' }),
-          payment_status: reversal.reversed ? 'refunded' : bk.payment_status,
-          booking_details: {
-            ...bk.booking_details,
-            fulfillment_failed: { at: now, error: errorMsg, reversal },
-            ...(stuck ? {
-              needs_review: {
-                reason: 'charge not reversed after the booking failed',
-                ticketed: false,
-                at: now,
-                reversal: { action: reversal.action || null, error: reversal.error || null }
-              }
-            } : {})
-          },
-          updated_at: now
-        }).eq('id', bk.id);
+      if (!bk) break;
+      // A reversal the gateway refused - or could not attempt - leaves the
+      // customer charged with no booking. Writing that row `cancelled` hid it
+      // from the paid-but-not-ticketed alarm, which skips cancelled rows, and
+      // nothing ever read `fulfillment_failed`, so the one case that needs a
+      // human reached no one. It keeps its status and is flagged instead.
+      // Every caller runs after the payment was verified, so "not reversed"
+      // means the money is still held.
+      const stuck = !reversal.reversed;
+      const now = new Date().toISOString();
+      const { data: written } = await unchangedSince(supabase.from('bookings').update({
+        ...(stuck ? {} : { status: 'cancelled' }),
+        payment_status: reversal.reversed ? 'refunded' : bk.payment_status,
+        booking_details: {
+          ...bk.booking_details,
+          fulfillment_failed: { at: now, error: errorMsg, reversal },
+          ...(stuck ? {
+            needs_review: {
+              reason: 'charge not reversed after the booking failed',
+              ticketed: false,
+              at: now,
+              reversal: { action: reversal.action || null, error: reversal.error || null }
+            }
+          } : {})
+        },
+        updated_at: now
+      }).eq('id', bk.id), bk).select('id');
+      if (written?.length) break;
+      // Out of tries: the outcome - possibly "charge not reversed" - is not on
+      // the row, so the alarms cannot see it. Said, not swallowed.
+      if (attempt === 3) {
+        reportError(new Error('the failed booking outcome could not be recorded: the row kept changing'), {
+          where: 'refundOnFulfillmentFailure', bookingReference: ref, reversed: reversal.reversed === true,
+        });
       }
     }
   } catch (e) {
@@ -971,6 +1002,18 @@ export function confirmationEmailOwed(booking) {
 const HELD_REVIEW_REASON_PREFIXES = ['chain failed after commit at ', 'order route failed after commit'];
 
 /**
+ * The flag the committed branch writes when the airline left a segment
+ * waitlisted, requested, unable or cancelled at commit (the chain's step
+ * 'segmentStatus', bookingChain.js NOT_A_SEAT_AT_COMMIT). The PNR exists but
+ * no seat is confirmed, and the server will not ticket it. It matched the held
+ * prefix above, so the customer was sent "the airline is holding your seats
+ * ... You do not need to do anything" - false. No honest email for this case
+ * exists, so none is sent: the flag pages a person, who contacts the customer.
+ * Defined in shared/reviewQueue.js, which the alarm reads too.
+ */
+export { NO_CONFIRMED_SEAT_REVIEW_REASON };
+
+/**
  * Which email a booking still owes its customer.
  *
  *  - 'confirmation': what the success path sends (reservation or confirmation);
@@ -991,6 +1034,7 @@ export function confirmationEmailKind(booking) {
   if (details.confirmation_email?.state === 'sent') return null;
   const review = details.needs_review;
   if (!review || EMAILED_REVIEW_REASONS.has(review.reason)) return 'confirmation';
+  if (review.reason === NO_CONFIRMED_SEAT_REVIEW_REASON) return null;
   const reason = String(review.reason || '');
   return HELD_REVIEW_REASON_PREFIXES.some((prefix) => reason.startsWith(prefix)) ? 'held' : null;
 }
@@ -1057,19 +1101,45 @@ async function claimConfirmationEmail(bookingReference, { failOpen = false } = {
 /** Write down how a claimed send went, while the claim is still this request's. */
 async function recordConfirmationEmail(bookingReference, claimedAt, outcome) {
   if (!supabase || !bookingReference || !claimedAt) return;
-  const { data: row } = await supabase
-    .from('bookings')
-    .select('booking_details')
-    .eq('booking_reference', bookingReference)
-    .single();
-  const details = row?.booking_details;
-  if (!details) return;
-  const { error } = await supabase
-    .from('bookings')
-    .update({ booking_details: { ...details, confirmation_email: { ...details.confirmation_email, ...outcome, claimed_at: claimedAt } } })
-    .eq('booking_reference', bookingReference)
-    .eq('booking_details->confirmation_email->>claimed_at', claimedAt);
-  if (error) console.error('⚠️ Could not record the confirmation email:', error.message);
+  // Checked, and tried again. The write was pinned to this claim and never
+  // asked whether it matched: a whole-column write of booking_details landing
+  // while the email went out - a copy read before the claim - left it matching
+  // nothing, and the booking stayed owed its confirmation, so every later retry
+  // sent it again. Now a lost race reads again and re-applies the outcome,
+  // pinned to the row as read (utils/bookingDetailsGuard.js), unless another
+  // sender has claimed the email since: that claim is theirs to record.
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    const { data: row } = await supabase
+      .from('bookings')
+      .select('status, payment_status, booking_details')
+      .eq('booking_reference', bookingReference)
+      .single();
+    const details = row?.booking_details;
+    if (!details) return;
+    const current = details.confirmation_email || null;
+    const ours = current?.claimed_at === claimedAt;
+    if (!ours && current?.claimed_at && String(current.claimed_at) > String(claimedAt)) {
+      console.warn('Confirmation email outcome not recorded: it was claimed again since', { bookingReference });
+      return;
+    }
+    let write = unchangedSince(
+      supabase
+        .from('bookings')
+        .update({ booking_details: { ...details, confirmation_email: { ...(ours ? current : {}), ...outcome, claimed_at: claimedAt } } })
+        .eq('booking_reference', bookingReference),
+      row,
+    );
+    write = current?.claimed_at
+      ? write.eq('booking_details->confirmation_email->>claimed_at', current.claimed_at)
+      : write.is('booking_details->confirmation_email->>claimed_at', null);
+    const { data, error } = await write.select('booking_reference');
+    if (error) {
+      console.error('⚠️ Could not record the confirmation email:', error.message);
+      return;
+    }
+    if (data?.length) return;
+  }
+  console.error('Confirmation email outcome not recorded: the booking kept changing', { bookingReference });
 }
 
 /**
@@ -1133,18 +1203,78 @@ async function sendHeldForReviewEmail(bookingReference, body) {
  */
 const DUPLICATE_LOOKBACK_MS = 30 * DAY_MS;
 
-/** What the customer is told when their payment is held as a second payment for one trip. */
-function duplicatePaymentAnswer(bookingReference) {
+/**
+ * What happened to a booking's money, as its record says - for an answer that
+ * tells the customer.
+ *
+ * A retry of a booking under review was answered "Your payment is held with
+ * this booking ... do not book this trip again" whatever the row said: this
+ * branch never read the payment. A flagged row can have been refunded since it
+ * was flagged - the Payments tab writes payment_status and nothing else - and
+ * for that customer both sentences were false.
+ *
+ * A cancellation that moved the money and could not record it leaves the row
+ * reading paid (flagUnrecordedCancellation), and the customer was told "we will
+ * confirm what happened to your payment": neither held nor returned is known.
+ *
+ * @returns {'held'|'returned'|'partly_returned'|'unconfirmed'}
+ */
+export function paymentStateOf(booking) {
+  const payment = String(booking?.payment_status ?? '').toLowerCase();
+  if (['refunded', 'reversed'].includes(payment)) return 'returned';
+  if (payment === 'partially_refunded') return 'partly_returned';
+  if (unrecordedCancellationOf(booking)) return 'unconfirmed';
+  return ['paid', 'completed'].includes(payment) ? 'held' : 'unconfirmed';
+}
+
+/**
+ * The refusal a retry of a booking under review gets, worded by what its
+ * payment record says (paymentStateOf). "Our team is reviewing it" and "If you
+ * have not heard from us" are for a payment still held, or one whose fate a
+ * person is confirming: a refunded booking is on no desk list and no alarm.
+ */
+function notSentAgainMessage(bookingReference, paymentState) {
+  const call = `call (877) 538-7380 with booking reference ${bookingReference}`;
+  if (paymentState === 'returned') {
+    return 'This booking could not be completed, so it was not sent to the airline again. '
+      + `Your payment for it has been refunded. If you have any questions, ${call}.`;
+  }
+  if (paymentState === 'partly_returned') {
+    return 'This booking could not be completed, so it was not sent to the airline again. '
+      + `Part of your payment for it has been refunded. Please ${call} about the rest.`;
+  }
+  return 'This booking could not be completed and our team is reviewing it, so it was not sent to the airline again. '
+    + `Nothing more has been charged. If you have not heard from us within 2 business days, ${call}.`;
+}
+
+/**
+ * What the customer is told when their payment is held as a second payment for
+ * one trip - and, on a retry, what became of it since.
+ *
+ * "Our support team will check it and refund this payment" was said on every
+ * retry, including one whose payment staff had already refunded: a retry is
+ * answered from the row before the gateway is asked, so the answer is worded
+ * by the row's payment record (paymentStateOf). Where it is caught first, the
+ * gateway has just confirmed the capture and nothing refunds it: 'held'.
+ */
+function duplicatePaymentAnswer(bookingReference, paymentState = 'held') {
+  const call = `call (877) 538-7380 with booking reference ${bookingReference}`;
+  const money = paymentState === 'returned' ? `This payment has been refunded. If you have any questions, ${call}.`
+    : paymentState === 'partly_returned' ? `Part of this payment has been refunded. Please ${call} about the rest.`
+      : paymentState === 'held'
+        ? 'Our support team will check it and refund this payment. If you did mean to book this trip twice, or have not '
+          + `heard from us within 2 business days, ${call}.`
+        : 'Our support team will check what happened to this payment and contact you. If you have not heard from us '
+          + `within 2 business days, ${call}.`;
   const message = 'This payment looks like a second payment for a trip you have already booked, for the same travellers '
-    + 'on the same flights, so we have not booked it again. Your other booking is not affected. Our support team will '
-    + 'check it and refund this payment. If you did mean to book this trip twice, or have not heard from us within '
-    + `2 business days, call (877) 538-7380 with booking reference ${bookingReference}.`;
+    + `on the same flights, so we have not booked it again. Your other booking is not affected. ${money}`;
   return {
     success: false,
     code: 'DUPLICATE_PAYMENT',
     duplicatePayment: true,
     needsReview: true,
     bookingReference,
+    paymentState,
     error: message,
     message,
   };
@@ -1396,8 +1526,30 @@ export function buildBookingRow(bookingData, userId) {
 // Helper to handle duplicate booking_reference
 const MERGE_TRIES = 3;
 
+/** The bookings table refused the row's owner: a foreign key on user_id, or RLS. */
+const ownerRefused = (error) => error?.code === '23503' || error?.code === '42501'
+  || /violates foreign key|row-level security/i.test(error?.message || '');
+
+/**
+ * A paid booking whose outcome could not be written is reported, not just
+ * logged. The route still answers the customer (savedToDatabase: false), so
+ * without this a live PNR could sit behind checkout's `pending` row - no
+ * itinerary, no travellers, no confirmation email - with nothing said.
+ */
+const reportMergeFailure = (bookingData, reason) => reportError(
+  new Error(`the booking outcome could not be saved: ${reason}`),
+  { where: 'handleDuplicateBookingMerge', bookingReference: bookingData.bookingReference, pnr: bookingData.pnr || null },
+);
+
 export async function handleDuplicateBookingMerge(bookingData, rowTemplate) {
   console.log('🔄 Booking reference already exists, merging into the checkout row...');
+
+  // Set once the table has refused the template's owner. Checkout saves its row
+  // without the owner when `bookings.user_id` refuses the id (a travel agent's
+  // token, a legacy login), so that row has none - and the merge put the same
+  // refused id straight back, the same foreign key refused it, and the whole
+  // save was abandoned. The id is still kept, in booking_details.original_user_id.
+  let withoutTemplateOwner = false;
 
   for (let tries = 0; tries < MERGE_TRIES; tries += 1) {
     const { data: existingBooking } = await supabase
@@ -1434,7 +1586,7 @@ export async function handleDuplicateBookingMerge(bookingData, rowTemplate) {
     const update = {
       ...rowTemplate,
       booking_details: mergedDetails,
-      user_id: existingBooking?.user_id || rowTemplate.user_id || null,
+      user_id: existingBooking?.user_id || (withoutTemplateOwner ? null : rowTemplate.user_id) || null,
     };
     // Never resurrect a cancelled booking, or re-mark returned money as paid.
     if (existingBooking?.status === 'cancelled') update.status = 'cancelled';
@@ -1460,8 +1612,15 @@ export async function handleDuplicateBookingMerge(bookingData, rowTemplate) {
       console.warn('↻ The booking changed while it was being saved; merging again', { bookingReference: bookingData.bookingReference });
       continue;
     }
+    if (updateError && !withoutTemplateOwner && update.user_id && update.user_id !== existingBooking?.user_id
+      && ownerRefused(updateError)) {
+      console.warn('The booking owner was refused, merging without one', { bookingReference: bookingData.bookingReference, code: updateError.code });
+      withoutTemplateOwner = true;
+      continue;
+    }
     if (updateError) {
       console.error('❌ Update with merged data failed:', updateError.message);
+      reportMergeFailure(bookingData, updateError.message);
       return null;
     }
 
@@ -1473,6 +1632,7 @@ export async function handleDuplicateBookingMerge(bookingData, rowTemplate) {
   }
 
   console.error('❌ Booking not saved: it kept changing while it was being merged', { bookingReference: bookingData.bookingReference });
+  reportMergeFailure(bookingData, 'it kept changing while it was being merged');
   return null;
 }
 
@@ -1957,7 +2117,17 @@ router.post('/price', async (req, res) => {
     // sell for every page view would be a sell for every look. A refusal is a
     // 409, answered below as FARE_UNAVAILABLE, like a fare the airline will not
     // price. See confirmSeats in services/amadeusSoap/bookingChain.js.
-    const seatsChecked = req.body.confirmSeats === true && providerStatus().seatCheckBeforePayment;
+    //
+    // Never while booking is switched off. The seat check is a GDS write
+    // (Air_SellFromRecommendation, then Fare_PricePNRWithBookingClass), and
+    // AMADEUS_WS_BOOKING_ENABLED false is the switch that says this deployment
+    // makes none. It was gated on the seat-check flag alone, so with booking off
+    // every checkout - and any request carrying the flag - sold and released
+    // seats at the airline for a checkout that could only end in
+    // BOOKING_DISABLED, counted against the office's look-to-book ratio.
+    const seatsChecked = req.body.confirmSeats === true
+      && providerStatus().seatCheckBeforePayment
+      && providerStatus().bookingEnabled === true;
     if (seatsChecked) {
       await FlightProvider.confirmSeats(pricingResponse.data?.flightOffers?.[0] ?? flightOffer);
     }
@@ -1993,7 +2163,14 @@ router.post('/price', async (req, res) => {
     // it. Both used to answer 500, so checkout - which prices through this
     // route on Vercel - told the customer to try again in a moment for ever.
     const fareRefused = isFareRefusal(error);
-    res.status(fareRefused ? 409 : 500).json({
+    // An outage keeps its own 5xx and its Retry-After. A wait for an Amadeus
+    // slot (503, retry in 2s) and "too many concurrent requests" were both
+    // flattened to a bare 500, so nothing downstream could tell "busy, retry
+    // shortly" from a failure.
+    const ownStatus = Number(error?.code);
+    const status = fareRefused ? 409 : (ownStatus >= 500 && ownStatus <= 599 ? ownStatus : 500);
+    if (!fareRefused && Number(error?.retryAfter) > 0) res.set('Retry-After', String(error.retryAfter));
+    res.status(status).json({
       success: false,
       error: error.message || 'Failed to price flight',
       ...(fareRefused ? { code: 'FARE_UNAVAILABLE' } : {}),
@@ -2061,9 +2238,18 @@ router.post('/date-prices', async (req, res) => {
       return res.status(400).json({ success: false, error: 'from, to and dates[] are required' });
     }
 
+    // Resolved once, and the same codes key the cache AND go to the search. The
+    // key used the curated table ("New York" -> JFK) while the search was sent
+    // the raw text and the dataset resolved it ("New York" -> NYC, every New
+    // York airport), so Newark and LaGuardia fares were served under the JFK
+    // key and the strip quoted prices no JFK flight sells. The search page
+    // resolves through the same table, so the strip matches the search it
+    // links to.
+    const origin = resolveToIATACode(from) || from;
+    const destination = resolveToIATACode(to) || to;
     const ws = describeWsConfig();
     const cacheKey = CacheKeys.flightBrowse('date-prices', [
-      resolveToIATACode(from), resolveToIATACode(to),
+      origin, destination,
       `${adults || 1}-${children || 0}-${infants || 0}-${travelClass || 'any'}`,
       dates.slice().sort().join(','),
       // The strip quotes the cheapest fare of the day, so it has to be built
@@ -2073,7 +2259,7 @@ router.post('/date-prices', async (req, res) => {
     ]);
 
     const payload = await withCache(cacheKey, TTL.FLIGHT_CALENDAR, () => FlightProvider.getCalendarPrices({
-      from, to, adults, children, infants, travelClass, dates,
+      from: origin, to: destination, adults, children, infants, travelClass, dates,
     }));
 
     // null means nothing could be priced, so nothing was cached. The strip
@@ -2359,7 +2545,12 @@ router.post('/order', optionalProtect, async (req, res) => {
     // this the second one sells a second set of seats against a single charge.
     // The answer says what the booking actually is: it used to report
     // CONFIRMED for any row with a PNR, ticketed or not.
-    if (existing.booking_details?.pnr) {
+    // Not a PNR the airline confirmed a seat on, while a person is still on it:
+    // answered as the review below answers it, not "This booking already
+    // exists", which the order page renders as "Your seats are reserved".
+    // Found under a later flag too: a refused cancel writes its own on top.
+    const awaitingSeat = Boolean(noConfirmedSeatOf(existing));
+    if (existing.booking_details?.pnr && !awaitingSeat) {
       const details = existing.booking_details;
       // Committed and still working: the request that holds this booking is
       // queueing it and issuing the ticket. Answered as it was before the
@@ -2403,6 +2594,11 @@ router.post('/order', optionalProtect, async (req, res) => {
         ticketed,
         tickets,
         needsReview: Boolean(details.needs_review),
+        // What the payment record says, as the 409 retry answers carry it. A
+        // held PNR refunded from the Payments tab (payment_status alone) was
+        // answered like a paid one, and the order page said its seats were
+        // held and its payment received.
+        paymentState: paymentStateOf(existing),
         savedToDatabase: true,
         message: ticketed ? 'This booking already exists' : 'This booking already exists; its ticket has not been issued yet'
       });
@@ -2411,7 +2607,7 @@ router.post('/order', optionalProtect, async (req, res) => {
     // A payment already held as a second payment for one trip stays held: a
     // human decides whether to book or refund it (findDuplicateBooking, below).
     if (existing.booking_details?.needs_review?.duplicate_of) {
-      return res.status(409).json(duplicatePaymentAnswer(existing.booking_reference));
+      return res.status(409).json(duplicatePaymentAnswer(existing.booking_reference, paymentStateOf(existing)));
     }
 
     // A booking whose fulfilment already failed, or that a human is sorting
@@ -2425,14 +2621,16 @@ router.post('/order', optionalProtect, async (req, res) => {
     const failedBefore = existing.booking_details?.fulfillment_failed;
     const review = existing.booking_details?.needs_review;
     if (failedBefore || (review && !EMAILED_REVIEW_REASONS.has(review.reason))) {
-      const message = 'This booking could not be completed and our team is reviewing it, so it was not sent to the airline again. '
-        + 'Nothing more has been charged. If you have not heard from us within 2 business days, '
-        + `call (877) 538-7380 with booking reference ${existing.booking_reference}.`;
+      // Said from the row, not assumed: the order page says "your payment is
+      // held ... do not book this trip again" only when this says 'held'.
+      const paymentState = paymentStateOf(existing);
+      const message = notSentAgainMessage(existing.booking_reference, paymentState);
       return res.status(409).json({
         success: false,
         code: failedBefore ? 'BOOKING_FAILED' : 'BOOKING_NEEDS_REVIEW',
         needsReview: true,
         bookingReference: existing.booking_reference,
+        paymentState,
         error: message,
         message,
       });
@@ -2534,8 +2732,23 @@ router.post('/order', optionalProtect, async (req, res) => {
     // appeared in the customer's My Trips - see utils/bookingOwner.js.
     const userId = resolveBookingUserId(req);
 
-    // Ensure travelers is always an array (even if empty) to prevent validation errors
-    const travelersList = Array.isArray(travelers) ? travelers : (travelers ? [travelers] : []);
+    // ---- Who is travelling? The people checkout verified. --------------------
+    //
+    // Checkout checked every traveller against the fare before the card was
+    // charged - a printable name, a date of birth, a passport valid to the last
+    // flight on a trip abroad - and kept them on this row. This route used to
+    // book the `travelers` in its own request body instead, and re-check only
+    // names, a gender and a date of birth. A body with the same people and no
+    // passports passed, the chain sold and committed a PNR, and the airline
+    // would not ticket it without the travel document: a charge, a committed
+    // PNR and a refund. A body naming anyone else was booked in their names
+    // against this payment. So the row's travellers are booked, rebuilt exactly
+    // as the order page and the abandoned-checkout job rebuild them
+    // (shared/flightOrderBody.js). The body's are used only for a row that holds
+    // none, which no checkout since verification began has written.
+    const verifiedTravellers = buildFlightOrderBody(orderDataFromCheckoutRow(existing)).passengerDetails;
+    const bodyTravellers = Array.isArray(travelers) ? travelers : (travelers ? [travelers] : []);
+    const travelersList = verifiedTravellers.length > 0 ? verifiedTravellers : bodyTravellers;
 
     // ---- Which fare? The one checkout verified. -------------------------------
     //
@@ -3055,6 +3268,28 @@ router.post('/order', optionalProtect, async (req, res) => {
           ticketed: providerError.ticketed,
           bookingReference: req.body.bookingReference
         });
+        // The airline confirmed no seat on at least one flight: the chain's own
+        // words, and no email. The generic answer below - "Your seats are
+        // reserved ... We will email you as soon as it is issued" - and the
+        // Reservation Held email were both false of it, and the server will
+        // not issue this ticket. The flag above pages a person, who contacts
+        // the customer. Not a 2xx, so no client shows its held-seat screen.
+        if (providerError.step === 'segmentStatus') {
+          const message = providerError.error
+            || 'The airline has not confirmed a seat on every flight - our team will contact you';
+          return res.status(409).json({
+            success: false,
+            code: 'BOOKING_NEEDS_REVIEW',
+            needsReview: true,
+            bookingReference: req.body.bookingReference,
+            pnr: providerError.pnr || null,
+            // The gateway confirmed the capture above, and a committed PNR is
+            // never refunded here: the money is held against it.
+            paymentState: payment?.paid === true ? 'held' : 'unconfirmed',
+            error: message,
+            message
+          });
+        }
         // This answer promises an email; it used to send none.
         await sendHeldForReviewEmail(req.body.bookingReference, req.body);
         // "Your seats are reserved" is true when a record locator came back.
@@ -3126,16 +3361,18 @@ router.post('/order', optionalProtect, async (req, res) => {
     if (!orderResponse || !orderResponse.success) {
       const errorMsg = orderResponse?.error || 'Amadeus service returned unsuccessful response';
       console.error('❌ Flight order creation failed:', errorMsg);
-      {
-        return await refundOnFulfillmentFailure(res, {
-          orderId: arcOrderId,
-          bookingReference: req.body.bookingReference,
-          amount: totalAmount || amount,
-          currency: firstOffer?.price?.currency || 'USD',
-          errorMsg
-        });
-      }
-      throw new Error(errorMsg);
+      // Let the booking go before refunding it, as the thrown-failure path does.
+      // Left at in_progress, the refunded booking read as still being confirmed
+      // for the claim's lifetime. Not over a committed PNR, whose state the
+      // commit recorded.
+      if (!committedPnr) await releaseBookingChain(req.body.bookingReference, 'provider-unsuccessful');
+      return await refundOnFulfillmentFailure(res, {
+        orderId: arcOrderId,
+        bookingReference: req.body.bookingReference,
+        amount: totalAmount || amount,
+        currency: firstOffer?.price?.currency || 'USD',
+        errorMsg
+      });
     }
 
     console.log('✅ Flight order created successfully');
@@ -3143,6 +3380,8 @@ router.post('/order', optionalProtect, async (req, res) => {
     // PRODUCTION: a "successful" MOCK response means no real ticket was issued — reverse the charge.
     if (process.env.NODE_ENV === 'production' && typeof orderResponse.mode === 'string' && orderResponse.mode.toUpperCase().includes('MOCK')) {
       console.error('❌ Amadeus returned a MOCK booking in production (no real ticket):', orderResponse.mode);
+      // Released first, for the same reason as the unsuccessful answer above.
+      if (!committedPnr) await releaseBookingChain(req.body.bookingReference, 'mock-in-production');
       return await refundOnFulfillmentFailure(res, {
         orderId: arcOrderId,
         bookingReference: req.body.bookingReference,
@@ -3157,15 +3396,30 @@ router.post('/order', optionalProtect, async (req, res) => {
     // could be used any number of times.
     await noteCouponUse();
 
-    // Extract flight details for database from the first offer
-    const firstItinerary = firstOffer?.itineraries?.[0];
+    // The offer as the airline priced it and the chain booked it. The record
+    // was written from the search offer, although pricing deliberately
+    // replaces fare basis, class, cabin and checked bags per flight
+    // (mappers/pricing.js) - so a 50 LB allowance the airline priced was
+    // stored, served and printed as the search's 23 KG. Same flights either
+    // way: pricing keeps the itineraries.
+    const bookedOffer = pricedOffer || firstOffer;
+    // The fare checkout verified and charged for. The search quote was
+    // recorded instead - with a fee list that is always empty on a search
+    // offer - so a fare that moved before checkout was charged at one figure
+    // and recorded at another.
+    const chargedFare = verifiedCharge?.pricedFare || {};
+    const recordedMoney = (value, fallback) => (Number.isFinite(Number(value)) && value !== null && value !== ''
+      ? Number(value).toFixed(2) : (fallback || null));
+
+    // Extract flight details for database from the booked offer
+    const firstItinerary = bookedOffer?.itineraries?.[0];
     const firstSegment = firstItinerary?.segments?.[0] || {};
     const lastSegment = firstItinerary?.segments?.[firstItinerary?.segments?.length - 1] || firstSegment;
     const pnrValue = orderResponse.pnr || orderResponse.data?.associatedRecords?.[0]?.reference;
     const orderIdValue = orderResponse.orderId || orderResponse.data?.id;
 
     // Extract Amadeus enriched fields
-    const fareDetails = firstOffer?.travelerPricings?.[0]?.fareDetailsBySegment?.[0];
+    const fareDetails = bookedOffer?.travelerPricings?.[0]?.fareDetailsBySegment?.[0];
     const allSegments = firstItinerary?.segments || [];
     const stopsCount = Math.max(0, allSegments.length - 1);
     let stopDetailsList = [];
@@ -3224,7 +3478,7 @@ router.post('/order', optionalProtect, async (req, res) => {
       operatingAirlineName: firstSegment.operating?.carrierCode || null,
       lastTicketingDate: firstOffer?.lastTicketingDate || null,
       numberOfBookableSeats: firstOffer?.numberOfBookableSeats || null,
-      refundable: firstOffer?._ama?.refundable ?? null,
+      refundable: bookedOffer?._ama?.refundable ?? null,
       baggageDetails: {
         checked: fareDetails?.includedCheckedBags || null,
         cabin: fareDetails?.includedCabinBags || null
@@ -3232,21 +3486,22 @@ router.post('/order', optionalProtect, async (req, res) => {
       baggage: fareDetails?.includedCheckedBags?.weight
         ? `${fareDetails.includedCheckedBags.weight}${fareDetails.includedCheckedBags.weightUnit || 'kg'}`
         : (fareDetails?.includedCheckedBags?.quantity ? `${fareDetails.includedCheckedBags.quantity} Piece(s)` : null),
-      priceBase: firstOffer?.price?.base || null,
-      priceGrandTotal: firstOffer?.price?.grandTotal || firstOffer?.price?.total || null,
-      priceFees: firstOffer?.price?.fees || [],
+      priceBase: recordedMoney(chargedFare.base, bookedOffer?.price?.base),
+      priceGrandTotal: recordedMoney(chargedFare.total, bookedOffer?.price?.grandTotal || bookedOffer?.price?.total),
+      priceFees: bookedOffer?.price?.fees || [],
       fareBreakdown: fareBreakdown || null,
-      passengerDetails: passengerDetails || amadeusTravelers.map((t) => ({
+      // Who was booked: the verified travellers, not the request's list.
+      passengerDetails: (verifiedTravellers.length > 0 ? verifiedTravellers : passengerDetails) || amadeusTravelers.map((t) => ({
         id: t.id,
         firstName: t.name.firstName,
         lastName: t.name.lastName,
         dateOfBirth: t.dateOfBirth,
         gender: t.gender
       })),
-      flightOffer: firstOffer,
+      flightOffer: bookedOffer,
       // Every leg and flight of the offer booked, return and connections
       // included - the fields above read only the first leg.
-      itineraries: itinerariesFromOffer(firstOffer),
+      itineraries: itinerariesFromOffer(bookedOffer),
       // What the GDS actually did, for reconciliation and for the ticket
       // numbers the customer's document prints.
       gds: orderResponse.gds || null,
@@ -3552,12 +3807,21 @@ router.delete('/order/:orderId', protect, async (req, res) => {
       // cancelled, stops expecting a flight, and no refund was issued either.
       // Only record a cancellation the GDS actually confirmed.
       if (!amadeusCancelled) {
-        await patchBookingDetails(bookingRef, {
+        // Kept under the new flag, not replaced: a flag written over another
+        // without `previous` erased it for every reader - a PNR with no
+        // confirmed seat read "your seats are reserved" again. And marked a
+        // failed cancellation, as the orchestrated cancel marks its own, so
+        // the alarm and the desk find it on a ticketed booking too: the
+        // customer is told below that our team has been alerted.
+        await patchBookingDetails(bookingRef, (details) => ({
           needs_review: {
             reason: 'fallback cancel could not reach the GDS; booking may still be live',
-            at: new Date().toISOString()
+            source: 'cancellation',
+            cancelFailed: true,
+            at: new Date().toISOString(),
+            ...(details?.needs_review ? { previous: details.needs_review } : {}),
           }
-        });
+        }));
         return res.status(502).json({
           success: false,
           error: 'We could not confirm the cancellation with the airline. '
@@ -3969,8 +4233,19 @@ export function toClientBooking(booking, { showPassports = false } = {}) {
     // The reason is what the e-ticket reads ("ticket_numbers_not_retrieved").
     // The rest of the record is for the support desk: gateway errors, reversal
     // attempts, the GDS detail.
+    //
+    // A state an earlier flag set can sit under a later one (flagInForce), and
+    // the page sees only this top reason, so it is worked out here and sent by
+    // name. Sent as the top reason alone, a PNR with no confirmed seat read
+    // "Your seats are reserved" again once a refused cancel flagged it.
     needs_review: booking.booking_details?.needs_review
-      ? { reason: booking.booking_details.needs_review.reason ?? null }
+      ? {
+        reason: booking.booking_details.needs_review.reason ?? null,
+        no_confirmed_seat: Boolean(noConfirmedSeatOf(booking)),
+        // Issued, but the numbers have not reached us: "not issued" was false.
+        // Not once a cancel voided those tickets: "issued" was false then.
+        ticket_numbers_missing: Boolean(liveTicketNumbersMissingOf(booking)),
+      }
       : null,
     // Whether the GDS ticketed. The rest is the office id, the GDS session and
     // TST references, which no page reads.
@@ -4129,14 +4404,37 @@ router.get('/cheapest-dates', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Origin and destination are required' });
     }
 
+    // The calendar samples one-way fares a few days either side of the date,
+    // with no stop or trip-length filter - Fare_MasterPricerCalendar, which
+    // could do more, is barred on this WSAP (getCheapestFlightDates). These
+    // three were validated into the cache key and then dropped, so a non-stop
+    // request was answered with connecting fares as if they were non-stop.
+    // Neither app sends them; the one-way question both apps ask is answered.
+    const unsupported = nonStop === 'true' ? 'non-stop flights'
+      : duration ? 'trip length'
+        : oneWay === 'false' ? 'round trips'
+          : null;
+    if (unsupported) {
+      return res.status(400).json({
+        success: false,
+        error: `The cheapest-dates calendar cannot filter by ${unsupported}; it samples one-way fares only.`,
+      });
+    }
+
     console.log(`💰 Cheapest dates: ${origin} → ${destination}`);
-    const cacheKey = CacheKeys.flightBrowse('cheapest-dates', [origin, destination, departureDate, viewBy || 'DATE', oneWay, nonStop, duration]);
+    const ws = describeWsConfig();
+    const cacheKey = CacheKeys.flightBrowse('cheapest-dates', [
+      origin, destination, departureDate, viewBy || 'DATE',
+      // The cheapest day is quoted under the rules search sells by. Without
+      // this a carrier just added to AMADEUS_WS_UNTICKETABLE_CARRIERS - or an
+      // interline pair just blocked - was advertised for the twelve hours of
+      // the cache. See /date-prices.
+      searchFilterKey({}, ws.unticketableCarriers, ws.interline),
+    ]);
     const result = await withCache(cacheKey, TTL.FLIGHT_BROWSE, async () => {
       const r = await FlightProvider.getCheapestFlightDates(origin, destination, {
         departureDate,
-        oneWay: oneWay === 'true',
-        duration: duration ? parseInt(duration) : undefined,
-        nonStop: nonStop === 'true',
+        oneWay: true,
         viewBy: viewBy || 'DATE'
       });
       // Only cache successful, non-empty responses — never cache failures/empties.
@@ -4164,14 +4462,25 @@ router.post('/calendar-prices', async (req, res) => {
       return res.status(400).json({ success: false, error: 'origin, destination and dates[] are required' });
     }
 
+    // Resolved once and used for both the key and the search, as /date-prices
+    // does and for the same reason: the key read "New York" as JFK while the
+    // search read it as NYC.
+    const from = resolveToIATACode(origin) || origin;
+    const to = resolveToIATACode(destination) || destination;
+    const ws = describeWsConfig();
+
     // Redis-backed, replacing an in-process Map that was per-instance and lost
     // on every restart - and on Vercel, on every cold start.
     const cacheKey = CacheKeys.flightBrowse('calendar-prices', [
-      resolveToIATACode(origin), resolveToIATACode(destination), dates.slice().sort().join(','),
+      from, to, dates.slice().sort().join(','),
+      // The cheapest fare of the day, under the rules search sells by: without
+      // this a carrier or interline pair just blocked went on being quoted for
+      // the life of the cache. See /date-prices.
+      searchFilterKey({}, ws.unticketableCarriers, ws.interline),
     ]);
 
     const payload = await withCache(cacheKey, TTL.FLIGHT_CALENDAR, () => FlightProvider.getCalendarPrices({
-      from: origin, to: destination, adults: 1, dates,
+      from, to, adults: 1, dates,
     }));
 
     if (!payload) return res.json({ success: false, prices: {}, error: 'No prices available' });

@@ -20,7 +20,9 @@ import { getSemaphore } from '../services/amadeusSoap/semaphore.js';
 import { sendEmail } from '../services/emailService.js';
 // The order route's own TTL: a claim older than this was left by a request
 // that died, and its booking needs running again.
-import { CHAIN_CLAIM_TTL_MS as CLAIM_TTL_MS, MAX_QUEUE_ATTEMPTS, liveChainState } from '../utils/bookingChainClaim.js';
+import {
+  AUTO_COMPLETE_WINDOW_MS, CHAIN_CLAIM_TTL_MS as CLAIM_TTL_MS, MAX_QUEUE_ATTEMPTS, liveChainState,
+} from '../utils/bookingChainClaim.js';
 import { queueEnvironment } from '../utils/queueEnvironment.js';
 import { unchangedSince } from '../utils/bookingDetailsGuard.js';
 const MAX_PER_TICK = 5;
@@ -68,7 +70,7 @@ export async function findRunnable({ limit = MAX_PER_TICK, now = Date.now(), env
   // share this database, which is the whole premise of the label.
   const { data, error } = await supabase
     .from('bookings')
-    .select('booking_reference, status, booking_details')
+    .select('booking_reference, status, payment_status, booking_details')
     .not('booking_details->queued_order', 'is', null)
     .eq('booking_details->>queued_env', env)
     .order('updated_at', { ascending: true })
@@ -79,46 +81,165 @@ export async function findRunnable({ limit = MAX_PER_TICK, now = Date.now(), env
     return [];
   }
 
-  return (data || []).filter((row) => {
-    // Local dev and production share this database: never touch a booking
-    // another environment queued.
-    if (row.booking_details?.queued_env !== env) return false;
-    const chain = row.booking_details?.gds_chain || {};
-    if (row.booking_details?.pnr || row.status === 'cancelled') return true; // finished: only needs clearing
-    if (chain.state === 'queued') {
-      // Waiting out a retry delay (retryLater).
-      const retryAfter = Date.parse(chain.retryAfter ?? '');
-      return !(Number.isFinite(retryAfter) && retryAfter > now);
-    }
-    // A replay that died mid-chain leaves its claim behind; once it is stale,
-    // run the booking again rather than strand a paid customer.
-    return chain.state === 'in_progress'
-      && chain.startedAt && now - Date.parse(chain.startedAt) > CLAIM_TTL_MS;
-  }).slice(0, limit);
+  // Local dev and production share this database: never touch a booking
+  // another environment queued.
+  const acted = (data || [])
+    .filter((row) => row.booking_details?.queued_env === env)
+    .map((row) => ({ row, action: queueActionFor(row, { now }) }))
+    .filter(({ action }) => action !== null);
+  // Clearing takes no Amadeus slot, so it is not counted against `limit`: a
+  // row whose clear keeps failing stays at the front of this oldest-first read,
+  // and counted, five of them would have stopped every paid booking behind them.
+  return [
+    ...acted.filter(({ action }) => action !== 'clear').slice(0, limit),
+    ...acted.filter(({ action }) => action === 'clear'),
+  ].map(({ row }) => row);
 }
+
+/**
+ * What the worker does with a row that still holds a queued order.
+ *
+ *  - 'replay':    run it through the order route;
+ *  - 'clear':     it is finished - only drop the stored order;
+ *  - 'hand-over': a failed chain too old to replay - flag it for a person and
+ *                 tell the customer, never book it;
+ *  - null:        leave it this tick.
+ *
+ * @returns {'replay'|'clear'|'hand-over'|null}
+ */
+export function queueActionFor(row, { now = Date.now() } = {}) {
+  const details = row?.booking_details || {};
+  const chain = details.gds_chain || {};
+  if (details.pnr || row.status === 'cancelled') return 'clear';
+  if (chain.state === 'queued') {
+    // Waiting out a retry delay (retryLater).
+    const retryAfter = Date.parse(chain.retryAfter ?? '');
+    return Number.isFinite(retryAfter) && retryAfter > now ? null : 'replay';
+  }
+  // Finished, with the order still stored: a person owns it (`needs_review`,
+  // which the queue's own final failure writes), the route has started a
+  // reversal (`fulfillment_failed`), or the money went back. Picked up to drop
+  // the order - passport numbers and dates of birth, and what makes the
+  // admin's Void Payment answer BOOKING_BUSY - and never replayed. Before, a
+  // clear that failed once was never tried again: nothing selected these rows.
+  // Not while a chain still holds the booking.
+  const settled = details.needs_review || details.fulfillment_failed
+    || ['refunded', 'partially_refunded'].includes(row.payment_status);
+  if (settled) return liveChainState(chain, now) ? null : 'clear';
+  // Let go by the route and never queued again. Before a retryable 503 the
+  // route releases its claim, which writes the chain `failed`
+  // (releaseBookingChain), and retryLater puts it back to `queued`. When
+  // that write does not land - an error, or the database not answering the
+  // read before it - the row keeps its order and a `failed` chain, and
+  // without this branch no job ever looked at it again: charged, not booked,
+  // nobody told. Nothing is running it, so it is run again, after the same
+  // wait a re-queue would have had.
+  //
+  // Not while something else owns the outcome - settled above.
+  if (chain.state === 'failed') {
+    // And only while it is young enough to book. Round 1 replayed a failed
+    // chain of any age, and one with no finish time at once: on deploy every
+    // stranded row would have gone through /order, so a payment staff had
+    // settled by hand was booked weeks late, and one refunded in the ARC
+    // portal was emailed "we could not confirm your booking". The rule for a
+    // paid booking never booked is abandonedCheckout's - book or refund within
+    // AUTO_COMPLETE_WINDOW_MS, past that a person decides. A row that records
+    // no time at all is taken as old.
+    const stoppedAt = Date.parse(chain.finishedAt || chain.queuedAt || '');
+    if (!Number.isFinite(stoppedAt) || now - stoppedAt > AUTO_COMPLETE_WINDOW_MS) return 'hand-over';
+    return now - stoppedAt < RETRY_DELAY_MS ? null : 'replay';
+  }
+  // A replay that died mid-chain leaves its claim behind; once it is stale,
+  // run the booking again rather than strand a paid customer.
+  return chain.state === 'in_progress' && chain.startedAt && now - Date.parse(chain.startedAt) > CLAIM_TTL_MS
+    ? 'replay'
+    : null;
+}
+
+/**
+ * A failed chain past the replay window: flagged for a person, and the customer
+ * told, instead of booked. Flagged first - if that cannot be written nothing is
+ * sent and the order is kept, so the next tick tries again rather than email a
+ * customer that a team nobody told has been alerted.
+ */
+async function handOver(row) {
+  const ref = row.booking_reference;
+  const alerted = await flagFinalFailure(ref, null, null, {
+    reason: `queued booking's chain failed more than ${AUTO_COMPLETE_WINDOW_MS / 3_600_000} hours ago and was not replayed; `
+      + 'check the airline and ARC Pay, then book or refund it by hand',
+  });
+  if (!alerted) {
+    log('stale failed booking could not be flagged; will try again', { bookingReference: ref });
+    return 'retry';
+  }
+  log('stale failed booking handed to a person, not replayed', { bookingReference: ref });
+  await notifyFailure(row.booking_details?.queued_order, ref, {}, { alerted });
+  await clearQueuedOrder(ref);
+  return 'handed-over';
+}
+
+/** One row the worker picked, done as queueActionFor says. */
+export async function runQueued(row, { baseUrl, fetchImpl, now = Date.now() } = {}) {
+  const action = queueActionFor(row, { now });
+  if (action === 'hand-over') return handOver(row);
+  if (action === 'clear') {
+    await clearQueuedOrder(row.booking_reference);
+    return 'already-finished';
+  }
+  if (action === 'replay') return replay(row, { baseUrl, ...(fetchImpl ? { fetchImpl } : {}) });
+  return 'skipped';
+}
+
+/**
+ * How many times a clear that lost its race is read and tried again - the same
+ * as the other writers of this column (patchBookingDetails, the alarms' marks).
+ */
+const CLEAR_TRIES = 3;
 
 /** Drop the stored order (it carries passenger details) once it has an outcome. */
 async function clearQueuedOrder(bookingReference) {
-  const { data: row } = await supabase
-    .from('bookings')
-    .select('status, payment_status, booking_details')
-    .eq('booking_reference', bookingReference)
-    .single();
-  if (!row?.booking_details?.queued_order) return;
-  const { queued_order: _order, queued_env: _env, ...rest } = row.booking_details;
-  // Pinned, like every other writer of this column. A replay that the worker
-  // abandoned at its timeout leaves the route's own chain still running, and
-  // the next tick picks the row up again as soon as a PNR appears - so this
-  // read and write can straddle the chain's final save and put the row back as
-  // it was, losing the tickets and itineraries it had just written while
-  // leaving `status` on the newer value.
-  const { data: written } = await unchangedSince(
-    supabase.from('bookings').update({ booking_details: rest }).eq('booking_reference', bookingReference),
-    row,
-  ).select('booking_reference');
-  if (!written?.length) {
-    log('queued order not cleared: the booking changed while it was being read', { bookingReference });
+  // Read and tried again after a lost race, rather than given up on. This is
+  // the only code that removes the order - passengers' dates of birth and
+  // passport numbers - and after a final failure nothing selects the row
+  // again, so one lost race kept that data for good, and the GDPR erasure job
+  // defers any booking still holding a queued order (gdpr.controller.js), so
+  // the customer's erasure request was refused on every run after it.
+  //
+  // A failed read or write is logged and tried again too. A read error used to
+  // look like "nothing to clear" and return in silence, and a write error gave
+  // up after one try. Past these tries the worker picks the row up again on a
+  // later tick (queueActionFor answers 'clear'), so a bad minute is not for good.
+  for (let attempt = 0; attempt < CLEAR_TRIES; attempt += 1) {
+    const { data: row, error: readError } = await supabase
+      .from('bookings')
+      .select('status, payment_status, booking_details')
+      .eq('booking_reference', bookingReference)
+      .single();
+    if (readError) {
+      // No such row: nothing holds the order any more.
+      if (readError.code === 'PGRST116') return;
+      log('queued order not cleared: the booking could not be read', { bookingReference, attempt: attempt + 1, error: readError.message });
+      continue;
+    }
+    if (!row?.booking_details?.queued_order) return;
+    const { queued_order: _order, queued_env: _env, ...rest } = row.booking_details;
+    // Pinned, like every other writer of this column. A replay that the worker
+    // abandoned at its timeout leaves the route's own chain still running, and
+    // the next tick picks the row up again as soon as a PNR appears - so this
+    // read and write can straddle the chain's final save and put the row back as
+    // it was, losing the tickets and itineraries it had just written while
+    // leaving `status` on the newer value.
+    const { data: written, error } = await unchangedSince(
+      supabase.from('bookings').update({ booking_details: rest }).eq('booking_reference', bookingReference),
+      row,
+    ).select('booking_reference');
+    if (error) {
+      log('queued order not cleared', { bookingReference, attempt: attempt + 1, error: error.message });
+      continue;
+    }
+    if (written?.length) return;
   }
+  log('queued order not cleared after every try; a later tick clears it', { bookingReference, tries: CLEAR_TRIES });
 }
 
 /**
@@ -208,54 +329,70 @@ export function isRetryableAnswer(status, body) {
  * RETRY_DELAY_MS.
  *
  * The route may have left the chain `failed` or `in_progress` when it answered.
- * Either way nothing is running it, and findRunnable picks up only `queued`, so
- * it is queued again here - by a compare-and-set on the stamp just read, so a
- * request that has taken the booking since is never undone.
+ * Either way nothing is running it, so it is queued again here - by a
+ * compare-and-set on the stamp just read, so a request that has taken the
+ * booking since is never undone. A race lost to a write that left the booking
+ * free is read and decided again.
  *
- * @returns {Promise<'queued'|'gave-up'|'moved-on'|'unknown'>}
+ * @returns {Promise<'queued'|'gave-up'|'moved-on'|'not-queued'|'unknown'>}
+ *   'not-queued' the write did not land, so the row is as the route left it;
+ *                findRunnable picks a released (`failed`) chain up again.
  */
+const REQUEUE_TRIES = 3;
+
 async function retryLater(bookingReference, { now = Date.now() } = {}) {
-  const { data: row, error } = await supabase
-    .from('bookings')
-    .select('status, booking_details')
-    .eq('booking_reference', bookingReference)
-    .single();
-  if (error || !row) return 'unknown';
+  for (let attempt = 0; attempt < REQUEUE_TRIES; attempt += 1) {
+    const { data: row, error } = await supabase
+      .from('bookings')
+      .select('status, booking_details')
+      .eq('booking_reference', bookingReference)
+      .single();
+    if (error || !row) return 'unknown';
 
-  const details = row.booking_details || {};
-  if (!details.queued_order || details.pnr || row.status === 'cancelled') return 'moved-on';
-  const chain = details.gds_chain || {};
-  const holder = liveChainState(chain, now);
-  if (holder === 'in_progress' || holder === 'cancelling') return 'moved-on';
+    const details = row.booking_details || {};
+    if (!details.queued_order || details.pnr || row.status === 'cancelled') return 'moved-on';
+    const chain = details.gds_chain || {};
+    const holder = liveChainState(chain, now);
+    if (holder === 'in_progress' || holder === 'cancelling') return 'moved-on';
 
-  const queueAttempts = Number(chain.queueAttempts || 0) + 1;
-  if (queueAttempts > MAX_QUEUE_ATTEMPTS) return 'gave-up';
+    const queueAttempts = Number(chain.queueAttempts || 0) + 1;
+    if (queueAttempts > MAX_QUEUE_ATTEMPTS) return 'gave-up';
 
-  const at = new Date(now).toISOString();
-  let update = supabase
-    .from('bookings')
-    .update({
-      booking_details: {
-        ...details,
-        gds_chain: {
-          state: 'queued',
-          startedAt: at,
-          queuedAt: chain.queuedAt || at,
-          ...(chain.attempt ? { attempt: chain.attempt } : {}),
-          queueAttempts,
-          retryAfter: new Date(now + RETRY_DELAY_MS).toISOString(),
+    const at = new Date(now).toISOString();
+    let update = supabase
+      .from('bookings')
+      .update({
+        booking_details: {
+          ...details,
+          gds_chain: {
+            state: 'queued',
+            startedAt: at,
+            queuedAt: chain.queuedAt || at,
+            ...(chain.attempt ? { attempt: chain.attempt } : {}),
+            queueAttempts,
+            retryAfter: new Date(now + RETRY_DELAY_MS).toISOString(),
+          },
         },
-      },
-      updated_at: at,
-    })
-    .eq('booking_reference', bookingReference);
-  update = chain.startedAt
-    ? update.eq('booking_details->gds_chain->>startedAt', chain.startedAt)
-    : update.is('booking_details->gds_chain->>startedAt', null);
-  const { error: writeError } = await update;
-  // Failed or lost: the row is as the route left it, and a later tick reads it again.
-  if (writeError) log('could not queue the booking again', { bookingReference, error: writeError.message });
-  return 'queued';
+        updated_at: at,
+      })
+      .eq('booking_reference', bookingReference);
+    update = chain.startedAt
+      ? update.eq('booking_details->gds_chain->>startedAt', chain.startedAt)
+      : update.is('booking_details->gds_chain->>startedAt', null);
+    // Asked for the row back, because an update that matched nothing answers
+    // `{ data: null, error: null }` - which is how this used to report
+    // 'queued' for a write that never happened.
+    const { data: written, error: writeError } = await update.select('booking_reference');
+    if (writeError) {
+      log('could not queue the booking again', { bookingReference, error: writeError.message });
+      return 'not-queued';
+    }
+    if (written?.length) return 'queued';
+    // Matched no row: something wrote the chain in between. Read it again and
+    // decide again - it may have been taken, or merely touched.
+  }
+  log('could not queue the booking again: it kept changing', { bookingReference, tries: REQUEUE_TRIES });
+  return 'not-queued';
 }
 
 /**
@@ -269,7 +406,7 @@ async function retryLater(bookingReference, { now = Date.now() } = {}) {
  *
  * @returns {Promise<boolean>} whether the booking now carries a review flag
  */
-async function flagFinalFailure(bookingReference, status, body, { now = Date.now() } = {}) {
+async function flagFinalFailure(bookingReference, status, body, { now = Date.now(), reason = null } = {}) {
   if (body?.refunded === true) return false;
   const read = async () => {
     const { data, error } = await supabase
@@ -294,7 +431,7 @@ async function flagFinalFailure(bookingReference, status, body, { now = Date.now
       booking_details: {
         ...details,
         needs_review: {
-          reason: `queued booking could not be completed (${body?.code || `HTTP ${status}`}); the payment may still be held`,
+          reason: reason || `queued booking could not be completed (${body?.code || `HTTP ${status}`}); the payment may still be held`,
           source: 'booking-queue',
           ticketed: false,
           at,
@@ -417,7 +554,7 @@ export function startBookingQueueWorker({ port, intervalMs = 5000 } = {}) {
       const free = Math.min(freeSlots(), MAX_PER_TICK);
       if (free === 0) return;
       const rows = await findRunnable({ limit: free });
-      await Promise.all(rows.map((row) => replay(row, { baseUrl })));
+      await Promise.all(rows.map((row) => runQueued(row, { baseUrl })));
     } catch (error) {
       log('tick failed', { error: error.message });
     } finally {

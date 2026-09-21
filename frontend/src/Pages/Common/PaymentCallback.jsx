@@ -1,14 +1,23 @@
 import React, { useEffect, useState } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { getApiUrl } from '../../utils/apiHelper';
-import { isTimeout } from '../../utils/fetchTimeout';
 import { useSupabaseAuth } from '../../contexts/SupabaseAuthContext';
+
+const SUPPORT_PHONE = '(877) 538-7380';
+// How often a payment-link payer's payment is asked about while the payment
+// gateway cannot be reached (complete-payment-link answers 402 `retryable`).
+const LINK_CONFIRM_ATTEMPTS = 3;
+const LINK_CONFIRM_RETRY_MS = 3000;
 
 export default function PaymentCallback() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [status, setStatus] = useState('Checking your payment...');
   const [error, setError] = useState(null);
+  // An error this page stays on: the payer has something to read and do, and
+  // nothing to be redirected to.
+  const [isStaying, setIsStaying] = useState(false);
+  const [retryHref, setRetryHref] = useState(null);
   const { user } = useSupabaseAuth();
 
   useEffect(() => {
@@ -48,9 +57,19 @@ export default function PaymentCallback() {
           console.log('🔗 Processing payment link callback for:', paymentLinkToken);
           setStatus('Verifying payment link payment...');
 
-          try {
-            // Update payment link status to paid via backend
-            const updateResponse = await fetch(getApiUrl(`payments?action=complete-payment-link`), {
+          /**
+           * Only a confirmed payment is called confirmed.
+           *
+           * complete-payment-link answers 403 when the payment cannot be
+           * verified and 402 when the gateway holds no capture for it. This
+           * read the body, never looked at `success`, announced "Payment
+           * confirmed!" and opened the receipt - which prints "Payment
+           * Successful!" and PAID for whatever payment it is given. A request
+           * that never answered said "Your payment went through" and did the
+           * same. The payer then travelled on a payment nobody had seen.
+           */
+          const askToComplete = async () => {
+            const response = await fetch(getApiUrl(`payments?action=complete-payment-link`), {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -59,36 +78,42 @@ export default function PaymentCallback() {
                 resultIndicator: resultIndicator || ''
               })
             });
-            const updateResult = await updateResponse.json();
-            console.log('🔗 Payment link update result:', updateResult);
+            const body = await response.json().catch(() => ({}));
+            return { ok: response.ok, status: response.status, body: body || {} };
+          };
 
-            const paymentId = updateResult.paymentId || orderId;
+          let outcome = null;
+          try {
+            for (let attempt = 1; attempt <= LINK_CONFIRM_ATTEMPTS; attempt += 1) {
+              outcome = await askToComplete();
+              console.log('🔗 Payment link update result:', outcome.status, outcome.body?.success ?? null);
+              const gatewayUnreachable = outcome.status === 402 && outcome.body?.retryable;
+              if (!gatewayUnreachable || attempt === LINK_CONFIRM_ATTEMPTS) break;
+              setStatus('Still confirming your payment with the payment gateway...');
+              await new Promise((resolve) => setTimeout(resolve, LINK_CONFIRM_RETRY_MS));
+            }
+          } catch (plError) {
+            console.error('⚠️ Payment link update failed:', plError);
+            outcome = null;
+          }
 
+          if (outcome?.ok && outcome.body?.success) {
+            const paymentId = outcome.body.paymentId || orderId;
             setStatus('Payment confirmed! Generating your receipt...');
             setTimeout(() => {
               navigate(`/payment/success?paymentId=${paymentId}`);
             }, 1500);
-          } catch (plError) {
-            console.error('⚠️ Payment link update failed:', plError);
-            /**
-             * The gateway took the money; our own record of it did not get
-             * written. The customer is still redirected to the receipt, because
-             * the payment genuinely went through ARC Pay - but this branch used
-             * to announce "Payment confirmed!" for a request that had simply
-             * never answered, which reads as a promise that everything is
-             * settled when the payment link is still marked unpaid.
-             *
-             * Now the wording matches what is known: the payment went through,
-             * and the record is still catching up. Nothing to do differently -
-             * a customer cannot fix our bookkeeping - but they are not told
-             * something we have not verified.
-             */
-            setStatus(isTimeout(plError)
-              ? 'Your payment went through. We are still updating your record — opening your receipt...'
-              : 'Payment received. Opening your receipt...');
-            setTimeout(() => {
-              navigate(`/payment/success?paymentId=${orderId}`);
-            }, 1500);
+            return;
+          }
+
+          setIsStaying(true);
+          if (outcome?.status === 403) {
+            setError(`We could not verify this payment. If your card was charged, please call ${SUPPORT_PHONE} and do not pay again.`);
+          } else if (outcome?.status === 402 && !outcome.body?.retryable) {
+            setError(`The payment gateway shows no completed payment for this link. If your card was charged, please call ${SUPPORT_PHONE}; otherwise you can try again from your payment link.`);
+            setRetryHref(`/pay/${encodeURIComponent(paymentLinkToken)}`);
+          } else {
+            setError(`We could not confirm your payment yet. Please do not pay again - call ${SUPPORT_PHONE} and we will confirm it for you.`);
           }
           return;
         }
@@ -416,7 +441,13 @@ export default function PaymentCallback() {
             </div>
             <h1 className="text-2xl font-semibold text-gray-800 mb-2">Payment Verification Issue</h1>
             <p className="text-red-600 mb-4">{error}</p>
-            <p className="text-sm text-gray-500">Redirecting you shortly...</p>
+            {isStaying ? (
+              retryHref && (
+                <Link to={retryHref} className="text-blue-600 underline">Back to your payment link</Link>
+              )
+            ) : (
+              <p className="text-sm text-gray-500">Redirecting you shortly...</p>
+            )}
           </>
         ) : (
           <>

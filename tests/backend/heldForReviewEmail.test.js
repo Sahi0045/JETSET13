@@ -66,7 +66,7 @@ const checkoutRow = (over = {}) => ({
     customer_email: 'jane@example.com',
     arc_captured_amount: 291,
     arc_captured_currency: 'USD',
-    pending_booking_data: { bookingData: { originalOffer: offer, passengerData: [{ firstName: 'Jane', lastName: 'Doe' }] } },
+    pending_booking_data: { bookingData: { originalOffer: offer, passengerData: [{ firstName: 'Jane', lastName: 'Doe', gender: 'FEMALE', dateOfBirth: '1990-01-01' }] } },
     verified_charge: { total: 291, pricedFare: { total: 291, currency: 'USD' }, verifiedAt: new Date().toISOString() },
     ...(over.booking_details || {}),
   },
@@ -291,5 +291,91 @@ describe('a commit we never got an answer to', () => {
     const res = await request(app).post('/api/flights/order').send(order);
 
     expect(res.body.message).toMatch(/seats are reserved/i);
+  });
+});
+
+/**
+ * A PNR whose airline confirmed no seat.
+ *
+ * The chain stops with step 'segmentStatus' when a segment comes back from
+ * commit waitlisted, requested, unable or cancelled (bookingChain.js
+ * NOT_A_SEAT_AT_COMMIT). It went to the generic committed branch, which
+ * answered "Your seats are reserved with the airline ... We will email you as
+ * soon as it is issued" and sent the Reservation Held email - "the airline is
+ * holding your seats ... You do not need to do anything". Neither is true, and
+ * the server will not issue that ticket. No honest email for this case exists,
+ * so none is sent: the needs_review flag pages a person, who contacts them.
+ */
+describe('a booking the airline confirmed no seat on', () => {
+  const NO_SEAT = 'The airline has not confirmed a seat on every flight - our team will contact you';
+  const noSeat = () => {
+    throw Object.assign(new Error(NO_SEAT), {
+      name: 'BookingChainError',
+      committed: true,
+      pnr: 'HELD42',
+      step: 'segmentStatus',
+      ticketed: false,
+      code: 502,
+      error: NO_SEAT,
+      technicalError: 'segment status TL at commit: TL is not a confirmed seat (waitlisted, requested, unable or cancelled); not accepted or ticketed',
+    });
+  };
+
+  it('answers with the chain\'s own words, promises no seat, and sends no email', async () => {
+    bookThen(noSeat);
+    const { app, table } = await appWith([checkoutRow()]);
+
+    const res = await request(app).post('/api/flights/order').send(order);
+
+    expect(res.body.success).toBe(false);
+    expect(res.body.error).toBe(NO_SEAT);
+    expect(res.body.message).toBe(NO_SEAT);
+    expect(res.body.needsReview).toBe(true);
+    // The gateway confirmed the capture and nothing was refunded: the order
+    // page may say the payment is held against the reservation.
+    expect(res.body.paymentState).toBe('held');
+    expect(JSON.stringify(res.body)).not.toMatch(/seats are reserved|holding your seats|email you as soon as it is issued/i);
+    expect(send).not.toHaveBeenCalled();
+    // A person is paged instead: the flag the alarm and the desk read.
+    expect(table.row(REF).booking_details.needs_review).toMatchObject({ reason: 'chain failed after commit at segmentStatus', ticketed: false });
+    expect(table.row(REF).booking_details.confirmation_email?.state).not.toBe('sent');
+  });
+
+  it('is not sent the held email, or told its seats are reserved, on a retry either', async () => {
+    bookThen(noSeat);
+    const { app } = await appWith([checkoutRow()]);
+    await request(app).post('/api/flights/order').send(order);
+
+    const again = await request(app).post('/api/flights/order').send(order);
+    await new Promise((resolve) => setTimeout(resolve, 30));
+
+    expect(again.body.success).toBe(false);
+    expect(again.body.code).toBe('BOOKING_NEEDS_REVIEW');
+    expect(JSON.stringify(again.body)).not.toMatch(/seats are reserved|already exists/i);
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it('is owed no email of either kind', async () => {
+    const { confirmationEmailKind } = await import('../../backend/routes/flight.routes.js');
+    const row = checkoutRow({ status: 'pending_ticketing', booking_details: { pnr: 'HELD42', needs_review: { reason: 'chain failed after commit at segmentStatus' } } });
+    expect(confirmationEmailKind(row)).toBeNull();
+  });
+
+  // My Trips reads the same flag (frontend/src/utils/bookingStatus.js), and
+  // must not say "your seats are reserved" either.
+  it('is the reason My Trips knows as "no confirmed seat"', async () => {
+    const routes = await import('../../backend/routes/flight.routes.js');
+    const myTrips = await import('../../frontend/src/utils/bookingStatus.js');
+    expect(myTrips.NO_CONFIRMED_SEAT_REVIEW_REASON).toBe(routes.NO_CONFIRMED_SEAT_REVIEW_REASON);
+  });
+
+  // A queued booking replayed into this answer is a final failure to the
+  // booking queue, which keeps the flag and emails its own "we could not
+  // confirm your booking ... our team will contact you" - true of this case.
+  it('gets the booking queue\'s honest not-confirmed email when it was queued', async () => {
+    const { failureCopy } = await import('../../backend/jobs/bookingQueue.job.js');
+    const copy = failureCopy({ success: false, code: 'BOOKING_NEEDS_REVIEW', needsReview: true, error: NO_SEAT }, { alerted: true });
+    expect(copy).toMatch(/^We could not confirm your booking\. Our team has been alerted and will contact you/);
+    expect(copy).not.toMatch(/reserved|holding|refund/i);
   });
 });

@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { CheckCircle, Ship, Plane, Calendar, CreditCard, ArrowLeft, Clock, MapPin, Users, XCircle } from 'lucide-react';
 import Navbar from './Navbar';
-import { attentionMessage, refundStatus } from '../../utils/bookingStatus';
-import { isPaid } from '../../utils/eTicket';
+import { attentionMessage, paymentReturned, refundStatus } from '../../utils/bookingStatus';
+import { hasNoConfirmedSeat, isPaid, ticketState } from '../../utils/eTicket';
 import { daysUntilDate, formatCalendarDate } from '../../utils/dateUtils';
 import { cancellationMessage } from '../../../../shared/cancellationOutcome';
 import { bookingItineraries, returnDateOf } from '../../../../shared/bookingItineraries';
@@ -116,12 +116,30 @@ function BookingConfirmation() {
   // one of them "Reservation Held - your seats are reserved". What it is
   // depends on the payment, and on whether it is already in front of a person.
   const neverBooked = isFlight && !bookingData.pnr && statusUpper === 'PENDING';
+  // A PNR is not a seat. The airline left a flight on this one waitlisted,
+  // requested, unable or cancelled at commit, and it read "Reservation Held -
+  // your seats are reserved" like any other.
+  //
+  // A flight refunded without being cancelled (the Payments tab writes
+  // payment_status alone) is none of the others: it read "Booking Received -
+  // Your payment is complete", "Our team is looking after your payment", or
+  // "This booking has not been paid for", from a record saying refunded.
+  const returned = isFlight ? paymentReturned(bookingData) : null;
+  // Issued, with its number not read back (ticketState 'pending'). This page
+  // never read it, so it said "Your ticket is being issued and is not ready
+  // yet" beside attention text saying the ticket had been issued. Before the
+  // refunded outcome, as a ticket with its number is: a refund on an issued
+  // ticket is money returned on a completed booking, not "Booking Not
+  // Completed".
   const outcome = statusUpper === 'CANCELLED' ? 'cancelled'
-    : (bookingData.queued === true || statusUpper === 'PENDING_CONFIRMATION') ? 'queued'
+    : !returned && (bookingData.queued === true || statusUpper === 'PENDING_CONFIRMATION') ? 'queued'
       : (bookingData.ticketed === true || hasTickets) ? 'ticketed'
-        : neverBooked ? (bookingData.needs_review ? 'not_completed' : isPaid(bookingData) ? 'not_booked' : 'awaiting_payment')
-          : isFlight ? 'held'
-            : 'confirmed';
+        : isFlight && ticketState(bookingData) === 'pending' ? 'ticket_pending'
+          : returned ? 'payment_returned'
+            : neverBooked ? (bookingData.needs_review ? 'not_completed' : isPaid(bookingData) ? 'not_booked' : 'awaiting_payment')
+              : isFlight && hasNoConfirmedSeat(bookingData) ? 'no_confirmed_seat'
+                : isFlight ? 'held'
+                  : 'confirmed';
 
   // Full class strings on purpose: Tailwind cannot see a class built from a
   // template literal, so a `bg-${tone}-500` would be purged from the build.
@@ -136,6 +154,24 @@ function BookingConfirmation() {
       // Not "has been sent": this page cannot know that an email went out.
       mail: 'We email your ticket details to the address you booked with.',
     },
+    // The ticket exists; only its number has not reached us. No "being issued",
+    // and no "as soon as it is issued".
+    // Refunded since, in full or in part (the Payments tab): nobody is getting
+    // the number for it, so it is not promised.
+    ticket_pending: {
+      Icon: CheckCircle,
+      iconWrap: 'bg-gradient-to-br from-green-400 to-green-600',
+      badge: 'bg-green-500',
+      title: 'Ticket Issued',
+      lead: returned
+        ? `Your ticket has been issued, and ${returned === 'all' ? 'your payment' : 'part of your payment'} for it has been refunded. `
+          + 'Its ticket number has not reached us yet.'
+        : 'Your ticket has been issued. Its ticket number has not reached us yet.',
+      badgeText: 'Ticket issued',
+      mail: returned
+        ? 'If you need your ticket number, or have any questions, call (877) 538-7380 with your booking reference.'
+        : 'Our team is getting your ticket number from the airline. Until then, this reference is your proof of booking.',
+    },
     held: {
       Icon: Clock,
       iconWrap: 'bg-gradient-to-br from-amber-400 to-amber-600',
@@ -148,6 +184,19 @@ function BookingConfirmation() {
       mail: heldForReview
         ? 'Our team is finishing your ticket and will email you as soon as it is issued. Until then, this reference is your proof of booking.'
         : 'We email your e-ticket to the address you booked with once it is issued. Until then, this reference is your proof of booking.',
+    },
+    // Nothing here promises a seat, a ticket or an email: a person contacts
+    // them (the order route pages one). Booking again would buy a second trip
+    // that no duplicate check catches.
+    no_confirmed_seat: {
+      Icon: Clock,
+      iconWrap: 'bg-gradient-to-br from-amber-400 to-amber-600',
+      badge: 'bg-amber-500',
+      title: 'Seat Not Confirmed',
+      lead: 'The airline has not confirmed a seat on every flight, so no ticket has been issued.',
+      badgeText: 'Needs attention',
+      mail: 'Our team will contact you about this booking. Please do not book this trip again in the meantime. '
+        + 'You can also call (877) 538-7380 with your booking reference.',
     },
     queued: {
       Icon: Clock,
@@ -189,6 +238,17 @@ function BookingConfirmation() {
       badgeText: 'Needs attention',
       mail: 'Our team will email you about your payment. You can also call (877) 538-7380 with your booking reference.',
     },
+    payment_returned: {
+      Icon: Clock,
+      iconWrap: 'bg-gradient-to-br from-slate-400 to-slate-600',
+      badge: 'bg-slate-500',
+      title: 'Booking Not Completed',
+      lead: returned === 'part'
+        ? 'This booking was not completed. Part of your payment for it has been refunded.'
+        : 'This booking was not completed, and your payment for it has been refunded.',
+      badgeText: returned === 'part' ? 'Partly refunded' : 'Refunded',
+      mail: 'If you have any questions, call (877) 538-7380 with your booking reference.',
+    },
     awaiting_payment: {
       Icon: Clock,
       iconWrap: 'bg-gradient-to-br from-slate-400 to-slate-600',
@@ -225,7 +285,9 @@ function BookingConfirmation() {
   const attention = attentionMessage(bookingData);
   const paymentNote = outcome === 'cancelled' ? (refund?.label || 'Booking cancelled')
     : outcome === 'awaiting_payment' ? 'Payment not received'
-      : 'Payment received';
+      : returned === 'all' ? 'Payment refunded'
+        : returned === 'part' ? 'Partly refunded'
+          : 'Payment received';
 
   return (
     <>
@@ -531,7 +593,12 @@ function BookingConfirmation() {
 
                 <div className="flex justify-between items-center p-4 bg-green-50 rounded-xl border border-green-200">
                   <div>
-                    <p className="text-sm text-green-700">{outcome === 'cancelled' ? 'Amount Paid' : 'Total Paid'}</p>
+                    {/* "Total Paid" sat over a booking never paid for, and one refunded since. */}
+                    <p className="text-sm text-green-700">
+                      {['cancelled', 'payment_returned'].includes(outcome) ? 'Amount Paid'
+                        : outcome === 'awaiting_payment' ? 'Booking Total'
+                          : 'Total Paid'}
+                    </p>
                     {hasAmount ? (
                       <p className="text-2xl font-bold text-green-800">
                         {bookingData.currency || 'USD'} {paidAmount.toFixed(2)}

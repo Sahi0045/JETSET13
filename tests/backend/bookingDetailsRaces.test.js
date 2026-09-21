@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakeBookingsTable } from './helpers/fakeBookings.js';
 
 /**
@@ -172,5 +172,101 @@ describe("the order route's final save", () => {
 
     expect(saved).toBeNull();
     expect(table.row('FLTM1').status).toBe('pending');
+  });
+});
+
+/**
+ * An owner the bookings table already refused is not written again.
+ *
+ * Checkout saves the row without its owner when `bookings.user_id` refuses the
+ * id - a travel agent's token or a legacy login carries one that is not in
+ * auth.users. The order route's save then collides with that row and merges
+ * into it, and the merge put the refused id straight back: the same foreign
+ * key refused it, and the save was abandoned after one try. A paid booking
+ * with a live PNR kept checkout's `pending` row - no itinerary, no travellers,
+ * no confirmation email - and nothing was reported.
+ */
+describe('the final save for an owner the table refuses', () => {
+  const REJECTED = 'agent-9';
+  const unowned = () => ({
+    id: 'bk-o1',
+    booking_reference: 'FLTO1',
+    travel_type: 'flight',
+    status: 'pending',
+    payment_status: 'paid',
+    total_amount: 291,
+    user_id: null,
+    booking_details: {
+      order_id: 'FLTO1',
+      customer_email: 'agent@example.com',
+      arc_captured_amount: 291,
+      pnr: 'OWN123',
+      gds: { ticketed: false },
+    },
+  });
+  const bookingData = {
+    bookingReference: 'FLTO1',
+    pnr: 'OWN123',
+    orderId: 'FLTO1',
+    totalAmount: 291,
+    currency: 'USD',
+    userId: REJECTED,
+    gds: { ticketed: false, office: 'SCK1S2400' },
+    itineraries: [{ direction: 'outbound', origin: 'JFK', destination: 'LHR', segments: [] }],
+    tickets: [],
+    ticketed: false,
+  };
+  const reportError = vi.fn();
+
+  /** The bookings table, answering a write of the refused owner as Postgres does. */
+  const withForeignKey = async (rows, options) => {
+    await useTable(rows, options);
+    vi.doMock('../../backend/services/monitoring.js', () => ({ reportError, default: { reportError } }));
+    const supabase = (await import('../../backend/config/supabase.js')).default;
+    supabase.from.mockImplementation((name) => {
+      const chain = table.from(name);
+      const update = chain.update;
+      chain.update = (patch) => {
+        if (patch?.user_id !== REJECTED) return update(patch);
+        const refused = {
+          then: (resolve) => resolve({
+            data: null,
+            error: { code: '23503', message: 'insert or update on table "bookings" violates foreign key constraint "bookings_user_id_fkey"' },
+          }),
+        };
+        for (const op of ['eq', 'is', 'neq', 'select', 'single', 'maybeSingle']) refused[op] = () => refused;
+        return refused;
+      };
+      return chain;
+    });
+  };
+
+  beforeEach(() => reportError.mockReset());
+  afterEach(() => vi.doUnmock('../../backend/services/monitoring.js'));
+
+  it('saves the booking without the refused owner, and keeps who it was', async () => {
+    await withForeignKey([unowned()]);
+    const { handleDuplicateBookingMerge, buildBookingRow } = await import('../../backend/routes/flight.routes.js');
+
+    const saved = await handleDuplicateBookingMerge(bookingData, buildBookingRow(bookingData, REJECTED));
+
+    expect(saved).toBeTruthy();
+    const row = table.row('FLTO1');
+    expect(row.status).toBe('pending_ticketing');
+    expect(row.user_id).toBeNull();
+    expect(row.booking_details.original_user_id).toBe(REJECTED);
+    expect(row.booking_details.itineraries).toHaveLength(1);
+    expect(row.booking_details.gds).toMatchObject({ office: 'SCK1S2400' });
+  });
+
+  it('reports a save that finally fails, rather than failing silently', async () => {
+    await withForeignKey([unowned()], { fail: ({ patch }) => Boolean(patch?.status) });
+    const { handleDuplicateBookingMerge, buildBookingRow } = await import('../../backend/routes/flight.routes.js');
+
+    const saved = await handleDuplicateBookingMerge(bookingData, buildBookingRow(bookingData, null));
+
+    expect(saved).toBeNull();
+    expect(reportError).toHaveBeenCalledTimes(1);
+    expect(reportError.mock.calls[0][1]).toMatchObject({ bookingReference: 'FLTO1', pnr: 'OWN123' });
   });
 });

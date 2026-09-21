@@ -165,6 +165,23 @@ describe('a second checkout for a trip that already has a payment page open', ()
     expect(res.body.orderId).toBe('FLTFIRST1');
     expect(openedANewPage()).toBe(false);
   });
+
+  // The window was five minutes and the page lives fifteen
+  // (`interaction.timeout: 900`). A customer interrupted for six minutes who
+  // clicked Pay again got a second live page beside the first, and could pay
+  // both.
+  it('hands back a page that is still open on ARC, however long ago it was opened', async () => {
+    // Up to its last minute: see 'the open page is in its last minute on ARC'.
+    for (const minutes of [6, 13]) {
+      axios.post.mockClear();
+      const { res } = await checkout({
+        rows: [openCheckout({ created_at: minutesAgo(minutes), booking_details: { checkout_created_at: minutesAgo(minutes) } })],
+      });
+
+      expect(res.body.orderId, `${minutes} minutes`).toBe('FLTFIRST1');
+      expect(openedANewPage(), `${minutes} minutes`).toBe(false);
+    }
+  });
 });
 
 describe('a new payment page is opened, as before, when the open one is not this exact trip', () => {
@@ -188,8 +205,28 @@ describe('a new payment page is opened, as before, when the open one is not this
     await opensItsOwn({ rows: [openCheckout()], body: { amount: '452.00' }, verdict: { ...verified, charge: { total: 452 } } });
   });
 
-  it('the open page is older than the reuse window', async () => {
-    await opensItsOwn({ rows: [openCheckout({ created_at: minutesAgo(6), booking_details: { checkout_created_at: minutesAgo(6) } })] });
+  it('the open page has outlived its fifteen minutes on ARC', async () => {
+    await opensItsOwn({ rows: [openCheckout({ created_at: minutesAgo(17), booking_details: { checkout_created_at: minutesAgo(17) } })] });
+  });
+
+  // The window was sixteen minutes against a fifteen-minute page, so from
+  // minute fifteen to sixteen every Pay click handed back a page ARC had
+  // already closed, and the customer could not pay at all until it ran out.
+  it('the open page is in its last minute on ARC, or past it', async () => {
+    for (const minutes of [14.5, 15.5]) {
+      vi.resetModules();
+      axios.post.mockClear();
+      await opensItsOwn({ rows: [openCheckout({ created_at: minutesAgo(minutes), booking_details: { checkout_created_at: minutesAgo(minutes) } })] });
+    }
+  });
+
+  it('the reuse window is shorter than the page ARC is asked to keep open', async () => {
+    await checkout({ rows: [] });
+    const { CHECKOUT_REUSE_WINDOW_MS, ARC_PAGE_TIMEOUT_SECONDS } = await import('../../backend/routes/payment/checkout.handlers.js');
+    expect(ARC_PAGE_TIMEOUT_SECONDS).toBe(900);
+    expect(CHECKOUT_REUSE_WINDOW_MS).toBeLessThan(ARC_PAGE_TIMEOUT_SECONDS * 1000);
+    const initiate = axios.post.mock.calls.find(([, body]) => body?.apiOperation === 'INITIATE_CHECKOUT')?.[1];
+    expect(initiate.interaction.timeout).toBe(ARC_PAGE_TIMEOUT_SECONDS);
   });
 
   it("it is another customer's page", async () => {

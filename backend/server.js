@@ -287,6 +287,8 @@ const server = app.listen(PORT, () => {
     // Names every Amadeus setting still on a PDT-shaped value, because each one
     // fails silently and there would be no error to search for later.
     logCutoverRisks();
+    // Asleep outside production unless WORKFLOW_ENGINE=true: it writes to and
+    // deletes from the database this laptop shares with production.
     startWorkflowEngine().catch(e => console.error('[Workflow] Engine failed to start:', e.message));
     try { startDataRetentionJob(24); } catch(e) { console.error('[Retention] Job failed to start:', e.message); }
     startBookingQueueWorker({ port: PORT });

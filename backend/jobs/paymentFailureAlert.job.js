@@ -24,6 +24,8 @@
 import supabase from '../config/supabase.js';
 import { unchangedSince } from '../utils/bookingDetailsGuard.js';
 import { postToSlack } from './slackAlert.js';
+import { alarmsMayRun } from './needsReviewAlert.job.js';
+import { queueEnvironment } from '../utils/queueEnvironment.js';
 
 const DEFAULT_INTERVAL_MS = 15 * 60 * 1000;
 // Staggered behind the needs-review job so two alarms waking at once cannot
@@ -169,11 +171,19 @@ export async function runOnce({ webhookUrl = process.env.ALERT_SLACK_WEBHOOK_URL
   return { announced: unrefunded.length };
 }
 
-export function startPaymentFailureAlertJob({ intervalMs = DEFAULT_INTERVAL_MS } = {}) {
+export function startPaymentFailureAlertJob({ intervalMs = DEFAULT_INTERVAL_MS, env = process.env } = {}) {
   if (!supabase) return { stop: () => {} };
 
-  if (!process.env.ALERT_SLACK_WEBHOOK_URL) {
+  if (!env.ALERT_SLACK_WEBHOOK_URL) {
     log('asleep: set ALERT_SLACK_WEBHOOK_URL to turn on failed-refund alerts');
+    return { stop: () => {} };
+  }
+
+  // Production only, unless asked for by name - the same rule, and the same
+  // reason, as the paid-but-not-ticketed alarm (alarmsMayRun): a laptop
+  // stamping `alerted_at` on production's failed refunds silences them there.
+  if (!alarmsMayRun(env)) {
+    log(`asleep: this is '${queueEnvironment(env)}', not production (set ALERT_JOBS=true to run it here)`);
     return { stop: () => {} };
   }
 

@@ -63,11 +63,13 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
     // Its document still downloaded headed "E-Ticket", with every number on it.
     const isCancelled = state === 'cancelled';
     const hasPnr = Boolean(pnrOf(bookingData));
+    const docState = documentState(bookingData);
     // "E-Ticket" is a claim, and so is "Booking Confirmation": the first needs a
-    // ticket, the second a PNR. Neither is made for a booking that holds none.
+    // ticket, the second a PNR with a seat on it. Neither is made for a booking
+    // that holds none - including a PNR the airline confirmed no seat on.
     const documentTitle = isCancelled ? 'Cancelled Booking'
         : isTicketed ? 'E-Ticket'
-            : hasPnr ? 'Booking Confirmation'
+            : hasPnr && docState !== 'no_confirmed_seat' ? 'Booking Confirmation'
                 : 'Booking Summary';
 
     // Worded from what is true of the booking. "Your seat is held under the PNR
@@ -81,6 +83,12 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
         held: {
             title: 'This is a confirmed reservation, not a ticket.',
             body: 'Your seat is held under the PNR below. We will email your e-ticket once it is issued. Please do not travel on this document alone.',
+        },
+        // Manage Booking does not offer this one (canDownloadDocument), but the
+        // template is on the page, and it must not say "held" either.
+        no_confirmed_seat: {
+            title: 'The airline has not confirmed a seat on every flight.',
+            body: 'No ticket has been issued, and this document does not hold a seat. Our team will contact you. Please do not book this trip again in the meantime.',
         },
         queued: {
             title: 'Your booking is being confirmed with the airline.',
@@ -96,7 +104,7 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
                 body: 'Nothing is held with the airline, so this is not a reservation or a ticket.',
             },
     };
-    const notice = NOTICES[documentState(bookingData)] || null;
+    const notice = NOTICES[docState] || null;
 
     // Get flight data - handle both nested and direct structures. Identifiers
     // fall back to a visible placeholder rather than a plausible-looking

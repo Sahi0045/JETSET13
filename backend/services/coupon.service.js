@@ -1,4 +1,5 @@
 import { computeCouponDiscount, roundMoney } from '../../shared/flightCharge.js';
+import { flightsKey, travellerNamesKey } from '../utils/tripMatch.js';
 
 /**
  * Is this coupon valid for this order, and what does it take off?
@@ -8,10 +9,16 @@ import { computeCouponDiscount, roundMoney } from '../../shared/flightCharge.js'
  * `orderTotal`, and the page then charged the `finalTotal` it was handed -
  * frozen at the moment the coupon was applied, whatever changed afterwards.
  *
+ * `preview` is the coupon box's question (POST /coupons/validate), asked with
+ * no trip: the caller's own unpaid payment pages neither refuse the coupon nor
+ * count toward its limit there. Checkout asks again with the trip and enforces
+ * both. Without it a customer who cancelled at ARC was refused their own
+ * coupon for 15 minutes, because of the page they had just left.
+ *
  * @param {object} client  a Supabase client
  * @returns {Promise<{ok: true, coupon, discountAmount, finalTotal} | {ok: false, status, message}>}
  */
-export async function evaluateCoupon(client, { code, orderTotal = 0, bookingType = 'all', userId, email } = {}) {
+export async function evaluateCoupon(client, { code, orderTotal = 0, bookingType = 'all', userId, email, trip = null, preview = false } = {}) {
   if (!code) return { ok: false, status: 400, message: 'Coupon code is required.' };
 
   const { data: coupon, error } = await client
@@ -36,8 +43,26 @@ export async function evaluateCoupon(client, { code, orderTotal = 0, bookingType
   // used its coupon yet: every open checkout passed both limits, and a
   // one-per-customer coupon applied to two trips at once was given twice.
   const pending = await pendingCouponCheckouts(client, coupon);
+  const customerEmail = normalizeEmail(email);
+  const isCallers = (row) => Boolean((userId && row.user_id === userId)
+    || (customerEmail && normalizeEmail(row.booking_details?.customer_email) === customerEmail));
+  // The customer's own unpaid payment page for this same trip. A customer who
+  // cancelled at ARC, corrected a passport number and pressed Pay again after
+  // the five minutes a page is handed back for found that page, still inside
+  // its 15, and was refused their coupon as "already on another booking" - and
+  // charged in full - or, with the coupon at its last use, told it had reached
+  // its limit. The rules are about two trips at once; two payments for one
+  // trip are held for a human by the order route (findDuplicateBooking), so the
+  // coupon cannot be given twice this way. A payment already taken is never
+  // set aside: that protection stands. In a preview, with no trip, any of the
+  // caller's own unpaid pages - checkout decides.
+  const sameTripPage = (row) => Boolean(trip)
+    && couponTripKey(row.booking_details?.pending_booking_data?.bookingData?.originalOffer,
+      row.booking_details?.pending_booking_data?.bookingData?.passengerData) === trip;
+  const setAside = (row) => isCallers(row) && row.payment_status !== 'paid' && (preview || sameTripPage(row));
+  const counted = pending.filter((row) => !setAside(row));
   if (coupon.max_uses !== null && coupon.max_uses !== undefined
-    && Number(coupon.current_uses || 0) + pending.length >= coupon.max_uses) {
+    && Number(coupon.current_uses || 0) + counted.length >= coupon.max_uses) {
     return { ok: false, status: 400, message: 'This coupon has reached its maximum usage limit.' };
   }
   if (parseFloat(coupon.min_order_value) > 0 && parseFloat(orderTotal) < parseFloat(coupon.min_order_value)) {
@@ -49,16 +74,37 @@ export async function evaluateCoupon(client, { code, orderTotal = 0, bookingType
 
   // One use per customer: by account, or by email for a guest. A guest passes
   // no user id, so the check used to be skipped for every guest booking.
-  const customerEmail = normalizeEmail(email);
+  //
+  // And by email for a signed-in customer too, not by account alone. A use can
+  // be recorded with no account on it - a booking made as a guest, or one whose
+  // owner the bookings table rejected so checkout saved it without one - and
+  // the same customer, signed in, was asked only about their account, found
+  // nothing, and was given a one-per-customer coupon again. Two lookups rather
+  // than one `or` filter, so an address is never spliced into a filter string.
   if (userId || customerEmail) {
-    const base = client.from('coupon_usage').select('id').eq('coupon_id', coupon.id);
-    const { data: existing } = await (userId ? base.eq('user_id', userId) : base.eq('user_email', customerEmail))
+    const usedBy = (column, value) => client.from('coupon_usage').select('id')
+      .eq('coupon_id', coupon.id)
+      .eq(column, value)
       .limit(1)
       .maybeSingle();
-    if (existing) return { ok: false, status: 400, message: 'You have already used this coupon.' };
-    const mine = pending.some((row) => (userId && row.user_id === userId)
-      || (customerEmail && normalizeEmail(row.booking_details?.customer_email) === customerEmail));
-    if (mine) {
+    const { data: byAccount } = userId ? await usedBy('user_id', userId) : { data: null };
+    const { data: byEmail } = !byAccount && customerEmail ? await usedBy('user_email', customerEmail) : { data: null };
+    if (byAccount || byEmail) return { ok: false, status: 400, message: 'You have already used this coupon.' };
+    // Another of this customer's checkouts holding the coupon - not the page
+    // set aside above. Worded by what it is. A paid booking with no PNR yet
+    // holds the coupon for up to six hours, and in the coupon box it is the
+    // only thing that can refuse it: "started in the last 15 minutes ... once
+    // its payment page has closed" was false of every part of it.
+    const callersOthers = counted.filter(isCallers);
+    if (callersOthers.some((row) => row.payment_status === 'paid')) {
+      return {
+        ok: false,
+        status: 400,
+        message: 'This coupon is already on a paid booking of yours that has not been completed yet, so it cannot be used again. '
+          + 'Please contact us at (877) 538-7380 and we will help.',
+      };
+    }
+    if (callersOthers.length > 0) {
       return {
         ok: false,
         status: 400,
@@ -81,6 +127,17 @@ export async function evaluateCoupon(client, { code, orderTotal = 0, bookingType
 }
 
 const normalizeEmail = (value) => String(value ?? '').trim().toLowerCase() || null;
+
+/**
+ * One trip, as the order route's duplicate check tells trips apart: the same
+ * flights for the same people (utils/tripMatch.js). Null when either cannot be
+ * read - missing data is never "the same trip".
+ */
+export function couponTripKey(offer, travellers) {
+  const flights = flightsKey(offer);
+  const names = travellerNamesKey(travellers);
+  return flights && names ? `${flights}#${names}` : null;
+}
 
 // A hosted payment page lasts 15 minutes; a paid booking is booked, refunded or
 // flagged within the abandoned-checkout job's six hours.

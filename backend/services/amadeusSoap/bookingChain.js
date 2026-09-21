@@ -122,8 +122,35 @@ const anyLocatorMissing = (pnrReply) => {
 /** Each air segment's status: HK, or TK when the airline has changed it. */
 const airSegmentStatuses = (pnrReply) => airSegmentValues(pnrReply, 'relatedProduct.status');
 
-/** A segment the airline changed: confirmed (TK), waitlisted (TL) or requested (TN). */
-const SCHEDULE_CHANGE_STATUSES = new Set(['TK', 'TL', 'TN']);
+/**
+ * A segment the airline changed and still confirms (TK). Accepted with change
+ * advice, then ticketed.
+ *
+ * TL and TN used to be in here as well, and they are not seats: TL is the
+ * airline's schedule change landing on a WAITLIST, TN on a request it has not
+ * answered. Accepted like TK, they were queued, ticketed and emailed as
+ * confirmed - a ticket for a seat the airline had not given the passenger.
+ */
+const SCHEDULE_CHANGE_STATUSES = new Set(['TK']);
+
+/**
+ * Segment statuses at commit that are not a seat.
+ *
+ * The sell refuses a waitlist before anything is saved (airSell.js: "A
+ * waitlist is not a seat"), but the airline can still move a segment between
+ * the sell and the end transact. TL/TN (waitlisted/requested after a schedule
+ * change), HL/HN/NN/WL (the same without one), and UC, UN, UU, US, NO, HX, UNS
+ * (unable, not operating, no action, cancelled) all say the airline is not
+ * holding a confirmed seat. Every commit reply captured from this office - 138
+ * segments across LH, KU, EN, GF, CZ, BF, EK, KE, LY and MU on PDT, 15-17 Sep
+ * 2026 - answered HK, so this never meets a normal booking.
+ *
+ * The PNR exists by then and the customer has paid, so it is not refunded
+ * blind: the chain places it on the office queue, stops before change advice
+ * and issuance, and the order route holds it for a person (the `committed`
+ * branch).
+ */
+const NOT_A_SEAT_AT_COMMIT = new Set(['TL', 'TN', 'HL', 'HN', 'NN', 'WL', 'UC', 'UN', 'UU', 'US', 'NO', 'HX', 'UNS']);
 
 /**
  * Issuance the airline refused only because its side is not ready yet. Seen on
@@ -174,6 +201,41 @@ const voidFailedForNow = (cause) => String(cause?.amadeusCode ?? '') === '5795'
   || cause?.code === 'ECONNABORTED'
   || /timeout of \d+ms exceeded/i.test(String(cause?.technicalError ?? cause?.message ?? ''));
 
+/**
+ * Which tickets a void that failed overall DID void.
+ *
+ * Ticket_CancelDocument answers once per document, and a two-ticket void can
+ * come back voided for one and refused for the other. That was collapsed to
+ * one boolean and the error named no ticket, so the desk (needs_review.detail,
+ * written from technicalError) could not tell the ticket now void at Amadeus
+ * from the one still live - and a cancel on a later day would list the void
+ * one as a refund to claim from the airline. The reply's number carries a
+ * check digit ours does not, so it is matched as a prefix, as
+ * readVoidTicketReply does; a reply without numbers is reported as a count
+ * rather than guessed at by position.
+ */
+const partialVoid = (result, voidable) => {
+  const documents = result.documents ?? [];
+  const numbered = documents.length > 0 && documents.every((document) => document.number);
+  if (!numbered) {
+    const count = documents.filter((document) => document.voided).length;
+    return {
+      voided: null,
+      unvoided: null,
+      text: count > 0 ? `; ${count} of ${voidable.length} documents answered voided, which ones the reply does not say` : '',
+    };
+  }
+  const isVoided = (ticket) => documents.some((document) => document.voided
+    && document.number.startsWith(ticket.number.replace(/\D/g, '')));
+  const voided = voidable.filter(isVoided).map((ticket) => ticket.number);
+  const unvoided = voidable.filter((ticket) => !isVoided(ticket)).map((ticket) => ticket.number);
+  return {
+    voided,
+    unvoided,
+    text: voided.length > 0 ? `; voided ${voided.join(', ')} but not ${unvoided.join(', ')} - the PNR is left live` : '',
+  };
+};
+
 /** Seats are held per passenger; an infant travels on a lap and holds none. */
 const seatCount = (travelers) => travelers.filter((t) => t.ptc !== 'INF' && t.ptc !== 'HELD_INFANT').length;
 
@@ -200,8 +262,11 @@ const withPassengerTypes = (travelers, offer) => {
  * `inspectReply` classifies "no results" as an empty success, which is right
  * for a search and wrong for every call here: there is no such thing as an
  * empty sell. Booking treats it as the failure it is.
+ *
+ * `refusalOf` reads a reply that answers the question itself before its error
+ * containers are classified, and returns the error to throw, or null.
  */
-const callStep = async (ctx, { step, operation, bodyXml, pnr, committed, ticketed }) => {
+const callStep = async (ctx, { step, operation, bodyXml, pnr, committed, ticketed, refusalOf }) => {
   let result;
   try {
     result = await ctx.call(operation, bodyXml);
@@ -210,6 +275,8 @@ const callStep = async (ctx, { step, operation, bodyXml, pnr, committed, tickete
   }
 
   const reply = replyOf(result);
+  const refusal = refusalOf?.(reply);
+  if (refusal) throw refusal;
   const inspected = inspectReply(reply, operation);
   if (!inspected.ok) {
     throw new BookingChainError({
@@ -245,10 +312,18 @@ const callStep = async (ctx, { step, operation, bodyXml, pnr, committed, tickete
  * numbers are not there yet waits again and retries a few times before
  * leaving the PNR for manual follow-up. Non-fatal throughout: the tickets
  * exist whether or not we capture their numbers on this request.
+ *
+ * `expected` is one ticket per traveller, a lap infant included: the
+ * 2ADT+1CH+1INF certification booking (BMPUST, PDT 17 Sep 2026) carried four
+ * FA elements for its four travellers. The loop used to stop at the first
+ * retrieve carrying ANY ticket, so a PNR read while the numbers were still
+ * landing locked in a partial set - and a non-empty list raised no flag, so
+ * every later reader took two tickets of four as the whole booking.
  */
-const readTicketNumbers = async (ctx, { pnr, order, offer, bookingReference, config }) => {
+const readTicketNumbers = async (ctx, { pnr, order, offer, bookingReference, config, expected = 1 }) => {
   let tickets = order.tickets;
   let current = order;
+  const wanted = Math.max(1, expected);
   const attempts = Math.max(1, config.ticketRetrieveRetries + 1);
   await sleep(config.ticketRetrieveInitialMs);
   for (let attempt = 1; attempt <= attempts; attempt++) {
@@ -262,12 +337,14 @@ const readTicketNumbers = async (ctx, { pnr, order, offer, bookingReference, con
         ticketed: true,
       });
       const found = readTickets(retrieved);
-      if (found.length) {
+      // Keep the most complete set seen, so a later short read cannot lose a
+      // number an earlier one had.
+      if (found.length > (tickets?.length ?? 0)) {
         tickets = found;
         current = buildFlightOrder(retrieved, { flightOffers: [offer], bookingReference });
         current.tickets = tickets;
-        break;
       }
+      if (found.length >= wanted) break;
     } catch (cause) {
       log.warn({ pnr, attempt, reason: cause?.technicalError ?? cause?.message }, 'reading ticket numbers failed');
     }
@@ -276,8 +353,20 @@ const readTicketNumbers = async (ctx, { pnr, order, offer, bookingReference, con
   if (!tickets?.length) {
     // Ticket issued but its number has not surfaced yet — flag for manual
     // follow-up rather than silently confirm a booking with no ticket number.
-    current.needsReview = { reason: 'ticket_numbers_not_retrieved', at: new Date().toISOString() };
+    // With the count, as the partial case below, so the alarm can say how many
+    // numbers the desk is looking for.
+    current.needsReview = {
+      reason: 'ticket_numbers_not_retrieved', expected: wanted, got: 0, at: new Date().toISOString(),
+    };
     log.warn({ pnr, attempts }, 'ticket numbers not in PNR after retries; flagged for manual follow-up');
+  } else if (tickets.length < wanted) {
+    // Some numbers, not all. The same reason as none at all - the e-ticket and
+    // the confirmation email already read it as "issued, number pending" - with
+    // the count, so the desk knows it is looking for the missing ones.
+    current.needsReview = {
+      reason: 'ticket_numbers_not_retrieved', expected: wanted, got: tickets.length, at: new Date().toISOString(),
+    };
+    log.warn({ pnr, attempts, expected: wanted, got: tickets.length }, 'not every traveller\'s ticket number is in the PNR after retries; flagged for manual follow-up');
   }
   return { tickets, order: current };
 };
@@ -298,8 +387,16 @@ const readTicketNumbers = async (ctx, { pnr, order, offer, bookingReference, con
  * tried regardless. A ticket already on the PNR is read, never issued again.
  * Refusals because the airline is not ready are retried the same way, up to
  * the configured number, counting one already met in the booking session.
+ *
+ * "Already ticketed" means a ticket for every traveller (`expectedTickets`).
+ * Finding ANY ticket used to end the loop as ticketed and done, so a PNR seen
+ * with one ticket of three - still landing, or issued in part - was recorded
+ * complete. It is not issued again either (the traveller who has a ticket would
+ * get a second one): it is read again, and flagged if still short.
  */
-const issueInFreshSessions = async (booked, { offer, bookingReference, config, notReadyRefusals = 0 }) => {
+const issueInFreshSessions = async (booked, {
+  offer, bookingReference, config, notReadyRefusals = 0, expectedTickets = 1,
+}) => {
   const { pnr } = booked;
   const waitStarted = Date.now();
   let refusals = notReadyRefusals;
@@ -320,10 +417,20 @@ const issueInFreshSessions = async (booked, { offer, bookingReference, config, n
       });
 
       const existing = readTickets(current);
-      if (existing.length > 0) {
+      if (existing.length >= expectedTickets) {
         const order = buildFlightOrder(current, { flightOffers: [offer], bookingReference });
         order.tickets = existing;
         return { ticketed: true, tickets: existing, order };
+      }
+      if (existing.length > 0) {
+        const partial = buildFlightOrder(current, { flightOffers: [offer], bookingReference });
+        partial.tickets = existing;
+        return {
+          ticketed: true,
+          ...(await readTicketNumbers(ctx, {
+            pnr, order: partial, offer, bookingReference, config, expected: expectedTickets,
+          })),
+        };
       }
 
       const locators = airSegmentLocators(current);
@@ -356,7 +463,12 @@ const issueInFreshSessions = async (booked, { offer, bookingReference, config, n
         return { waiting: true, notReady: true };
       }
       if (!readIssueTicketReply(issueReply).issued) return { ticketed: false };
-      return { ticketed: true, ...(await readTicketNumbers(ctx, { pnr, order: booked.order, offer, bookingReference, config })) };
+      return {
+        ticketed: true,
+        ...(await readTicketNumbers(ctx, {
+          pnr, order: booked.order, offer, bookingReference, config, expected: expectedTickets,
+        })),
+      };
       }, { config });
     } catch (cause) {
       if (cause instanceof BookingChainError) throw cause;
@@ -482,24 +594,35 @@ export const runBookingChain = async (p) => {
 
     // ---- 1. Sell -----------------------------------------------------------
     // Holds the seats. Never retried: a retried sell is a second booking.
+    //
+    // UC between search and sell is normal, not exceptional: the fare class
+    // sold out in the seconds since the customer chose it. It has to read as
+    // a clean "gone", because the refund path is what happens next.
+    const sellRefused = (answer, cause) => new BookingChainError({
+      step: 'sell',
+      cause,
+      error: 'That flight is no longer available at this price',
+      code: 409,
+      technicalError: `segment status ${answer.statuses.join(',') || 'absent'}${cause?.amadeusCode ? ` (${cause.amadeusCode})` : ''}`,
+    });
     const sellReply = await callStep(ctx, {
       step: 'sell',
       operation: 'Air_SellFromRecommendation',
       bodyXml: buildAirSellBody({ segments: ama.segments, seats: seatCount(travelers) }),
+      // The segment statuses first, as confirmSeats reads them. Every real
+      // refusal on disk (16-Book-Unavailable-Class, PDT 17 Sep 2026) is UNS on
+      // each segment WITH a message-level 288, and callStep classified the 288
+      // first: a 502 "temporarily unavailable" for a class that had simply
+      // gone. A reply with no segment status keeps Amadeus's own classification.
+      refusalOf: (reply) => {
+        const answer = readAirSellReply(reply, { expectedSegments: ama.segments.length });
+        if (answer.sold || answer.statuses.length === 0) return null;
+        return sellRefused(answer, inspectReply(reply, 'Air_SellFromRecommendation').error ?? undefined);
+      },
     });
 
     const sold = readAirSellReply(sellReply, { expectedSegments: ama.segments.length });
-    if (!sold.sold) {
-      // UC between search and sell is normal, not exceptional: the fare class
-      // sold out in the seconds since the customer chose it. It has to read as
-      // a clean "gone", because the refund path is what happens next.
-      throw new BookingChainError({
-        step: 'sell',
-        error: 'That flight is no longer available at this price',
-        code: 409,
-        technicalError: `segment status ${sold.statuses.join(',') || 'absent'}`,
-      });
-    }
+    if (!sold.sold) throw sellRefused(sold);
 
     // ---- 2. Names and contact elements -------------------------------------
     // toDDMMYY throws on an unparseable date, and this runs after the seats are
@@ -739,7 +862,52 @@ export const runBookingChain = async (p) => {
     // returning TK for that flight before it could be proved end to end, so this
     // runs only when a segment carries a changed status.
     let bookedReply = commitReply;
-    const changed = airSegmentStatuses(commitReply).filter((status) => SCHEDULE_CHANGE_STATUSES.has(status));
+
+    // Queue_PlacePNR, from step 7 and from the not-a-seat stop below. Returns
+    // whether it was filed.
+    const placeOnQueue = async () => {
+      try {
+        await callStep(ctx, {
+          step: 'queue',
+          operation: 'Queue_PlacePNR',
+          bodyXml: buildQueuePlaceBody({
+            recordLocator: pnr,
+            queueOffice: config.queueOffice,
+            queueNumber: config.queueNumber,
+            queueCategory: config.queueCategory,
+          }),
+          pnr,
+          committed,
+        });
+        return true;
+      } catch (cause) {
+        // A booking that is not on a queue is still a booking. Refunding one over
+        // a filing error would be far worse than leaving it for the desk to find.
+        log.warn({ pnr, reason: cause?.technicalError ?? cause?.message }, 'Queue_PlacePNR failed; booking stands');
+        return false;
+      }
+    };
+
+    const statuses = airSegmentStatuses(commitReply);
+    const notSeats = statuses.filter((status) => NOT_A_SEAT_AT_COMMIT.has(status));
+    if (notSeats.length > 0) {
+      log.error({ pnr, statuses }, 'the airline is not holding a confirmed seat on every flight; not ticketing');
+      // Queued first. This is the PNR that most needs an agent - paid,
+      // committed, no confirmed seat - and stopping before the queue (round 1)
+      // kept exactly this one off the office queue. Never fatal, as in step 7.
+      await placeOnQueue();
+      throw new BookingChainError({
+        step: 'segmentStatus',
+        pnr,
+        committed,
+        ticketed: false,
+        error: 'The airline has not confirmed a seat on every flight - our team will contact you',
+        code: 502,
+        technicalError: `segment status ${statuses.join(',')} at commit: ${notSeats.join(',')} is not a confirmed seat `
+          + '(waitlisted, requested, unable or cancelled); not accepted or ticketed',
+      });
+    }
+    const changed = statuses.filter((status) => SCHEDULE_CHANGE_STATUSES.has(status));
     if (changed.length > 0) {
       log.warn({ pnr, changed }, 'a segment was changed by the airline; accepting it with change advice');
       bookedReply = await callStep(ctx, {
@@ -752,26 +920,7 @@ export const runBookingChain = async (p) => {
     }
 
     // ---- 7. Queue (bookkeeping; never fatal) -------------------------------
-    let queued = false;
-    try {
-      await callStep(ctx, {
-        step: 'queue',
-        operation: 'Queue_PlacePNR',
-        bodyXml: buildQueuePlaceBody({
-          recordLocator: pnr,
-          queueOffice: config.queueOffice,
-          queueNumber: config.queueNumber,
-          queueCategory: config.queueCategory,
-        }),
-        pnr,
-        committed,
-      });
-      queued = true;
-    } catch (cause) {
-      // A booking that is not on a queue is still a booking. Refunding one over
-      // a filing error would be far worse than leaving it for the desk to find.
-      log.warn({ pnr, reason: cause?.technicalError ?? cause?.message }, 'Queue_PlacePNR failed; booking stands');
-    }
+    const queued = await placeOnQueue();
 
     // ---- 8. Issue ----------------------------------------------------------
     // Airlines Amadeus hosts (LH, QR, AF) carry their record locator at commit
@@ -806,7 +955,9 @@ export const runBookingChain = async (p) => {
     // ---- 9. Read the ticket numbers back (with retries) --------------------
     let tickets = order.tickets;
     if (config.autoTicket && ticketed) {
-      ({ tickets, order } = await readTicketNumbers(ctx, { pnr, order, offer, bookingReference, config }));
+      ({ tickets, order } = await readTicketNumbers(ctx, {
+        pnr, order, offer, bookingReference, config, expected: travelers.length,
+      }));
     }
 
     log.info({
@@ -834,7 +985,9 @@ export const runBookingChain = async (p) => {
 
   const { issueInNewSession, notReadyRefusals, ...result } = booked;
   if (!issueInNewSession) return result;
-  return issueInFreshSessions(result, { offer, bookingReference, config, notReadyRefusals });
+  return issueInFreshSessions(result, {
+    offer, bookingReference, config, notReadyRefusals, expectedTickets: travelers.length,
+  });
 };
 
 /**
@@ -883,6 +1036,23 @@ export const confirmSeats = async (flightOffer) => {
   // Seats held, from the fare's own passenger types: a lap infant holds none.
   const seats = seatCount((offer.travelerPricings ?? []).map((t) => ({ ptc: t.travelerType }))) || 1;
   const flights = ama.segments.map((s) => `${s.marketingCarrier}${s.flightNumber}/${s.rbd}`);
+
+  // Those types come from the request body, on a route anyone can call, and
+  // nothing capped them: buildAirSellBody refuses only fewer than one. The fare
+  // was priced from `_ama.paxRefs` (index.js priceFlightOffer), so a body that
+  // left paxRefs at one adult and listed nine ADULT pricings priced one seat and
+  // sold nine. The sell holds exactly what was priced, and never more than one
+  // booking can hold - the chain's own ceiling, applied before its first call.
+  const pricedSeats = Array.isArray(ama.paxRefs) && ama.paxRefs.length > 0 ? seatCount(ama.paxRefs) : null;
+  if (seats > config.maxPassengersPerPnr || (pricedSeats !== null && seats !== pricedSeats)) {
+    throw new AmadeusSoapError({
+      error: 'This fare can no longer be booked - please search again',
+      code: 409,
+      technicalError: `seat check: ${seats} seats asked for; the fare was priced for ${pricedSeats ?? 'an unstated number'} `
+        + `and a booking holds at most ${config.maxPassengersPerPnr}`,
+      operation: 'Air_SellFromRecommendation',
+    });
+  }
 
   return withSession(async (ctx) => {
     const reply = replyOf(await ctx.call('Air_SellFromRecommendation', buildAirSellBody({ segments: ama.segments, seats })));
@@ -1084,10 +1254,11 @@ export const cancelBooking = async (recordLocator) => {
         const result = readVoidTicketReply(voidReply, documentNumbers);
         if (!result.voided) {
           const inspected = inspectReply(voidReply, 'Ticket_CancelDocument');
+          const partly = partialVoid(result, voidable);
           if (voidFailedForNow(inspected.error)) {
-            return { retryVoid: true, reason: inspected.error?.technicalError ?? null };
+            return { retryVoid: true, reason: `${inspected.error?.technicalError ?? 'void failed for now'}${partly.text}` };
           }
-          throw new BookingChainError({
+          const failure = new BookingChainError({
             step: 'voidTicket',
             pnr: recordLocator,
             committed: true,
@@ -1095,9 +1266,19 @@ export const cancelBooking = async (recordLocator) => {
             cause: inspected.error ?? undefined,
             error: 'We could not void the ticket',
             code: 502,
-            technicalError: inspected.error?.technicalError
-              ?? `Ticket_CancelDocument responseType ${result.responseType || 'absent'} status ${result.status || 'absent'}`,
+            technicalError: (inspected.error?.technicalError
+              ?? `Ticket_CancelDocument responseType ${result.responseType || 'absent'} status ${result.status || 'absent'}`)
+              + partly.text,
           });
+          failure.voidedTickets = partly.voided;
+          // Every ticket on the PNR this left live: the same-day ones whose void
+          // failed, and the earlier-day ones no void here touched. Slack prints
+          // this list as the complete "still live" set, and it named only the
+          // first kind. Left null when the reply did not say which documents
+          // failed: then nobody knows the full set.
+          failure.unvoidedTickets = partly.unvoided === null ? null
+            : [...partly.unvoided, ...unvoidable.filter((t) => t.number).map((t) => t.number)];
+          throw failure;
         }
         voided = true;
         log.info({ pnr: recordLocator, tickets: voidable.length }, 'tickets voided');
@@ -1115,29 +1296,46 @@ export const cancelBooking = async (recordLocator) => {
     // and a cancel then is refused - on PDT an Etihad and an Air Canada booking
     // were both left live this way. It is not a refusal to cancel: Amadeus says
     // to ignore it, redisplay the PNR and try again, which is what this does, twice.
-    for (let attempt = 1; ; attempt += 1) {
-      try {
-        await callStep(ctx, {
-          step: 'cancel',
-          operation: 'PNR_Cancel',
-          bodyXml: buildCancelBody(recordLocator),
-          pnr: recordLocator,
-          committed: true,
-          ticketed: tickets.length > 0,
-        });
-        break;
-      } catch (cause) {
-        const simultaneous = String(cause?.amadeusCode ?? '') === '8111'
-          || /SIMULTANEOUS CHANGES/i.test(String(cause?.technicalError ?? ''));
-        if (!simultaneous || attempt >= 3) throw cause;
-        log.warn({ pnr: recordLocator, attempt }, 'PNR_Cancel met simultaneous changes; ignoring it and retrying');
-        await sleep(config.cancelRetryDelayMs);
-        // Ignore the refused cancel before looking again. A plain retrieve here
-        // answered 31 FINISH OR IGNORE, because the failed change was still
-        // pending in the session - which is what left most cancels in the
-        // 15 Sep airline test unfinished.
-        await callStep(ctx, { step: 'ignore', operation: 'PNR_AddMultiElements', bodyXml: buildIgnoreBody(), pnr: recordLocator, committed: true });
+    try {
+      for (let attempt = 1; ; attempt += 1) {
+        try {
+          await callStep(ctx, {
+            step: 'cancel',
+            operation: 'PNR_Cancel',
+            bodyXml: buildCancelBody(recordLocator),
+            pnr: recordLocator,
+            committed: true,
+            ticketed: tickets.length > 0,
+          });
+          break;
+        } catch (cause) {
+          const simultaneous = String(cause?.amadeusCode ?? '') === '8111'
+            || /SIMULTANEOUS CHANGES/i.test(String(cause?.technicalError ?? ''));
+          if (!simultaneous || attempt >= 3) throw cause;
+          log.warn({ pnr: recordLocator, attempt }, 'PNR_Cancel met simultaneous changes; ignoring it and retrying');
+          await sleep(config.cancelRetryDelayMs);
+          // Ignore the refused cancel before looking again. A plain retrieve here
+          // answered 31 FINISH OR IGNORE, because the failed change was still
+          // pending in the session - which is what left most cancels in the
+          // 15 Sep airline test unfinished.
+          await callStep(ctx, { step: 'ignore', operation: 'PNR_AddMultiElements', bodyXml: buildIgnoreBody(), pnr: recordLocator, committed: true });
+        }
       }
+    } catch (cause) {
+      // The tickets are void and the itinerary is not cancelled. The error said
+      // nothing of the void, so the handler recorded no voided ticket, and a
+      // cancel on a later day - every ticket past its void window by then -
+      // listed the void ones as refunds to claim from the airline. Said the way
+      // a partial void says it (partialVoid): which were voided, and which were
+      // not - only tickets from an earlier day, which no void here touched.
+      if (voided) {
+        const voidedNumbers = voidable.map((t) => t.number);
+        cause.voidedTickets = voidedNumbers;
+        cause.unvoidedTickets = unvoidable.filter((t) => t.number).map((t) => t.number);
+        cause.technicalError = `${cause.technicalError ?? cause.message ?? 'PNR_Cancel failed'}`
+          + `; tickets voided ${voidedNumbers.join(', ')} - the PNR is left live`;
+      }
+      throw cause;
     }
 
     log.info({
