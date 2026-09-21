@@ -28,7 +28,7 @@ import { buildFlightOrderBody, orderDataFromCheckoutRow } from '../../shared/fli
 import { statusChangeRefusal } from '../../shared/bookingStatusChange.js';
 import {
   attentionOf, reviewResolution, ticketsOf, isTicketed, NO_CONFIRMED_SEAT_REVIEW_REASON, noConfirmedSeatOf,
-  ticketNumbersMissingOf, unrecordedCancellationOf,
+  liveTicketNumbersMissingOf, unrecordedCancellationOf,
 } from '../../shared/reviewQueue.js';
 import { errorSummary } from '../utils/errorSummary.js';
 import { flightSearchLimiter, guestBookingLimiter } from '../middleware/security.js';
@@ -4238,7 +4238,8 @@ export function toClientBooking(booking, { showPassports = false } = {}) {
         reason: booking.booking_details.needs_review.reason ?? null,
         no_confirmed_seat: Boolean(noConfirmedSeatOf(booking)),
         // Issued, but the numbers have not reached us: "not issued" was false.
-        ticket_numbers_missing: Boolean(ticketNumbersMissingOf(booking)),
+        // Not once a cancel voided those tickets: "issued" was false then.
+        ticket_numbers_missing: Boolean(liveTicketNumbersMissingOf(booking)),
       }
       : null,
     // Whether the GDS ticketed. The rest is the office id, the GDS session and

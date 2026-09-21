@@ -92,6 +92,33 @@ export const ticketNumbersMissingOf = (booking) => flagInForce(
 );
 
 /**
+ * The numbers-missing flag, for what the customer is told: null once the
+ * tickets it records have been voided.
+ *
+ * An issued ticket stays issued, but a void un-issues it. A same-day cancel can
+ * void every ticket and then have PNR_Cancel refused: the booking keeps the
+ * flag, and read from it alone the pages said "Your ticket has been issued"
+ * and offered a document saying so, of void tickets. So once the booking or
+ * any flag records as many voided tickets as the flag expected, and no record
+ * names one still live, no issued ticket is left to speak of.
+ *
+ * The customer's pages only. The refund decision and the alarm read
+ * ticketNumbersMissingOf: they ask whether a ticket was ever issued.
+ */
+export function liveTicketNumbersMissingOf(booking) {
+  const missing = ticketNumbersMissingOf(booking);
+  if (!missing) return null;
+  const flags = flagsInForce(booking, { pastResolved: true });
+  const digits = (number) => String(number ?? '').replace(/\D/g, '');
+  const listed = (list) => (Array.isArray(list) ? list : []);
+  const voided = new Set([detailsOf(booking)?.voided_tickets, ...flags.map((flag) => flag.voided_tickets)]
+    .flatMap(listed).map(digits).filter(Boolean));
+  const stillLive = flags.some((flag) => listed(flag.unvoided_tickets).some((number) => !voided.has(digits(number))));
+  const expected = Number.isFinite(missing.expected) ? missing.expected : 1;
+  return !stillLive && voided.size >= expected ? null : missing;
+}
+
+/**
  * The order route's flag on a PNR the airline confirmed no seat on: a flight
  * came back from commit waitlisted, requested, unable or cancelled (the
  * chain's step 'segmentStatus', bookingChain.js NOT_A_SEAT_AT_COMMIT). The PNR
