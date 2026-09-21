@@ -83,10 +83,15 @@ const UNAVAILABLE_RETRY_MS = 15000;
  *              auto-ticketing is off; also the needs-review case)
  *   queued   - GDS was saturated; the booking is queued and nothing has been
  *              sent to the airline yet
+ *   returned / partly_returned - a PNR and no ticket, whose payment the
+ *              booking's record says went back (the server's paymentState): a
+ *              reload for a held PNR refunded without being cancelled. It
+ *              read "Reservation Held - your seats are reserved".
  */
 function outcomeOf(body) {
   if (body?.queued === true) return 'queued';
   if (body?.ticketed === true) return 'ticketed';
+  if (['returned', 'partly_returned'].includes(body?.paymentState)) return body.paymentState;
   return 'held';
 }
 
@@ -398,6 +403,11 @@ function FlightCreateOrders() {
           // `needsReview` meant the "our team is finishing your ticket" line
           // never showed there.
           needs_review: needsReview ? { reason: null } : null,
+          // A payment the booking's record says went back, for the
+          // confirmation page (paymentReturned): it said "Total Paid ...
+          // Payment received" of a refunded booking.
+          ...(body.paymentState === 'returned' ? { payment_status: 'refunded' }
+            : body.paymentState === 'partly_returned' ? { payment_status: 'partially_refunded' } : {}),
           mode: body.mode || null,
           message: body.message || '',
           // Include formatted travelers
@@ -737,6 +747,20 @@ function FlightCreateOrders() {
                         <h2 className="text-xl font-semibold text-gray-800">Booking Received</h2>
                         <p className="text-gray-600">
                           Your payment is complete and your booking is in the queue. We are confirming your seats with the airline now; this can take a few minutes.
+                        </p>
+                      </>
+                    ) : ['returned', 'partly_returned'].includes(outcome) ? (
+                      // Refunded without being cancelled: no held seat and no
+                      // payment to speak of, as the under-review screen says it.
+                      <>
+                        <div className="mx-auto w-16 h-16 rounded-full bg-amber-50 flex items-center justify-center">
+                          <Clock className="w-8 h-8 text-amber-600" />
+                        </div>
+                        <h2 className="text-xl font-semibold text-gray-800">This booking was not completed</h2>
+                        <p className="text-gray-600">
+                          {outcome === 'returned'
+                            ? 'Your payment for this booking has been refunded.'
+                            : 'Part of your payment for this booking has been refunded.'}
                         </p>
                       </>
                     ) : (

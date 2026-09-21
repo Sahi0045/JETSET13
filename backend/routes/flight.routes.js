@@ -2594,6 +2594,11 @@ router.post('/order', optionalProtect, async (req, res) => {
         ticketed,
         tickets,
         needsReview: Boolean(details.needs_review),
+        // What the payment record says, as the 409 retry answers carry it. A
+        // held PNR refunded from the Payments tab (payment_status alone) was
+        // answered like a paid one, and the order page said its seats were
+        // held and its payment received.
+        paymentState: paymentStateOf(existing),
         savedToDatabase: true,
         message: ticketed ? 'This booking already exists' : 'This booking already exists; its ticket has not been issued yet'
       });
