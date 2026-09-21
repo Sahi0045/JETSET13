@@ -230,6 +230,22 @@ export async function handleInitiatePayment(req, res) {
             });
         }
 
+        // Charged in US dollars or not at all. The merchant settles only USD
+        // (ARC_SETTLEMENT_CURRENCY) and a quote's amount is in the currency the
+        // agent priced it in, so relabelling it would charge a different sum.
+        // Sent as it was, ARC refused the session and a payments row was left
+        // pending behind it; refused here, nothing is written.
+        const quoteCurrency = String(quote.currency || ARC_SETTLEMENT_CURRENCY).trim().toUpperCase();
+        if (quoteCurrency !== ARC_SETTLEMENT_CURRENCY) {
+            console.warn('⛔ Quote payment refused: not priced in USD', { quoteId: quote.id, currency: quoteCurrency });
+            return res.status(400).json({
+                success: false,
+                code: 'CURRENCY_NOT_SUPPORTED',
+                error: `This quote is priced in ${quoteCurrency}, and card payments can only be taken in US dollars. `
+                    + 'Please ask your travel agent for a quote in USD. Nothing has been charged.'
+            });
+        }
+
         // Fetch inquiry for customer details
         const { data: inquiry } = await supabase
             .from('inquiries')

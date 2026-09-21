@@ -1,10 +1,21 @@
 import axios from 'axios';
-import { supabase, ARC_PAY_CONFIG, getArcPayAuthConfig } from './arcpay.config.js';
+import { supabase, ARC_PAY_CONFIG, getArcPayAuthConfig, ARC_SETTLEMENT_CURRENCY } from './arcpay.config.js';
 import { getCallerInfo, generateLinkToken } from './payment.helpers.js';
 import { generatePaymentLinkTemplate } from '../../services/email/templates.js';
 import { reconcileBookingPayment } from './checkout.handlers.js';
 import { errorSummary } from '../../utils/errorSummary.js';
 
+/**
+ * The currency a link is charged in, upper-cased, or null when this merchant
+ * cannot take it. The merchant settles only USD (ARC_SETTLEMENT_CURRENCY) and a
+ * link's amount is in the currency the agent picked, so a link in anything
+ * else can never be paid: ARC refuses the session. Relabelling the amount USD
+ * would charge a different sum.
+ */
+const settlementCurrencyOf = (currency) => {
+    const code = String(currency || ARC_SETTLEMENT_CURRENCY).trim().toUpperCase();
+    return code === ARC_SETTLEMENT_CURRENCY ? code : null;
+};
 
 /**
  * Create a new payment link (Admin only)
@@ -50,6 +61,16 @@ export async function handleCreatePaymentLink(req, res) {
             });
         }
 
+        // Refused here, where the agent can fix it, rather than when the
+        // customer clicks Pay on a link that was emailed to them.
+        if (!settlementCurrencyOf(currency)) {
+            return res.status(400).json({
+                success: false,
+                code: 'CURRENCY_NOT_SUPPORTED',
+                error: `Payment links can only be in US dollars: ARC Pay accepts USD only. Enter the amount in USD instead of ${String(currency).toUpperCase()}.`
+            });
+        }
+
         // Generate unique token
         let linkToken = generateLinkToken();
         let attempts = 0;
@@ -80,7 +101,7 @@ export async function handleCreatePaymentLink(req, res) {
                 customer_phone: customerPhone || null,
                 booking_type: bookingType,
                 amount: parseFloat(amount),
-                currency: currency,
+                currency: settlementCurrencyOf(currency),
                 description: description || `${bookingType.charAt(0).toUpperCase() + bookingType.slice(1)} Booking Payment`,
                 travel_details: travelDetails,
                 status: 'pending',
@@ -202,6 +223,18 @@ export async function handleProcessPaymentLink(req, res) {
             return res.status(400).json({ success: false, error: 'Payment link has expired' });
         }
 
+        // A link made in another currency before links were held to USD.
+        const chargeCurrency = settlementCurrencyOf(paymentLink.currency);
+        if (!chargeCurrency) {
+            console.warn('⛔ Payment link refused: not in USD', { linkId: paymentLink.id, currency: paymentLink.currency });
+            return res.status(400).json({
+                success: false,
+                code: 'CURRENCY_NOT_SUPPORTED',
+                error: `This payment link is in ${String(paymentLink.currency).toUpperCase()}, and card payments can only be taken in US dollars. `
+                    + 'Please ask the agent who sent it for a new link in USD. Nothing has been charged.'
+            });
+        }
+
         // Create ARC Pay Hosted Checkout
         const arcMerchantId = ARC_PAY_CONFIG.MERCHANT_ID;
         const arcApiPassword = ARC_PAY_CONFIG.API_PASSWORD;
@@ -237,7 +270,7 @@ export async function handleProcessPaymentLink(req, res) {
                 id: orderId,
                 reference: orderId.substring(0, 40),
                 amount: parseFloat(paymentLink.amount).toFixed(2),
-                currency: paymentLink.currency,
+                currency: chargeCurrency,
                 description: paymentLink.description || `${paymentLink.booking_type} Payment`
             }
         };
