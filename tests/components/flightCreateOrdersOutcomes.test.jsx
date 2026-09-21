@@ -366,14 +366,15 @@ describe('what the order page leaves in the browser', () => {
 
 /**
  * The order route's codes, as the backend now sends them: BOOKING_FAILED is its
- * default failure after payment and BOOKING_NEEDS_REVIEW a failure our team
- * handles by hand - neither can be tried again - and BOOKING_UNAVAILABLE with
- * `retryable` is worth asking again after a short wait.
+ * default failure after payment and cannot be tried again, and
+ * BOOKING_UNAVAILABLE with `retryable` is worth asking again after a short
+ * wait. BOOKING_NEEDS_REVIEW - a failure our team handles by hand, with the
+ * payment still held - has its own screen (orderUnderReview.test.jsx).
  */
 describe('the order route codes', () => {
   const flush = (ms = 0) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
 
-  it.each(['BOOKING_FAILED', 'BOOKING_NEEDS_REVIEW'])('offers no "Try again" for %s, even without bookingFailed', async (code) => {
+  it.each(['BOOKING_FAILED'])('offers no "Try again" for %s, even without bookingFailed', async (code) => {
     vi.stubGlobal('fetch', vi.fn(async () => reply(502, { success: false, code, error: 'We could not confirm your flight booking.' })));
     renderOrderPage();
 
