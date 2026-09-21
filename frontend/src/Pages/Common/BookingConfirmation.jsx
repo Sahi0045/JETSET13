@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { CheckCircle, Ship, Plane, Calendar, CreditCard, ArrowLeft, Clock, MapPin, Users, XCircle } from 'lucide-react';
 import Navbar from './Navbar';
-import { attentionMessage, refundStatus } from '../../utils/bookingStatus';
+import { attentionMessage, paymentReturned, refundStatus } from '../../utils/bookingStatus';
 import { hasNoConfirmedSeat, isPaid } from '../../utils/eTicket';
 import { daysUntilDate, formatCalendarDate } from '../../utils/dateUtils';
 import { cancellationMessage } from '../../../../shared/cancellationOutcome';
@@ -119,13 +119,20 @@ function BookingConfirmation() {
   // A PNR is not a seat. The airline left a flight on this one waitlisted,
   // requested, unable or cancelled at commit, and it read "Reservation Held -
   // your seats are reserved" like any other.
+  //
+  // A flight refunded without being cancelled (the Payments tab writes
+  // payment_status alone) is none of the others: it read "Booking Received -
+  // Your payment is complete", "Our team is looking after your payment", or
+  // "This booking has not been paid for", from a record saying refunded.
+  const returned = isFlight ? paymentReturned(bookingData) : null;
   const outcome = statusUpper === 'CANCELLED' ? 'cancelled'
-    : (bookingData.queued === true || statusUpper === 'PENDING_CONFIRMATION') ? 'queued'
+    : !returned && (bookingData.queued === true || statusUpper === 'PENDING_CONFIRMATION') ? 'queued'
       : (bookingData.ticketed === true || hasTickets) ? 'ticketed'
-        : neverBooked ? (bookingData.needs_review ? 'not_completed' : isPaid(bookingData) ? 'not_booked' : 'awaiting_payment')
-          : isFlight && hasNoConfirmedSeat(bookingData) ? 'no_confirmed_seat'
-            : isFlight ? 'held'
-              : 'confirmed';
+        : returned ? 'payment_returned'
+          : neverBooked ? (bookingData.needs_review ? 'not_completed' : isPaid(bookingData) ? 'not_booked' : 'awaiting_payment')
+            : isFlight && hasNoConfirmedSeat(bookingData) ? 'no_confirmed_seat'
+              : isFlight ? 'held'
+                : 'confirmed';
 
   // Full class strings on purpose: Tailwind cannot see a class built from a
   // template literal, so a `bg-${tone}-500` would be purged from the build.
@@ -206,6 +213,17 @@ function BookingConfirmation() {
       badgeText: 'Needs attention',
       mail: 'Our team will email you about your payment. You can also call (877) 538-7380 with your booking reference.',
     },
+    payment_returned: {
+      Icon: Clock,
+      iconWrap: 'bg-gradient-to-br from-slate-400 to-slate-600',
+      badge: 'bg-slate-500',
+      title: 'Booking Not Completed',
+      lead: returned === 'part'
+        ? 'This booking was not completed. Part of your payment for it has been refunded.'
+        : 'This booking was not completed, and your payment for it has been refunded.',
+      badgeText: returned === 'part' ? 'Partly refunded' : 'Refunded',
+      mail: 'If you have any questions, call (877) 538-7380 with your booking reference.',
+    },
     awaiting_payment: {
       Icon: Clock,
       iconWrap: 'bg-gradient-to-br from-slate-400 to-slate-600',
@@ -242,7 +260,9 @@ function BookingConfirmation() {
   const attention = attentionMessage(bookingData);
   const paymentNote = outcome === 'cancelled' ? (refund?.label || 'Booking cancelled')
     : outcome === 'awaiting_payment' ? 'Payment not received'
-      : 'Payment received';
+      : returned === 'all' ? 'Payment refunded'
+        : returned === 'part' ? 'Partly refunded'
+          : 'Payment received';
 
   return (
     <>
@@ -548,7 +568,12 @@ function BookingConfirmation() {
 
                 <div className="flex justify-between items-center p-4 bg-green-50 rounded-xl border border-green-200">
                   <div>
-                    <p className="text-sm text-green-700">{outcome === 'cancelled' ? 'Amount Paid' : 'Total Paid'}</p>
+                    {/* "Total Paid" sat over a booking never paid for, and one refunded since. */}
+                    <p className="text-sm text-green-700">
+                      {['cancelled', 'payment_returned'].includes(outcome) ? 'Amount Paid'
+                        : outcome === 'awaiting_payment' ? 'Booking Total'
+                          : 'Total Paid'}
+                    </p>
                     {hasAmount ? (
                       <p className="text-2xl font-bold text-green-800">
                         {bookingData.currency || 'USD'} {paidAmount.toFixed(2)}

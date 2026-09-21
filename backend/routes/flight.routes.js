@@ -1247,18 +1247,34 @@ function notSentAgainMessage(bookingReference, paymentState) {
     + `Nothing more has been charged. If you have not heard from us within 2 business days, ${call}.`;
 }
 
-/** What the customer is told when their payment is held as a second payment for one trip. */
-function duplicatePaymentAnswer(bookingReference) {
+/**
+ * What the customer is told when their payment is held as a second payment for
+ * one trip - and, on a retry, what became of it since.
+ *
+ * "Our support team will check it and refund this payment" was said on every
+ * retry, including one whose payment staff had already refunded: a retry is
+ * answered from the row before the gateway is asked, so the answer is worded
+ * by the row's payment record (paymentStateOf). Where it is caught first, the
+ * gateway has just confirmed the capture and nothing refunds it: 'held'.
+ */
+function duplicatePaymentAnswer(bookingReference, paymentState = 'held') {
+  const call = `call (877) 538-7380 with booking reference ${bookingReference}`;
+  const money = paymentState === 'returned' ? `This payment has been refunded. If you have any questions, ${call}.`
+    : paymentState === 'partly_returned' ? `Part of this payment has been refunded. Please ${call} about the rest.`
+      : paymentState === 'held'
+        ? 'Our support team will check it and refund this payment. If you did mean to book this trip twice, or have not '
+          + `heard from us within 2 business days, ${call}.`
+        : 'Our support team will check what happened to this payment and contact you. If you have not heard from us '
+          + `within 2 business days, ${call}.`;
   const message = 'This payment looks like a second payment for a trip you have already booked, for the same travellers '
-    + 'on the same flights, so we have not booked it again. Your other booking is not affected. Our support team will '
-    + 'check it and refund this payment. If you did mean to book this trip twice, or have not heard from us within '
-    + `2 business days, call (877) 538-7380 with booking reference ${bookingReference}.`;
+    + `on the same flights, so we have not booked it again. Your other booking is not affected. ${money}`;
   return {
     success: false,
     code: 'DUPLICATE_PAYMENT',
     duplicatePayment: true,
     needsReview: true,
     bookingReference,
+    paymentState,
     error: message,
     message,
   };
@@ -2586,7 +2602,7 @@ router.post('/order', optionalProtect, async (req, res) => {
     // A payment already held as a second payment for one trip stays held: a
     // human decides whether to book or refund it (findDuplicateBooking, below).
     if (existing.booking_details?.needs_review?.duplicate_of) {
-      return res.status(409).json(duplicatePaymentAnswer(existing.booking_reference));
+      return res.status(409).json(duplicatePaymentAnswer(existing.booking_reference, paymentStateOf(existing)));
     }
 
     // A booking whose fulfilment already failed, or that a human is sorting

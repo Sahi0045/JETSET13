@@ -194,3 +194,35 @@ describe('a retry of a booking under review', () => {
     expect(res.body.paymentState).toBe('held');
   });
 });
+
+describe('a retry of a payment held as a second payment for one trip', () => {
+  const DUPLICATE = {
+    reason: 'possible duplicate payment: the same travellers on the same flights are already booked, or being booked, as FLTFIRST1.',
+    ticketed: false,
+    at: '2026-09-15T08:00:00Z',
+    duplicate_of: 'FLTFIRST1',
+    source: 'duplicate-payment',
+  };
+
+  it('refunded since: says it was refunded, not that support will refund it', async () => {
+    const place = await appWith([paidCheckout({ needs_review: DUPLICATE }, { payment_status: 'refunded' })]);
+
+    const res = await place();
+
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe('DUPLICATE_PAYMENT');
+    expect(res.body.paymentState).toBe('returned');
+    expect(res.body.error).toMatch(/This payment has been refunded\./);
+    expect(res.body.error).not.toMatch(/will check it and refund/);
+  });
+
+  it('still held: keeps the promise to check it and refund it', async () => {
+    const place = await appWith([paidCheckout({ needs_review: DUPLICATE })]);
+
+    const res = await place();
+
+    expect(res.body.paymentState).toBe('held');
+    expect(res.body.error).toMatch(/Our support team will check it and refund this payment\./);
+  });
+});
+

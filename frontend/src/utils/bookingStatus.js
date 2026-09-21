@@ -38,6 +38,23 @@ const pnrOf = (booking) => booking?.pnr || booking?.booking_details?.pnr || book
  */
 export { NO_CONFIRMED_SEAT_REVIEW_REASON };
 
+/**
+ * Whether the booking's payment record says its money went back, in full
+ * ('all') or in part ('part'), or null.
+ *
+ * A booking can be refunded without being cancelled: the Payments tab writes
+ * payment_status and nothing else. Every sentence below that spoke of the
+ * payment - "Our team is looking after your payment", "Awaiting payment",
+ * "Payment received", "do not book this trip again" - was said without
+ * reading it, and was false of that booking.
+ */
+export function paymentReturned(booking) {
+  const payment = String(booking?.payment_status ?? booking?.paymentStatus ?? '').toLowerCase();
+  if (['refunded', 'reversed'].includes(payment)) return 'all';
+  if (payment === 'partially_refunded') return 'part';
+  return null;
+}
+
 const money = (amount, currency) => {
   try {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency || 'USD' }).format(amount);
@@ -129,6 +146,17 @@ export function attentionMessage(booking) {
     return null;
   }
   if (!needsAttention(booking)) return null;
+  // Said from the payment record: a flagged booking refunded since reads
+  // refunded, and "our team is looking after your payment" was false of it.
+  const returned = paymentReturned(booking);
+  if (returned === 'all') {
+    return 'This booking was not completed, and your payment for it has been refunded. '
+      + 'If you have any questions, call (877) 538-7380 with your booking reference.';
+  }
+  if (returned === 'part') {
+    return 'This booking was not completed. Part of your payment for it has been refunded; '
+      + 'please call (877) 538-7380 with your booking reference about the rest.';
+  }
   // A PNR is not a seat: "your seats are reserved" was false of this one. And
   // a second trip bought meanwhile is not caught as a duplicate. Read through
   // hasNoConfirmedSeat, not the top flag: a refused cancel flags it again on top.
@@ -156,6 +184,10 @@ export function bookingStatusBadge(booking) {
     const tickets = ticketState(booking);
     if (tickets === 'issued') return { label: 'Ticketed', tone: 'success' };
     if (tickets === 'pending') return { label: 'Ticket issued', tone: 'success' };
+    // Refunded without being cancelled (paymentReturned): not being confirmed,
+    // not a held reservation, and not awaiting a payment it already made.
+    const returned = paymentReturned(booking);
+    if (returned) return { label: returned === 'all' ? 'Refunded' : 'Partly refunded', tone: 'neutral' };
     // Paid, and waiting in the queue for an Amadeus slot: nothing has been sent
     // to the airline yet, so it is neither a reservation nor a failure.
     if (!pnrOf(booking) && (booking?.queued === true || status === 'pending_confirmation')) {
