@@ -3802,12 +3802,21 @@ router.delete('/order/:orderId', protect, async (req, res) => {
       // cancelled, stops expecting a flight, and no refund was issued either.
       // Only record a cancellation the GDS actually confirmed.
       if (!amadeusCancelled) {
-        await patchBookingDetails(bookingRef, {
+        // Kept under the new flag, not replaced: a flag written over another
+        // without `previous` erased it for every reader - a PNR with no
+        // confirmed seat read "your seats are reserved" again. And marked a
+        // failed cancellation, as the orchestrated cancel marks its own, so
+        // the alarm and the desk find it on a ticketed booking too: the
+        // customer is told below that our team has been alerted.
+        await patchBookingDetails(bookingRef, (details) => ({
           needs_review: {
             reason: 'fallback cancel could not reach the GDS; booking may still be live',
-            at: new Date().toISOString()
+            source: 'cancellation',
+            cancelFailed: true,
+            at: new Date().toISOString(),
+            ...(details?.needs_review ? { previous: details.needs_review } : {}),
           }
-        });
+        }));
         return res.status(502).json({
           success: false,
           error: 'We could not confirm the cancellation with the airline. '
