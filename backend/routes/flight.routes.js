@@ -2046,7 +2046,14 @@ router.post('/price', async (req, res) => {
     // it. Both used to answer 500, so checkout - which prices through this
     // route on Vercel - told the customer to try again in a moment for ever.
     const fareRefused = isFareRefusal(error);
-    res.status(fareRefused ? 409 : 500).json({
+    // An outage keeps its own 5xx and its Retry-After. A wait for an Amadeus
+    // slot (503, retry in 2s) and "too many concurrent requests" were both
+    // flattened to a bare 500, so nothing downstream could tell "busy, retry
+    // shortly" from a failure.
+    const ownStatus = Number(error?.code);
+    const status = fareRefused ? 409 : (ownStatus >= 500 && ownStatus <= 599 ? ownStatus : 500);
+    if (!fareRefused && Number(error?.retryAfter) > 0) res.set('Retry-After', String(error.retryAfter));
+    res.status(status).json({
       success: false,
       error: error.message || 'Failed to price flight',
       ...(fareRefused ? { code: 'FARE_UNAVAILABLE' } : {}),

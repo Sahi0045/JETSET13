@@ -86,8 +86,32 @@ describe('POST /api/flights/price', () => {
     const res = await request(app).post('/api/flights/price')
       .send({ flightOffer: await offerFrom('mptbs-oneway-jfk-lhr') });
 
-    expect(res.status).toBe(500);
+    // Its own status: the service did not answer (504), not a generic 500.
+    expect(res.status).toBe(504);
     expect(res.body.code).toBeUndefined();
+  });
+
+  // No Amadeus slot came free in time: nothing was sent, and the answer is
+  // "busy, retry in 2s" (503 + Retry-After), which the error itself carries.
+  // Every such error was flattened to a bare 500, losing both.
+  it('answers a wait for an Amadeus slot as the 503 it is, with its Retry-After', async () => {
+    const { SlotTimeoutError } = await import('../../../backend/services/amadeusSoap/semaphore.js');
+    vi.doMock('../../../backend/services/flightProvider.js', () => ({
+      default: { priceFlightOffer: vi.fn().mockRejectedValue(new SlotTimeoutError(false)) },
+      providerStatus: () => ({ bookingEnabled: true, seatCheckBeforePayment: true }),
+    }));
+    try {
+      const app = await makeApp();
+
+      const res = await request(app).post('/api/flights/price').send({ flightOffer: { id: '1', _ama: {} } });
+
+      expect(res.status).toBe(503);
+      expect(res.headers['retry-after']).toBe('2');
+      expect(res.body.success).toBe(false);
+      expect(res.body.code).toBeUndefined();
+    } finally {
+      vi.doUnmock('../../../backend/services/flightProvider.js');
+    }
   });
 
   // Checkout asks for the seats to be confirmed before the charge. The review
