@@ -530,6 +530,125 @@ describe('a ticket recorded but not yet announced', () => {
 });
 
 /**
+ * A stop between recording the ticket and sending its email.
+ *
+ * The send was claimed - `ticket_issued_emailed: true` - in the same write that
+ * recorded the tickets, so a deploy, an OOM or a SIGTERM between that write and
+ * the mail left a row saying the customer had been told when nobody had.
+ * Neither query picked it up again (it has tickets, and it says emailed), so
+ * that e-ticket was never sent, with no log line. The comment above the
+ * owed-announce pass said it covered "a restart between the write and the
+ * mail". It did not.
+ *
+ * The claim now says when it was taken. One that has not become a sent email
+ * by TICKET_EMAIL_CLAIM_TTL_MS is taken again - with the same Resend
+ * idempotency key, so if the first send did go out before the stop, the
+ * second is not a second email.
+ */
+describe('a stop between recording the ticket and sending the email', () => {
+  const recordThenStop = async () => {
+    // The mail call never returns: the process died inside it.
+    const hung = vi.fn(() => new Promise(() => {}));
+    syncOne(bookingRow({ customer_email: 'flyer@example.com' }), { provider: providerWith([ticket('220-1', '1')]), sendEmail: hung });
+    await vi.waitFor(() => expect(hung).toHaveBeenCalled());
+    return { ...bookingRow(), booking_details: { ...stored } };
+  };
+
+  it('is sent after the claim has lapsed', async () => {
+    const row = await recordThenStop();
+    const claimedAt = Date.parse(row.booking_details.ticket_email_claimed_at);
+    const sendEmail = sentOk();
+
+    const result = await job.announceOne(row, { sendEmail, now: claimedAt + job.TICKET_EMAIL_CLAIM_TTL_MS + 1 });
+
+    expect(result.outcome).toBe('announced');
+    expect(sendEmail).toHaveBeenCalledTimes(1);
+    expect(stored.ticket_email_sent_at).toBeTruthy();
+  });
+
+  it('is found by the owed-email pass', async () => {
+    const row = await recordThenStop();
+    const claimedAt = Date.parse(row.booking_details.ticket_email_claimed_at);
+    const supabase = (await import('../../backend/config/supabase.js')).default;
+    const c = {
+      select: () => c, in: () => c, not: () => c, or: () => c, order: () => c,
+      limit: async () => ({ data: [row], error: null }),
+    };
+    supabase.from.mockImplementation(() => c);
+
+    expect(await job.findUnannounced({ now: claimedAt + job.TICKET_EMAIL_CLAIM_TTL_MS + 1 })).toHaveLength(1);
+    expect(await job.findUnannounced({ now: claimedAt + 60_000 })).toEqual([]);
+  });
+
+  it('is not taken over while the claim is still fresh', async () => {
+    const row = await recordThenStop();
+    const sendEmail = sentOk();
+
+    const result = await job.announceOne(row, { sendEmail, now: Date.parse(row.booking_details.ticket_email_claimed_at) + 60_000 });
+
+    expect(result.outcome).toBe('already-announced');
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+
+  it('sends every attempt for one set of tickets under one idempotency key', async () => {
+    const first = vi.fn(() => new Promise(() => {}));
+    syncOne(bookingRow(), { provider: providerWith([ticket('220-1', '1'), ticket('220-2', '2')]), sendEmail: first });
+    await vi.waitFor(() => expect(first).toHaveBeenCalled());
+    const row = { ...bookingRow(), booking_details: { ...stored } };
+    const again = sentOk();
+
+    await job.announceOne(row, { sendEmail: again, now: Date.parse(stored.ticket_email_claimed_at) + job.TICKET_EMAIL_CLAIM_TTL_MS + 1 });
+
+    expect(first.mock.calls[0][0].idempotencyKey).toBeTruthy();
+    expect(again.mock.calls[0][0].idempotencyKey).toBe(first.mock.calls[0][0].idempotencyKey);
+  });
+
+  /**
+   * A refused send is known not to have gone, so its retry needs no
+   * de-duplication - and must not share a key with it, in case Resend answers
+   * a repeated key with the refusal it already gave.
+   */
+  it('retries a refused send under a new key', async () => {
+    const refused = vi.fn(async () => ({ success: false, error: 'rate limited' }));
+    await syncOne(bookingRow(), { provider: providerWith([ticket('220-1', '1')]), sendEmail: refused });
+    const row = { ...bookingRow(), booking_details: { ...stored } };
+    const again = sentOk();
+
+    const result = await job.announceOne(row, { sendEmail: again, now: Date.now() + 1_000 });
+
+    expect(result.outcome).toBe('announced');
+    expect(again.mock.calls[0][0].idempotencyKey).toBeTruthy();
+    expect(again.mock.calls[0][0].idempotencyKey).not.toBe(refused.mock.calls[0][0].idempotencyKey);
+  });
+
+  it('records the send, so a sent email is never claimed again', async () => {
+    await syncOne(bookingRow(), { provider: providerWith([ticket('220-1', '1')]), sendEmail: sentOk() });
+    const row = { ...bookingRow(), booking_details: { ...stored } };
+    const sendEmail = sentOk();
+
+    const result = await job.announceOne(row, { sendEmail, now: Date.now() + 24 * 60 * 60_000 });
+
+    expect(stored.ticket_email_sent_at).toBeTruthy();
+    expect(result.outcome).toBe('already-announced');
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+
+  // Announced before claims carried a time: never mailed again.
+  it('leaves alone a booking announced before claims were timed', async () => {
+    stored = {
+      pnr: 'BEEDS3', customer_email: 'flyer@example.com', tickets: [ticket('220-1', '1')],
+      ticket_synced_at: '2026-09-16T10:00:00Z', ticket_issued_emailed: true, gds: { ticketed: true },
+    };
+    const sendEmail = sentOk();
+
+    const result = await job.announceOne({ ...bookingRow(), booking_details: { ...stored } }, { sendEmail, now: Date.now() });
+
+    expect(result.outcome).toBe('already-announced');
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+});
+
+/**
  * The window has to be able to reach a new booking.
  *
  * `findUnticketed` narrowed only in JavaScript: the query asked for every paid

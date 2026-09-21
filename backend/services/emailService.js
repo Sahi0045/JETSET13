@@ -571,7 +571,7 @@ export const sendBookingConfirmationEmail = async (bookingData) => {
  * again next tick.
  */
 export const sendTicketIssuedEmail = async ({
-  customerEmail, customerName, bookingReference, tickets = [], bookingDetails = {},
+  customerEmail, customerName, bookingReference, tickets = [], bookingDetails = {}, idempotencyKey,
 } = {}) => {
   if (!customerEmail) {
     console.warn('⚠️ No customer email on the booking; e-ticket email not sent', { bookingReference });
@@ -583,6 +583,12 @@ export const sendTicketIssuedEmail = async ({
   try {
     const html = generateTicketIssuedTemplate({ customerName, bookingReference, tickets: issued, bookingDetails });
 
+    // Resend's Idempotency-Key: a second attempt at the same e-ticket within
+    // 24 hours is answered with the first send, not delivered again. Ticket
+    // sync passes one so it can safely retry an email whose process stopped
+    // before recording that it went (jobs/ticketSync.job.js).
+    const sendOptions = idempotencyKey ? { idempotencyKey } : undefined;
+
     const response = await getResend().emails.send({
       from: 'Jetsetters <noreply@jetsetterss.com>',
       to: [customerEmail],
@@ -593,7 +599,7 @@ export const sendTicketIssuedEmail = async ({
         : `🎫 Your ${issued.length} e-tickets are issued - ${bookingReference} | Jetsetters`,
       html,
       text: stripHtml(html),
-    });
+    }, sendOptions);
 
     // Resend reports a refused send in `error`; it does not throw.
     if (response?.error) {
