@@ -5,7 +5,7 @@ import { TRAVELLER_TYPES } from '../../shared/flightOrderBody.js';
 import { describeGroup, groupFromOffer } from '../../shared/travellerGroup.js';
 import { NAME_MISSING, travellerNameProblem } from '../../shared/passengerName.js';
 import { DEFAULT_PRICE_SETTINGS } from '../config/priceDefaults.js';
-import { evaluateCoupon } from './coupon.service.js';
+import { couponTripKey, evaluateCoupon } from './coupon.service.js';
 
 /**
  * Verify what a flight checkout is about to charge, before ARC Pay sees it.
@@ -297,6 +297,9 @@ export async function verifyFlightCharge({
       bookingType: 'flights',
       userId,
       email,
+      // So the customer's own abandoned payment page for this trip does not
+      // count as the coupon being on another booking.
+      trip: couponTripKey(offer, passengers),
     });
     if (!evaluated.ok) {
       return refuse(409, 'COUPON_INVALID', evaluated.message, { pricedFare });

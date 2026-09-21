@@ -176,6 +176,22 @@ describe('verifyFlightCharge', () => {
     expect(result.coupon.code).toBe('FLY10');
   });
 
+  // So the customer's own abandoned payment page for this same trip is not
+  // taken for the coupon being on another booking (coupon.service.js).
+  it('tells the coupon check which trip this is', async () => {
+    const actual = await vi.importActual('../../backend/services/coupon.service.js');
+    const evaluateCoupon = vi.fn(async () => ({ ok: true, coupon: { id: 'c1', code: 'FLY10' }, discountAmount: 0 }));
+    vi.doMock('../../backend/services/coupon.service.js', () => ({ ...actual, evaluateCoupon }));
+    const booking = bookingFor(1);
+    booking.originalOffer.itineraries = [{ segments: [{ carrierCode: 'BA', number: '178', departure: { iataCode: 'JFK', at: '2026-11-15T19:25:00' }, arrival: { iataCode: 'LHR' } }] }];
+
+    await verify({ amount: 401, bookingData: booking, couponCode: 'FLY10', priceOffer: pricedAt(400) });
+    vi.doUnmock('../../backend/services/coupon.service.js');
+
+    expect(evaluateCoupon.mock.calls[0][1].trip).toBe(actual.couponTripKey(booking.originalOffer, booking.passengerData));
+    expect(evaluateCoupon.mock.calls[0][1].trip).toBeTruthy();
+  });
+
   // A payment page cannot be opened for $0.00. The page sent 0 and was answered
   // "Missing required fields: amount and orderId are required".
   it('refuses a coupon that leaves nothing to charge, and says why', async () => {
