@@ -593,7 +593,12 @@ const getCheapestFlightDates = async (origin, destination, options = {}) => {
   const result = await getCalendarPrices({
     from: origin, to: destination, adults: 1, dates,
   });
-  if (!result.success) return { success: false, data: [], error: result.error };
+  // null is getCalendarPrices saying no date priced (so withCache stores
+  // nothing). Read as an object it threw a TypeError, which withCache took for
+  // a cache fault and answered by running every live search a second time.
+  if (!result?.success) {
+    return { success: false, data: [], error: result?.error ?? 'no fare could be priced for these dates' };
+  }
 
   const currency = result.currency;
   return {
