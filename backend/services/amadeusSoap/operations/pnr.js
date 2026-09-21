@@ -1,9 +1,12 @@
 import { toPnrName } from '../../../../shared/passengerName.js';
+import logger from '../../logger.js';
 import { OPERATIONS } from '../codes.js';
 import { each, el, wrap } from '../xml.js';
 import {
   buildContactEmailFreetext, buildContactPhoneFreetext, buildDocsFreetext, buildFoidFreetext, toDDMMMYY,
 } from './travelDocs.js';
+
+const log = logger.child({ svc: 'amadeus-ws', flow: 'booking' });
 
 /**
  * PNR_AddMultiElements, PNR_Retrieve and PNR_Cancel.
@@ -333,10 +336,23 @@ export const buildAddElementsBody = (p) => {
     // traveller with no passport is skipped rather than failed.
     // An infant has no passenger number of its own, so its document goes on its
     // adult's; the I in its DOCS gender (MI/FI) is what marks it as the infant's.
+    //
+    // A document that could not be written is said out loud. It used to be
+    // dropped without a word, and the first sign was 27791 SSR DOCS MISSING FOR
+    // P<n> at issuance, after the charge. Which fields, never their values.
     ...assignPassengers(travelers).flatMap(({ traveler, paxNumber, infant }) => [traveler, infant]
       .filter(Boolean)
       .map((person) => {
-        const freetext = buildDocsFreetext(person, { withoutDocument: secureFlight });
+        const fields = new Set();
+        const freetext = buildDocsFreetext(person, {
+          withoutDocument: secureFlight,
+          onUnusable: (unusable) => unusable.forEach((field) => fields.add(field)),
+        });
+        if (fields.size > 0) {
+          log.warn({
+            paxNumber, infant: person === infant, fields: [...fields], sent: freetext ? 'name, date of birth and gender only' : 'nothing',
+          }, 'a traveller\'s SSR DOCS could not be written in full');
+        }
         return freetext ? docsElement({ number: ++number, paxNumber, freetext }) : '';
       })),
     // Per passenger with a seat: SSR CTCE and CTCM, the passenger's email and

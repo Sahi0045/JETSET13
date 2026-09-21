@@ -53,6 +53,24 @@ const genderCode = (gender, ptc) => {
 const DOC_TYPE = Object.freeze({ PASSPORT: 'P', IDENTITY_CARD: 'I', ID_CARD: 'I', VISA: 'V' });
 
 /**
+ * The most a DOCS can carry: its freetext repeats at most twice at 70
+ * characters (PNR_AddMultiElements XSD, see ssrElement in pnr.js). Past that the
+ * element used to be cut off - given names and the /H holder mark with it - and
+ * a record that does not match the passport is worse than none (toAlpha3).
+ */
+export const DOCS_MAX_LENGTH = 140;
+
+/** The names of the values a DOCS needs that are missing or unusable. Never the values. */
+const unusable = (values) => Object.keys(values).filter((field) => !values[field]);
+
+/** The text, if the element can hold all of it. */
+const fitting = (text, onUnusable) => {
+  if (text.length <= DOCS_MAX_LENGTH) return text;
+  onUnusable(['length']);
+  return null;
+};
+
+/**
  * DOCS with no document: surname, given name, date of birth and gender only.
  *
  * A flight to, from or within the United States needs these (Secure Flight)
@@ -60,12 +78,16 @@ const DOC_TYPE = Object.freeze({ PASSPORT: 'P', IDENTITY_CARD: 'I', ID_CARD: 'I'
  * with 27791 TICKETING INHIBITED-SSR DOCS MISSING FOR P1, and issued once
  * `////15JAN90/M//DOMESTIC/PROOF` was on the PNR (PDT, 15 Sep 2026).
  */
-const secureFlightDocs = (traveler) => {
+const secureFlightDocs = (traveler, onUnusable) => {
   const birth = toDDMMMYY(traveler.dateOfBirth);
   const surname = toPnrName(traveler.lastName);
   const given = toPnrName(traveler.firstName);
-  if (!birth || !surname || !given) return null;
-  return `////${birth}/${genderCode(traveler.gender, traveler.ptc)}//${surname}/${given}`;
+  const missing = unusable({ dateOfBirth: birth, lastName: surname, firstName: given });
+  if (missing.length) {
+    onUnusable(missing);
+    return null;
+  }
+  return fitting(`////${birth}/${genderCode(traveler.gender, traveler.ptc)}//${surname}/${given}`, onUnusable);
 };
 
 /**
@@ -78,14 +100,26 @@ const secureFlightDocs = (traveler) => {
  * A partial DOCS is not better than none. Amadeus rejects a malformed element
  * at commit, which would fail the whole booking rather than only the ticket —
  * so an incomplete document is skipped and the booking still succeeds.
+ *
+ * On a Secure Flight itinerary (`withoutDocument`) an unusable passport falls
+ * back to the name, date of birth and gender DOCS, exactly as no passport does.
+ * It used to return nothing - one bad field lost the fallback that American
+ * Airlines issued against, and the ticket was refused 27791 after the charge.
+ *
+ * `onUnusable` is told which fields could not be written (never their values),
+ * so the caller can say whose document was left off.
  */
-export const buildDocsFreetext = (traveler = {}, { withoutDocument = false } = {}) => {
+export const buildDocsFreetext = (traveler = {}, { withoutDocument = false, onUnusable = () => {} } = {}) => {
   const doc = Array.isArray(traveler.documents) ? traveler.documents[0] : traveler.documents;
-  if (!doc?.number) return withoutDocument ? secureFlightDocs(traveler) : null;
+  const fallback = () => (withoutDocument ? secureFlightDocs(traveler, onUnusable) : null);
+  if (!doc?.number) return fallback();
 
   const type = DOC_TYPE[String(doc.documentType ?? '').toUpperCase()] ?? 'P';
-  const nationality = toAlpha3(doc.nationality ?? doc.issuanceCountry);
-  const issuing = toAlpha3(doc.issuanceCountry ?? doc.nationality);
+  // `||`, not `??`: the order route writes an absent country as '' (never
+  // undefined), and '' ?? 'GB' is '' - the fallback between the two never fired
+  // and a passport with one country known got no DOCS at all.
+  const nationality = toAlpha3(doc.nationality || doc.issuanceCountry);
+  const issuing = toAlpha3(doc.issuanceCountry || doc.nationality);
   const birth = toDDMMMYY(traveler.dateOfBirth);
   const expiry = toDDMMMYY(doc.expiryDate);
   // The names as the name element writes them (pnr.js). Raw, "D'Souza" and
@@ -95,13 +129,20 @@ export const buildDocsFreetext = (traveler = {}, { withoutDocument = false } = {
   const surname = toPnrName(traveler.lastName);
   const given = toPnrName(traveler.firstName);
 
-  if (!nationality || !issuing || !birth || !expiry || !surname || !given) return null;
+  const missing = unusable({
+    nationality, issuanceCountry: issuing, dateOfBirth: birth, expiryDate: expiry, lastName: surname, firstName: given,
+  });
+  if (missing.length) {
+    onUnusable(missing);
+    return fallback();
+  }
 
   const number = String(doc.number).trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
   const gender = genderCode(traveler.gender, traveler.ptc);
   const holder = doc.holder === false ? '' : '/H';
 
-  return `${type}/${issuing}/${number}/${nationality}/${birth}/${gender}/${expiry}/${surname}/${given}${holder}`;
+  return fitting(`${type}/${issuing}/${number}/${nationality}/${birth}/${gender}/${expiry}/${surname}/${given}${holder}`, onUnusable)
+    ?? fallback();
 };
 
 /**
