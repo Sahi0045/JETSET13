@@ -87,10 +87,13 @@ describe('the Pay button on a withdrawn fare', () => {
     expect(review).toMatch(/if \(fareGone\) \{[\s\S]*?setNotice\(/);
   });
 
+  // The way out used to be a link back to the results, which threw away every
+  // traveller already typed. It is now the fares on sale now, on this page.
   it('offers the way out rather than a dead end', () => {
-    const guard = review.slice(review.indexOf('if (fareGone) {'), review.indexOf('if (fareGone) {') + 600);
+    const guard = review.slice(review.indexOf('if (fareGone) {'), review.indexOf('if (fareGone) {') + 700);
     expect(guard).toMatch(/no longer available/i);
-    expect(guard).toMatch(/onAction: \(\) => searchAgain\(\)/);
+    expect(guard).toMatch(/actionLabel: 'See the fares available now'/);
+    expect(guard).toMatch(/keeps everything you have typed/);
   });
 
   it('is checked before anything is charged', () => {

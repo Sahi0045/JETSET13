@@ -35,11 +35,13 @@ import { describeGroup, groupFromOffer, travellerGroupProblem } from '../../../.
 import { needsDateOfBirth, tripDates } from '../../../../../shared/travellerDetails';
 import { CALLING_CODES, COUNTRIES, callingCodeDigits } from '../../../../../shared/countries';
 import { arcItineraries, returnLegOf } from '../../../utils/reviewTrip';
-import { findSameFare, rebuildTravellers, searchForGroup } from '../../../utils/travellerGroupChange';
+import { fareIdentity, findSameFare, rebuildTravellers, searchForGroup } from '../../../utils/travellerGroupChange';
+import { reviewFlightFromSearch } from '../../../utils/reviewFlightFromSearch';
 import { travellerProblems, travellerProgress } from '../../../utils/travellerChecks';
 import { placeSavedTraveller, removeSavedTraveller, toSavedTraveller } from '../../../utils/savedTravellerSlots';
 import { useSaveTravellers, useSavedTravellers } from '../../../hooks/queries/useSavedTravellers';
 import TravellerGroupEditor from './TravellerGroupEditor';
+import FlightFareGoneAlternatives from './FlightFareGoneAlternatives';
 import "./booking-confirmation.css";
 
 // Passport / travel-document fields only matter on international routes. Map each
@@ -137,6 +139,10 @@ function FlightBookingConfirmation() {
   const [fareNotice, setFareNotice] = useState(null);
   // The airline refused to price this fare: the way on is a new search.
   const [fareGone, setFareGone] = useState(false);
+  // The fares on sale now for this same search, fetched when the fare dies so
+  // the customer changes flight here instead of starting the booking again.
+  // { busy, error, flights, switching } - see FlightFareGoneAlternatives.jsx.
+  const [alternatives, setAlternatives] = useState(null);
   const [checkingOut, setCheckingOut] = useState(false);
   // One payment page per trip. React state alone let a quick second click in
   // before Pay re-rendered disabled, and `checkingOut` was cleared as soon as
@@ -382,6 +388,101 @@ function FlightBookingConfirmation() {
       return;
     }
     navigate(`/flights/search?${searchToQuery(search)}`, { state: { searchData: search, editTravellers: true } });
+  };
+
+  /**
+   * The fares on sale now for this same search, fetched where the customer is.
+   *
+   * A withdrawn fare used to end the booking: one button, back to the results,
+   * and every name, date of birth and passport number typed so far left behind
+   * - the traveller draft is tied to the exact flight, so choosing a different
+   * one meant typing all of it again. On a route where the airline refuses
+   * often, that is the booking lost.
+   *
+   * The same search, for the same group the dead fare was priced for, minus
+   * that fare itself. Cheapest first, a handful shown; `searchAgain` still
+   * leads to the full results for anyone who wants them.
+   */
+  const loadAlternatives = async (deadOffer) => {
+    const offer = deadOffer ?? reviewState?.flightData?.originalOffer;
+    const search = offer ? searchForGroup(reviewState?.searchData, offer, groupFromOffer(offer)) : null;
+    if (!search?.from || !search?.to || !search?.departDate) {
+      setAlternatives({ busy: false, error: null, flights: [], switching: false });
+      return;
+    }
+
+    setAlternatives({ busy: true, error: null, flights: null, switching: false });
+    try {
+      const res = await fetch(apiConfig.endpoints.flights.search, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify(search),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok || !body?.success) {
+        setAlternatives({
+          busy: false,
+          error: 'We could not reach the airlines just now. Please try the full search.',
+          flights: null,
+          switching: false,
+        });
+        return;
+      }
+
+      // Not the fare that just died: offering it back would refuse again.
+      const dead = fareIdentity(offer);
+      const flights = (body.data ?? [])
+        .filter((flight) => flight?.originalOffer && fareIdentity(flight.originalOffer) !== dead)
+        .sort((a, b) => Number(a.price?.amount ?? a.price?.total) - Number(b.price?.amount ?? b.price?.total))
+        .slice(0, 5);
+      setAlternatives({ busy: false, error: null, flights, switching: false });
+    } catch {
+      setAlternatives({
+        busy: false,
+        error: 'We could not reach the airlines just now. Please try the full search.',
+        flights: null,
+        switching: false,
+      });
+    }
+  };
+
+  /**
+   * Put a different flight on this page, keeping everyone already typed.
+   *
+   * The group is the one the dead fare was priced for, so the new offer prices
+   * the same traveller types in the same order and `passengerData` still
+   * belongs to it - `rebuildTravellers` keeps each person in their own slot
+   * regardless. The flight goes into router state the way an arrival from
+   * search does, so a refresh keeps it.
+   */
+  const chooseAlternative = (choice) => {
+    if (!choice?.originalOffer || !reviewState?.flightData) return;
+    setAlternatives((state) => ({ ...(state || {}), switching: true }));
+
+    // The API's shape, converted to the one this page is handed by the results
+    // page. Copying the raw fields across put a string where the airline object
+    // belonged, and the chosen flight drew as "Jetsetters Airlines".
+    const flightData = reviewFlightFromSearch(choice, getCityName);
+    if (!flightData) {
+      setAlternatives((state) => ({ ...(state || {}), switching: false }));
+      return;
+    }
+
+    setPassengerData((current) => rebuildTravellers(current, choice.originalOffer.travelerPricings, blankTraveller));
+    // The dead fare's figures must not stand in for this one while the arrival
+    // check runs again.
+    setPricedFare(null);
+    setAppliedCoupon(null);
+    couponBase.current = null;
+    setFareGone(false);
+    setAlternatives(null);
+    setNotice(null);
+    setFareNotice('Flight changed, and your traveller details are as you left them. Please check the new total before you pay.');
+    navigate(`${routerLocation.pathname}${routerLocation.search}`, {
+      replace: true,
+      state: { ...(routerLocation.state || {}), flightData },
+    });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   // Back to the results for this same search, for the fares on sale now - the
@@ -676,7 +777,8 @@ function FlightBookingConfirmation() {
         if (cancelled) return;
         if (body?.code === 'FARE_UNAVAILABLE') {
           setFareGone(true);
-          setFareNotice('The airline can no longer sell this fare. Please search again to see the fares available now.');
+          setFareNotice('The airline can no longer sell this fare. The fares on sale now are below.');
+          loadAlternatives(offer);
           return;
         }
         const price = body?.data?.flightOffers?.[0]?.price;
@@ -982,10 +1084,10 @@ function FlightBookingConfirmation() {
       setNotice({
         tone: 'error',
         title: 'This fare is no longer available',
-        message: 'The airline has withdrawn it since you opened this page. Search again to see the fares available now.',
+        message: 'The airline has withdrawn it since you opened this page. The fares on sale now are at the top of this page - choosing one keeps everything you have typed.',
         reassure: true,
-        actionLabel: 'Search again',
-        onAction: () => searchAgain(),
+        actionLabel: 'See the fares available now',
+        onAction: () => window.scrollTo({ top: 0, behavior: 'smooth' }),
       });
       return;
     }
@@ -1186,14 +1288,18 @@ function FlightBookingConfirmation() {
       // help, and "try again in a moment" is what this said, every time.
       if (refusal.code === 'FARE_UNAVAILABLE') {
         setFareGone(true);
-        setFareNotice('The airline can no longer sell this fare. Please search again to see the fares available now.');
+        setFareNotice('The airline can no longer sell this fare. The fares on sale now are below.');
+        // The alternatives come to the customer: everything typed stays on the
+        // page, and choosing one of these swaps only the flight. Sending them
+        // back to the results meant typing every traveller again.
+        loadAlternatives();
         setNotice({
           tone: 'error',
           title: 'This fare is no longer available',
-          message: String(refusal.error || 'The airline can no longer sell this fare. Please search again.').replace(/\s*Nothing has been charged\.?/i, ''),
+          message: `${String(refusal.error || 'The airline can no longer sell this fare.').replace(/\s*Nothing has been charged\.?/i, '')} Nothing has been charged. Your traveller details are kept - pick one of the fares on sale now.`,
           reassure: true,
-          actionLabel: 'Search again',
-          onAction: searchAgain,
+          actionLabel: 'See the fares available now',
+          onAction: () => window.scrollTo({ top: 0, behavior: 'smooth' }),
         });
         return;
       }
@@ -1456,6 +1562,17 @@ function FlightBookingConfirmation() {
         <div className="booking-layout grid grid-cols-1 lg:grid-cols-3 gap-5">
           {/* Left Column - Flight & Passenger Details */}
           <div className="lg:col-span-2">
+
+            {/* The airline withdrew this fare. Rather than sending the customer
+                back to the results and losing everything typed, the fares on
+                sale now are offered here. */}
+            {fareGone && (
+              <FlightFareGoneAlternatives
+                state={alternatives}
+                onChoose={chooseAlternative}
+                onSearchAgain={searchAgain}
+              />
+            )}
 
             {/* Flight Details Card (Boarding Pass Style) */}
             <div className="booking-card flight-card">
