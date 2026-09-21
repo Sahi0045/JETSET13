@@ -1,4 +1,4 @@
-import { isPaid, ticketState } from './eTicket';
+import { NO_CONFIRMED_SEAT_REVIEW_REASON, isPaid, ticketState } from './eTicket';
 import {
   REFUND_DONE_ACTIONS,
   REFUND_REVIEW_ACTIONS,
@@ -34,9 +34,9 @@ const pnrOf = (booking) => booking?.pnr || booking?.booking_details?.pnr || book
  * The review flag the order route writes when the airline left a flight
  * waitlisted, requested, unable or cancelled at commit (NO_CONFIRMED_SEAT_REVIEW_REASON
  * in backend/routes/flight.routes.js; a test keeps the two equal). There is a
- * PNR, but no confirmed seat.
+ * PNR, but no confirmed seat. Defined in eTicket.js, whose document reads it too.
  */
-export const NO_CONFIRMED_SEAT_REVIEW_REASON = 'chain failed after commit at segmentStatus';
+export { NO_CONFIRMED_SEAT_REVIEW_REASON };
 
 const money = (amount, currency) => {
   try {
@@ -129,9 +129,11 @@ export function attentionMessage(booking) {
     return null;
   }
   if (!needsAttention(booking)) return null;
-  // A PNR is not a seat: "your seats are reserved" was false of this one.
+  // A PNR is not a seat: "your seats are reserved" was false of this one. And
+  // a second trip bought meanwhile is not caught as a duplicate.
   if (reviewOf(booking)?.reason === NO_CONFIRMED_SEAT_REVIEW_REASON) {
-    return 'The airline has not confirmed a seat on every flight, so no ticket has been issued. Our team will contact you.';
+    return 'The airline has not confirmed a seat on every flight, so no ticket has been issued. Our team will contact you. '
+      + 'Please do not book this trip again in the meantime.';
   }
   return pnrOf(booking)
     ? 'Your seats are reserved, but your ticket has not been issued yet. Our team is working on it and will email you.'

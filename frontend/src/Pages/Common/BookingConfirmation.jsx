@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { CheckCircle, Ship, Plane, Calendar, CreditCard, ArrowLeft, Clock, MapPin, Users, XCircle } from 'lucide-react';
 import Navbar from './Navbar';
 import { attentionMessage, refundStatus } from '../../utils/bookingStatus';
-import { isPaid } from '../../utils/eTicket';
+import { hasNoConfirmedSeat, isPaid } from '../../utils/eTicket';
 import { daysUntilDate, formatCalendarDate } from '../../utils/dateUtils';
 import { cancellationMessage } from '../../../../shared/cancellationOutcome';
 import { bookingItineraries, returnDateOf } from '../../../../shared/bookingItineraries';
@@ -116,12 +116,16 @@ function BookingConfirmation() {
   // one of them "Reservation Held - your seats are reserved". What it is
   // depends on the payment, and on whether it is already in front of a person.
   const neverBooked = isFlight && !bookingData.pnr && statusUpper === 'PENDING';
+  // A PNR is not a seat. The airline left a flight on this one waitlisted,
+  // requested, unable or cancelled at commit, and it read "Reservation Held -
+  // your seats are reserved" like any other.
   const outcome = statusUpper === 'CANCELLED' ? 'cancelled'
     : (bookingData.queued === true || statusUpper === 'PENDING_CONFIRMATION') ? 'queued'
       : (bookingData.ticketed === true || hasTickets) ? 'ticketed'
         : neverBooked ? (bookingData.needs_review ? 'not_completed' : isPaid(bookingData) ? 'not_booked' : 'awaiting_payment')
-          : isFlight ? 'held'
-            : 'confirmed';
+          : isFlight && hasNoConfirmedSeat(bookingData) ? 'no_confirmed_seat'
+            : isFlight ? 'held'
+              : 'confirmed';
 
   // Full class strings on purpose: Tailwind cannot see a class built from a
   // template literal, so a `bg-${tone}-500` would be purged from the build.
@@ -148,6 +152,19 @@ function BookingConfirmation() {
       mail: heldForReview
         ? 'Our team is finishing your ticket and will email you as soon as it is issued. Until then, this reference is your proof of booking.'
         : 'We email your e-ticket to the address you booked with once it is issued. Until then, this reference is your proof of booking.',
+    },
+    // Nothing here promises a seat, a ticket or an email: a person contacts
+    // them (the order route pages one). Booking again would buy a second trip
+    // that no duplicate check catches.
+    no_confirmed_seat: {
+      Icon: Clock,
+      iconWrap: 'bg-gradient-to-br from-amber-400 to-amber-600',
+      badge: 'bg-amber-500',
+      title: 'Seat Not Confirmed',
+      lead: 'The airline has not confirmed a seat on every flight, so no ticket has been issued.',
+      badgeText: 'Needs attention',
+      mail: 'Our team will contact you about this booking. Please do not book this trip again in the meantime. '
+        + 'You can also call (877) 538-7380 with your booking reference.',
     },
     queued: {
       Icon: Clock,
