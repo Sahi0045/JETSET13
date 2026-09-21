@@ -224,6 +224,16 @@ const callStep = async (ctx, { step, operation, bodyXml, pnr, committed, tickete
     });
   }
 
+  // An element the airline refused that the booking survives without. It does
+  // not stop the chain, but it is never silent: a refused FOID used to reach
+  // the log as nothing at all, and then as a whole failed booking.
+  if (inspected.warnings?.length) {
+    for (const warning of inspected.warnings) {
+      log.warn({ step, operation, pnr, element: warning.element, amadeusCode: warning.code, reason: warning.text },
+        'the airline refused one element; the booking continues without it');
+    }
+  }
+
   return reply;
 };
 
