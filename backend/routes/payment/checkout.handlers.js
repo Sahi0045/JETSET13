@@ -1083,10 +1083,36 @@ export async function handleSessionCreate(req, res) {
     }
 }
 
+/**
+ * What an ARC order still holds, read the way reconcileBookingPayment reads it:
+ * its successful PAYMENT/CAPTURE transactions, less successful refunds, and
+ * nothing once voided.
+ *
+ * The payment callback used to take the LAST transaction on the order as the
+ * payment's result. After a refund the last transaction is the refund, and a
+ * successful refund read as a successful payment.
+ */
+function heldOnOrder(order) {
+    const txns = Array.isArray(order?.transaction) ? order.transaction : [];
+    const succeeded = (t) => t.result === 'SUCCESS' || t.response?.gatewayCode === 'APPROVED';
+    const sumOf = (list) => list.reduce((sum, t) => sum + (Number(t.transaction?.amount) || 0), 0);
+    const captures = txns.filter((t) => succeeded(t) && ['PAYMENT', 'CAPTURE'].includes(t.transaction?.type));
+    const capturedTotal = captures.length ? sumOf(captures) : (order?.status === 'CAPTURED' ? Number(order.amount) || 0 : 0);
+    const refundedTotal = sumOf(txns.filter((t) => t.transaction?.type === 'REFUND' && t.result === 'SUCCESS'));
+    const held = orderVoided(order) ? 0 : Math.round((capturedTotal - refundedTotal) * 100) / 100;
+    return { capture: captures[0] || null, capturedTotal, held };
+}
+
 // Payment Callback - Handle ARC Pay redirect
 export async function handlePaymentCallback(req, res) {
     try {
-        console.log('📥 Payment callback received:', { query: req.query, body: req.body });
+        // Not the query itself: it carries the payer's result indicator, which
+        // is the proof of who paid.
+        console.log('📥 Payment callback received:', {
+            quoteId: req.body?.quote_id || req.query?.quote_id || null,
+            hasSession: Boolean(req.body?.sessionId || req.query?.sessionId || req.body?.['session.id'] || req.query?.['session.id']),
+            hasIndicator: Boolean(req.body?.resultIndicator || req.query?.resultIndicator),
+        });
 
         const resultIndicator = req.body?.resultIndicator || req.query?.resultIndicator;
         const sessionId = req.body?.sessionId || req.query?.sessionId || req.body?.['session.id'] || req.query?.['session.id'];
@@ -1122,22 +1148,53 @@ export async function handlePaymentCallback(req, res) {
             return res.redirect('/payment/failed?error=invalid_session');
         }
 
-        // Verify success indicator if provided
-        if (resultIndicator && payment.success_indicator && resultIndicator !== payment.success_indicator) {
-            console.error('Result indicator mismatch');
-            return res.redirect(`/inquiry/${payment.inquiry_id}?payment=failed&error=invalid_indicator`);
+        // Where the payer goes when this callback settles nothing: the inquiry
+        // the quote belongs to, or - for a row with none, a payment link's - the
+        // payment result page. `/inquiry/null` is where a link row used to go.
+        const notSettled = (inquiryQuery, failedQuery) => res.redirect(payment.inquiry_id
+            ? `/inquiry/${payment.inquiry_id}?${inquiryQuery}`
+            : `/payment/failed?${failedQuery}`);
+
+        // A settled payment is not decided again. This GET needs no login, and
+        // a refunded quote payment reached with nothing but its quote id was
+        // read again from ARC - whose last transaction was the refund - and
+        // written completed: the quote and inquiry went back to paid, the
+        // customer was emailed a booking confirmation, and the row's metadata,
+        // the refund record among it, was replaced.
+        if (payment.payment_status === 'completed') {
+            return res.redirect(`/payment/success?paymentId=${payment.id}`);
+        }
+        if (payment.payment_status === 'refunded') {
+            return res.redirect(payment.inquiry_id ? `/inquiry/${payment.inquiry_id}` : '/');
+        }
+
+        // Only the payer's browser may move this row. ARC hands the result
+        // indicator to it alone, on the way back from the payment page. The
+        // check used to run only when an indicator was sent, so leaving it off
+        // the URL skipped it.
+        if (!resultIndicator || !payment.success_indicator || String(resultIndicator) !== String(payment.success_indicator)) {
+            console.error('Result indicator missing or mismatched', { paymentId: payment.id, hasIndicator: Boolean(resultIndicator) });
+            return notSettled('payment=failed&error=invalid_indicator', 'error=invalid_indicator');
         }
 
         // Get transaction status from ARC Pay
         const authHeader = 'Basic ' + Buffer.from(`merchant.${ARC_PAY_CONFIG.MERCHANT_ID}:${ARC_PAY_CONFIG.API_PASSWORD}`).toString('base64');
 
-        let transaction;
+        // The order ARC was asked to open. For a quote that is the payment's own
+        // id; a payment link opens `PL-...`, recorded in `arc_order_id`. Asking
+        // for the row's id 404'd for every payment-link row, and the 404 was
+        // read as a decline: a completed payment was written `failed` and its
+        // metadata - the link token, the order id, the receipt - emptied.
+        const arcOrderId = payment.arc_order_id || payment.id;
+
+        let transaction = null;
         try {
             const orderResponse = await axios.get(
-                `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${payment.id}`,
-                { headers: { 'Authorization': authHeader, 'Accept': 'application/json' } }
+                `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${arcOrderId}`,
+                { headers: { 'Authorization': authHeader, 'Accept': 'application/json' }, validateStatus: () => true }
             );
-            transaction = orderResponse.data;
+            if (orderResponse.status === 200 && orderResponse.data) transaction = orderResponse.data;
+            else console.error('Failed to get order status: HTTP', orderResponse.status);
             // The order object carries the cardholder's name and billing
             // address alongside the masked card, so only the decision-relevant
             // fields are logged.
@@ -1151,6 +1208,12 @@ export async function handlePaymentCallback(req, res) {
             console.error('Failed to get order status:', orderError.message);
         }
 
+        // No answer is not a decline. Nothing is written, and the payer is sent
+        // where a payment still being confirmed goes.
+        if (!transaction) {
+            return notSettled('payment=pending', 'error=verification_failed');
+        }
+
         // Determine payment status
         const transactionArray = transaction?.transaction || [];
         const latestTxn = transactionArray[transactionArray.length - 1];
@@ -1160,41 +1223,61 @@ export async function handlePaymentCallback(req, res) {
 
         console.log('📊 Transaction analysis:', { result, gatewayCode, orderStatus });
 
-        // Check if payment is successful
-        const isSuccess = result === 'SUCCESS' && (gatewayCode === 'APPROVED' || !gatewayCode);
+        // Paid means ARC holds the money for this payment now - see heldOnOrder.
+        const { capture, capturedTotal, held } = heldOnOrder(transaction);
+        const expected = Number(payment.amount);
+        const isSuccess = held > 0 && !(Number.isFinite(expected) && expected > 0 && held + 0.01 < expected);
+
+        // Merged into what the row holds, never replacing it: the link token
+        // and order id are how the receipt and complete-payment-link find this
+        // row, and a refund's record lives here too.
+        const mergedMetadata = (extra) => ({ ...(payment.metadata || {}), transaction, ...extra });
 
         if (isSuccess) {
             console.log('✅ Payment successful');
 
-            await supabase
+            // Only a row still unsettled is written, so two callbacks at once
+            // record the payment - and email the customer - once.
+            const { data: settled, error: settleError } = await supabase
                 .from('payments')
                 .update({
                     payment_status: 'completed',
                     completed_at: new Date().toISOString(),
-                    arc_transaction_id: latestTxn?.transaction?.id || transaction?.id,
-                    metadata: { transaction }
+                    arc_transaction_id: capture?.transaction?.id || null,
+                    // The bank's reference, which the receipt shows; see
+                    // reconcileBookingPayment.
+                    metadata: mergedMetadata({ arc_receipt: capture?.transaction?.receipt || null })
                 })
-                .eq('id', payment.id);
+                .eq('id', payment.id)
+                .neq('payment_status', 'completed')
+                .neq('payment_status', 'refunded')
+                .select('id');
+            if (settleError) {
+                console.error('❌ Payment captured but not recorded:', { paymentId: payment.id, error: settleError.message });
+                return notSettled('payment=pending', 'error=verification_failed');
+            }
+            if (!settled?.length) {
+                return res.redirect(`/payment/success?paymentId=${payment.id}`);
+            }
 
-            await supabase
-                .from('quotes')
-                .update({ payment_status: 'paid', paid_at: new Date().toISOString(), status: 'paid' })
-                .eq('id', payment.quote_id);
-
-            await supabase
-                .from('inquiries')
-                .update({ status: 'paid' })
-                .eq('id', payment.inquiry_id);
-
-            // Update payment link status if this came from a payment link
-            const paymentLinkToken = req.query?.paymentLinkToken || req.body?.paymentLinkToken;
-            if (paymentLinkToken) {
-                console.log('🔗 Updating payment link status to paid:', paymentLinkToken);
+            if (payment.quote_id) {
                 await supabase
-                    .from('payment_links')
-                    .update({ status: 'paid', paid_at: new Date().toISOString(), payment_id: payment.id })
-                    .eq('link_token', paymentLinkToken);
-            } else if (payment.metadata?.payment_link_token) {
+                    .from('quotes')
+                    .update({ payment_status: 'paid', paid_at: new Date().toISOString(), status: 'paid' })
+                    .eq('id', payment.quote_id);
+            }
+
+            if (payment.inquiry_id) {
+                await supabase
+                    .from('inquiries')
+                    .update({ status: 'paid' })
+                    .eq('id', payment.inquiry_id);
+            }
+
+            // The payment link this payment was opened for, and no other. A
+            // link token taken from the query marked whatever link the caller
+            // named paid, against somebody else's payment.
+            if (payment.metadata?.payment_link_token) {
                 console.log('🔗 Updating payment link status to paid from metadata:', payment.metadata.payment_link_token);
                 await supabase
                     .from('payment_links')
@@ -1254,7 +1337,7 @@ export async function handlePaymentCallback(req, res) {
                 if (authTxnId) {
                     try {
                         const payResponse = await axios.put(
-                            `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${payment.id}/transaction/pay-${Date.now()}`,
+                            `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${arcOrderId}/transaction/pay-${Date.now()}`,
                             {
                                 apiOperation: 'PAY',
                                 authentication: { transactionId: authTxnId },
@@ -1321,17 +1404,29 @@ export async function handlePaymentCallback(req, res) {
 
             await supabase
                 .from('payments')
-                .update({ payment_status: 'pending', metadata: { transaction } })
-                .eq('id', payment.id);
+                .update({ payment_status: 'pending', metadata: mergedMetadata() })
+                .eq('id', payment.id)
+                .neq('payment_status', 'completed')
+                .neq('payment_status', 'refunded');
 
-            return res.redirect(`/inquiry/${payment.inquiry_id}?payment=pending`);
+            return notSettled('payment=pending', 'error=verification_failed');
+        } else if (capturedTotal > 0) {
+            // Taken, and since returned in whole or part, on a row this callback
+            // never settled. Not a payment and not a decline, so neither is
+            // written; the desk reads the order in ARC.
+            console.error('⚠️ Payment callback: ARC took this payment and has returned some or all of it', {
+                paymentId: payment.id, orderStatus, capturedTotal, held,
+            });
+            return notSettled('payment=failed&error=verification_failed', 'error=verification_failed');
         } else {
             console.log('❌ Payment failed:', { result, gatewayCode });
 
             await supabase
                 .from('payments')
-                .update({ payment_status: 'failed', metadata: { transaction, failureReason: gatewayCode || result } })
-                .eq('id', payment.id);
+                .update({ payment_status: 'failed', metadata: mergedMetadata({ failureReason: gatewayCode || result || null }) })
+                .eq('id', payment.id)
+                .neq('payment_status', 'completed')
+                .neq('payment_status', 'refunded');
 
             return res.redirect(`/payment/failed?reason=${encodeURIComponent(gatewayCode || result || 'payment_declined')}&paymentId=${payment.id}`);
         }
