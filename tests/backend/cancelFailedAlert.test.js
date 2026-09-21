@@ -190,7 +190,8 @@ describe('the alarm text for a cancel the airline refused', () => {
 
   it('does not guess which tickets are live when the cancel did not say', () => {
     const text = at(() => buildMessage([withFlag({ detail: '999 CANCEL NOT ALLOWED' })]));
-    expect(text).toMatch(new RegExp(`PNR ABC123 · tickets voided: none recorded · on the booking: ${VOIDED}, ${NOT_VOIDED}\n`));
+    // Not "still live": no record says so. Nor voided: none of the records says that either.
+    expect(text).toMatch(new RegExp(`PNR ABC123 · tickets voided: none recorded · not recorded as voided: ${VOIDED}, ${NOT_VOIDED}\n`));
   });
 
   it('says so when the booking has no tickets', () => {

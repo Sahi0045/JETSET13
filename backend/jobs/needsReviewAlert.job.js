@@ -24,7 +24,7 @@ import { postToSlack } from './slackAlert.js';
 import { unchangedSince } from '../utils/bookingDetailsGuard.js';
 import { queueEnvironment } from '../utils/queueEnvironment.js';
 import {
-  NO_CONFIRMED_SEAT_REVIEW_REASON, TICKET_NUMBERS_MISSING, isFailedCancellation, isUnrecordedCancellation,
+  NO_CONFIRMED_SEAT_REVIEW_REASON, TICKET_NUMBERS_MISSING, flagsInForce, isFailedCancellation, isUnrecordedCancellation,
   needsAirlineRefundClaim, ticketsOf, unrecordedCancellationOf,
 } from '../../shared/reviewQueue.js';
 
@@ -240,23 +240,52 @@ export function describeUnrecordedCancellation(booking) {
   ].join('\n');
 }
 
+const ticketDigits = (number) => String(number ?? '').replace(/\D/g, '');
+
+/** Ticket numbers from several lists, each once, in the order first seen. */
+const unionTickets = (...lists) => {
+  const seen = new Set();
+  return lists.flatMap((list) => (Array.isArray(list) ? list : [])).filter((number) => {
+    const digits = ticketDigits(number);
+    if (!digits || seen.has(digits)) return false;
+    seen.add(digits);
+    return true;
+  });
+};
+
 /**
  * One line per cancellation the airline did not carry out. Which tickets were
- * voided and which are still live, as the cancel recorded them; when it did not
- * say, the booking's tickets are listed as they are, never guessed live.
+ * voided and which are still live, as the cancels recorded them; when the
+ * latest did not say, what is known not to be voided is listed as such, never
+ * guessed live or void.
+ *
+ * Voided is every ticket ANY attempt voided: the booking's own list (the
+ * cancel handler adds each attempt's voids to booking_details.voided_tickets)
+ * and the lists on every flag in the chain. It read the latest flag alone, and
+ * a later refused cancel that voided nothing writes a flag with no lists: Slack
+ * said "tickets voided: none recorded · on the booking: A, B" of two void
+ * tickets, and a person working by hand could claim their value from the
+ * airline, or under-refund a fare whose tickets were void.
  */
 export function describeFailedCancellation(booking) {
   const details = booking.booking_details || {};
   const review = details.needs_review || {};
   const hours = Math.round((Date.now() - Date.parse(review.at || booking.created_at)) / 36e5);
-  const voided = Array.isArray(review.voided_tickets) ? review.voided_tickets : [];
-  const live = Array.isArray(review.unvoided_tickets) ? review.unvoided_tickets : null;
-  const onBooking = ticketsOf(details).map((ticket) => ticket.number);
-  const tickets = live
-    ? `tickets voided: ${voided.join(', ') || 'none'} · still live: ${live.join(', ') || 'none'}`
-    : voided.length ? `tickets voided: ${voided.join(', ')} · still live: not recorded`
-      : onBooking.length ? `tickets voided: none recorded · on the booking: ${onBooking.join(', ')}`
-        : 'no tickets issued';
+  // A void is a fact about the ticket, so resolved flags count too.
+  const flags = flagsInForce(booking, { pastResolved: true });
+  const voided = unionTickets(details.voided_tickets, ...flags.map((flag) => flag.voided_tickets));
+  const voidedDigits = new Set(voided.map(ticketDigits));
+  const notVoided = (list) => list.filter((number) => !voidedDigits.has(ticketDigits(number)));
+  let tickets;
+  if (Array.isArray(review.unvoided_tickets)) {
+    // This attempt's own report: every ticket on the PNR it did not void.
+    tickets = `tickets voided: ${voided.join(', ') || 'none'} · still live: ${notVoided(review.unvoided_tickets).join(', ') || 'none'}`;
+  } else {
+    const others = notVoided(unionTickets(ticketsOf(details).map((ticket) => ticket.number), ...flags.map((flag) => flag.unvoided_tickets)));
+    tickets = voided.length || others.length
+      ? `tickets voided: ${voided.join(', ') || 'none recorded'} · not recorded as voided: ${others.join(', ') || 'none'}`
+      : 'no tickets issued';
+  }
   return [
     `*${booking.booking_reference}* — ${booking.status}/${booking.payment_status}, ${booking.total_amount} USD`,
     `PNR ${details.pnr || review.pnr || 'none'} · ${tickets}`,

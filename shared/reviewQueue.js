@@ -41,14 +41,25 @@ const topFlagOf = (booking) => booking?.needs_review ?? detailsOf(booking)?.need
  * Twenty levels is far more than any booking gets; it only stops a malformed
  * chain from looping.
  */
-export function flagInForce(booking, matches, { pastResolved = false } = {}) {
+export function flagInForce(booking, matches, options) {
+  return flagsInForce(booking, options).find(matches) ?? null;
+}
+
+/**
+ * Every review flag on a booking, latest first, down to (not including) the
+ * first one a person resolved - or the whole chain with `pastResolved`. The
+ * walk flagInForce searches, for a reader that needs what every flag recorded
+ * (the tickets each cancel attempt voided, say).
+ */
+export function flagsInForce(booking, { pastResolved = false } = {}) {
+  const flags = [];
   let review = topFlagOf(booking);
   for (let depth = 0; review && depth < 20; depth += 1) {
-    if (review.resolved_at && !pastResolved) return null;
-    if (matches(review)) return review;
+    if (review.resolved_at && !pastResolved) break;
+    flags.push(review);
     review = review.previous;
   }
-  return null;
+  return flags;
 }
 
 /** Ticket numbers recorded on a booking. */
