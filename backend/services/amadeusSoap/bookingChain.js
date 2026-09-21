@@ -146,8 +146,9 @@ const SCHEDULE_CHANGE_STATUSES = new Set(['TK']);
  * 2026 - answered HK, so this never meets a normal booking.
  *
  * The PNR exists by then and the customer has paid, so it is not refunded
- * blind: the chain stops before change advice, queueing and issuance, and the
- * order route holds it for a person (the `committed` branch).
+ * blind: the chain places it on the office queue, stops before change advice
+ * and issuance, and the order route holds it for a person (the `committed`
+ * branch).
  */
 const NOT_A_SEAT_AT_COMMIT = new Set(['TL', 'TN', 'HL', 'HN', 'NN', 'WL', 'UC', 'UN', 'UU', 'US', 'NO', 'HX', 'UNS']);
 
@@ -861,10 +862,40 @@ export const runBookingChain = async (p) => {
     // returning TK for that flight before it could be proved end to end, so this
     // runs only when a segment carries a changed status.
     let bookedReply = commitReply;
+
+    // Queue_PlacePNR, from step 7 and from the not-a-seat stop below. Returns
+    // whether it was filed.
+    const placeOnQueue = async () => {
+      try {
+        await callStep(ctx, {
+          step: 'queue',
+          operation: 'Queue_PlacePNR',
+          bodyXml: buildQueuePlaceBody({
+            recordLocator: pnr,
+            queueOffice: config.queueOffice,
+            queueNumber: config.queueNumber,
+            queueCategory: config.queueCategory,
+          }),
+          pnr,
+          committed,
+        });
+        return true;
+      } catch (cause) {
+        // A booking that is not on a queue is still a booking. Refunding one over
+        // a filing error would be far worse than leaving it for the desk to find.
+        log.warn({ pnr, reason: cause?.technicalError ?? cause?.message }, 'Queue_PlacePNR failed; booking stands');
+        return false;
+      }
+    };
+
     const statuses = airSegmentStatuses(commitReply);
     const notSeats = statuses.filter((status) => NOT_A_SEAT_AT_COMMIT.has(status));
     if (notSeats.length > 0) {
       log.error({ pnr, statuses }, 'the airline is not holding a confirmed seat on every flight; not ticketing');
+      // Queued first. This is the PNR that most needs an agent - paid,
+      // committed, no confirmed seat - and stopping before the queue (round 1)
+      // kept exactly this one off the office queue. Never fatal, as in step 7.
+      await placeOnQueue();
       throw new BookingChainError({
         step: 'segmentStatus',
         pnr,
@@ -873,7 +904,7 @@ export const runBookingChain = async (p) => {
         error: 'The airline has not confirmed a seat on every flight - our team will contact you',
         code: 502,
         technicalError: `segment status ${statuses.join(',')} at commit: ${notSeats.join(',')} is not a confirmed seat `
-          + '(waitlisted, requested, unable or cancelled); not accepted, queued or ticketed',
+          + '(waitlisted, requested, unable or cancelled); not accepted or ticketed',
       });
     }
     const changed = statuses.filter((status) => SCHEDULE_CHANGE_STATUSES.has(status));
@@ -889,26 +920,7 @@ export const runBookingChain = async (p) => {
     }
 
     // ---- 7. Queue (bookkeeping; never fatal) -------------------------------
-    let queued = false;
-    try {
-      await callStep(ctx, {
-        step: 'queue',
-        operation: 'Queue_PlacePNR',
-        bodyXml: buildQueuePlaceBody({
-          recordLocator: pnr,
-          queueOffice: config.queueOffice,
-          queueNumber: config.queueNumber,
-          queueCategory: config.queueCategory,
-        }),
-        pnr,
-        committed,
-      });
-      queued = true;
-    } catch (cause) {
-      // A booking that is not on a queue is still a booking. Refunding one over
-      // a filing error would be far worse than leaving it for the desk to find.
-      log.warn({ pnr, reason: cause?.technicalError ?? cause?.message }, 'Queue_PlacePNR failed; booking stands');
-    }
+    const queued = await placeOnQueue();
 
     // ---- 8. Issue ----------------------------------------------------------
     // Airlines Amadeus hosts (LH, QR, AF) carry their record locator at commit

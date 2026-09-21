@@ -682,6 +682,36 @@ describe('after the PNR exists', () => {
       .rejects.toMatchObject({ committed: true, ticketed: false, pnr: 'ABC123' });
   });
 
+  // Queue_PlacePNR was always attempted and never fatal. Round 1 put the
+  // not-a-seat stop in front of it, so the one PNR that most needs an agent -
+  // paid, committed, no confirmed seat - was the one kept off the office queue.
+  it('places a not-a-seat PNR on the office queue before handing it to a person', async () => {
+    const { runBookingChain } = await loadChain();
+    queueReplies(sellOk, addOk, fopOk, priceOk, tstOk, withSegmentStatus('TL'), fopOk);
+
+    const failure = await runBookingChain({ offer: offer(), travelers }).catch((error) => error);
+
+    expect(failure).toMatchObject({ step: 'segmentStatus', committed: true, ticketed: false, pnr: 'ABC123' });
+    const sent = axios.post.mock.calls.map(([, body]) => String(body));
+    const commitAt = sent.findIndex((body) => body.includes('<PNR_AddMultiElements') && body.includes('<optionCode>11</optionCode>'));
+    const queueAt = sent.findIndex((body) => body.includes('<Queue_PlacePNR'));
+    expect(queueAt).toBeGreaterThan(commitAt);
+    expect(sent[queueAt]).toContain('ABC123');
+    // Still no change advice and no ticket: the queue is bookkeeping only.
+    expect(commitOptions()).toEqual(['0', '11']);
+    expect(sent.some((body) => body.includes('<DocIssuance_IssueTicket'))).toBe(false);
+  });
+
+  it('keeps the segment-status answer when the queue itself fails', async () => {
+    const { runBookingChain } = await loadChain();
+    queueReplies(sellOk, addOk, fopOk, priceOk, tstOk, withSegmentStatus('HX'), errorReply('QUEUE NOT FOUND'));
+
+    const failure = await runBookingChain({ offer: offer(), travelers }).catch((error) => error);
+
+    expect(failure).toMatchObject({ step: 'segmentStatus', committed: true, ticketed: false, pnr: 'ABC123' });
+    expect(axios.post.mock.calls.some(([, body]) => String(body).includes('<Queue_PlacePNR'))).toBe(true);
+  });
+
   // The route reads `committed` to decide whether refunding is safe. A ticketed
   // booking that gets refunded leaves the customer flying for free and the
   // airline billing us.
