@@ -127,12 +127,15 @@ function BookingConfirmation() {
   const returned = isFlight ? paymentReturned(bookingData) : null;
   // Issued, with its number not read back (ticketState 'pending'). This page
   // never read it, so it said "Your ticket is being issued and is not ready
-  // yet" beside attention text saying the ticket had been issued.
+  // yet" beside attention text saying the ticket had been issued. Before the
+  // refunded outcome, as a ticket with its number is: a refund on an issued
+  // ticket is money returned on a completed booking, not "Booking Not
+  // Completed".
   const outcome = statusUpper === 'CANCELLED' ? 'cancelled'
     : !returned && (bookingData.queued === true || statusUpper === 'PENDING_CONFIRMATION') ? 'queued'
       : (bookingData.ticketed === true || hasTickets) ? 'ticketed'
-        : returned ? 'payment_returned'
-          : isFlight && ticketState(bookingData) === 'pending' ? 'ticket_pending'
+        : isFlight && ticketState(bookingData) === 'pending' ? 'ticket_pending'
+          : returned ? 'payment_returned'
             : neverBooked ? (bookingData.needs_review ? 'not_completed' : isPaid(bookingData) ? 'not_booked' : 'awaiting_payment')
               : isFlight && hasNoConfirmedSeat(bookingData) ? 'no_confirmed_seat'
                 : isFlight ? 'held'
@@ -153,14 +156,21 @@ function BookingConfirmation() {
     },
     // The ticket exists; only its number has not reached us. No "being issued",
     // and no "as soon as it is issued".
+    // Refunded since, in full or in part (the Payments tab): nobody is getting
+    // the number for it, so it is not promised.
     ticket_pending: {
       Icon: CheckCircle,
       iconWrap: 'bg-gradient-to-br from-green-400 to-green-600',
       badge: 'bg-green-500',
       title: 'Ticket Issued',
-      lead: 'Your ticket has been issued. Its ticket number has not reached us yet.',
+      lead: returned
+        ? `Your ticket has been issued, and ${returned === 'all' ? 'your payment' : 'part of your payment'} for it has been refunded. `
+          + 'Its ticket number has not reached us yet.'
+        : 'Your ticket has been issued. Its ticket number has not reached us yet.',
       badgeText: 'Ticket issued',
-      mail: 'Our team is getting your ticket number from the airline. Until then, this reference is your proof of booking.',
+      mail: returned
+        ? 'If you need your ticket number, or have any questions, call (877) 538-7380 with your booking reference.'
+        : 'Our team is getting your ticket number from the airline. Until then, this reference is your proof of booking.',
     },
     held: {
       Icon: Clock,

@@ -159,6 +159,13 @@ export function attentionMessage(booking) {
   // Said from the payment record: a flagged booking refunded since reads
   // refunded, and "our team is looking after your payment" was false of it.
   const returned = paymentReturned(booking);
+  // A ticket was issued (ticketState 'pending': its number not read back), so
+  // the booking was completed; money went back on it. Read before the
+  // sentences below, which said "This booking was not completed" of it.
+  if (returned && ticketState(booking) === 'pending') {
+    return `Your ticket has been issued, and ${returned === 'all' ? 'your payment' : 'part of your payment'} for it has been refunded. `
+      + 'Its ticket number has not reached us; if you need it, or have any questions, call (877) 538-7380 with your booking reference.';
+  }
   if (returned === 'all') {
     return 'This booking was not completed, and your payment for it has been refunded. '
       + 'If you have any questions, call (877) 538-7380 with your booking reference.';
