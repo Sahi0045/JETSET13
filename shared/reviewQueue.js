@@ -77,6 +77,17 @@ export const TICKET_NUMBERS_MISSING = 'ticket_numbers_not_retrieved';
  */
 export const NO_CONFIRMED_SEAT_REVIEW_REASON = 'chain failed after commit at segmentStatus';
 
+/**
+ * The no-confirmed-seat flag on a booking, on top or under a later one, or null.
+ *
+ * The seatless Slack section tells staff to cancel the PNR, and a refused
+ * cancel writes its own flag on top. Read from the top alone, the booking then
+ * went back to "Your seats are reserved" on every customer page, offered a PDF
+ * saying the seat was held, and a retry of the order answered ALREADY_BOOKED.
+ * No seat had been confirmed at any point.
+ */
+export const noConfirmedSeatOf = (booking) => flagInForce(booking, (review) => review.reason === NO_CONFIRMED_SEAT_REVIEW_REASON);
+
 /** What a member of staff recorded when they dealt with it, or null. */
 export const reviewResolution = (booking) => {
   const review = detailsOf(booking)?.needs_review;

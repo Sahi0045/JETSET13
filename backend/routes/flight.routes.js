@@ -26,7 +26,9 @@ import { flightsKey, travellerNamesKey } from '../utils/tripMatch.js';
 import { needsDateOfBirth } from '../../shared/travellerDetails.js';
 import { buildFlightOrderBody, orderDataFromCheckoutRow } from '../../shared/flightOrderBody.js';
 import { statusChangeRefusal } from '../../shared/bookingStatusChange.js';
-import { attentionOf, reviewResolution, ticketsOf, isTicketed, NO_CONFIRMED_SEAT_REVIEW_REASON } from '../../shared/reviewQueue.js';
+import {
+  attentionOf, reviewResolution, ticketsOf, isTicketed, NO_CONFIRMED_SEAT_REVIEW_REASON, noConfirmedSeatOf,
+} from '../../shared/reviewQueue.js';
 import { errorSummary } from '../utils/errorSummary.js';
 import { flightSearchLimiter, guestBookingLimiter } from '../middleware/security.js';
 import { liveChainState } from '../utils/bookingChainClaim.js';
@@ -2485,8 +2487,8 @@ router.post('/order', optionalProtect, async (req, res) => {
     // Not a PNR the airline confirmed a seat on, while a person is still on it:
     // answered as the review below answers it, not "This booking already
     // exists", which the order page renders as "Your seats are reserved".
-    const awaitingSeat = existing.booking_details?.needs_review?.reason === NO_CONFIRMED_SEAT_REVIEW_REASON
-      && !existing.booking_details.needs_review.resolved_at;
+    // Found under a later flag too: a refused cancel writes its own on top.
+    const awaitingSeat = Boolean(noConfirmedSeatOf(existing));
     if (existing.booking_details?.pnr && !awaitingSeat) {
       const details = existing.booking_details;
       // Committed and still working: the request that holds this booking is
@@ -4151,8 +4153,16 @@ export function toClientBooking(booking, { showPassports = false } = {}) {
     // The reason is what the e-ticket reads ("ticket_numbers_not_retrieved").
     // The rest of the record is for the support desk: gateway errors, reversal
     // attempts, the GDS detail.
+    //
+    // A state an earlier flag set can sit under a later one (flagInForce), and
+    // the page sees only this top reason, so it is worked out here and sent by
+    // name. Sent as the top reason alone, a PNR with no confirmed seat read
+    // "Your seats are reserved" again once a refused cancel flagged it.
     needs_review: booking.booking_details?.needs_review
-      ? { reason: booking.booking_details.needs_review.reason ?? null }
+      ? {
+        reason: booking.booking_details.needs_review.reason ?? null,
+        no_confirmed_seat: Boolean(noConfirmedSeatOf(booking)),
+      }
       : null,
     // Whether the GDS ticketed. The rest is the office id, the GDS session and
     // TST references, which no page reads.

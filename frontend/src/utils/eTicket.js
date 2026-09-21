@@ -17,6 +17,8 @@
  *     validatingCarrier: 'AI'|null, issuedOn: '2026-09-04'|null }
  */
 
+import { NO_CONFIRMED_SEAT_REVIEW_REASON, noConfirmedSeatOf } from '../../../shared/reviewQueue';
+
 /**
  * A booking reaches the UI in two different shapes, and both are live:
  *
@@ -44,18 +46,40 @@ const REVIEW_PATHS = [
 /**
  * The review flag the order route writes when the airline left a flight
  * waitlisted, requested, unable or cancelled at commit (the chain's step
- * 'segmentStatus'; NO_CONFIRMED_SEAT_REVIEW_REASON in
- * backend/routes/flight.routes.js, which a test keeps equal to this). There is
- * a PNR, but no confirmed seat, and the server will not ticket it.
+ * 'segmentStatus'). There is a PNR, but no confirmed seat, and the server will
+ * not ticket it. The one value lives in shared/reviewQueue.js, which the route
+ * and the alarm read too.
  *
- * Kept here rather than in bookingStatus.js, which imports this file and
+ * Exported here rather than from bookingStatus.js, which imports this file and
  * re-exports it: the document reads it too.
  */
-export const NO_CONFIRMED_SEAT_REVIEW_REASON = 'chain failed after commit at segmentStatus';
+export { NO_CONFIRMED_SEAT_REVIEW_REASON };
 
-/** Whether the airline left this booking's PNR without a confirmed seat. */
+/**
+ * A state the server worked out for the page, or undefined when this copy of
+ * the booking does not carry it.
+ *
+ * Both booking reads send the review flag cut down to its reason
+ * (toClientBooking), and an earlier flag can sit under a later one: a refused
+ * cancel writes its own on top of "no confirmed seat". So the server walks the
+ * flags (shared/reviewQueue.js flagInForce) and names the state; the top reason
+ * alone told the page the seat was held again.
+ */
+const sentByServer = (bookingData, name) => {
+  for (const read of REVIEW_PATHS) {
+    const value = read(bookingData)?.[name];
+    if (typeof value === 'boolean') return value;
+  }
+  return undefined;
+};
+
+/**
+ * Whether the airline left this booking's PNR without a confirmed seat: as the
+ * server worked it out, or - for a copy that does not say, such as a raw row -
+ * by the same walk over the flags the server makes.
+ */
 export function hasNoConfirmedSeat(bookingData) {
-  return REVIEW_PATHS.some((read) => read(bookingData)?.reason === NO_CONFIRMED_SEAT_REVIEW_REASON);
+  return sentByServer(bookingData, 'no_confirmed_seat') ?? Boolean(noConfirmedSeatOf(bookingData));
 }
 
 /** Whether the booking was cancelled, from whichever shape it arrived in. */
