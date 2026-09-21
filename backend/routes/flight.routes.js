@@ -3245,15 +3245,30 @@ router.post('/order', optionalProtect, async (req, res) => {
     // could be used any number of times.
     await noteCouponUse();
 
-    // Extract flight details for database from the first offer
-    const firstItinerary = firstOffer?.itineraries?.[0];
+    // The offer as the airline priced it and the chain booked it. The record
+    // was written from the search offer, although pricing deliberately
+    // replaces fare basis, class, cabin and checked bags per flight
+    // (mappers/pricing.js) - so a 50 LB allowance the airline priced was
+    // stored, served and printed as the search's 23 KG. Same flights either
+    // way: pricing keeps the itineraries.
+    const bookedOffer = pricedOffer || firstOffer;
+    // The fare checkout verified and charged for. The search quote was
+    // recorded instead - with a fee list that is always empty on a search
+    // offer - so a fare that moved before checkout was charged at one figure
+    // and recorded at another.
+    const chargedFare = verifiedCharge?.pricedFare || {};
+    const recordedMoney = (value, fallback) => (Number.isFinite(Number(value)) && value !== null && value !== ''
+      ? Number(value).toFixed(2) : (fallback || null));
+
+    // Extract flight details for database from the booked offer
+    const firstItinerary = bookedOffer?.itineraries?.[0];
     const firstSegment = firstItinerary?.segments?.[0] || {};
     const lastSegment = firstItinerary?.segments?.[firstItinerary?.segments?.length - 1] || firstSegment;
     const pnrValue = orderResponse.pnr || orderResponse.data?.associatedRecords?.[0]?.reference;
     const orderIdValue = orderResponse.orderId || orderResponse.data?.id;
 
     // Extract Amadeus enriched fields
-    const fareDetails = firstOffer?.travelerPricings?.[0]?.fareDetailsBySegment?.[0];
+    const fareDetails = bookedOffer?.travelerPricings?.[0]?.fareDetailsBySegment?.[0];
     const allSegments = firstItinerary?.segments || [];
     const stopsCount = Math.max(0, allSegments.length - 1);
     let stopDetailsList = [];
@@ -3312,7 +3327,7 @@ router.post('/order', optionalProtect, async (req, res) => {
       operatingAirlineName: firstSegment.operating?.carrierCode || null,
       lastTicketingDate: firstOffer?.lastTicketingDate || null,
       numberOfBookableSeats: firstOffer?.numberOfBookableSeats || null,
-      refundable: firstOffer?._ama?.refundable ?? null,
+      refundable: bookedOffer?._ama?.refundable ?? null,
       baggageDetails: {
         checked: fareDetails?.includedCheckedBags || null,
         cabin: fareDetails?.includedCabinBags || null
@@ -3320,9 +3335,9 @@ router.post('/order', optionalProtect, async (req, res) => {
       baggage: fareDetails?.includedCheckedBags?.weight
         ? `${fareDetails.includedCheckedBags.weight}${fareDetails.includedCheckedBags.weightUnit || 'kg'}`
         : (fareDetails?.includedCheckedBags?.quantity ? `${fareDetails.includedCheckedBags.quantity} Piece(s)` : null),
-      priceBase: firstOffer?.price?.base || null,
-      priceGrandTotal: firstOffer?.price?.grandTotal || firstOffer?.price?.total || null,
-      priceFees: firstOffer?.price?.fees || [],
+      priceBase: recordedMoney(chargedFare.base, bookedOffer?.price?.base),
+      priceGrandTotal: recordedMoney(chargedFare.total, bookedOffer?.price?.grandTotal || bookedOffer?.price?.total),
+      priceFees: bookedOffer?.price?.fees || [],
       fareBreakdown: fareBreakdown || null,
       // Who was booked: the verified travellers, not the request's list.
       passengerDetails: (verifiedTravellers.length > 0 ? verifiedTravellers : passengerDetails) || amadeusTravelers.map((t) => ({
@@ -3332,10 +3347,10 @@ router.post('/order', optionalProtect, async (req, res) => {
         dateOfBirth: t.dateOfBirth,
         gender: t.gender
       })),
-      flightOffer: firstOffer,
+      flightOffer: bookedOffer,
       // Every leg and flight of the offer booked, return and connections
       // included - the fields above read only the first leg.
-      itineraries: itinerariesFromOffer(firstOffer),
+      itineraries: itinerariesFromOffer(bookedOffer),
       // What the GDS actually did, for reconciliation and for the ticket
       // numbers the customer's document prints.
       gds: orderResponse.gds || null,
