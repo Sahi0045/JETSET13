@@ -38,8 +38,9 @@ const client = ({ coupon = COUPON, bookings = [], usage = [] } = {}) => ({
       limit: () => query,
       maybeSingle: async () => {
         if (table === 'coupons') return { data: coupon, error: null };
-        const byUser = filters.find(([, column]) => column === 'user_id');
-        return { data: usage.find((row) => !byUser || row.user_id === byUser[2]) ?? null, error: null };
+        // The per-customer lookups: by account, and by email.
+        const who = filters.filter(([op, column]) => op === 'eq' && ['user_id', 'user_email'].includes(column));
+        return { data: usage.find((row) => who.every(([, column, value]) => row[column] === value)) ?? null, error: null };
       },
       then: (resolve) => {
         if (table === 'bookings') {
@@ -81,6 +82,68 @@ describe('a coupon on a checkout that has not finished', () => {
 
     expect(result.ok).toBe(false);
     expect(result.message).toMatch(/maximum usage/);
+  });
+
+  /**
+   * The customer's own payment page for this same trip is not "another booking".
+   *
+   * A customer applies a coupon, reaches the payment page, cancels, corrects a
+   * passport number and presses Pay again. After the five minutes a payment
+   * page is handed back for, that is a new checkout - and it found their own
+   * open page, still inside its 15 minutes, and refused the coupon as "already
+   * on another booking". The review page then stripped it and charged the full
+   * total. The same flights for the same people is one trip: two payments for
+   * it are held for a human by the order route, so letting the coupon through
+   * cannot give it twice.
+   */
+  describe("the customer's own open page for the same trip", () => {
+    const offer = {
+      itineraries: [{ segments: [{ carrierCode: 'BA', number: '178', departure: { iataCode: 'JFK', at: '2026-11-15T19:25:00' }, arrival: { iataCode: 'LHR' } }] }],
+    };
+    const otherOffer = {
+      itineraries: [{ segments: [{ carrierCode: 'BA', number: '112', departure: { iataCode: 'JFK', at: '2026-11-16T19:25:00' }, arrival: { iataCode: 'LHR' } }] }],
+    };
+    const jane = [{ firstName: 'Jane', lastName: 'Doe', passportNumber: 'OLD123' }];
+    const openPageFor = (tripOffer, travellers, over = {}) => checkoutRow({
+      created_at: minutesAgo(8),
+      booking_details: {
+        customer_email: 'jane@example.com',
+        verified_charge: { coupon: { code: 'ONCE20' } },
+        pending_booking_data: { bookingData: { originalOffer: tripOffer, passengerData: travellers } },
+      },
+      ...over,
+    });
+    const tripOf = async (tripOffer, travellers) => (await import('../../backend/services/coupon.service.js')).couponTripKey(tripOffer, travellers);
+
+    it('does not refuse the coupon when the customer pays again for the same trip', async () => {
+      const corrected = [{ firstName: 'Jane', lastName: 'Doe', passportNumber: 'NEW456' }];
+
+      const result = await evaluate(client({ bookings: [openPageFor(offer, jane)] }), { trip: await tripOf(offer, corrected) });
+
+      expect(result.ok).toBe(true);
+    });
+
+    it('still refuses it on a different flight', async () => {
+      const result = await evaluate(client({ bookings: [openPageFor(otherOffer, jane)] }), { trip: await tripOf(offer, jane) });
+
+      expect(result.ok).toBe(false);
+      expect(result.message).toMatch(/already on another booking/);
+    });
+
+    it('still refuses it for different travellers on the same flight', async () => {
+      const sam = [{ firstName: 'Sam', lastName: 'Doe' }];
+
+      const result = await evaluate(client({ bookings: [openPageFor(offer, sam)] }), { trip: await tripOf(offer, jane) });
+
+      expect(result.ok).toBe(false);
+    });
+
+    // A payment already taken for the trip is not an abandoned page.
+    it('still refuses it while a payment for the same trip is waiting to be booked', async () => {
+      const result = await evaluate(client({ bookings: [openPageFor(offer, jane, { payment_status: 'paid' })] }), { trip: await tripOf(offer, jane) });
+
+      expect(result.ok).toBe(false);
+    });
   });
 
   it('ignores a payment page that closed, a cancelled checkout and one whose use is already counted', async () => {

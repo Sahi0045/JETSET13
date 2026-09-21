@@ -86,8 +86,32 @@ describe('POST /api/flights/price', () => {
     const res = await request(app).post('/api/flights/price')
       .send({ flightOffer: await offerFrom('mptbs-oneway-jfk-lhr') });
 
-    expect(res.status).toBe(500);
+    // Its own status: the service did not answer (504), not a generic 500.
+    expect(res.status).toBe(504);
     expect(res.body.code).toBeUndefined();
+  });
+
+  // No Amadeus slot came free in time: nothing was sent, and the answer is
+  // "busy, retry in 2s" (503 + Retry-After), which the error itself carries.
+  // Every such error was flattened to a bare 500, losing both.
+  it('answers a wait for an Amadeus slot as the 503 it is, with its Retry-After', async () => {
+    const { SlotTimeoutError } = await import('../../../backend/services/amadeusSoap/semaphore.js');
+    vi.doMock('../../../backend/services/flightProvider.js', () => ({
+      default: { priceFlightOffer: vi.fn().mockRejectedValue(new SlotTimeoutError(false)) },
+      providerStatus: () => ({ bookingEnabled: true, seatCheckBeforePayment: true }),
+    }));
+    try {
+      const app = await makeApp();
+
+      const res = await request(app).post('/api/flights/price').send({ flightOffer: { id: '1', _ama: {} } });
+
+      expect(res.status).toBe(503);
+      expect(res.headers['retry-after']).toBe('2');
+      expect(res.body.success).toBe(false);
+      expect(res.body.code).toBeUndefined();
+    } finally {
+      vi.doUnmock('../../../backend/services/flightProvider.js');
+    }
   });
 
   // Checkout asks for the seats to be confirmed before the charge. The review
@@ -102,6 +126,31 @@ describe('POST /api/flights/price', () => {
 
     beforeEach(() => {
       vi.stubEnv('AMADEUS_WS_WSAP', '1ASIWJETJEC');
+      // The seat check exists to protect a booking this host would make.
+      vi.stubEnv('AMADEUS_WS_BOOKING_ENABLED', 'true');
+    });
+
+    // AMADEUS_WS_BOOKING_ENABLED false is the switch that says this deployment
+    // makes no GDS writes. The seat check is one - Air_SellFromRecommendation
+    // and Fare_PricePNRWithBookingClass - and anyone could ask for it here with
+    // a request body flag, so seats were sold and released against the office
+    // while booking was off, for checkouts that could only end in
+    // BOOKING_DISABLED.
+    it('does not sell while booking is switched off, whoever asks', async () => {
+      vi.stubEnv('AMADEUS_WS_BOOKING_ENABLED', 'false');
+      axios.post.mockReset();
+      axios.post
+        .mockResolvedValueOnce(reply(fixture('informative-pricing')))
+        .mockResolvedValueOnce(reply(sellReply('OK', 'OK')))
+        .mockResolvedValue(reply(signOut));
+      const app = await makeApp();
+
+      const res = await request(app).post('/api/flights/price').send({ flightOffer: await offerFrom('mptbs-oneway-jfk-lhr'), confirmSeats: true });
+
+      expect(res.status).toBe(200);
+      expect(res.body.meta.bookingEnabled).toBe(false);
+      expect(res.body.meta.seatsConfirmed).toBe(false);
+      expect(sells()).toHaveLength(0);
     });
 
     it('does not sell when the request does not ask', async () => {
@@ -282,6 +331,105 @@ describe('calendar endpoints', () => {
     // Redis for six hours.
     const producer = withCache.mock.calls.at(-1)?.[2];
     await expect(producer()).resolves.toBeNull();
+  });
+
+  /**
+   * The key a strip is cached under names the airports its search used.
+   *
+   * A typed city was keyed through the route's curated table ("New York" ->
+   * JFK) while the search itself was sent the raw text and resolved by the
+   * dataset ("New York" -> NYC, every New York airport). The Newark and
+   * LaGuardia fares were then served under the JFK key to a customer who
+   * searched JFK, and the strip quoted a price no JFK flight sells. The search
+   * page resolves "New York" to JFK, so the strip that links to it does too.
+   */
+  describe.each([
+    ['date-prices', (city) => ({ from: city, to: 'LHR', dates: ['2099-11-15'], adults: 1 })],
+    ['calendar-prices', (city) => ({ origin: city, destination: 'LHR', dates: ['2099-11-15'] })],
+  ])('/%s for a typed city', (endpoint, body) => {
+    const originsSent = () => axios.post.mock.calls
+      .map(([, xml]) => /<departureLocalization>[\s\S]*?<locationId>([A-Z]{3})<\/locationId>/.exec(String(xml))?.[1])
+      .filter(Boolean);
+
+    it('searches the airports its cache key names', async () => {
+      const { withCache } = await import('../../../backend/services/cache.service.js');
+      axios.post.mockReset();
+      axios.post.mockResolvedValue(reply(fixture('mptbs-oneway-jfk-lhr')));
+      const app = await makeApp();
+
+      await request(app).post(`/api/flights/${endpoint}`).send(body('New York'));
+
+      const key = withCache.mock.calls.at(-1)?.[0];
+      expect(key).toContain(':JFK:LHR:');
+      expect(originsSent().length).toBeGreaterThan(0);
+      expect(new Set(originsSent())).toEqual(new Set(['JFK']));
+    });
+  });
+
+  // The calendar quotes the cheapest fare of the day, so a carrier or interline
+  // pair this office has stopped selling must not be served from a key built
+  // before the rule changed - as the date strip's key already knows.
+  it('keys /calendar-prices by the carrier and interline rules, as /date-prices is', async () => {
+    const { withCache } = await import('../../../backend/services/cache.service.js');
+    axios.post.mockResolvedValue(reply(fixture('mptbs-oneway-jfk-lhr')));
+    const app = await makeApp();
+    const keyUnder = async (carriers) => {
+      vi.stubEnv('AMADEUS_WS_UNTICKETABLE_CARRIERS', carriers);
+      await request(app).post('/api/flights/calendar-prices').send({ origin: 'JFK', destination: 'LHR', dates: ['2099-11-15'] });
+      return withCache.mock.calls.at(-1)?.[0];
+    };
+
+    expect(await keyUnder('B6')).not.toBe(await keyUnder('B6,LH'));
+  });
+
+  // The cheapest-day widget is cached for twelve hours. After a carrier is
+  // added to AMADEUS_WS_UNTICKETABLE_CARRIERS - because issuance refused one of
+  // its tickets - it went on advertising that carrier's fare under a key that
+  // could not see the change.
+  it('keys /cheapest-dates by the carrier and interline rules', async () => {
+    const { withCache } = await import('../../../backend/services/cache.service.js');
+    axios.post.mockResolvedValue(reply(fixture('mptbs-oneway-jfk-lhr')));
+    const app = await makeApp();
+    const keyUnder = async (carriers) => {
+      vi.stubEnv('AMADEUS_WS_UNTICKETABLE_CARRIERS', carriers);
+      await request(app).get('/api/flights/cheapest-dates')
+        .query({ origin: 'JFK', destination: 'LHR', departureDate: '2099-11-15', oneWay: 'true' });
+      return withCache.mock.calls.at(-1)?.[0];
+    };
+
+    expect(await keyUnder('B6')).not.toBe(await keyUnder('B6,LH'));
+  });
+
+  // The calendar samples one-way fares with no stop or trip-length filter - it
+  // has no other way to (see getCheapestFlightDates). These were validated into
+  // the cache key and then dropped, so a non-stop request was answered with
+  // connecting fares as if they were non-stop.
+  it.each([
+    ['nonStop', { nonStop: 'true' }],
+    ['duration', { duration: '7' }],
+    ['a round trip', { oneWay: 'false' }],
+  ])('/cheapest-dates says it cannot filter by %s, rather than ignoring it', async (_label, extra) => {
+    axios.post.mockReset();
+    axios.post.mockResolvedValue(reply(fixture('mptbs-oneway-jfk-lhr')));
+    const app = await makeApp();
+
+    const res = await request(app).get('/api/flights/cheapest-dates')
+      .query({ origin: 'JFK', destination: 'LHR', departureDate: '2099-11-15', ...extra });
+
+    expect(res.status).toBe(400);
+    expect(res.body.success).toBe(false);
+    expect(axios.post).not.toHaveBeenCalled();
+  });
+
+  it('/cheapest-dates still answers the one-way question both apps ask', async () => {
+    axios.post.mockResolvedValue(reply(fixture('mptbs-oneway-jfk-lhr')));
+    const app = await makeApp();
+
+    const res = await request(app).get('/api/flights/cheapest-dates')
+      .query({ origin: 'JFK', destination: 'LHR', departureDate: '2099-11-15', oneWay: 'true' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.length).toBeGreaterThan(0);
   });
 
   it('rejects a request with no dates before calling Amadeus', async () => {

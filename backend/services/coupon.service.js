@@ -1,4 +1,5 @@
 import { computeCouponDiscount, roundMoney } from '../../shared/flightCharge.js';
+import { flightsKey, travellerNamesKey } from '../utils/tripMatch.js';
 
 /**
  * Is this coupon valid for this order, and what does it take off?
@@ -11,7 +12,7 @@ import { computeCouponDiscount, roundMoney } from '../../shared/flightCharge.js'
  * @param {object} client  a Supabase client
  * @returns {Promise<{ok: true, coupon, discountAmount, finalTotal} | {ok: false, status, message}>}
  */
-export async function evaluateCoupon(client, { code, orderTotal = 0, bookingType = 'all', userId, email } = {}) {
+export async function evaluateCoupon(client, { code, orderTotal = 0, bookingType = 'all', userId, email, trip = null } = {}) {
   if (!code) return { ok: false, status: 400, message: 'Coupon code is required.' };
 
   const { data: coupon, error } = await client
@@ -49,15 +50,36 @@ export async function evaluateCoupon(client, { code, orderTotal = 0, bookingType
 
   // One use per customer: by account, or by email for a guest. A guest passes
   // no user id, so the check used to be skipped for every guest booking.
+  //
+  // And by email for a signed-in customer too, not by account alone. A use can
+  // be recorded with no account on it - a booking made as a guest, or one whose
+  // owner the bookings table rejected so checkout saved it without one - and
+  // the same customer, signed in, was asked only about their account, found
+  // nothing, and was given a one-per-customer coupon again. Two lookups rather
+  // than one `or` filter, so an address is never spliced into a filter string.
   const customerEmail = normalizeEmail(email);
   if (userId || customerEmail) {
-    const base = client.from('coupon_usage').select('id').eq('coupon_id', coupon.id);
-    const { data: existing } = await (userId ? base.eq('user_id', userId) : base.eq('user_email', customerEmail))
+    const usedBy = (column, value) => client.from('coupon_usage').select('id')
+      .eq('coupon_id', coupon.id)
+      .eq(column, value)
       .limit(1)
       .maybeSingle();
-    if (existing) return { ok: false, status: 400, message: 'You have already used this coupon.' };
-    const mine = pending.some((row) => (userId && row.user_id === userId)
-      || (customerEmail && normalizeEmail(row.booking_details?.customer_email) === customerEmail));
+    const { data: byAccount } = userId ? await usedBy('user_id', userId) : { data: null };
+    const { data: byEmail } = !byAccount && customerEmail ? await usedBy('user_email', customerEmail) : { data: null };
+    if (byAccount || byEmail) return { ok: false, status: 400, message: 'You have already used this coupon.' };
+    // Not the customer's own unpaid payment page for this same trip. A customer
+    // who cancelled at ARC, corrected a passport number and pressed Pay again
+    // after the five minutes a page is handed back for found that page, still
+    // inside its 15, and was refused their coupon as "already on another
+    // booking" - and charged in full. The rule is about two trips at once; two
+    // payments for one trip are held for a human by the order route
+    // (findDuplicateBooking), so the coupon cannot be given twice this way.
+    const sameTripPage = (row) => Boolean(trip) && row.payment_status !== 'paid'
+      && couponTripKey(row.booking_details?.pending_booking_data?.bookingData?.originalOffer,
+        row.booking_details?.pending_booking_data?.bookingData?.passengerData) === trip;
+    const mine = pending.some((row) => ((userId && row.user_id === userId)
+      || (customerEmail && normalizeEmail(row.booking_details?.customer_email) === customerEmail))
+      && !sameTripPage(row));
     if (mine) {
       return {
         ok: false,
@@ -81,6 +103,17 @@ export async function evaluateCoupon(client, { code, orderTotal = 0, bookingType
 }
 
 const normalizeEmail = (value) => String(value ?? '').trim().toLowerCase() || null;
+
+/**
+ * One trip, as the order route's duplicate check tells trips apart: the same
+ * flights for the same people (utils/tripMatch.js). Null when either cannot be
+ * read - missing data is never "the same trip".
+ */
+export function couponTripKey(offer, travellers) {
+  const flights = flightsKey(offer);
+  const names = travellerNamesKey(travellers);
+  return flights && names ? `${flights}#${names}` : null;
+}
 
 // A hosted payment page lasts 15 minutes; a paid booking is booked, refunded or
 // flagged within the abandoned-checkout job's six hours.

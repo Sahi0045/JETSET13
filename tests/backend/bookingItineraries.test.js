@@ -79,7 +79,7 @@ const checkoutRow = (over = {}) => ({
     customer_email: 'jane@example.com',
     arc_captured_amount: 291,
     arc_captured_currency: 'USD',
-    pending_booking_data: { bookingData: { originalOffer: roundTripOffer, passengerData: [{ firstName: 'Jane', lastName: 'Doe' }] } },
+    pending_booking_data: { bookingData: { originalOffer: roundTripOffer, passengerData: [{ firstName: 'Jane', lastName: 'Doe', gender: 'FEMALE', dateOfBirth: '1990-01-01' }] } },
     verified_charge: { total: 291, pricedFare: { total: 291, currency: 'USD' }, verifiedAt: new Date().toISOString() },
     ...(over.booking_details || {}),
   },

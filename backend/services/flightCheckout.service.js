@@ -5,7 +5,7 @@ import { TRAVELLER_TYPES } from '../../shared/flightOrderBody.js';
 import { describeGroup, groupFromOffer } from '../../shared/travellerGroup.js';
 import { NAME_MISSING, travellerNameProblem } from '../../shared/passengerName.js';
 import { DEFAULT_PRICE_SETTINGS } from '../config/priceDefaults.js';
-import { evaluateCoupon } from './coupon.service.js';
+import { couponTripKey, evaluateCoupon } from './coupon.service.js';
 
 /**
  * Verify what a flight checkout is about to charge, before ARC Pay sees it.
@@ -96,7 +96,11 @@ export async function priceOfferForCheckout(offer) {
   if (!result?.success || !priced?.price) throw new Error(result?.error || 'pricing returned no offer');
   const { describeWsConfig } = await import('./amadeusSoap/config.js');
   const wsConfig = describeWsConfig();
-  if (wsConfig.seatCheckBeforePayment) {
+  // Not while booking is off: verifyFlightCharge refuses BOOKING_DISABLED as
+  // soon as this returns, so a sell here was a sell-and-release against the
+  // office for a checkout that could never become a booking. The pricing route
+  // holds the same rule for the Vercel leg.
+  if (wsConfig.seatCheckBeforePayment && wsConfig.bookingEnabled === true) {
     try {
       await FlightProvider.confirmSeats(priced);
     } catch (error) {
@@ -122,11 +126,54 @@ export async function priceOfferForCheckout(offer) {
 export async function readPriceSettings(client) {
   const { data, error } = await client.from('price_settings').select('*').single();
   if (error && error.code !== 'PGRST116') throw error;
-  if (!data) return null;
+  if (!data) {
+    // Every flight checkout stops here, and nothing said why. `.single()`
+    // answers PGRST116 for both "no rows" and "more than one row", so what the
+    // driver said is logged - as the admin route logs it - to tell an empty
+    // table from a duplicated row. Still refused rather than picking a row: the
+    // review page computes its total from the same row, and a fee read from one
+    // of two could differ from the total the customer was shown.
+    console.error('No price_settings row could be read; flight checkout is refusing', {
+      pgError: error ? { code: error.code, message: error.message, details: error.details } : null,
+    });
+    return null;
+  }
   return { ...DEFAULT_PRICE_SETTINGS, ...(data.settings || {}) };
 }
 
 const refuse = (status, code, message, extra = {}) => ({ ok: false, status, code, message, ...extra });
+
+/** 'YYYY-MM-DD...' -> 'DDMMYY', the form `_ama.segments` carries a date in. */
+const ddmmyy = (at) => {
+  const match = /^\d{2}(\d{2})-(\d{2})-(\d{2})/.exec(String(at ?? ''));
+  return match ? `${match[3]}${match[2]}${match[1]}` : null;
+};
+
+/**
+ * Are the flights shown - `itineraries`, which the traveller checks read for
+ * borders, ages and passport expiry - the flights sold, `_ama.segments`, which
+ * pricing, the seat check and the booking chain read?
+ *
+ * The mapper builds both from the same reply, one segment for one
+ * (mappers/offer.js), so a genuine offer always agrees. Nothing checked it: an
+ * offer showing a domestic hop over a real international `_ama` needed no
+ * passport here and was sold abroad without SSR DOCS, and one with no
+ * itineraries at all skipped every age and passport-expiry check. An offer
+ * with no `_ama.segments` is left to pricing, which refuses it.
+ */
+const flightsShownAreSold = (offer) => {
+  const sold = offer?._ama?.segments;
+  if (!Array.isArray(sold) || sold.length === 0) return true;
+  const shown = (Array.isArray(offer.itineraries) ? offer.itineraries : [])
+    .flatMap((itinerary) => (Array.isArray(itinerary?.segments) ? itinerary.segments : []));
+  if (shown.length !== sold.length) return false;
+  const same = (a, b) => String(a ?? '').trim().toUpperCase() === String(b ?? '').trim().toUpperCase();
+  return sold.every((segment, i) => same(shown[i]?.carrierCode, segment?.marketingCarrier)
+    && same(shown[i]?.number, segment?.flightNumber)
+    && same(shown[i]?.departure?.iataCode, segment?.boardPoint)
+    && same(shown[i]?.arrival?.iataCode, segment?.offPoint)
+    && (!segment?.departureDate || ddmmyy(shown[i]?.departure?.at) === String(segment.departureDate)));
+};
 
 /**
  * @returns {Promise<
@@ -148,6 +195,9 @@ export async function verifyFlightCharge({
   const pricedFor = Array.isArray(offer?.travelerPricings) ? offer.travelerPricings.length : 0;
   if (!offer || pricedFor === 0) {
     return refuse(400, 'OFFER_MISSING', 'Your flight selection did not reach us. Please search again.');
+  }
+  if (!flightsShownAreSold(offer)) {
+    return refuse(400, 'OFFER_MISSING', 'Your flight selection did not reach us intact. Please search again.');
   }
 
   // The fare covers exactly the travellers it was priced for. Extra travellers
@@ -182,6 +232,20 @@ export async function verifyFlightCharge({
     || [...sentTypes].sort().join() !== [...pricedTypes].sort().join())) {
     return refuse(400, 'PASSENGER_COUNT_MISMATCH',
       `The travellers do not match this fare, which is for ${describeGroup(groupFromOffer(offer))}. Please search again for the people travelling.`);
+  }
+
+  // The fee settings, read before the fare is priced. Pricing is where the
+  // seats are sold and released at the airline (the seat check), and a
+  // checkout that cannot be charged without these was refused only after that
+  // sell - one it could never use, counted against the office's look-to-book.
+  let config = null;
+  try {
+    config = await readPriceSettings(client);
+  } catch (error) {
+    console.warn('⚠️ Checkout could not read price settings:', error?.message || error);
+  }
+  if (!config) {
+    return refuse(503, 'PRICE_CONFIG_UNAVAILABLE', 'Pricing is temporarily unavailable. Please try again shortly.');
   }
 
   let priced;
@@ -268,16 +332,6 @@ export async function verifyFlightCharge({
     return refuse(503, 'PRICE_UNAVAILABLE', 'We could not confirm the current fare with the airline. Please try again in a moment.');
   }
 
-  let config = null;
-  try {
-    config = await readPriceSettings(client);
-  } catch (error) {
-    console.warn('⚠️ Checkout could not read price settings:', error?.message || error);
-  }
-  if (!config) {
-    return refuse(503, 'PRICE_CONFIG_UNAVAILABLE', 'Pricing is temporarily unavailable. Please try again shortly.');
-  }
-
   // The fixed fee is per seated traveller; a lap infant pays none of it. Which
   // traveller is which comes from the offer the airline just priced, as it does
   // on the review page - never from the traveller forms.
@@ -287,13 +341,27 @@ export async function verifyFlightCharge({
   let coupon = null;
   if (couponCode) {
     const beforeDiscount = computeFlightCharge({ fareTotal, travellerTypes, config });
-    const evaluated = await evaluateCoupon(client, {
-      code: couponCode,
-      orderTotal: beforeDiscount.total,
-      bookingType: 'flights',
-      userId,
-      email,
-    });
+    let evaluated;
+    try {
+      evaluated = await evaluateCoupon(client, {
+        code: couponCode,
+        orderTotal: beforeDiscount.total,
+        bookingType: 'flights',
+        userId,
+        email,
+        // So the customer's own abandoned payment page for this trip does not
+        // count as the coupon being on another booking.
+        trip: couponTripKey(offer, passengers),
+      });
+    } catch (error) {
+      // The coupons table could not be read. That is not a coupon that does
+      // not apply, so it is not taken off - and it was not an explained
+      // failure either: the error escaped as a bare 500 "Failed to create
+      // hosted checkout", which the review page could do nothing with.
+      console.warn('Checkout could not check the coupon:', error?.message || error);
+      return refuse(503, 'COUPON_UNAVAILABLE',
+        'We could not check your coupon just now. Please try again in a moment.', { pricedFare });
+    }
     if (!evaluated.ok) {
       return refuse(409, 'COUPON_INVALID', evaluated.message, { pricedFare });
     }
