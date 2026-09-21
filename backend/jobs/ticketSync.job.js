@@ -121,6 +121,21 @@ export async function findUnticketed({ limit = MAX_PER_TICK } = {}) {
     // `eq 'false'` on NULL is NULL, so a plain `.eq` would silently skip
     // exactly the rows this job exists to find.
     .or('booking_details->gds->>ticketed.is.null,booking_details->gds->>ticketed.eq.false')
+    // Closed bookings in the query too, for the same reason. A cancellation
+    // whose refund failed stays `paid`, keeps its PNR and was never ticketed,
+    // so it matches everything above for ever; filtered only below, sixty of
+    // them filled the window and an open booking behind them was never read.
+    .not('status', 'in', `(${CLOSED.join(',')})`)
+    // Least recently asked about first, never-asked first of all.
+    //
+    // Oldest-first alone starved the window the same way from the other end:
+    // a booking that can never be ticketed - Air India refused with 2161, a KU
+    // refused ETKT NOT AUTHORISED, a PDT PNR since purged - never leaves this
+    // population, so once ten of them existed they were the ten asked about
+    // on every tick, and a booking a person ticketed by hand this morning was
+    // never retrieved. `ticket_checked_at` (runOnce) sends each one to the back
+    // once it has been asked, so every booking takes its turn.
+    .order('booking_details->>ticket_checked_at', { ascending: true, nullsFirst: true })
     .order('created_at', { ascending: true })
     .limit(limit * 5);
 
@@ -139,6 +154,15 @@ export async function findUnticketed({ limit = MAX_PER_TICK } = {}) {
 }
 
 /**
+ * Outcomes that leave a booking where it was: asked about, nothing found.
+ *
+ * Only these are stamped. A ticket that was found but could not be recorded
+ * ('not-recorded') is not: it should be asked about again at once, not after
+ * every other booking has had its turn.
+ */
+const ASKED_NOTHING_FOUND = new Set(['still-unticketed', 'unreadable', 'partially-ticketed']);
+
+/**
  * Tickets this job recorded whose owner has not been told yet.
  *
  * Without this the retry below is unreachable and the promise is quietly
@@ -152,7 +176,7 @@ export async function findUnticketed({ limit = MAX_PER_TICK } = {}) {
  * confirmation email; announcing those would mean emailing every past customer
  * about a ticket they have had for weeks.
  */
-export async function findUnannounced({ limit = MAX_PER_TICK } = {}) {
+export async function findUnannounced({ limit = MAX_PER_TICK, now = Date.now() } = {}) {
   const { data, error } = await supabase
     .from('bookings')
     .select(SELECT)
@@ -161,7 +185,12 @@ export async function findUnannounced({ limit = MAX_PER_TICK } = {}) {
     // Same reason as findUnticketed, and null-safe for the same reason: a row
     // that has never been announced has no `ticket_issued_emailed` key at all,
     // and `neq` against NULL is NULL - it would exclude every row this is for.
-    .or('booking_details->>ticket_issued_emailed.is.null,booking_details->>ticket_issued_emailed.eq.false')
+    //
+    // The third clause is a claim that never became a sent email (see
+    // claimLapsed). Rows announced before claims carried a time have no
+    // `ticket_email_claimed_at`, so they stay out of the window for good.
+    .or('booking_details->>ticket_issued_emailed.is.null,booking_details->>ticket_issued_emailed.eq.false,'
+      + 'and(booking_details->>ticket_email_sent_at.is.null,booking_details->>ticket_email_claimed_at.not.is.null)')
     .order('created_at', { ascending: true })
     .limit(limit * 5);
 
@@ -171,11 +200,39 @@ export async function findUnannounced({ limit = MAX_PER_TICK } = {}) {
     .filter(open)
     .filter((row) => {
       const details = row.booking_details || {};
-      if (details.ticket_issued_emailed === true) return false;
+      if (details.ticket_issued_emailed === true && !claimLapsed(details, now)) return false;
       return Array.isArray(details.tickets) && details.tickets.some((t) => t?.number);
     })
     .slice(0, limit);
 }
+
+/**
+ * How long a claimed e-ticket email may go without being recorded as sent
+ * before it is taken again. A send is one Resend call; a claim this old with no
+ * `ticket_email_sent_at` belongs to a process that stopped between the claim
+ * and the mail - a deploy, an OOM, a SIGTERM - and nothing else will ever send
+ * it.
+ */
+export const TICKET_EMAIL_CLAIM_TTL_MS = 10 * 60 * 1000;
+
+/** A claim taken, never recorded as sent, and old enough to be dead. */
+const claimLapsed = (details, now = Date.now()) => {
+  if (details?.ticket_issued_emailed !== true || details.ticket_email_sent_at) return false;
+  const claimedAt = Date.parse(details.ticket_email_claimed_at ?? '');
+  return Number.isFinite(claimedAt) && now - claimedAt >= TICKET_EMAIL_CLAIM_TTL_MS;
+};
+
+/**
+ * The Resend idempotency key for one claim of a booking's e-ticket email,
+ * stored with the claim (`ticket_email_key`).
+ *
+ * A lapsed claim is taken again under the SAME key, so if the stopped
+ * process's mail did go out, Resend answers the second attempt with that send
+ * instead of delivering it twice - that is what makes taking it safe. A
+ * refused send released its claim and is known not to have gone, so the next
+ * claim gets a new key: a retry must not be answered with the refusal.
+ */
+const idempotencyKeyFor = (reference, claimedAt) => `e-ticket/${reference}/${claimedAt}`;
 
 /**
  * The tickets on a retrieved PNR, each with the name of whoever holds it.
@@ -203,45 +260,91 @@ export const withTravellerNames = (order) => {
 };
 
 /**
+ * The travellers on a retrieved PNR who hold no ticket yet.
+ *
+ * Any ticket at all used to count as the whole booking done. When a person
+ * tickets by hand - every booking, while AUTO_TICKET is off - and issues two
+ * of a family's three, the booking was recorded ticketed with two numbers,
+ * the customer got one e-ticket email, and the row left this job, the
+ * paid-not-ticketed alarm and the admin "Needs attention" list for good.
+ *
+ * Both halves come from the same retrieve: a ticket names its passenger by the
+ * PNR reference, and an infant's names its adult with `-INF`, which is the id
+ * readTravelers gives that infant (mappers/flightOrder.js; the certification
+ * PNR BMPUST reads travellers 2, 2-INF, 5, 4 and tickets for exactly those).
+ * A ticket that names nobody cannot be matched, so then the tickets are
+ * counted. A PNR whose travellers could not be read says nothing either way,
+ * and is left to the tickets it has, as before.
+ */
+export const travellersWithoutTicket = (order, tickets) => {
+  const travellers = Array.isArray(order?.travelers) ? order.travelers : [];
+  if (travellers.length === 0) return [];
+  if (tickets.some((t) => t.travelerId == null)) {
+    return tickets.length >= travellers.length ? [] : travellers.slice(tickets.length);
+  }
+  const holders = new Set(tickets.map((t) => String(t.travelerId)));
+  return travellers.filter((traveller) => !holders.has(String(traveller?.id)));
+};
+
+/**
  * Ask Amadeus whether this PNR has a ticket yet, and record it if it does.
  *
  * Returns what happened, so a tick can be reported and a test can assert on it
  * without reading the database.
  */
 /** Tell the customer, from whichever of the two populations found them. */
-const announce = (row, tickets, sendEmail) => sendEmail({
+const announce = (row, tickets, sendEmail, idempotencyKey) => sendEmail({
   customerEmail: addressFor(row),
   customerName: nameFor(row),
   bookingReference: row.booking_reference,
   tickets,
   bookingDetails: { ...(row.booking_details || {}), tickets },
+  idempotencyKey,
 }).catch((error) => ({ success: false, error: error?.message }));
+
+/**
+ * Write down that the mail went, so the claim is never taken again. Not
+ * written, the claim lapses and the mail is asked for once more - under the
+ * same idempotency key, so Resend answers with the send it already made.
+ */
+const recordSent = async (reference) => {
+  const written = await patchBookingDetails(reference, { ticket_email_sent_at: new Date().toISOString() });
+  if (!written) log('e-ticket email sent but not recorded as sent', { booking: reference });
+};
 
 /**
  * Send the e-ticket for a booking whose numbers are already recorded.
  *
  * The send is claimed with a compare-and-set before the mail goes out, so two
  * workers cannot both announce it; a refused send releases the claim and the
- * row is picked up again next tick.
+ * row is picked up again next tick. A claim that lapsed - taken, never
+ * recorded as sent - is taken again (claimLapsed).
  */
-export async function announceOne(row, { sendEmail = sendTicketIssuedEmail } = {}) {
+export async function announceOne(row, { sendEmail = sendTicketIssuedEmail, now = Date.now() } = {}) {
   const reference = row.booking_reference;
   const tickets = (row.booking_details?.tickets || []).filter((t) => t?.number);
   if (tickets.length === 0) return { reference, outcome: 'nothing-to-announce' };
 
   let claimed = false;
+  let key = null;
   const written = await patchBookingDetails(reference, (current) => {
-    claimed = current.ticket_issued_emailed !== true;
-    return claimed ? { ticket_issued_emailed: true } : {};
+    const lapsed = claimLapsed(current, now);
+    claimed = current.ticket_issued_emailed !== true || lapsed;
+    if (!claimed) return {};
+    const at = new Date(now).toISOString();
+    // Taken again after a stop: the stopped attempt's key. Taken fresh: a new one.
+    key = (lapsed && current.ticket_email_key) || idempotencyKeyFor(reference, at);
+    return { ticket_issued_emailed: true, ticket_email_claimed_at: at, ticket_email_key: key };
   });
   if (!written || !claimed) return { reference, outcome: 'already-announced' };
 
-  const sent = await announce(row, tickets, sendEmail);
+  const sent = await announce(row, tickets, sendEmail, key);
   if (!sent?.success) {
     log('e-ticket email not sent', { booking: reference, reason: sent?.error });
     await patchBookingDetails(reference, { ticket_issued_emailed: false });
     return { reference, outcome: 'announce-failed', emailed: false };
   }
+  await recordSent(reference);
   return { reference, outcome: 'announced', emailed: true };
 }
 
@@ -265,6 +368,17 @@ export async function syncOne(row, { provider = FlightProvider, sendEmail = send
   const tickets = withTravellerNames(order);
   if (tickets.length === 0) return { reference, pnr, outcome: 'still-unticketed' };
 
+  // Recorded only once every traveller holds a ticket. Until then nothing is
+  // written: the booking stays unticketed, so it stays in front of the alarm,
+  // the admin list and this job, and the e-ticket email goes out once, whole.
+  const waiting = travellersWithoutTicket(order, tickets);
+  if (waiting.length > 0) {
+    log('only part of the booking is ticketed; waiting for the rest', {
+      booking: reference, pnr, ticketed: tickets.length, travellers: order.travelers.length,
+    });
+    return { reference, pnr, outcome: 'partially-ticketed', tickets };
+  }
+
   /**
    * Written through the booking's own compare-and-set patch, so a ticket
    * recorded here cannot overwrite something the chain, a cancellation or a
@@ -272,16 +386,23 @@ export async function syncOne(row, { provider = FlightProvider, sendEmail = send
    * that records the tickets. That is what makes the email once-only: two
    * workers, or a restart mid-tick, both read `emailed: false`, both try to
    * write, and only one write lands.
+   *
+   * The claim carries when it was taken. A stop between this write and the
+   * mail used to leave `emailed: true` on a customer nobody told, for good;
+   * now the claim lapses and the owed-email pass takes it again.
    */
   let claimed = false;
+  let key = null;
   const written = await patchBookingDetails(reference, (current) => {
     const already = Array.isArray(current.tickets) && current.tickets.length > 0;
     claimed = !already && current.ticket_issued_emailed !== true;
+    const at = new Date().toISOString();
+    key = claimed ? idempotencyKeyFor(reference, at) : null;
     return {
       tickets,
       gds: { ...(current.gds || {}), ticketed: true },
-      ticket_synced_at: new Date().toISOString(),
-      ...(claimed ? { ticket_issued_emailed: true } : {}),
+      ticket_synced_at: at,
+      ...(claimed ? { ticket_issued_emailed: true, ticket_email_claimed_at: at, ticket_email_key: key } : {}),
     };
   });
 
@@ -297,7 +418,7 @@ export async function syncOne(row, { provider = FlightProvider, sendEmail = send
   // The email is what the customer was promised, but it is not what makes the
   // booking correct: the numbers are already recorded, so a refused send leaves
   // My Trips, Manage Booking and the PDF all telling the truth.
-  const sent = await announce(row, tickets, sendEmail);
+  const sent = await announce(row, tickets, sendEmail, key);
 
   if (!sent?.success) {
     log('e-ticket email not sent', { booking: reference, reason: sent?.error });
@@ -306,6 +427,7 @@ export async function syncOne(row, { provider = FlightProvider, sendEmail = send
     return { reference, pnr, outcome: 'recorded', tickets, emailed: false };
   }
 
+  await recordSent(reference);
   return { reference, pnr, outcome: 'recorded', tickets, emailed: true };
 }
 
@@ -313,11 +435,20 @@ export async function runOnce({ limit = MAX_PER_TICK, provider = FlightProvider,
   const rows = await findUnticketed({ limit });
   const results = [];
   for (const row of rows) {
-    results.push(await syncOne(row, { provider, sendEmail }));
+    const result = await syncOne(row, { provider, sendEmail });
+    results.push(result);
+    // When it was asked, and nothing more: not a verdict on the ticket, which
+    // is why syncOne itself still writes nothing for these outcomes. It is
+    // what puts this booking behind the ones not yet asked (findUnticketed).
+    // A stamp that does not land costs one extra turn at the front, no more.
+    if (ASKED_NOTHING_FOUND.has(result.outcome)) {
+      await patchBookingDetails(row.booking_reference, { ticket_checked_at: new Date().toISOString() });
+    }
   }
 
   // Tickets recorded on an earlier tick whose owner still has not been told -
-  // a refused send, or a restart between the write and the mail.
+  // a refused send, or a stop between the claim and the mail once that claim
+  // has lapsed (TICKET_EMAIL_CLAIM_TTL_MS).
   const owed = await findUnannounced({ limit });
   const announced = [];
   for (const row of owed) {
