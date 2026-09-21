@@ -96,7 +96,11 @@ export async function priceOfferForCheckout(offer) {
   if (!result?.success || !priced?.price) throw new Error(result?.error || 'pricing returned no offer');
   const { describeWsConfig } = await import('./amadeusSoap/config.js');
   const wsConfig = describeWsConfig();
-  if (wsConfig.seatCheckBeforePayment) {
+  // Not while booking is off: verifyFlightCharge refuses BOOKING_DISABLED as
+  // soon as this returns, so a sell here was a sell-and-release against the
+  // office for a checkout that could never become a booking. The pricing route
+  // holds the same rule for the Vercel leg.
+  if (wsConfig.seatCheckBeforePayment && wsConfig.bookingEnabled === true) {
     try {
       await FlightProvider.confirmSeats(priced);
     } catch (error) {

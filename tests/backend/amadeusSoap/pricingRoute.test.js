@@ -102,6 +102,31 @@ describe('POST /api/flights/price', () => {
 
     beforeEach(() => {
       vi.stubEnv('AMADEUS_WS_WSAP', '1ASIWJETJEC');
+      // The seat check exists to protect a booking this host would make.
+      vi.stubEnv('AMADEUS_WS_BOOKING_ENABLED', 'true');
+    });
+
+    // AMADEUS_WS_BOOKING_ENABLED false is the switch that says this deployment
+    // makes no GDS writes. The seat check is one - Air_SellFromRecommendation
+    // and Fare_PricePNRWithBookingClass - and anyone could ask for it here with
+    // a request body flag, so seats were sold and released against the office
+    // while booking was off, for checkouts that could only end in
+    // BOOKING_DISABLED.
+    it('does not sell while booking is switched off, whoever asks', async () => {
+      vi.stubEnv('AMADEUS_WS_BOOKING_ENABLED', 'false');
+      axios.post.mockReset();
+      axios.post
+        .mockResolvedValueOnce(reply(fixture('informative-pricing')))
+        .mockResolvedValueOnce(reply(sellReply('OK', 'OK')))
+        .mockResolvedValue(reply(signOut));
+      const app = await makeApp();
+
+      const res = await request(app).post('/api/flights/price').send({ flightOffer: await offerFrom('mptbs-oneway-jfk-lhr'), confirmSeats: true });
+
+      expect(res.status).toBe(200);
+      expect(res.body.meta.bookingEnabled).toBe(false);
+      expect(res.body.meta.seatsConfirmed).toBe(false);
+      expect(sells()).toHaveLength(0);
     });
 
     it('does not sell when the request does not ask', async () => {

@@ -495,10 +495,11 @@ describe('priceOfferForCheckout tells a refused fare from an outage', () => {
     });
 
     const pricedOk = () => vi.fn().mockResolvedValue({ success: true, data: { flightOffers: [{ price: { total: '400.00' } }] } });
-    const withSeatCheck = (confirmSeats, seatCheckBeforePayment = true) => {
+    const withSeatCheck = (confirmSeats, seatCheckBeforePayment = true, bookingEnabled = true) => {
       vi.stubEnv('FLIGHTS_API_BASE', '');
       vi.stubEnv('VERCEL', '');
       vi.stubEnv('AMADEUS_WS_SEAT_CHECK_BEFORE_PAYMENT', String(seatCheckBeforePayment));
+      vi.stubEnv('AMADEUS_WS_BOOKING_ENABLED', String(bookingEnabled));
       vi.doMock('../../backend/services/flightProvider.js', () => ({
         default: { priceFlightOffer: pricedOk(), confirmSeats },
       }));
@@ -517,6 +518,22 @@ describe('priceOfferForCheckout tells a refused fare from an outage', () => {
       withSeatCheck(confirmSeats, false);
       expect(await price()).toBeNull();
       expect(confirmSeats).not.toHaveBeenCalled();
+    });
+
+    // With booking off, verifyFlightCharge answers BOOKING_DISABLED for every
+    // checkout - but only after this returns, so the seats were sold and
+    // released at the airline first, for a checkout that could never become a
+    // booking. Each one counted against the office's look-to-book ratio.
+    it('does not sell the seats while booking is switched off', async () => {
+      const confirmSeats = vi.fn();
+      withSeatCheck(confirmSeats, true, false);
+      const { priceOfferForCheckout } = await import('../../backend/services/flightCheckout.service.js');
+
+      const priced = await priceOfferForCheckout({ id: '1' });
+
+      expect(confirmSeats).not.toHaveBeenCalled();
+      // And the answer still says so, for verifyFlightCharge to refuse on.
+      expect(priced._ama.bookingEnabled).toBe(false);
     });
   });
 });

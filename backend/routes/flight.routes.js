@@ -1957,7 +1957,17 @@ router.post('/price', async (req, res) => {
     // sell for every page view would be a sell for every look. A refusal is a
     // 409, answered below as FARE_UNAVAILABLE, like a fare the airline will not
     // price. See confirmSeats in services/amadeusSoap/bookingChain.js.
-    const seatsChecked = req.body.confirmSeats === true && providerStatus().seatCheckBeforePayment;
+    //
+    // Never while booking is switched off. The seat check is a GDS write
+    // (Air_SellFromRecommendation, then Fare_PricePNRWithBookingClass), and
+    // AMADEUS_WS_BOOKING_ENABLED false is the switch that says this deployment
+    // makes none. It was gated on the seat-check flag alone, so with booking off
+    // every checkout - and any request carrying the flag - sold and released
+    // seats at the airline for a checkout that could only end in
+    // BOOKING_DISABLED, counted against the office's look-to-book ratio.
+    const seatsChecked = req.body.confirmSeats === true
+      && providerStatus().seatCheckBeforePayment
+      && providerStatus().bookingEnabled === true;
     if (seatsChecked) {
       await FlightProvider.confirmSeats(pricingResponse.data?.flightOffers?.[0] ?? flightOffer);
     }
