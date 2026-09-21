@@ -165,6 +165,22 @@ describe('a second checkout for a trip that already has a payment page open', ()
     expect(res.body.orderId).toBe('FLTFIRST1');
     expect(openedANewPage()).toBe(false);
   });
+
+  // The window was five minutes and the page lives fifteen
+  // (`interaction.timeout: 900`). A customer interrupted for six minutes who
+  // clicked Pay again got a second live page beside the first, and could pay
+  // both.
+  it('hands back a page that is still open on ARC, however long ago it was opened', async () => {
+    for (const minutes of [6, 14]) {
+      axios.post.mockClear();
+      const { res } = await checkout({
+        rows: [openCheckout({ created_at: minutesAgo(minutes), booking_details: { checkout_created_at: minutesAgo(minutes) } })],
+      });
+
+      expect(res.body.orderId, `${minutes} minutes`).toBe('FLTFIRST1');
+      expect(openedANewPage(), `${minutes} minutes`).toBe(false);
+    }
+  });
 });
 
 describe('a new payment page is opened, as before, when the open one is not this exact trip', () => {
@@ -188,8 +204,8 @@ describe('a new payment page is opened, as before, when the open one is not this
     await opensItsOwn({ rows: [openCheckout()], body: { amount: '452.00' }, verdict: { ...verified, charge: { total: 452 } } });
   });
 
-  it('the open page is older than the reuse window', async () => {
-    await opensItsOwn({ rows: [openCheckout({ created_at: minutesAgo(6), booking_details: { checkout_created_at: minutesAgo(6) } })] });
+  it('the open page has outlived its fifteen minutes on ARC', async () => {
+    await opensItsOwn({ rows: [openCheckout({ created_at: minutesAgo(17), booking_details: { checkout_created_at: minutesAgo(17) } })] });
   });
 
   it("it is another customer's page", async () => {

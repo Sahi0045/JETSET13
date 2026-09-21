@@ -15,12 +15,18 @@ const sanitizeRef = (v) => String(v ?? '').replace(/[^A-Za-z0-9_-]/g, '') || '__
 
 /**
  * How long an unpaid flight checkout is handed back, rather than a second one
- * opened for the same trip. A double click, the back button and a second tab
- * all happen within it. It stays well inside the payment page's own 15 minutes
- * (`interaction.timeout: 900` below), so a page handed back still has most of
- * its time left.
+ * opened for the same trip: the payment page's whole life on ARC
+ * (`interaction.timeout: 900` below) and a minute more. Within it the page can
+ * still be paid, so it is the one handed back; after it, it cannot.
+ *
+ * This was five minutes, chosen so a page handed back had most of its time
+ * left. But from minute five to minute fifteen the first page was still live
+ * when a second was opened beside it, and a customer who finished both was
+ * charged twice. A page handed back late may now run out while the customer is
+ * on it; ARC then sends them to the cancel page and the next Pay opens a fresh
+ * one - a retry, where the old gap cost a second charge.
  */
-export const CHECKOUT_REUSE_WINDOW_MS = 5 * 60 * 1000;
+export const CHECKOUT_REUSE_WINDOW_MS = 16 * 60 * 1000;
 
 /** What hosted checkout sells. `flight` is the one whose fare the airline prices. */
 const HOSTED_CHECKOUT_TYPES = ['flight', 'hotel', 'cruise', 'package'];
