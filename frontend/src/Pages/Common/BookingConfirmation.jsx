@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { CheckCircle, Ship, Plane, Calendar, CreditCard, ArrowLeft, Clock, MapPin, Users, XCircle } from 'lucide-react';
 import Navbar from './Navbar';
 import { attentionMessage, paymentReturned, refundStatus } from '../../utils/bookingStatus';
-import { hasNoConfirmedSeat, isPaid } from '../../utils/eTicket';
+import { hasNoConfirmedSeat, isPaid, ticketState } from '../../utils/eTicket';
 import { daysUntilDate, formatCalendarDate } from '../../utils/dateUtils';
 import { cancellationMessage } from '../../../../shared/cancellationOutcome';
 import { bookingItineraries, returnDateOf } from '../../../../shared/bookingItineraries';
@@ -125,14 +125,18 @@ function BookingConfirmation() {
   // Your payment is complete", "Our team is looking after your payment", or
   // "This booking has not been paid for", from a record saying refunded.
   const returned = isFlight ? paymentReturned(bookingData) : null;
+  // Issued, with its number not read back (ticketState 'pending'). This page
+  // never read it, so it said "Your ticket is being issued and is not ready
+  // yet" beside attention text saying the ticket had been issued.
   const outcome = statusUpper === 'CANCELLED' ? 'cancelled'
     : !returned && (bookingData.queued === true || statusUpper === 'PENDING_CONFIRMATION') ? 'queued'
       : (bookingData.ticketed === true || hasTickets) ? 'ticketed'
         : returned ? 'payment_returned'
-          : neverBooked ? (bookingData.needs_review ? 'not_completed' : isPaid(bookingData) ? 'not_booked' : 'awaiting_payment')
-            : isFlight && hasNoConfirmedSeat(bookingData) ? 'no_confirmed_seat'
-              : isFlight ? 'held'
-                : 'confirmed';
+          : isFlight && ticketState(bookingData) === 'pending' ? 'ticket_pending'
+            : neverBooked ? (bookingData.needs_review ? 'not_completed' : isPaid(bookingData) ? 'not_booked' : 'awaiting_payment')
+              : isFlight && hasNoConfirmedSeat(bookingData) ? 'no_confirmed_seat'
+                : isFlight ? 'held'
+                  : 'confirmed';
 
   // Full class strings on purpose: Tailwind cannot see a class built from a
   // template literal, so a `bg-${tone}-500` would be purged from the build.
@@ -146,6 +150,17 @@ function BookingConfirmation() {
       badgeText: 'Ticketed',
       // Not "has been sent": this page cannot know that an email went out.
       mail: 'We email your ticket details to the address you booked with.',
+    },
+    // The ticket exists; only its number has not reached us. No "being issued",
+    // and no "as soon as it is issued".
+    ticket_pending: {
+      Icon: CheckCircle,
+      iconWrap: 'bg-gradient-to-br from-green-400 to-green-600',
+      badge: 'bg-green-500',
+      title: 'Ticket Issued',
+      lead: 'Your ticket has been issued. Its ticket number has not reached us yet.',
+      badgeText: 'Ticket issued',
+      mail: 'Our team is getting your ticket number from the airline. Until then, this reference is your proof of booking.',
     },
     held: {
       Icon: Clock,
