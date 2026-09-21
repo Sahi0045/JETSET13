@@ -24,8 +24,8 @@ import { postToSlack } from './slackAlert.js';
 import { unchangedSince } from '../utils/bookingDetailsGuard.js';
 import { queueEnvironment } from '../utils/queueEnvironment.js';
 import {
-  NO_CONFIRMED_SEAT_REVIEW_REASON, TICKET_NUMBERS_MISSING, flagsInForce, isFailedCancellation, isUnrecordedCancellation,
-  needsAirlineRefundClaim, ticketsOf, unrecordedCancellationOf,
+  NO_CONFIRMED_SEAT_REVIEW_REASON, TICKET_NUMBERS_MISSING, flagsInForce, isFailedCancellation, isTicketed,
+  isUnrecordedCancellation, needsAirlineRefundClaim, ticketNumbersMissingOf, ticketsOf, unrecordedCancellationOf,
 } from '../../shared/reviewQueue.js';
 
 /**
@@ -276,6 +276,15 @@ export function describeFailedCancellation(booking) {
   const voided = unionTickets(details.voided_tickets, ...flags.map((flag) => flag.voided_tickets));
   const voidedDigits = new Set(voided.map(ticketDigits));
   const notVoided = (list) => list.filter((number) => !voidedDigits.has(ticketDigits(number)));
+  // Whether a ticket was issued, by any record of it. With no number on the
+  // booking and none in the cancel's lists, this printed "no tickets issued"
+  // of a booking the chain ticketed and could not read the numbers back for
+  // (ticket_numbers_not_retrieved, found under the refused cancel's flag too):
+  // staff told there is no ticket could cancel and refund in full over live
+  // tickets. A void is of an issued ticket, so it counts.
+  const numbersMissing = Boolean(ticketNumbersMissingOf(booking));
+  const ticketed = isTicketed(details) || numbersMissing || flags.some((flag) => flag.ticketed === true)
+    || voided.length > 0 || (Array.isArray(review.unvoided_tickets) && review.unvoided_tickets.length > 0);
   let tickets;
   if (Array.isArray(review.unvoided_tickets)) {
     // This attempt's own report: every ticket on the PNR it did not void.
@@ -284,11 +293,13 @@ export function describeFailedCancellation(booking) {
     const others = notVoided(unionTickets(ticketsOf(details).map((ticket) => ticket.number), ...flags.map((flag) => flag.unvoided_tickets)));
     tickets = voided.length || others.length
       ? `tickets voided: ${voided.join(', ') || 'none recorded'} · not recorded as voided: ${others.join(', ') || 'none'}`
-      : 'no tickets issued';
+      : ticketed ? 'ticket numbers not recorded: read the FA lines' : 'no tickets issued';
   }
+  // Numbers the chain could not read back are missing from every list above.
+  const incomplete = numbersMissing && tickets.startsWith('tickets voided') ? ' · not every ticket number is recorded: read the FA lines' : '';
   return [
     `*${booking.booking_reference}* — ${booking.status}/${booking.payment_status}, ${booking.total_amount} USD`,
-    `PNR ${details.pnr || review.pnr || 'none'} · ${tickets}`,
+    `PNR ${details.pnr || review.pnr || 'none'} · ticketed: ${ticketed ? 'yes' : 'NO'} · ${tickets}${incomplete}`,
     `airline: ${review.detail || 'no detail recorded'}`,
     `flagged ${hours}h ago`,
   ].join('\n');

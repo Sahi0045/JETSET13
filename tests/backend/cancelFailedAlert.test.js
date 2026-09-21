@@ -182,7 +182,7 @@ describe('the alarm text for a cancel the airline refused', () => {
         + 'A traveller whose ticket was voided cannot fly on it.',
       '',
       `*${REF}* — confirmed/paid, 582 USD\n`
-        + `PNR ABC123 · tickets voided: ${VOIDED} · still live: ${NOT_VOIDED}\n`
+        + `PNR ABC123 · ticketed: yes · tickets voided: ${VOIDED} · still live: ${NOT_VOIDED}\n`
         + `airline: voided ${VOIDED} but not ${NOT_VOIDED} - the PNR is left live\n`
         + 'flagged 3h ago',
     ].join('\n\n'));
@@ -191,12 +191,12 @@ describe('the alarm text for a cancel the airline refused', () => {
   it('does not guess which tickets are live when the cancel did not say', () => {
     const text = at(() => buildMessage([withFlag({ detail: '999 CANCEL NOT ALLOWED' })]));
     // Not "still live": no record says so. Nor voided: none of the records says that either.
-    expect(text).toMatch(new RegExp(`PNR ABC123 · tickets voided: none recorded · not recorded as voided: ${VOIDED}, ${NOT_VOIDED}\n`));
+    expect(text).toMatch(new RegExp(`PNR ABC123 · ticketed: yes · tickets voided: none recorded · not recorded as voided: ${VOIDED}, ${NOT_VOIDED}\n`));
   });
 
   it('says so when the booking has no tickets', () => {
     const text = at(() => buildMessage([withFlag({ detail: '999 CANCEL NOT ALLOWED' }, { gds: { ticketed: false }, tickets: [] })]));
-    expect(text).toMatch(/PNR ABC123 · no tickets issued\n/);
+    expect(text).toMatch(/PNR ABC123 · ticketed: NO · no tickets issued\n/);
   });
 });
 
