@@ -51,6 +51,43 @@ beforeEach(async () => {
   vi.spyOn(console, 'error').mockImplementation(() => {});
 });
 
+/**
+ * Only production works production's inquiries.
+ *
+ * Local development and production share one database. This engine was
+ * started by `npm run dev` with no environment check, so every developer's
+ * laptop reassigned production inquiries, marked them `in_progress`, stamped
+ * `sla_breach_notified` (spending the one SLA email production would have
+ * sent), escalated them to `urgent`, and at 02:00 hard-deleted anonymised
+ * inquiries and password-reset rows. The retention job beside it was given
+ * this guard for exactly this reason (dataRetention.job.js); this one was not.
+ */
+describe('where the engine runs', () => {
+  it('stays asleep on a machine that is not production', async () => {
+    const supabase = (await import('../../backend/config/supabase.js')).default;
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    await engine.startWorkflowEngine({ env: { NODE_ENV: 'production' } });
+    engine.stopWorkflowEngine();
+
+    expect(supabase.from).not.toHaveBeenCalled();
+  });
+
+  it('runs on the stack that names itself production, or when asked for by name', async () => {
+    const supabase = (await import('../../backend/config/supabase.js')).default;
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    await engine.startWorkflowEngine({ env: { BOOKING_QUEUE_ENV: 'production' } });
+    engine.stopWorkflowEngine();
+    expect(supabase.from).toHaveBeenCalled();
+
+    supabase.from.mockClear();
+    await engine.startWorkflowEngine({ env: { WORKFLOW_ENGINE: 'true' } });
+    engine.stopWorkflowEngine();
+    expect(supabase.from).toHaveBeenCalled();
+  });
+});
+
 describe('a refused SLA notice', () => {
   it('does not stop the notices behind it', async () => {
     inquiries = [
