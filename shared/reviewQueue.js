@@ -137,8 +137,15 @@ export const NO_CONFIRMED_SEAT_REVIEW_REASON = 'chain failed after commit at seg
  * went back to "Your seats are reserved" on every customer page, offered a PDF
  * saying the seat was held, and a retry of the order answered ALREADY_BOOKED.
  * No seat had been confirmed at any point.
+ *
+ * Past a resolved flag too: resolving says a person dealt with the booking,
+ * not that the airline gave it a seat. A person who called the customer and
+ * pressed "Mark as handled" with the seat still waitlisted turned every page
+ * back to "Your seats are reserved". Only the booking can say otherwise, and
+ * the one record it keeps of that is a ticket.
  */
-export const noConfirmedSeatOf = (booking) => flagInForce(booking, (review) => review.reason === NO_CONFIRMED_SEAT_REVIEW_REASON);
+export const noConfirmedSeatOf = (booking) => (isTicketed(detailsOf(booking)) ? null
+  : flagInForce(booking, (review) => review.reason === NO_CONFIRMED_SEAT_REVIEW_REASON, { pastResolved: true }));
 
 /** What a member of staff recorded when they dealt with it, or null. */
 export const reviewResolution = (booking) => {

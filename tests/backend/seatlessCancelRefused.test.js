@@ -173,7 +173,10 @@ describe('a PNR with no confirmed seat whose cancel the airline refused', () => 
     expect(axios.put).not.toHaveBeenCalled();
   });
 
-  it('is settled once a person resolves the flag on top, as the order route already read it', async () => {
+  // Round 5: resolving says a person dealt with it, not that the airline gave
+  // a seat; the note is free text. This asserted `false` - the pages then said
+  // "Your seats are reserved" of a seat nothing on the booking records.
+  it('is not settled by a person resolving the flag on top; a ticket on the booking settles it', async () => {
     const row = seatless();
     row.booking_details.needs_review = {
       reason: 'GDS cancellation failed; refund withheld to avoid paying out against a live booking',
@@ -185,6 +188,8 @@ describe('a PNR with no confirmed seat whose cancel the airline refused', () => 
     };
     const { toClientBooking } = await import('../../backend/routes/flight.routes.js');
 
+    expect(toClientBooking(row).needs_review.no_confirmed_seat).toBe(true);
+    row.booking_details.tickets = [{ number: '220-7491174926' }];
     expect(toClientBooking(row).needs_review.no_confirmed_seat).toBe(false);
   });
 
