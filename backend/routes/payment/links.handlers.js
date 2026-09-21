@@ -258,6 +258,17 @@ export async function handleProcessPaymentLink(req, res) {
             code: 'PAYMENT_LINK_UNAVAILABLE',
             error: 'We could not start your payment just now. Please try again in a moment. Nothing has been charged.'
         });
+        // Not "Nothing has been charged": this is exactly when nobody knows
+        // whether an earlier page for this link was paid - a payer who paid and
+        // closed the tab before the link was completed. Only this attempt is
+        // known to have charged nothing.
+        const cannotCheckEarlier = () => res.status(503).json({
+            success: false,
+            code: 'PAYMENT_LINK_UNAVAILABLE',
+            error: 'We could not start your payment just now, and this attempt has not charged you. '
+                + 'We could not confirm whether an earlier payment on this link went through, so please do not pay again '
+                + 'before contacting us: call (877) 538-7380 and we will check it for you.'
+        });
 
         const { data: earlierPages, error: earlierError } = await supabase
             .from('payments')
@@ -267,7 +278,7 @@ export async function handleProcessPaymentLink(req, res) {
             .limit(5);
         if (earlierError) {
             console.error('❌ Payment link: could not look for an earlier payment page', { linkId: paymentLink.id, reason: earlierError.message });
-            return cannotCheck();
+            return cannotCheckEarlier();
         }
         const pages = Array.isArray(earlierPages) ? earlierPages : [];
         const latest = pages[0];
@@ -294,7 +305,7 @@ export async function handleProcessPaymentLink(req, res) {
             // was opened and left.
             if (!arcOrder.reachable && ![400, 404].includes(arcOrder.httpStatus)) {
                 console.error('❌ Payment link: ARC could not say whether an earlier page was paid', { orderId: page.arc_order_id, httpStatus: arcOrder.httpStatus ?? null });
-                return cannotCheck();
+                return cannotCheckEarlier();
             }
         }
 
