@@ -613,6 +613,18 @@ function FlightBookingConfirmation() {
     // on the page they confirmed.
     const returnLeg = returnLegOf(flightData);
     const returnSegments = returnLeg ? returnLeg.segments.map(toReviewSegment) : [];
+    // How often the flight home lands before it arrives: each change of plane
+    // and each technical stop inside one flight (a segment's `stops`). The
+    // results page counts both; this counted segments alone, so one flight
+    // number that lands on the way read "Direct". An alternative chosen on
+    // this page has no results-page description, so the offer is counted.
+    const returnItinerarySegments = flightData.originalOffer?.itineraries?.[1]?.segments ?? [];
+    const returnStops = Number.isFinite(flightData.returnLeg?.stops)
+      ? flightData.returnLeg.stops
+      : returnItinerarySegments.length > 0
+        ? returnItinerarySegments.length - 1
+          + returnItinerarySegments.reduce((count, seg) => count + (Array.isArray(seg?.stops) ? seg.stops.length : 0), 0)
+        : returnSegments.length - 1;
 
     // Every flight on the offer, the flights home included - what checkout
     // decides passports and Secure Flight by (backend/utils/itinerary.js). The
@@ -671,7 +683,7 @@ function FlightBookingConfirmation() {
         returnLeg: returnSegments.length > 0 ? {
           segments: returnSegments,
           duration: returnLeg.duration,
-          stops: returnSegments.length - 1,
+          stops: returnStops,
           departureCity: returnSegments[0].departure.cityName,
           arrivalCity: returnSegments[returnSegments.length - 1].arrival.cityName,
         } : null,

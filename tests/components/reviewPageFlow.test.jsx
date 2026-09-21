@@ -183,6 +183,75 @@ describe('a single flight with a technical stop', () => {
   });
 });
 
+// The flight home, counted by its segments alone: one flight number with a
+// technical stop read "Direct" on the return strip, though the results page
+// had counted the stop and the outbound strip counts one the same way.
+describe('a return flight with a technical stop', () => {
+  const roundTrip = () => offer({
+    id: '1',
+    itineraries: [
+      { segments: [segment('DEL', 'BOM', '2026-11-15T08:00:00', '2026-11-15T10:00:00')] },
+      { segments: [segment('BOM', 'DEL', '2026-11-22T08:00:00', '2026-11-22T11:30:00', {
+        number: '2593', stops: [{ iataCode: 'IDR', arrivalAt: '2026-11-22T09:15:00', departureAt: '2026-11-22T10:00:00' }],
+      })] },
+    ],
+  });
+  const returnStrip = (container) => container.querySelector('[data-return-leg]');
+
+  it('counts the stop the results page counted', async () => {
+    vi.stubGlobal('fetch', airline());
+    const fare = roundTrip();
+    const flightData = reviewFlight(fare, {
+      returnLeg: {
+        duration: 'PT3H30M',
+        stops: 1,
+        stopDetails: [{ airport: 'IDR', duration: '0h 45m', technical: true }],
+        segments: [{
+          departure: { airport: 'BOM', time: '08:00', at: '2026-11-22T08:00:00' },
+          arrival: { airport: 'DEL', time: '11:30', at: '2026-11-22T11:30:00' },
+          airline: { code: 'AI', name: 'Air India' },
+          flightNumber: 'AI 2593',
+          duration: 'PT3H30M',
+        }],
+      },
+    });
+
+    const { container } = renderReviewPage(FlightBookingConfirmation, { state: { flightData } });
+
+    await screen.findByText('Return');
+    expect(returnStrip(container).textContent).toMatch(/1 Stop/);
+    expect(returnStrip(container).textContent).not.toMatch(/Direct/);
+  });
+
+  // An alternative chosen on this page arrives without the results page's
+  // description of the way home; the offer itself still says where it lands.
+  it('counts it from the offer when nothing else describes the return', async () => {
+    vi.stubGlobal('fetch', airline());
+
+    const { container } = renderReviewPage(FlightBookingConfirmation, { state: { flightData: reviewFlight(roundTrip()) } });
+
+    await screen.findByText('Return');
+    expect(returnStrip(container).textContent).toMatch(/1 Stop/);
+    expect(returnStrip(container).textContent).not.toMatch(/Direct/);
+  });
+
+  it('still reads Direct for a return that does not stop', async () => {
+    vi.stubGlobal('fetch', airline());
+    const fare = offer({
+      id: '1',
+      itineraries: [
+        { segments: [segment('DEL', 'BOM', '2026-11-15T08:00:00', '2026-11-15T10:00:00')] },
+        { segments: [segment('BOM', 'DEL', '2026-11-22T08:00:00', '2026-11-22T10:00:00', { number: '102' })] },
+      ],
+    });
+
+    const { container } = renderReviewPage(FlightBookingConfirmation, { state: { flightData: reviewFlight(fare) } });
+
+    await screen.findByText('Return');
+    expect(returnStrip(container).textContent).toMatch(/Direct/);
+  });
+});
+
 /** Fill the first traveller in enough for Pay to go ahead on a domestic trip. */
 const fillLeadTraveller = async () => {
   fireEvent.change(await screen.findByLabelText(/First Name/), { target: { value: 'Jane' } });
