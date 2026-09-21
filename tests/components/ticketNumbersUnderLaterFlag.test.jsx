@@ -6,6 +6,7 @@ vi.mock('../../frontend/src/Pages/Common/Navbar', () => ({ default: () => null }
 
 const { default: FlightETicket } = await import('../../frontend/src/Pages/Common/flights/FlightETicket.jsx');
 const { documentState, ticketState } = await import('../../frontend/src/utils/eTicket');
+const { attentionMessage } = await import('../../frontend/src/utils/bookingStatus');
 
 /**
  * A ticketed booking whose ticket numbers never came back, after the customer's
@@ -64,5 +65,15 @@ describe('a ticketed booking whose numbers never came back, after a refused canc
 
   it('a booking with no such flag anywhere is not called issued', () => {
     expect(ticketState({ ...afterRefusedCancel, needs_review: { ...afterRefusedCancel.needs_review, ticket_numbers_missing: false } })).toBe('none');
+  });
+
+  // My Trips and Manage Booking put this sentence beside "Issued, number
+  // pending" and a document saying "Your ticket has been issued".
+  it('My Trips does not say the ticket has not been issued', () => {
+    const top = { ...afterRefusedCancel, needs_review: { reason: 'ticket_numbers_not_retrieved', no_confirmed_seat: false, ticket_numbers_missing: true } };
+    for (const booking of [afterRefusedCancel, top]) {
+      expect(attentionMessage(booking)).not.toMatch(/not been issued|not issued/);
+      expect(attentionMessage(booking)).toMatch(/Your ticket has been issued/);
+    }
   });
 });

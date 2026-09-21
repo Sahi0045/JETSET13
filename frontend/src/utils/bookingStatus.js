@@ -164,6 +164,12 @@ export function attentionMessage(booking) {
     return 'The airline has not confirmed a seat on every flight, so no ticket has been issued. Our team will contact you. '
       + 'Please do not book this trip again in the meantime.';
   }
+  // Issued, with its number not read back (ticketState 'pending'): "your
+  // ticket has not been issued yet" sat beside "Issued, number pending" and a
+  // document saying the ticket was issued.
+  if (ticketState(booking) === 'pending') {
+    return 'Your ticket has been issued, but its ticket number has not reached us yet. Our team is getting it from the airline.';
+  }
   return pnrOf(booking)
     ? 'Your seats are reserved, but your ticket has not been issued yet. Our team is working on it and will email you.'
     : 'Your booking could not be completed with the airline. Our team is looking after your payment and will email you.';
