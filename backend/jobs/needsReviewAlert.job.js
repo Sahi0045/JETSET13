@@ -22,6 +22,15 @@
 import supabase from '../config/supabase.js';
 import { postToSlack } from './slackAlert.js';
 import { unchangedSince } from '../utils/bookingDetailsGuard.js';
+import { queueEnvironment } from '../utils/queueEnvironment.js';
+
+/**
+ * Whether the Slack alarms may run in this process: on the stack that names
+ * itself production (utils/queueEnvironment.js - not NODE_ENV, which `npm
+ * start` sets on any machine), or where ALERT_JOBS=true asks for them by name.
+ * Shared with the failed-refund alarm so the two cannot disagree.
+ */
+export const alarmsMayRun = (env = process.env) => queueEnvironment(env) === 'production' || env.ALERT_JOBS === 'true';
 
 const DEFAULT_INTERVAL_MS = 15 * 60 * 1000;
 const FIRST_RUN_DELAY_MS = 60 * 1000;      // let the app finish booting first
@@ -251,11 +260,21 @@ export async function runOnce({ webhookUrl = process.env.ALERT_SLACK_WEBHOOK_URL
   return { announced: stuck.length };
 }
 
-export function startNeedsReviewAlertJob({ intervalMs = DEFAULT_INTERVAL_MS } = {}) {
+export function startNeedsReviewAlertJob({ intervalMs = DEFAULT_INTERVAL_MS, env = process.env } = {}) {
   if (!supabase) return { stop: () => {} };
 
-  if (!process.env.ALERT_SLACK_WEBHOOK_URL) {
+  if (!env.ALERT_SLACK_WEBHOOK_URL) {
     log('asleep: set ALERT_SLACK_WEBHOOK_URL to turn on paid-but-not-ticketed alerts');
+    return { stop: () => {} };
+  }
+
+  // Production only, unless asked for by name. Local development and
+  // production share the database, and each booking is announced exactly
+  // once: a laptop with the webhook in its environment would post production's
+  // bookings and stamp `alerted_at` on them, and production's own run would
+  // then say nothing about them, ever. The webhook alone was the only gate.
+  if (!alarmsMayRun(env)) {
+    log(`asleep: this is '${queueEnvironment(env)}', not production (set ALERT_JOBS=true to run it here)`);
     return { stop: () => {} };
   }
 
