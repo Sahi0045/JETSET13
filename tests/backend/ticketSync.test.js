@@ -223,6 +223,86 @@ describe('a PNR with no ticket yet', () => {
   });
 });
 
+/**
+ * A PNR ticketed for some of its travellers and not the rest.
+ *
+ * Any ticket at all used to count as done: the job wrote the tickets it saw,
+ * `gds.ticketed: true` and the email claim in one write, and from then on the
+ * booking was out of this job's population, out of the paid-not-ticketed
+ * alarm's and off the admin "Needs attention" list. A family of three whose
+ * agent issued two tickets got one e-ticket email with two numbers, and nobody
+ * ever looked at the third traveller again. With AUTO_TICKET off every ticket
+ * is issued by a person, so this is the path production runs.
+ *
+ * The shapes are the certification PNR BMPUST (17 Sep 2026): passengers 2, 4
+ * and 5, and an infant riding on 2. A ticket names its passenger by that
+ * reference, and an infant's ticket names its adult with `-INF`
+ * (readTravelers / readTickets), so "every traveller holds a ticket" is a
+ * question the same retrieve answers.
+ */
+describe('a PNR only partly ticketed', () => {
+  const family = [
+    traveller('2', 'DEV', 'RAO'),
+    { id: '2-INF', travelerType: 'HELD_INFANT', associatedAdultId: '2', name: { firstName: 'ANU', lastName: 'RAO' } },
+    traveller('5', 'KIRAN', 'RAO'),
+    traveller('4', 'ASHA', 'RAO'),
+  ];
+  const infantTicket = { ...ticket('220-7491175304', '2-INF'), travelerType: 'HELD_INFANT', associatedAdultId: '2' };
+
+  it('records nothing and sends nothing while a traveller has no ticket', async () => {
+    const sendEmail = sentOk();
+    const result = await syncOne(bookingRow(), {
+      provider: providerWith([ticket('220-7491175301', '2'), ticket('220-7491175302', '4')], { travelers: family }),
+      sendEmail,
+    });
+
+    expect(result.outcome).toBe('partially-ticketed');
+    expect(patched).toEqual([]);
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+
+  it("counts the infant's own ticket, not the adult's, as the infant's", async () => {
+    const result = await syncOne(bookingRow(), {
+      provider: providerWith([
+        ticket('220-7491175301', '2'), ticket('220-7491175302', '4'), ticket('220-7491175303', '5'),
+      ], { travelers: family }),
+      sendEmail: sentOk(),
+    });
+
+    expect(result.outcome).toBe('partially-ticketed');
+  });
+
+  it('records the booking once every traveller, the infant included, holds a ticket', async () => {
+    const sendEmail = sentOk();
+    const result = await syncOne(bookingRow(), {
+      provider: providerWith([
+        ticket('220-7491175301', '2'), ticket('220-7491175302', '4'), ticket('220-7491175303', '5'), infantTicket,
+      ], { travelers: family }),
+      sendEmail,
+    });
+
+    expect(result.outcome).toBe('recorded');
+    expect(patched[0].changes.tickets).toHaveLength(4);
+    expect(patched[0].changes.gds.ticketed).toBe(true);
+    expect(sendEmail).toHaveBeenCalledTimes(1);
+  });
+
+  // A ticket that names no passenger cannot be matched, so it is counted.
+  it('counts tickets when they carry no passenger reference', async () => {
+    const two = [traveller('2', 'DEV', 'RAO'), traveller('3', 'ASHA', 'RAO')];
+
+    const short = await syncOne(bookingRow(), { provider: providerWith([ticket('220-1', null)], { travelers: two }), sendEmail: sentOk() });
+    expect(short.outcome).toBe('partially-ticketed');
+
+    stored = null;
+    const full = await syncOne(bookingRow(), {
+      provider: providerWith([ticket('220-1', null), ticket('220-2', null)], { travelers: two }),
+      sendEmail: sentOk(),
+    });
+    expect(full.outcome).toBe('recorded');
+  });
+});
+
 describe('which bookings are asked about', () => {
   const rowsFrom = (list) => {
     const chain = {

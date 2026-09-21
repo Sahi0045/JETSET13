@@ -160,7 +160,7 @@ export async function findUnticketed({ limit = MAX_PER_TICK } = {}) {
  * ('not-recorded') is not: it should be asked about again at once, not after
  * every other booking has had its turn.
  */
-const ASKED_NOTHING_FOUND = new Set(['still-unticketed', 'unreadable']);
+const ASKED_NOTHING_FOUND = new Set(['still-unticketed', 'unreadable', 'partially-ticketed']);
 
 /**
  * Tickets this job recorded whose owner has not been told yet.
@@ -227,6 +227,33 @@ export const withTravellerNames = (order) => {
 };
 
 /**
+ * The travellers on a retrieved PNR who hold no ticket yet.
+ *
+ * Any ticket at all used to count as the whole booking done. When a person
+ * tickets by hand - every booking, while AUTO_TICKET is off - and issues two
+ * of a family's three, the booking was recorded ticketed with two numbers,
+ * the customer got one e-ticket email, and the row left this job, the
+ * paid-not-ticketed alarm and the admin "Needs attention" list for good.
+ *
+ * Both halves come from the same retrieve: a ticket names its passenger by the
+ * PNR reference, and an infant's names its adult with `-INF`, which is the id
+ * readTravelers gives that infant (mappers/flightOrder.js; the certification
+ * PNR BMPUST reads travellers 2, 2-INF, 5, 4 and tickets for exactly those).
+ * A ticket that names nobody cannot be matched, so then the tickets are
+ * counted. A PNR whose travellers could not be read says nothing either way,
+ * and is left to the tickets it has, as before.
+ */
+export const travellersWithoutTicket = (order, tickets) => {
+  const travellers = Array.isArray(order?.travelers) ? order.travelers : [];
+  if (travellers.length === 0) return [];
+  if (tickets.some((t) => t.travelerId == null)) {
+    return tickets.length >= travellers.length ? [] : travellers.slice(tickets.length);
+  }
+  const holders = new Set(tickets.map((t) => String(t.travelerId)));
+  return travellers.filter((traveller) => !holders.has(String(traveller?.id)));
+};
+
+/**
  * Ask Amadeus whether this PNR has a ticket yet, and record it if it does.
  *
  * Returns what happened, so a tick can be reported and a test can assert on it
@@ -288,6 +315,17 @@ export async function syncOne(row, { provider = FlightProvider, sendEmail = send
 
   const tickets = withTravellerNames(order);
   if (tickets.length === 0) return { reference, pnr, outcome: 'still-unticketed' };
+
+  // Recorded only once every traveller holds a ticket. Until then nothing is
+  // written: the booking stays unticketed, so it stays in front of the alarm,
+  // the admin list and this job, and the e-ticket email goes out once, whole.
+  const waiting = travellersWithoutTicket(order, tickets);
+  if (waiting.length > 0) {
+    log('only part of the booking is ticketed; waiting for the rest', {
+      booking: reference, pnr, ticketed: tickets.length, travellers: order.travelers.length,
+    });
+    return { reference, pnr, outcome: 'partially-ticketed', tickets };
+  }
 
   /**
    * Written through the booking's own compare-and-set patch, so a ticket
