@@ -18,6 +18,39 @@ const detailsOf = (booking) => booking?.booking_details ?? booking?.bookingDetai
 const statusOf = (booking) => String(booking?.status ?? '').toLowerCase();
 const paymentOf = (booking) => String(booking?.payment_status ?? booking?.paymentStatus ?? '').toLowerCase();
 
+// The top review flag, from a database row or from a page's copy of one: the
+// single-booking read spreads booking_details, so its flag sits at the top.
+const topFlagOf = (booking) => booking?.needs_review ?? detailsOf(booking)?.needs_review ?? null;
+
+/**
+ * The first review flag that `matches`, on top or under later flags, or null.
+ *
+ * A booking keeps only its latest flag on top. A later cancel attempt - failed,
+ * or carried out and not recorded - writes its own flag and keeps the one
+ * before only as `previous` (payment/operations.handlers.js keepingPrevious).
+ * Every reader that looked at the top flag alone forgot the earlier state the
+ * moment that happened: a PNR with no confirmed seat read "your seats are
+ * reserved" again after its cancel was refused. So every state that a later
+ * flag can bury is read through here, and there is one walker.
+ *
+ * A flag a person resolved settles everything under it, so the search stops
+ * there. `pastResolved` is for a fact about the airline record rather than a
+ * job for a person: a ticket the airline issued stays issued whatever anyone
+ * recorded after it.
+ *
+ * Twenty levels is far more than any booking gets; it only stops a malformed
+ * chain from looping.
+ */
+export function flagInForce(booking, matches, { pastResolved = false } = {}) {
+  let review = topFlagOf(booking);
+  for (let depth = 0; review && depth < 20; depth += 1) {
+    if (review.resolved_at && !pastResolved) return null;
+    if (matches(review)) return review;
+    review = review.previous;
+  }
+  return null;
+}
+
 /** Ticket numbers recorded on a booking. */
 export const ticketsOf = (details) => (Array.isArray(details?.tickets) ? details.tickets : [])
   .filter((ticket) => ticket?.number);
@@ -94,16 +127,10 @@ export function isUnrecordedCancellation(booking) {
  * `previous` (payment/operations.handlers.js keepingPrevious). Reading the top
  * flag alone, a failed retry took "Cancelled, but not recorded" off the desk
  * list and the alarm, though nothing about it had been resolved. A flag a
- * person resolved settles everything under it, so the search stops there.
+ * person resolved settles everything under it (flagInForce).
  */
 export function unrecordedCancellationOf(booking) {
-  let review = detailsOf(booking)?.needs_review;
-  for (let depth = 0; review && depth < 20; depth += 1) {
-    if (review.resolved_at) return null;
-    if (review.source === 'cancellation' && review.unrecorded === true) return review;
-    review = review.previous;
-  }
-  return null;
+  return flagInForce(booking, (review) => review.source === 'cancellation' && review.unrecorded === true);
 }
 
 /**
