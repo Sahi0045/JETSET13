@@ -276,17 +276,60 @@ export async function settle(row, { now = Date.now(), reconcile = reconcileBooki
 
 const memory = new Map();
 
-export async function runOnce({ baseUrl, now = Date.now(), site = siteForEnv(), checked = memory, reconcile, send, flag } = {}) {
-  const { data, error } = await supabase
+/** Checkouts read per page: the newest page every run, and one page further back. */
+const PAGE = 100;
+
+/**
+ * Where the page further back starts next run. In memory, like `checked`: a
+ * restart begins again just behind the newest page.
+ */
+const scanPosition = { offset: PAGE };
+
+export async function runOnce({
+  baseUrl, now = Date.now(), site = siteForEnv(), checked = memory, scan = scanPosition, reconcile, send, flag,
+} = {}) {
+  const pending = () => supabase
     .from('bookings')
     .select('id, booking_reference, status, payment_status, total_amount, created_at, booking_details')
     .eq('travel_type', 'flight')
     .eq('status', 'pending')
     .gte('created_at', new Date(now - LOOKBACK_MS).toISOString())
     .lte('created_at', new Date(now - GRACE_MS).toISOString())
-    .order('created_at', { ascending: false })
-    .limit(100);
+    .order('created_at', { ascending: false });
+
+  const { data: newest, error } = await pending().limit(PAGE);
   if (error) throw new Error(`could not read checkouts: ${error.message}`);
+
+  /**
+   * And one page further back, a page deeper each run.
+   *
+   * The newest hundred were all this ever read. Every hosted checkout writes a
+   * pending row and nothing clears an unpaid one, and what this job has settled
+   * lives in memory, which narrows nothing in the query - so past a hundred
+   * checkouts the rest of the seven-day lookback was out of sight for good. A
+   * paid one that fell behind (a reconcile that kept answering "gateway
+   * unavailable", say) was never booked and never flagged. The newest page
+   * stays first, since a checkout that has just passed its grace is the
+   * likeliest to be a paid one; this page takes turns through the rest and
+   * starts again behind the newest once it has been all the way back.
+   */
+  let older = [];
+  if ((newest || []).length === PAGE) {
+    const from = Math.max(PAGE, Number(scan.offset) || PAGE);
+    const { data: page, error: pageError } = await pending().range(from, from + PAGE - 1);
+    if (pageError) {
+      log('could not read older checkouts', { error: pageError.message });
+    } else {
+      older = page || [];
+      scan.offset = older.length === PAGE ? from + PAGE : PAGE;
+    }
+  }
+  const seen = new Set();
+  const data = [...(newest || []), ...older].filter((row) => {
+    if (seen.has(row.booking_reference)) return false;
+    seen.add(row.booking_reference);
+    return true;
+  });
 
   const sendOrder = send || ((row, body) => replay(
     { booking_reference: row.booking_reference, status: row.status, booking_details: { ...row.booking_details, queued_order: body } },
