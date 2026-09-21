@@ -166,6 +166,19 @@ describe('verifyFlightCharge', () => {
     expect(result.code).toBe('PRICE_CONFIG_UNAVAILABLE');
   });
 
+  // Pricing is where the seats are sold and released at the airline. A
+  // checkout that cannot be charged for want of the fee settings is refused
+  // before that, not after a sell it could never use.
+  it('refuses without price settings before the fare is priced', async () => {
+    rows.price_settings = null;
+    const priceOffer = pricedAt(400);
+
+    const result = await verify({ amount: 401, bookingData: bookingFor(1), priceOffer });
+
+    expect(result.code).toBe('PRICE_CONFIG_UNAVAILABLE');
+    expect(priceOffer).not.toHaveBeenCalled();
+  });
+
   // Every flight checkout stops while the row is missing or duplicated
   // (`.single()` answers PGRST116 for both), and nothing was logged: on-call saw
   // a total outage with no line pointing at the table. Still refused - the

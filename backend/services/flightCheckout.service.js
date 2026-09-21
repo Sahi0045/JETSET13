@@ -199,6 +199,20 @@ export async function verifyFlightCharge({
       `The travellers do not match this fare, which is for ${describeGroup(groupFromOffer(offer))}. Please search again for the people travelling.`);
   }
 
+  // The fee settings, read before the fare is priced. Pricing is where the
+  // seats are sold and released at the airline (the seat check), and a
+  // checkout that cannot be charged without these was refused only after that
+  // sell - one it could never use, counted against the office's look-to-book.
+  let config = null;
+  try {
+    config = await readPriceSettings(client);
+  } catch (error) {
+    console.warn('⚠️ Checkout could not read price settings:', error?.message || error);
+  }
+  if (!config) {
+    return refuse(503, 'PRICE_CONFIG_UNAVAILABLE', 'Pricing is temporarily unavailable. Please try again shortly.');
+  }
+
   let priced;
   try {
     priced = await priceOffer(offer);
@@ -281,16 +295,6 @@ export async function verifyFlightCharge({
   }
   if (!Number.isFinite(fareTotal) || fareTotal <= 0) {
     return refuse(503, 'PRICE_UNAVAILABLE', 'We could not confirm the current fare with the airline. Please try again in a moment.');
-  }
-
-  let config = null;
-  try {
-    config = await readPriceSettings(client);
-  } catch (error) {
-    console.warn('⚠️ Checkout could not read price settings:', error?.message || error);
-  }
-  if (!config) {
-    return refuse(503, 'PRICE_CONFIG_UNAVAILABLE', 'Pricing is temporarily unavailable. Please try again shortly.');
   }
 
   // The fixed fee is per seated traveller; a lap infant pays none of it. Which
