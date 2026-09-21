@@ -108,6 +108,16 @@ export const sendEmail = async ({ to, subject, template, data, html, text }) => 
       text
     });
 
+    // Resend reports a refused send in `error`; it does not throw. This logged
+    // "Email sent successfully" for those and returned, and every caller reads
+    // only a throw as "not sent" - so the booking queue's "we could not confirm
+    // your booking" notice could be refused and still recorded as told. A
+    // throw is what a missing key or a network failure already does here.
+    if (response?.error) {
+      const reason = response.error.message || String(response.error);
+      throw new Error(`email refused by Resend: ${reason}`);
+    }
+
     console.log('Email sent successfully:', response);
     return response;
   } catch (error) {

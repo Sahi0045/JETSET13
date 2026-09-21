@@ -105,18 +105,25 @@ async function checkSLABreaches() {
 
         // Notify admin/supervisor
         const adminEmail = process.env.ADMIN_EMAIL || 'jetsetters721@gmail.com';
-        await sendEmail({
-          to:      adminEmail,
-          subject: `SLA breach - ${inq.customer_name} (${inq.inquiry_type})`,
-          html: generateSlaAlertTemplate({
-            kind: 'breach',
-            customerName: inq.customer_name,
-            inquiryType: inq.inquiry_type,
-            status: inq.status,
-            sla,
-            inquiryId: inq.id,
-          }),
-        });
+        // Per inquiry: sendEmail throws on a send Resend refused, and one
+        // refused notice must not end the run for every inquiry behind it.
+        try {
+          await sendEmail({
+            to:      adminEmail,
+            subject: `SLA breach - ${inq.customer_name} (${inq.inquiry_type})`,
+            html: generateSlaAlertTemplate({
+              kind: 'breach',
+              customerName: inq.customer_name,
+              inquiryType: inq.inquiry_type,
+              status: inq.status,
+              sla,
+              inquiryId: inq.id,
+            }),
+          });
+        } catch (e) {
+          console.error(`[Workflow] SLA breach notice NOT sent for inquiry ${inq.id.slice(-8)}:`, e.message);
+          continue;
+        }
 
         await logAudit('sla_breach_detected', inq.id, { elapsed_hours: elapsed.toFixed(1), sla_hours: sla });
         console.log(`[Workflow] SLA breach notification sent for inquiry ${inq.id.slice(-8)}`);
@@ -149,17 +156,22 @@ async function checkEscalations() {
       }).eq('id', inq.id);
 
       const adminEmail = process.env.ADMIN_EMAIL || 'jetsetters721@gmail.com';
-      await sendEmail({
-        to:      adminEmail,
-        subject: `Escalation - ${inq.customer_name} (48h no action)`,
-        html: generateSlaAlertTemplate({
-          kind: 'escalation',
-          customerName: inq.customer_name,
-          inquiryType: inq.inquiry_type,
-          status: inq.status,
-          inquiryId: inq.id,
-        }),
-      });
+      // Per inquiry, for the same reason as the SLA notice above.
+      try {
+        await sendEmail({
+          to:      adminEmail,
+          subject: `Escalation - ${inq.customer_name} (48h no action)`,
+          html: generateSlaAlertTemplate({
+            kind: 'escalation',
+            customerName: inq.customer_name,
+            inquiryType: inq.inquiry_type,
+            status: inq.status,
+            inquiryId: inq.id,
+          }),
+        });
+      } catch (e) {
+        console.error(`[Workflow] Escalation notice NOT sent for inquiry ${inq.id.slice(-8)}:`, e.message);
+      }
 
       await logAudit('escalated', inq.id, { reason: '48h_no_action' });
       console.log(`[Workflow] Escalated inquiry ${inq.id.slice(-8)}`);
