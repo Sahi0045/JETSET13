@@ -23,6 +23,7 @@ import supabase from '../config/supabase.js';
 import { postToSlack } from './slackAlert.js';
 import { unchangedSince } from '../utils/bookingDetailsGuard.js';
 import { queueEnvironment } from '../utils/queueEnvironment.js';
+import { needsAirlineRefundClaim } from '../../shared/reviewQueue.js';
 
 /**
  * Whether the Slack alarms may run in this process: on the stack that names
@@ -120,11 +121,12 @@ export function describeBooking(booking) {
  * `needs_review.tickets`). That flag was written and never read: this job
  * skipped cancelled rows, and the failed-refund alarm lists only refunds that
  * failed, so the claim reached nobody.
+ *
+ * The rule lives in shared/reviewQueue.js, which the admin "Needs attention"
+ * list uses too: written twice, the two disagreed, and a claim Slack announced
+ * once was missing from the only durable list of them.
  */
-export function needsAirlineRefundClaim(booking) {
-  const review = booking?.booking_details?.needs_review;
-  return review?.source === 'cancellation' && Array.isArray(review.tickets) && review.tickets.length > 0;
-}
+export { needsAirlineRefundClaim };
 
 /** One line per airline claim. Ticket numbers, never passenger names. */
 export function describeAirlineClaim(booking) {

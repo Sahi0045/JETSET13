@@ -37,6 +37,24 @@ export const reviewResolution = (booking) => {
 };
 
 /**
+ * A cancelled booking whose tickets still hold value with the airline.
+ *
+ * The tickets are the ones the cancellation could not void, as it recorded
+ * them on its review flag (`needs_review.tickets`, from `requiresAirlineRefund`
+ * in payment/operations.handlers.js) - not the booking's own ticket list. The
+ * two differ exactly when it matters: a booking whose ticket numbers were
+ * never read back (`ticket_numbers_not_retrieved`) has no ticket list, and the
+ * cancel's own retrieve still finds its tickets and lists them for a claim.
+ *
+ * The one rule, for the Slack alarm (jobs/needsReviewAlert.job.js) and this
+ * panel alike. They used to be written separately, and disagreed.
+ */
+export function needsAirlineRefundClaim(booking) {
+  const review = detailsOf(booking)?.needs_review;
+  return review?.source === 'cancellation' && Array.isArray(review.tickets) && review.tickets.length > 0;
+}
+
+/**
  * What still needs doing on this booking, or null.
  *
  * @returns {null | { kind: 'not_ticketed'|'review'|'airline_refund', reason: string,
@@ -47,17 +65,23 @@ export function attentionOf(booking) {
   const review = details?.needs_review || null;
   if (review?.resolved_at) return null;
 
-  const tickets = ticketsOf(details);
   // A cancelled booking whose tickets were past the void window: the airline
   // owes the money back and somebody has to claim it. This one IS on a
   // cancelled booking, so it is decided before the cancelled check below.
-  if (review?.source === 'cancellation' && tickets.length > 0) {
+  if (needsAirlineRefundClaim(booking)) {
     return {
       kind: 'airline_refund',
       reason: review.reason || 'the refund has to be claimed from the airline',
       since: review.at || null,
-      tickets: tickets.map((ticket) => ticket.number),
+      tickets: review.tickets.map((ticket) => ticket?.number ?? ticket),
     };
+  }
+  // Any other cancellation that asked for a person - a refund the gateway
+  // refused, one left for review. Nothing is owed by the airline, so it is not
+  // labelled a claim (it used to be, whenever the booking had ticket numbers,
+  // voided or not); but it is not settled either, so it stays on the list.
+  if (review?.source === 'cancellation') {
+    return { kind: 'review', reason: review.reason || 'flagged for review', since: review.at || null };
   }
 
   if (['cancelled', 'refunded'].includes(statusOf(booking))) return null;
