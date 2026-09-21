@@ -1,8 +1,10 @@
 import axios from 'axios';
+import { randomBytes } from 'node:crypto';
 import { supabase, ARC_PAY_CONFIG, getArcPayAuthConfig, ARC_SETTLEMENT_CURRENCY } from './arcpay.config.js';
 import { getCallerInfo, generateLinkToken } from './payment.helpers.js';
 import { generatePaymentLinkTemplate } from '../../services/email/templates.js';
-import { reconcileBookingPayment } from './checkout.handlers.js';
+import { reconcileBookingPayment, CHECKOUT_REUSE_WINDOW_MS } from './checkout.handlers.js';
+import { inspectArcOrder } from './operations.handlers.js';
 import { errorSummary } from '../../utils/errorSummary.js';
 
 /**
@@ -235,6 +237,67 @@ export async function handleProcessPaymentLink(req, res) {
             });
         }
 
+        // One link, one payment page that can be paid. Every Pay click opened
+        // a new ARC order, and the link is marked paid only when the payer's
+        // browser comes back to complete it - so a second click, or a payer who
+        // paid and closed the tab before that, got a second live page and could
+        // be charged twice. A page opened for this link within its life on ARC
+        // (the same window hosted checkout uses) is handed back instead. An
+        // older one is asked about at ARC first: a payment already taken there
+        // stops a new page opening, and so does not being able to ask.
+        const refuseAsPaid = (orderId) => {
+            console.error('⛔ Payment link refused: ARC already holds a payment for it', { linkId: paymentLink.id, orderId });
+            return res.status(409).json({
+                success: false,
+                code: 'PAYMENT_LINK_ALREADY_PAID',
+                error: 'A payment has already been taken for this link. Please do not pay again - call (877) 538-7380 and we will confirm it for you.'
+            });
+        };
+        const cannotCheck = () => res.status(503).json({
+            success: false,
+            code: 'PAYMENT_LINK_UNAVAILABLE',
+            error: 'We could not start your payment just now. Please try again in a moment. Nothing has been charged.'
+        });
+
+        const { data: earlierPages, error: earlierError } = await supabase
+            .from('payments')
+            .select('id, arc_order_id, arc_session_id, payment_status, created_at')
+            .eq('metadata->>payment_link_token', token)
+            .order('created_at', { ascending: false })
+            .limit(5);
+        if (earlierError) {
+            console.error('❌ Payment link: could not look for an earlier payment page', { linkId: paymentLink.id, reason: earlierError.message });
+            return cannotCheck();
+        }
+        const pages = Array.isArray(earlierPages) ? earlierPages : [];
+        const latest = pages[0];
+        const latestAge = Date.now() - Date.parse(latest?.created_at);
+        if (latest?.payment_status === 'pending' && latest.arc_session_id && latest.arc_order_id
+            && latestAge >= 0 && latestAge < CHECKOUT_REUSE_WINDOW_MS) {
+            const openUrl = `https://api.arcpay.travel/checkout/pay/${latest.arc_session_id}`;
+            console.log('♻️ Handing back the payment page already open for this link', { orderId: latest.arc_order_id });
+            return res.json({
+                success: true,
+                reused: true,
+                sessionId: latest.arc_session_id,
+                orderId: latest.arc_order_id,
+                checkoutUrl: openUrl,
+                paymentPageUrl: openUrl
+            });
+        }
+        for (const page of pages) {
+            if (page.payment_status === 'completed') return refuseAsPaid(page.arc_order_id);
+            if (page.payment_status !== 'pending' || !page.arc_order_id) continue;
+            const arcOrder = await inspectArcOrder(page.arc_order_id);
+            if (arcOrder.reachable && arcOrder.holdsPayment) return refuseAsPaid(page.arc_order_id);
+            // ARC answers 400/404 for an order nobody ever paid on: the page
+            // was opened and left.
+            if (!arcOrder.reachable && ![400, 404].includes(arcOrder.httpStatus)) {
+                console.error('❌ Payment link: ARC could not say whether an earlier page was paid', { orderId: page.arc_order_id, httpStatus: arcOrder.httpStatus ?? null });
+                return cannotCheck();
+            }
+        }
+
         // Create ARC Pay Hosted Checkout
         const arcMerchantId = ARC_PAY_CONFIG.MERCHANT_ID;
         const arcApiPassword = ARC_PAY_CONFIG.API_PASSWORD;
@@ -247,7 +310,9 @@ export async function handleProcessPaymentLink(req, res) {
         const frontendBaseUrl = process.env.FRONTEND_URL || 'https://www.jetsetterss.com';
         const authHeader = 'Basic ' + Buffer.from(`merchant.${arcMerchantId}:${arcApiPassword}`).toString('base64');
 
-        const orderId = `PL-${paymentLink.id.slice(0, 8)}-${Date.now().toString().slice(-6)}`;
+        // Random, not the clock. `Date.now()`'s last six digits came round
+        // again every 1,000 seconds, and ARC keys a payment by its order id.
+        const orderId = `PL-${paymentLink.id.slice(0, 8)}-${randomBytes(5).toString('hex').toUpperCase()}`;
         const returnUrl = `${frontendBaseUrl}/payment/callback?orderId=${orderId}&bookingType=${paymentLink.booking_type}&paymentLinkToken=${token}`;
         const cancelUrl = `${frontendBaseUrl}/pay/${token}?cancelled=true`;
 
@@ -304,7 +369,17 @@ export async function handleProcessPaymentLink(req, res) {
         const firstName = nameParts[0] || '';
         const lastName = nameParts.slice(1).join(' ') || '';
 
-        const { data: bookingRecord } = await supabase.from('bookings').insert({
+        /**
+         * Both rows or no payment page.
+         *
+         * complete-payment-link finds the payment by this booking row and the
+         * payments row below, and answers "Booking not found" / "could not be
+         * verified" without them. Neither insert's error was read: a refused
+         * row still sent the customer to a live ARC page, and a payment made
+         * there was recorded nowhere any job reads. The ARC session already
+         * exists, but a session nobody is sent to costs nothing.
+         */
+        const { error: bookingInsertError } = await supabase.from('bookings').insert({
             booking_reference: orderId,
             travel_type: paymentLink.booking_type,
             total_amount: parseFloat(paymentLink.amount),
@@ -327,10 +402,14 @@ export async function handleProcessPaymentLink(req, res) {
                 customer_name: paymentLink.customer_name
             },
             created_at: new Date().toISOString()
-        }).select().single();
+        });
+        if (bookingInsertError) {
+            console.error('❌ Refusing payment link checkout: the booking could not be recorded', { orderId, code: bookingInsertError.code, reason: bookingInsertError.message });
+            return cannotCheck();
+        }
 
         // Store payment record
-        await supabase.from('payments').insert({
+        const { error: paymentInsertError } = await supabase.from('payments').insert({
             amount: parseFloat(paymentLink.amount),
             currency: paymentLink.currency,
             payment_status: 'pending',
@@ -346,6 +425,15 @@ export async function handleProcessPaymentLink(req, res) {
             },
             created_at: new Date().toISOString()
         });
+        if (paymentInsertError) {
+            console.error('❌ Refusing payment link checkout: the payment could not be recorded', { orderId, code: paymentInsertError.code, reason: paymentInsertError.message });
+            // The booking row this request just made, under a reference nobody
+            // else has seen: without its payment it is a checkout that can never
+            // be paid.
+            const { error: cleanupError } = await supabase.from('bookings').delete().eq('booking_reference', orderId);
+            if (cleanupError) console.error('⚠️ Could not remove the unpaid payment-link booking', { orderId, reason: cleanupError.message });
+            return cannotCheck();
+        }
 
         // Build the checkout redirect URL (must use api.arcpay.travel, NOT ap-gateway.mastercard.com)
         const checkoutUrl = `https://api.arcpay.travel/checkout/pay/${sessionId}`;
