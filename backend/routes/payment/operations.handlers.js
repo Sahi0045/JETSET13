@@ -1424,13 +1424,22 @@ export async function handlePaymentVoid(req, res) {
         const authConfig = getArcPayAuthConfig();
 
         // 2. RETRIEVE_ORDER to (a) verify the order is still voidable and (b) find the target transaction id
-        let targetTxnId = payment?.arc_transaction_id || booking?.booking_details?.transaction_id || null;
+        //
+        // Both come from ARC or the void does not happen. When the order could
+        // not be read this used to void anyway, aimed at an id the rows held -
+        // for a hotel or a cruise `booking_details.transaction_id` is the ARC
+        // result indicator, not a transaction - on an order whose state nobody
+        // had looked at. Refused instead, the way a cancellation refuses when
+        // the gateway cannot say what it holds.
+        let targetTxnId = null;
         let voidedAmount = null;
         let orderStatus = null;
+        let orderRead = false;
         try {
             const orderUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${arcOrderId}`;
             const orderResp = await axios.get(orderUrl, { headers: authConfig.headers, validateStatus: () => true });
             if (orderResp.status === 200 && orderResp.data) {
+                orderRead = true;
                 orderStatus = orderResp.data.status; // e.g. CAPTURED, AUTHORIZED, REFUNDED, CANCELLED
                 const txns = Array.isArray(orderResp.data.transaction) ? orderResp.data.transaction : [];
 
@@ -1457,6 +1466,16 @@ export async function handlePaymentVoid(req, res) {
             }
         } catch (retrieveErr) {
             console.warn('⚠️ RETRIEVE_ORDER failed:', retrieveErr.message);
+        }
+
+        if (!orderRead) {
+            await giveBack();
+            return res.status(503).json({
+                success: false,
+                code: 'GATEWAY_UNAVAILABLE',
+                retryable: true,
+                error: 'Could not read this payment from ARC Pay, so nothing was voided. Try again in a few minutes.'
+            });
         }
 
         if (!targetTxnId) {
@@ -1498,6 +1517,15 @@ export async function handlePaymentVoid(req, res) {
         const voidedAt = new Date().toISOString();
 
         // 4a. Update the booking (DB payment_status constraint allows 'refunded' — funds fully returned by void)
+        //
+        // From here the money is back with the customer, so a write that fails,
+        // or matches nothing because the booking changed hands while ARC
+        // answered, is not a success. It used to be logged and answered "Payment
+        // voided successfully", leaving the booking `paid` for money that had
+        // gone back - which the order route and the paid-not-ticketed alarm read
+        // as a live payment. It is answered the way a refund that could not be
+        // recorded is (handlePaymentRefund, RECORD_FAILED).
+        let recordError = null;
         if (booking) {
             // Read back rather than spread the row this request started with:
             // reconcile, a chain or a cancellation may have written since, and
@@ -1531,8 +1559,13 @@ export async function handlePaymentVoid(req, res) {
             // Still this void's booking: nothing may have taken it while ARC answered.
             if (claim) update = update.eq('booking_details->gds_chain->>startedAt', claim.stamp);
             const { data: written, error: bErr } = await update.select('id');
-            if (bErr) console.error('⚠️ Booking void-update failed:', bErr.message);
-            else if (!written?.length) console.error('⚠️ Payment voided, but the booking changed hands before it was recorded', { bookingReference: booking.booking_reference });
+            if (bErr) {
+                console.error('⚠️ Booking void-update failed:', bErr.message);
+                recordError = `the booking could not be updated (${bErr.message})`;
+            } else if (!written?.length) {
+                console.error('⚠️ Payment voided, but the booking changed hands before it was recorded', { bookingReference: booking.booking_reference });
+                recordError = 'the booking changed hands before the void was recorded';
+            }
             claim = null;
         }
 
@@ -1548,7 +1581,20 @@ export async function handlePaymentVoid(req, res) {
                     void: { transactionId: voidTxnId, targetTransactionId: targetTxnId, reason, voidedAt, paymentAction: 'VOID' }
                 }
             }).eq('id', payment.id);
-            if (pErr) console.error('⚠️ Payment void-update failed:', pErr.message);
+            if (pErr) {
+                console.error('⚠️ Payment void-update failed:', pErr.message);
+                recordError = recordError || `the payment record could not be updated (${pErr.message})`;
+            }
+        }
+
+        if (recordError) {
+            return res.status(500).json({
+                success: false,
+                code: 'RECORD_FAILED',
+                error: 'The void went through at ARC Pay, but it could not be recorded here. Do not void it again - record it by hand.',
+                reason: recordError,
+                void: { bookingReference: booking?.booking_reference || ref, orderId: arcOrderId, voidTransactionId: voidTxnId, targetTransactionId: targetTxnId }
+            });
         }
 
         return res.json({
