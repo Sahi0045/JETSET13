@@ -25,7 +25,7 @@ import { unchangedSince } from '../utils/bookingDetailsGuard.js';
 import { queueEnvironment } from '../utils/queueEnvironment.js';
 import {
   NO_CONFIRMED_SEAT_REVIEW_REASON, TICKET_NUMBERS_MISSING, isFailedCancellation, isUnrecordedCancellation,
-  needsAirlineRefundClaim, ticketsOf,
+  needsAirlineRefundClaim, ticketsOf, unrecordedCancellationOf,
 } from '../../shared/reviewQueue.js';
 
 /**
@@ -176,11 +176,13 @@ export function describeTicketNumbersMissing(booking) {
 
 /**
  * One line per cancellation carried out but not recorded. What the cancel did,
- * as its flag says - the row itself may still read confirmed and paid.
+ * as its flag says - the row itself may still read confirmed and paid. The flag
+ * may sit under a later one (unrecordedCancellationOf); that one is named too.
  */
 export function describeUnrecordedCancellation(booking) {
   const details = booking.booking_details || {};
-  const review = details.needs_review || {};
+  const latest = details.needs_review || {};
+  const review = unrecordedCancellationOf(booking) || latest;
   const hours = Math.round((Date.now() - Date.parse(review.at || booking.created_at)) / 36e5);
   const tickets = review.tickets || [];
   return [
@@ -188,6 +190,9 @@ export function describeUnrecordedCancellation(booking) {
     `PNR ${details.pnr || 'none'} · payment ${review.paymentAction || 'unknown'} ${review.refundAmount ?? 0} USD`
       + ` · tickets voided: ${review.ticketsVoided === true ? 'yes' : 'no'}`
       + (tickets.length ? ` · to claim from the airline: ${tickets.join(', ')}` : ''),
+    ...(latest !== review
+      ? [`since then: ${latest.reason || 'flagged again'}${latest.detail ? ` (${latest.detail})` : ''}`]
+      : []),
     `flagged ${hours}h ago`,
   ].join('\n');
 }

@@ -83,8 +83,27 @@ export function needsAirlineRefundClaim(booking) {
  * a refund to claim, when the first thing to do is find out what happened.
  */
 export function isUnrecordedCancellation(booking) {
-  const review = detailsOf(booking)?.needs_review;
-  return review?.source === 'cancellation' && review.unrecorded === true;
+  return unrecordedCancellationOf(booking) !== null;
+}
+
+/**
+ * The unrecorded-cancellation flag on a booking, or null - on top, or under a
+ * later one.
+ *
+ * A later cancel attempt writes its own flag and keeps the one before only as
+ * `previous` (payment/operations.handlers.js keepingPrevious). Reading the top
+ * flag alone, a failed retry took "Cancelled, but not recorded" off the desk
+ * list and the alarm, though nothing about it had been resolved. A flag a
+ * person resolved settles everything under it, so the search stops there.
+ */
+export function unrecordedCancellationOf(booking) {
+  let review = detailsOf(booking)?.needs_review;
+  for (let depth = 0; review && depth < 20; depth += 1) {
+    if (review.resolved_at) return null;
+    if (review.source === 'cancellation' && review.unrecorded === true) return review;
+    review = review.previous;
+  }
+  return null;
 }
 
 /**
@@ -115,14 +134,15 @@ export function attentionOf(booking) {
   if (review?.resolved_at) return null;
 
   // Before anything reads the booking's status or tickets: neither says what
-  // happened, which is the point of this flag.
-  if (isUnrecordedCancellation(booking)) {
+  // happened, which is the point of this flag. Found under a later flag too.
+  const unrecorded = unrecordedCancellationOf(booking);
+  if (unrecorded) {
     return {
       kind: 'unrecorded_cancellation',
-      reason: review.reason || 'cancellation carried out but not recorded',
-      since: review.at || null,
-      ...(Array.isArray(review.tickets) && review.tickets.length
-        ? { tickets: review.tickets.map((ticket) => ticket?.number ?? ticket) }
+      reason: unrecorded.reason || 'cancellation carried out but not recorded',
+      since: unrecorded.at || null,
+      ...(Array.isArray(unrecorded.tickets) && unrecorded.tickets.length
+        ? { tickets: unrecorded.tickets.map((ticket) => ticket?.number ?? ticket) }
         : {}),
     };
   }
