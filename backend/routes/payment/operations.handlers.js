@@ -1729,48 +1729,76 @@ export async function handlePaymentRetrieve(req, res) {
             return res.status(404).json({ success: false, error: 'Payment not found' });
         }
 
-        // Try to retrieve order status from ARC Pay
+        // The order ARC opened for this payment. For a quote that is the row's
+        // own id; for a payment link it is `PL-...`, and asking for the row's
+        // id 404'd, so the button did nothing for every payment-link payment.
+        const arcOrderId = payment.arc_order_id || paymentId;
         let arcPayData = null;
+        let arcHttpStatus = null;
         try {
             const authConfig = getArcPayAuthConfig();
-            const orderUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${paymentId}`;
+            const orderUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${arcOrderId}`;
 
             const orderResponse = await fetch(orderUrl, {
                 method: 'GET',
                 headers: authConfig.headers
             });
-
-            if (orderResponse.ok) {
-                arcPayData = await orderResponse.json();
-
-                // Sync status from ARC Pay to local DB
-                const arcStatus = arcPayData?.status;
-                let localStatus = payment.payment_status;
-
-                if (arcStatus === 'CAPTURED' && localStatus !== 'completed') {
-                    localStatus = 'completed';
-                } else if (arcStatus === 'REFUNDED' && localStatus !== 'refunded') {
-                    localStatus = 'refunded';
-                } else if (arcStatus === 'PARTIALLY_REFUNDED' && localStatus !== 'partially_refunded') {
-                    localStatus = 'partially_refunded';
-                } else if ((arcStatus === 'VOID' || arcStatus === 'CANCELLED') && localStatus !== 'voided') {
-                    localStatus = 'voided';
-                }
-
-                if (localStatus !== payment.payment_status) {
-                    await supabase.from('payments').update({
-                        payment_status: localStatus,
-                        last_status_check: new Date().toISOString()
-                    }).eq('id', paymentId);
-                }
-            }
+            arcHttpStatus = orderResponse.status ?? null;
+            if (orderResponse.ok) arcPayData = await orderResponse.json();
         } catch (arcError) {
             console.warn('⚠️ Could not retrieve ARC Pay status:', arcError.message);
         }
 
+        // Not asked is not in agreement. This answered success with the row as
+        // it was, so the desk read "checked" when ARC had never been reached.
+        if (!arcPayData) {
+            return res.status(502).json({
+                success: false,
+                error: `Could not read this payment from ARC Pay${arcHttpStatus ? ` (${arcHttpStatus})` : ''}. Nothing was changed.`,
+            });
+        }
+
+        // Sync status from ARC Pay to local DB, in values the payments CHECK
+        // allows: pending|processing|completed|failed|refunded. This wrote
+        // 'partially_refunded' and 'voided', and `last_status_check`, a column
+        // the table does not have - so every write failed with 42703 or 23514,
+        // unread, and the stale row was returned as if it had been synced.
+        //  - a voided order returned everything; the void itself records that
+        //    as 'refunded' (handlePaymentVoid), which is only true of a payment
+        //    that had been taken;
+        //  - a partial refund has no value here; handlePaymentRefund leaves the
+        //    status as it is and keeps the history in metadata.
+        const arcStatus = arcPayData?.status;
+        let localStatus = payment.payment_status;
+        if (arcStatus === 'CAPTURED') {
+            localStatus = 'completed';
+        } else if (arcStatus === 'REFUNDED') {
+            localStatus = 'refunded';
+        } else if ((arcStatus === 'VOID' || arcStatus === 'CANCELLED') && payment.payment_status === 'completed') {
+            localStatus = 'refunded';
+        }
+
+        let current = payment;
+        if (localStatus !== payment.payment_status) {
+            const { data: written, error: writeError } = await supabase.from('payments').update({
+                payment_status: localStatus,
+                updated_at: new Date().toISOString()
+            }).eq('id', paymentId).select('*');
+            if (writeError || !written?.length) {
+                console.error('❌ Payment status sync failed:', writeError?.message || 'no row matched', { paymentId, arcStatus });
+                return res.status(500).json({
+                    success: false,
+                    error: `ARC Pay shows this payment as ${arcStatus}, but the record here could not be updated.`,
+                    payment,
+                    orderData: arcPayData
+                });
+            }
+            current = written[0];
+        }
+
         return res.json({
             success: true,
-            payment: payment,
+            payment: current,
             orderData: arcPayData
         });
     } catch (error) {
