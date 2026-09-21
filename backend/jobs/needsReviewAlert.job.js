@@ -22,6 +22,7 @@
 import supabase from '../config/supabase.js';
 import { postToSlack } from './slackAlert.js';
 import { unchangedSince } from '../utils/bookingDetailsGuard.js';
+import { TICKET_NUMBERS_MISSING } from '../../shared/reviewQueue.js';
 
 const DEFAULT_INTERVAL_MS = 15 * 60 * 1000;
 const FIRST_RUN_DELAY_MS = 60 * 1000;      // let the app finish booting first
@@ -58,9 +59,12 @@ export function selectUnannounced(rows = []) {
     // cancelled and ticketed, so both checks below would skip it - and did.
     if (needsAirlineRefundClaim(booking)) return true;
 
-    // The ticket turned up later, by retry or by hand.
-    if (details.gds?.ticketed === true) return false;
-    if (Array.isArray(details.tickets) && details.tickets.length > 0) return false;
+    // The ticket turned up later, by retry or by hand. Not the chain's own
+    // "issued, but the numbers did not all arrive": that row is ticketed by
+    // definition, and skipping it here meant nobody was ever told.
+    const numbersMissing = review?.reason === TICKET_NUMBERS_MISSING;
+    if (!numbersMissing && details.gds?.ticketed === true) return false;
+    if (!numbersMissing && Array.isArray(details.tickets) && details.tickets.length > 0) return false;
 
     // Already dealt with: a cancelled or refunded booking has been resolved and
     // nobody needs paging about it. The first dry run flagged FLTMTPRZA5T -
