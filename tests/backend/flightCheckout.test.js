@@ -176,6 +176,28 @@ describe('verifyFlightCharge', () => {
     expect(result.coupon.code).toBe('FLY10');
   });
 
+  // A coupon that cannot be read is not a coupon that does not apply, and not
+  // an unexplained failure either. The read's error escaped as a bare 500
+  // "Failed to create hosted checkout", which none of the review page's
+  // recovery branches read, so every retry failed the same way unexplained.
+  it('says the coupon could not be checked when the coupons table cannot be read', async () => {
+    const { verifyFlightCharge } = await import('../../backend/services/flightCheckout.service.js');
+    const client = clientFor();
+    const from = client.from;
+    client.from = vi.fn((table) => {
+      const query = from(table);
+      if (table === 'coupons') query.maybeSingle = vi.fn(async () => ({ data: null, error: { message: 'connection reset' } }));
+      return query;
+    });
+
+    const result = await verifyFlightCharge({ client, amount: 361.8, bookingData: bookingFor(2), couponCode: 'FLY10', priceOffer: pricedAt(400) });
+
+    expect(result.ok).toBe(false);
+    expect(result.status).toBe(503);
+    expect(result.code).toBe('COUPON_UNAVAILABLE');
+    expect(result.message).toMatch(/coupon/i);
+  });
+
   // So the customer's own abandoned payment page for this same trip is not
   // taken for the coupon being on another booking (coupon.service.js).
   it('tells the coupon check which trip this is', async () => {

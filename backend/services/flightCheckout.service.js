@@ -291,16 +291,27 @@ export async function verifyFlightCharge({
   let coupon = null;
   if (couponCode) {
     const beforeDiscount = computeFlightCharge({ fareTotal, travellerTypes, config });
-    const evaluated = await evaluateCoupon(client, {
-      code: couponCode,
-      orderTotal: beforeDiscount.total,
-      bookingType: 'flights',
-      userId,
-      email,
-      // So the customer's own abandoned payment page for this trip does not
-      // count as the coupon being on another booking.
-      trip: couponTripKey(offer, passengers),
-    });
+    let evaluated;
+    try {
+      evaluated = await evaluateCoupon(client, {
+        code: couponCode,
+        orderTotal: beforeDiscount.total,
+        bookingType: 'flights',
+        userId,
+        email,
+        // So the customer's own abandoned payment page for this trip does not
+        // count as the coupon being on another booking.
+        trip: couponTripKey(offer, passengers),
+      });
+    } catch (error) {
+      // The coupons table could not be read. That is not a coupon that does
+      // not apply, so it is not taken off - and it was not an explained
+      // failure either: the error escaped as a bare 500 "Failed to create
+      // hosted checkout", which the review page could do nothing with.
+      console.warn('Checkout could not check the coupon:', error?.message || error);
+      return refuse(503, 'COUPON_UNAVAILABLE',
+        'We could not check your coupon just now. Please try again in a moment.', { pricedFare });
+    }
     if (!evaluated.ok) {
       return refuse(409, 'COUPON_INVALID', evaluated.message, { pricedFare });
     }
