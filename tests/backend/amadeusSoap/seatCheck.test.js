@@ -269,3 +269,42 @@ describe('pricing what the seat check sold, before payment', () => {
     expect(sent('Fare_PricePNRWithBookingClass')).toHaveLength(0);
   });
 });
+
+// /flights/price takes `confirmSeats: true` from any caller, and the number of
+// seats sold came from the offer's travelerPricings - a field the request body
+// supplies - with no ceiling at all (buildAirSellBody only refuses fewer than
+// one). Pricing is built from `_ama.paxRefs`, so a body that left paxRefs at one
+// adult and listed nine ADULT pricings priced one seat and SOLD nine.
+describe('how many seats the check may sell', () => {
+  const withPaxRefs = (types, refs) => ({ ...offer(types), _ama: { ...offer(types)._ama, paxRefs: refs } });
+
+  it('sells no more seats than the fare was priced for', async () => {
+    const confirmSeats = await load();
+    replies(sold);
+    const tampered = withPaxRefs(Array(9).fill('ADULT'), [{ ref: '1', ptc: 'ADT' }]);
+
+    await expect(confirmSeats(tampered)).rejects.toMatchObject({ code: 409 });
+    expect(sent('Air_SellFromRecommendation')).toHaveLength(0);
+  });
+
+  it('never sells more seats than one booking can hold', async () => {
+    const confirmSeats = await load();
+    replies(sold);
+    const tooMany = withPaxRefs(Array(12).fill('ADULT'), Array.from({ length: 12 }, (_, i) => ({ ref: String(i + 1), ptc: 'ADT' })));
+
+    await expect(confirmSeats(tooMany)).rejects.toMatchObject({ code: 409 });
+    expect(sent('Air_SellFromRecommendation')).toHaveLength(0);
+  });
+
+  it('sells for a family priced as it is listed, the lap infant holding no seat', async () => {
+    const confirmSeats = await load();
+    replies(sold);
+    const family = withPaxRefs(['ADULT', 'ADULT', 'CHILD', 'HELD_INFANT'], [
+      { ref: '1', ptc: 'ADT' }, { ref: '2', ptc: 'ADT' }, { ref: '3', ptc: 'CHD' }, { ref: '1', ptc: 'INF' },
+    ]);
+
+    await expect(confirmSeats(family)).resolves.toMatchObject({ available: true });
+    const sell = sent('Air_SellFromRecommendation')[0];
+    expect(sell.match(/<quantity>(\d+)<\/quantity>/g)).toEqual(['<quantity>3</quantity>', '<quantity>3</quantity>']);
+  });
+});

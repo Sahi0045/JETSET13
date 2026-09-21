@@ -970,6 +970,23 @@ export const confirmSeats = async (flightOffer) => {
   const seats = seatCount((offer.travelerPricings ?? []).map((t) => ({ ptc: t.travelerType }))) || 1;
   const flights = ama.segments.map((s) => `${s.marketingCarrier}${s.flightNumber}/${s.rbd}`);
 
+  // Those types come from the request body, on a route anyone can call, and
+  // nothing capped them: buildAirSellBody refuses only fewer than one. The fare
+  // was priced from `_ama.paxRefs` (index.js priceFlightOffer), so a body that
+  // left paxRefs at one adult and listed nine ADULT pricings priced one seat and
+  // sold nine. The sell holds exactly what was priced, and never more than one
+  // booking can hold - the chain's own ceiling, applied before its first call.
+  const pricedSeats = Array.isArray(ama.paxRefs) && ama.paxRefs.length > 0 ? seatCount(ama.paxRefs) : null;
+  if (seats > config.maxPassengersPerPnr || (pricedSeats !== null && seats !== pricedSeats)) {
+    throw new AmadeusSoapError({
+      error: 'This fare can no longer be booked - please search again',
+      code: 409,
+      technicalError: `seat check: ${seats} seats asked for; the fare was priced for ${pricedSeats ?? 'an unstated number'} `
+        + `and a booking holds at most ${config.maxPassengersPerPnr}`,
+      operation: 'Air_SellFromRecommendation',
+    });
+  }
+
   return withSession(async (ctx) => {
     const reply = replyOf(await ctx.call('Air_SellFromRecommendation', buildAirSellBody({ segments: ama.segments, seats })));
     const sold = readAirSellReply(reply, { expectedSegments: ama.segments.length });
