@@ -116,28 +116,45 @@ export async function findRunnable({ limit = MAX_PER_TICK, now = Date.now(), env
   }).slice(0, limit);
 }
 
+/**
+ * How many times a clear that lost its race is read and tried again - the same
+ * as the other writers of this column (patchBookingDetails, the alarms' marks).
+ */
+const CLEAR_TRIES = 3;
+
 /** Drop the stored order (it carries passenger details) once it has an outcome. */
 async function clearQueuedOrder(bookingReference) {
-  const { data: row } = await supabase
-    .from('bookings')
-    .select('status, payment_status, booking_details')
-    .eq('booking_reference', bookingReference)
-    .single();
-  if (!row?.booking_details?.queued_order) return;
-  const { queued_order: _order, queued_env: _env, ...rest } = row.booking_details;
-  // Pinned, like every other writer of this column. A replay that the worker
-  // abandoned at its timeout leaves the route's own chain still running, and
-  // the next tick picks the row up again as soon as a PNR appears - so this
-  // read and write can straddle the chain's final save and put the row back as
-  // it was, losing the tickets and itineraries it had just written while
-  // leaving `status` on the newer value.
-  const { data: written } = await unchangedSince(
-    supabase.from('bookings').update({ booking_details: rest }).eq('booking_reference', bookingReference),
-    row,
-  ).select('booking_reference');
-  if (!written?.length) {
-    log('queued order not cleared: the booking changed while it was being read', { bookingReference });
+  // Read and tried again after a lost race, rather than given up on. This is
+  // the only code that removes the order - passengers' dates of birth and
+  // passport numbers - and after a final failure nothing selects the row
+  // again, so one lost race kept that data for good, and the GDPR erasure job
+  // defers any booking still holding a queued order (gdpr.controller.js), so
+  // the customer's erasure request was refused on every run after it.
+  for (let attempt = 0; attempt < CLEAR_TRIES; attempt += 1) {
+    const { data: row } = await supabase
+      .from('bookings')
+      .select('status, payment_status, booking_details')
+      .eq('booking_reference', bookingReference)
+      .single();
+    if (!row?.booking_details?.queued_order) return;
+    const { queued_order: _order, queued_env: _env, ...rest } = row.booking_details;
+    // Pinned, like every other writer of this column. A replay that the worker
+    // abandoned at its timeout leaves the route's own chain still running, and
+    // the next tick picks the row up again as soon as a PNR appears - so this
+    // read and write can straddle the chain's final save and put the row back as
+    // it was, losing the tickets and itineraries it had just written while
+    // leaving `status` on the newer value.
+    const { data: written, error } = await unchangedSince(
+      supabase.from('bookings').update({ booking_details: rest }).eq('booking_reference', bookingReference),
+      row,
+    ).select('booking_reference');
+    if (error) {
+      log('queued order not cleared', { bookingReference, error: error.message });
+      return;
+    }
+    if (written?.length) return;
   }
+  log('queued order not cleared: the booking kept changing while it was being read', { bookingReference, tries: CLEAR_TRIES });
 }
 
 /**

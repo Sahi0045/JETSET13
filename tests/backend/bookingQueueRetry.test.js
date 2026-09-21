@@ -262,6 +262,45 @@ describe('a final failure', () => {
   });
 });
 
+/**
+ * The stored order carries the passengers' dates of birth and passport numbers,
+ * and clearQueuedOrder is the only code that removes it. Its write is pinned to
+ * the row it read, and when that lost a race it logged and gave up. On a final
+ * failure nothing selects the row again - its chain is `failed` and it carries a
+ * review flag - so the passport data stayed for good, and the GDPR erasure job
+ * (gdpr.controller.js) defers any booking still holding a queued order, so the
+ * customer's erasure request was refused on every run after.
+ */
+describe('dropping the stored order', () => {
+  it('is read and tried again when the booking changed under it', async () => {
+    let raced = false;
+    const { replay } = await load([queuedRow()], {
+      fail: ({ patch }) => {
+        const clearing = patch?.booking_details && !('queued_order' in patch.booking_details);
+        if (clearing && !raced) {
+          raced = true;
+          // A payment reconcile lands between the read and the write.
+          table.row(REF).booking_details.arc_captured_amount = 291;
+        }
+        return false;
+      },
+    });
+
+    const outcome = await replay(snapshot(table.row(REF)), {
+      baseUrl: 'http://x',
+      fetchImpl: answer(403, { success: false, code: 'PAYER_NOT_VERIFIED' }),
+    });
+
+    expect(outcome).toBe('failed');
+    const details = table.row(REF).booking_details;
+    expect(details.queued_order).toBeUndefined();
+    expect(details.queued_env).toBeUndefined();
+    // Merged onto what was written in between, not over it.
+    expect(details.arc_captured_amount).toBe(291);
+    expect(details.needs_review.reason).toMatch(/PAYER_NOT_VERIFIED/);
+  });
+});
+
 describe('the retry delay', () => {
   it('is waited out before the booking is picked up again', async () => {
     const now = Date.now();
