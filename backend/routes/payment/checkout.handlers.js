@@ -1094,45 +1094,24 @@ export async function handleGetPendingBooking(req, res) {
     }
 }
 
-// Session Create - Create ARC Pay session
+/**
+ * Session Create - retired.
+ *
+ * This opened a bare session on the live merchant (no order, no amount) for
+ * anyone who POSTed to it, with no login, and returned ARC's whole reply: an
+ * open proxy to the merchant's session endpoint from our IP. Nothing calls it
+ * - the web app, the mobile app and the backend open payment pages through
+ * hosted checkout, a quote or a payment link, each of which makes its own
+ * session with an order behind it - so it now opens nothing and says so.
+ */
 export async function handleSessionCreate(req, res) {
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Method not allowed' });
     }
-
-    try {
-        const arcMerchantId = ARC_PAY_CONFIG.MERCHANT_ID;
-        const arcApiPassword = ARC_PAY_CONFIG.API_PASSWORD;
-        let arcBaseUrl = ARC_PAY_CONFIG.BASE_URL || 'https://api.arcpay.travel/api/rest/version/100';
-
-        if (arcBaseUrl.includes('/merchant/')) {
-            arcBaseUrl = arcBaseUrl.split('/merchant/')[0];
-        }
-
-        const sessionUrl = `${arcBaseUrl}/merchant/${arcMerchantId}/session`;
-        const authHeader = 'Basic ' + Buffer.from(`merchant.${arcMerchantId}:${arcApiPassword}`).toString('base64');
-
-        const response = await axios.post(sessionUrl, {}, {
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': authHeader
-            },
-            timeout: 30000
-        });
-
-        return res.json({
-            success: true,
-            sessionData: response.data,
-            message: 'Session created successfully'
-        });
-
-    } catch (error) {
-        console.error('❌ Session create error:', errorSummary(error));
-        return res.status(500).json({
-            success: false,
-            error: 'Failed to create session'
-        });
-    }
+    return res.status(410).json({
+        success: false,
+        error: 'This payment action is no longer available. Payment pages are opened by checkout.'
+    });
 }
 
 /**
