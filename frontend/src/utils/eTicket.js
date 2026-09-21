@@ -201,9 +201,16 @@ export function documentState(bookingData) {
  * airline holds. Without a PNR there is nothing to carry - no ticket and no
  * reservation - and a PDF headed "Booking Confirmation" says otherwise. Nor
  * with a PNR the airline confirmed no seat on: there is no seat to prove.
+ *
+ * Nor a held seat whose payment went back: the Payments tab refunds without
+ * cancelling, and the PDF said "Your seat is held under the PNR below. We will
+ * email your e-ticket once it is issued" - no ticket is issued on it.
  */
 export function canDownloadDocument(bookingData) {
-  return ['ticketed', 'ticket_pending', 'held'].includes(documentState(bookingData));
+  const state = documentState(bookingData);
+  const payment = String(bookingData?.payment_status ?? bookingData?.paymentStatus ?? '').toLowerCase();
+  if (state === 'held' && ['refunded', 'partially_refunded', 'reversed'].includes(payment)) return false;
+  return ['ticketed', 'ticket_pending', 'held'].includes(state);
 }
 
 /** Whether the money is actually confirmed, rather than assumed. */
