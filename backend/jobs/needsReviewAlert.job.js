@@ -322,6 +322,13 @@ export function buildMessage(bookings) {
   // A cancel the airline refused: under "paid but not ticketed" it read
   // "ticket it, or refund it" - a refund against a live PNR.
   const cancelFailed = bookings.filter((booking) => !isUnrecordedCancellation(booking) && isFailedCancellation(booking));
+  // Refunded before its cancel was refused: the Payments tab writes
+  // payment_status alone. "No refund was made ... Do NOT refund until it is
+  // cancelled" was said of it too, of money already returned.
+  const refundedBefore = (booking) => ['refunded', 'partially_refunded', 'reversed']
+    .includes(String(booking.payment_status || '').toLowerCase());
+  const cancelFailedPaid = cancelFailed.filter((booking) => !refundedBefore(booking));
+  const cancelFailedRefunded = cancelFailed.filter(refundedBefore);
   const rest = bookings.filter((booking) => !isUnrecordedCancellation(booking) && !isFailedCancellation(booking));
   const claims = rest.filter(needsAirlineRefundClaim);
   // A ticketed booking whose numbers did not arrive is NOT "paid but not
@@ -350,16 +357,29 @@ export function buildMessage(bookings) {
       ...unrecorded.map(describeUnrecordedCancellation),
     );
   }
-  if (cancelFailed.length) {
+  if (cancelFailedPaid.length) {
     sections.push(
-      `:x: *${cancelFailed.length} cancellation${cancelFailed.length > 1 ? 's' : ''} the airline did not carry out*`,
+      `:x: *${cancelFailedPaid.length} cancellation${cancelFailedPaid.length > 1 ? 's' : ''} the airline did not carry out*`,
       'The customer asked to cancel and was told our team would complete it. '
         + 'The airline did not cancel the PNR, so it is still live, and no refund was made. '
         + 'Cancel the PNR with the airline first. Do NOT refund until it is cancelled: '
         + 'a refund against a live PNR pays out for flights the customer still holds. '
         + 'A traveller whose ticket was voided cannot fly on it.',
       '',
-      ...cancelFailed.map(describeFailedCancellation),
+      ...cancelFailedPaid.map(describeFailedCancellation),
+    );
+  }
+  if (cancelFailedRefunded.length) {
+    sections.push(
+      `:x: *${cancelFailedRefunded.length} cancellation${cancelFailedRefunded.length > 1 ? 's' : ''} the airline did not carry out, `
+        + 'on a payment already refunded*',
+      'The customer asked to cancel and was told our team would complete it. '
+        + 'The airline did not cancel the PNR, so it is still live. This cancel made no refund, but the payment had already '
+        + 'been refunded before it, in full or in part: the payment status on each line says which. Do NOT refund it again. '
+        + 'Cancel the PNR with the airline: while it is live, it holds flights that are no longer paid for in full. '
+        + 'A traveller whose ticket was voided cannot fly on it.',
+      '',
+      ...cancelFailedRefunded.map(describeFailedCancellation),
     );
   }
   if (seatless.length) {
