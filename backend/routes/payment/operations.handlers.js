@@ -1104,6 +1104,46 @@ async function sendCancellationEmail(booking, email, cancellationResult) {
 // from the admin panel (InquiryDetail.jsx)
 // ============================================
 
+/**
+ * How long one desk member's hold on refunding a payment lasts: far longer
+ * than a gateway read and a refund take, short enough that a closed tab does
+ * not lock the payment for good. The same as the flight manual refund's.
+ */
+const PAYMENT_REFUND_CLAIM_TTL_MS = 5 * 60_000;
+const PAYMENT_REFUND_CLAIM = 'metadata->refund_claim->>claimedAt';
+
+/**
+ * Take a payment's refund for one desk member, or learn that someone else has
+ * it. Two admins pressing Refund both read ARC's ceiling - 291 captured,
+ * nothing refunded - both passed it, and ARC took both refunds, each under its
+ * own transaction id: 582 back on a 291 charge. A compare-and-set on the claim
+ * stamp decides, as claimManualRefund does for a cancelled flight.
+ */
+async function claimPaymentRefund(payment, adminId) {
+    const prior = payment.metadata?.refund_claim?.claimedAt ?? null;
+    if (prior && Date.now() - Date.parse(prior) < PAYMENT_REFUND_CLAIM_TTL_MS) return { claimed: false };
+
+    const stamp = new Date().toISOString();
+    const metadata = { ...(payment.metadata || {}), refund_claim: { claimedAt: stamp, by: adminId } };
+    let update = supabase.from('payments').update({ metadata }).eq('id', payment.id);
+    update = prior === null ? update.is(PAYMENT_REFUND_CLAIM, null) : update.eq(PAYMENT_REFUND_CLAIM, prior);
+    const { data, error } = await update.select('id');
+    if (error) return { claimed: false, error };
+    if (!data?.length) return { claimed: false };
+    return { claimed: true, stamp, metadata };
+}
+
+/** Let go of a refund claim that moved no money. Conditioned on its own stamp. */
+async function releasePaymentRefund(paymentId, claim) {
+    const { refund_claim: _mine, ...metadata } = claim.metadata;
+    const { error } = await supabase
+        .from('payments')
+        .update({ metadata })
+        .eq('id', paymentId)
+        .eq(PAYMENT_REFUND_CLAIM, claim.stamp);
+    if (error) console.error('⚠️ Could not release the payment refund claim:', error.message);
+}
+
 export async function handlePaymentRefund(req, res) {
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Method not allowed' });
@@ -1114,6 +1154,16 @@ export async function handlePaymentRefund(req, res) {
     // so it must gate itself — previously it did not, leaving an unauthenticated
     // ARC Pay refund endpoint reachable by anyone.
     if (!(await requireBookingStaff(req, res))) return;
+
+    // Held from before ARC is read until the refund is recorded, and handed
+    // back on every way out that moved no money.
+    let claim = null;
+    let claimedPaymentId = null;
+    const giveBack = async () => {
+        const held = claim;
+        claim = null;
+        if (held) await releasePaymentRefund(claimedPaymentId, held);
+    };
 
     try {
         console.log('💰 Handling PAYMENT-REFUND operation');
@@ -1149,6 +1199,20 @@ export async function handlePaymentRefund(req, res) {
         if (isNaN(refundAmount) || refundAmount <= 0) {
             return res.status(400).json({ success: false, error: 'Invalid refund amount' });
         }
+        const taken = await claimPaymentRefund(payment, (await getCaller(req))?.id ?? req.user?.id ?? null);
+        if (taken.error) {
+            return res.status(503).json({ success: false, code: 'REFUND_UNAVAILABLE', error: 'Could not start the refund just now. Nothing has been refunded; try again.' });
+        }
+        if (!taken.claimed) {
+            return res.status(409).json({
+                success: false,
+                code: 'REFUND_IN_PROGRESS',
+                error: 'Someone is refunding this payment right now. Nothing has been refunded; refresh in a few minutes to see what they recorded.',
+            });
+        }
+        claim = taken;
+        claimedPaymentId = payment.id;
+
         // CRITICAL: Use the ARC Pay order ID (FLT...), NOT the Supabase UUID
         const arcOrderId = payment.arc_order_id || paymentId;
         console.log('🔑 ARC Pay Order ID for refund:', arcOrderId, '(Supabase ID:', paymentId, ')');
@@ -1165,6 +1229,7 @@ export async function handlePaymentRefund(req, res) {
         const orderUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${arcOrderId}`;
         const orderResp = await axios.get(orderUrl, { headers: authConfig.headers, validateStatus: () => true });
         if (orderResp.status !== 200 || !orderResp.data) {
+            await giveBack();
             return res.status(502).json({
                 success: false,
                 error: `Could not read this payment from ARC Pay (${orderResp.status}). Nothing has been refunded.`,
@@ -1199,6 +1264,7 @@ export async function handlePaymentRefund(req, res) {
         // no ceiling at all. A 200 with `{}` is truthy, so the 502 above does
         // not catch it.
         if (capturedAmount <= 0) {
+            await giveBack();
             return res.status(502).json({
                 success: false,
                 error: 'ARC Pay did not report a captured payment for this order, so there is no balance to refund against. '
@@ -1206,6 +1272,7 @@ export async function handlePaymentRefund(req, res) {
             });
         }
         if (alreadyVoided || alreadyRefunded + 0.01 >= capturedAmount) {
+            await giveBack();
             return res.status(400).json({
                 success: false,
                 error: 'This payment has already been returned in full.',
@@ -1213,6 +1280,7 @@ export async function handlePaymentRefund(req, res) {
         }
         const refundCeiling = Math.max(0, Math.round((capturedAmount - alreadyRefunded) * 100) / 100);
         if (refundAmount > refundCeiling + 0.001) {
+            await giveBack();
             return res.status(400).json({
                 success: false,
                 error: `Refund amount exceeds the refundable balance (${refundCeiling.toFixed(2)} ${payment.currency || 'USD'})`,
@@ -1224,6 +1292,14 @@ export async function handlePaymentRefund(req, res) {
 
         const refundTxnId = `refund-admin-${Date.now()}`;
         const refundUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${arcOrderId}/transaction/${refundTxnId}`;
+
+        // From the refund request on, money may have moved, so the claim is no
+        // longer handed back on the way out. A request that breaks mid-flight
+        // leaves it to expire rather than letting a second refund go out while
+        // nobody knows what happened to the first. Only ARC's refusal - money
+        // known not to have moved - releases it below.
+        const heldClaim = claim;
+        claim = null;
 
         // `refundResponse.ok` used to decide this. ARC answers a refund it
         // refused with HTTP 200 and `result: "FAILURE"`, so a declined refund
@@ -1240,6 +1316,7 @@ export async function handlePaymentRefund(req, res) {
         }, { headers: authConfig.headers, validateStatus: () => true });
 
         if (!arcSucceeded(refundResponse)) {
+            await releasePaymentRefund(claimedPaymentId, heldClaim);
             console.error('❌ ARC Pay refund refused:', refundResponse.status, JSON.stringify(refundResponse.data));
             // Nothing is written. `refund_pending` is not a value the payments
             // CHECK constraint allows and no job ever read it, so recording it
@@ -1259,7 +1336,11 @@ export async function handlePaymentRefund(req, res) {
         // refunded" guard above could therefore never trip, and the same
         // payment could be refunded over and over.
         const refundedAt = new Date().toISOString();
-        const { error: paymentWriteError } = await supabase.from('payments').update({
+        // The money has moved. The claim is cleared by the write that records
+        // the refund; if that write fails it is left to expire, so nobody
+        // refunds again while the refund is recorded by hand.
+        const { refund_claim: _claim, ...kept } = heldClaim.metadata;
+        const { data: paymentWritten, error: paymentUpdateError } = await supabase.from('payments').update({
             // Only once the gateway holds nothing more. Writing 'refunded' for a
             // PARTIAL refund made the guard above refuse every later call, so
             // the remainder could never be returned - and told reconcile and the
@@ -1269,14 +1350,18 @@ export async function handlePaymentRefund(req, res) {
             // in metadata, which is where the history lives.
             ...(returnsEverything ? { payment_status: 'refunded' } : {}),
             metadata: {
-                ...(payment.metadata || {}),
+                ...kept,
                 refunds: [
-                    ...(payment.metadata?.refunds || []),
+                    ...(kept.refunds || []),
                     { amount: refundAmount, reason, transactionId: refundTxnId, at: refundedAt, by: 'admin' }
                 ]
             },
             updated_at: refundedAt
-        }).eq('id', paymentId);
+        }).eq('id', paymentId).eq(PAYMENT_REFUND_CLAIM, heldClaim.stamp).select('id');
+        // Matching nothing means the claim was lost while ARC answered: the
+        // refund happened and this row does not say so.
+        const paymentWriteError = paymentUpdateError
+            || (!paymentWritten?.length ? new Error('the payment changed hands before the refund was recorded') : null);
 
         // The booking this payment belongs to, found the way it is actually
         // linked. This used to filter `bookings.id` by `payment.quote_id` - a
@@ -1321,6 +1406,9 @@ export async function handlePaymentRefund(req, res) {
         });
     } catch (error) {
         console.error('❌ Payment refund error:', errorSummary(error));
+        // Handed back only if the refund was never requested: `claim` is
+        // cleared just before it is.
+        await giveBack().catch(() => {});
         return res.status(500).json({ success: false, error: 'Failed to process refund', details: error.message });
     }
 }

@@ -88,6 +88,9 @@ const refundWith = async ({ order, putReply, body = { paymentId: 'pay-1', reason
   return res;
 };
 
+/** The payments write that recorded the refund: the last, after the claim that held the payment. */
+const recordedRefund = () => table.writes.filter((w) => w.table === 'payments').at(-1);
+
 beforeEach(() => {
   vi.resetModules();
   if (!axios.put) axios.put = vi.fn();
@@ -130,7 +133,7 @@ describe('admin refund', () => {
     });
 
     expect(res.body.success).toBe(true);
-    const write = table.writes.find((w) => w.table === 'payments');
+    const write = recordedRefund();
     expect(write.patch.payment_status).toBe('refunded');
     expect(write.patch.metadata.refunds).toHaveLength(1);
     expect(write.patch.metadata.refunds[0].amount).toBe(291);
@@ -201,7 +204,7 @@ describe('a partial admin refund', () => {
     });
 
     expect(res.body.success).toBe(true);
-    const write = table.writes.find((w) => w.table === 'payments');
+    const write = recordedRefund();
     expect(write.patch.payment_status, 'still owes 191').toBeUndefined();
     expect(write.patch.metadata.refunds).toHaveLength(1);
   });
@@ -236,7 +239,7 @@ describe('a partial admin refund', () => {
       body: { paymentId: 'pay-1', amount: 291, reason: 'All of it' },
     });
 
-    const write = table.writes.find((w) => w.table === 'payments');
+    const write = recordedRefund();
     expect(write.patch.payment_status).toBe('refunded');
   });
 });
@@ -313,6 +316,71 @@ describe('reading the gateway’s transaction list', () => {
     const res = await refundWith({ order });
 
     expect(res.statusCode).toBe(502);
+    expect(axios.put).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Two desk members pressing Refund on the same payment.
+ *
+ * Both read ARC's ceiling - 291 captured, nothing refunded - and both passed
+ * it, because nothing held the payment between reading the ceiling and sending
+ * the refund. Each refund got its own transaction id, so ARC took both: 582
+ * back on a 291 charge.
+ */
+describe('two refunds of one payment at once', () => {
+  const concurrently = async (payments = [payment()]) => {
+    table = fakeBookingsTable([booking()], { tables: { payments } });
+    axios.get.mockResolvedValue(arcOrder());
+    axios.put.mockImplementation(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      return { status: 200, data: { result: 'SUCCESS' } };
+    });
+    const { handlePaymentRefund } = await import('../../backend/routes/payment/operations.handlers.js');
+    const run = async () => {
+      const res = createResponse();
+      await handlePaymentRefund(createRequest({ method: 'POST', body: { paymentId: 'pay-1', amount: 291, reason: 'Duplicate charge' } }), res);
+      return res;
+    };
+    return Promise.all([run(), run()]);
+  };
+
+  it('sends one refund to ARC, and tells the second desk member someone else is refunding it', async () => {
+    const [first, second] = await concurrently();
+
+    expect(axios.put).toHaveBeenCalledTimes(1);
+    const answers = [first, second].map((res) => res.statusCode).sort();
+    expect(answers).toEqual([200, 409]);
+    const refused = [first, second].find((res) => res.statusCode === 409);
+    expect(refused.body.success).toBe(false);
+    expect(refused.body.code).toBe('REFUND_IN_PROGRESS');
+  });
+
+  it('leaves no hold behind once the refund is recorded, or once it is refused', async () => {
+    await concurrently();
+    expect(table.table.length).toBe(1);
+    const { data: [recorded] } = await table.from('payments').eq('id', 'pay-1');
+    expect(recorded.metadata.refund_claim).toBeUndefined();
+    expect(recorded.metadata.refunds).toHaveLength(1);
+
+    const refused = await refundWith({
+      order: arcOrder(),
+      putReply: { status: 200, data: { result: 'FAILURE' } },
+    });
+    expect(refused.statusCode).toBe(400);
+    const { data: [afterRefusal] } = await table.from('payments').eq('id', 'pay-1');
+    expect(afterRefusal.metadata.refund_claim).toBeUndefined();
+  });
+
+  it('waits for a refund another desk member started a moment ago', async () => {
+    const res = await refundWith({
+      order: arcOrder(),
+      putReply: { status: 200, data: { result: 'SUCCESS' } },
+      payments: [payment({ metadata: { refund_claim: { claimedAt: new Date().toISOString(), by: 'admin-2' } } })],
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(axios.get).not.toHaveBeenCalled();
     expect(axios.put).not.toHaveBeenCalled();
   });
 });
