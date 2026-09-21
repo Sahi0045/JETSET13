@@ -344,15 +344,31 @@ export async function handleInitiatePayment(req, res) {
             });
         }
 
-        // Update payment with session ID
-        await supabase
+        // Store the session and its success indicator, and hand out the page
+        // only if that write landed. The callback refuses any payment whose
+        // stored indicator is missing, so a page handed out after a failed
+        // write could be paid and then answered "payment failed" with nothing
+        // recorded: a customer charged and told it failed. Asked for the row
+        // back, because an update that matches nothing answers no error.
+        const { data: stored, error: storeError } = await supabase
             .from('payments')
             .update({
                 arc_session_id: sessionId,
                 success_indicator: successIndicator,
                 arc_order_id: payment.id
             })
-            .eq('id', payment.id);
+            .eq('id', payment.id)
+            .select('id');
+        if (storeError || !stored?.length) {
+            console.error('❌ Quote payment session not stored; payment page withheld', {
+                paymentId: payment.id,
+                error: storeError?.message || 'the update matched no payment row'
+            });
+            return res.status(500).json({
+                success: false,
+                error: 'We could not open the payment page just now. Nothing has been charged - please try again in a minute.'
+            });
+        }
 
         // HPP (Hosted Payment Page) Redirect URL - simple GET redirect with session ID
         // This matches the format in api/payments.js
