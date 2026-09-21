@@ -28,6 +28,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  * query asked for.
  */
 let rows = [];
+// PostgREST refusing to order by a JSON path, as a real 400 would.
+let refuseJsonOrder = false;
 
 const valueAt = (row, path) => path.split(/->>?/).reduce((value, key) => (value == null ? undefined : value[key]), row);
 const text = (value) => (value == null ? null : String(value));
@@ -41,6 +43,9 @@ const table = () => {
     return (row) => (op === 'is' ? valueAt(row, column) == null : text(valueAt(row, column)) === value);
   };
   const run = () => {
+    if (refuseJsonOrder && sorts.some(({ column }) => column.includes('->'))) {
+      return { data: null, error: { code: 'PGRST100', message: '"failed to parse order (booking_details->>ticket_checked_at.asc.nullsfirst)"' } };
+    }
     let out = rows.filter((row) => filters.every((keep) => keep(row)));
     out = [...out].sort((a, b) => {
       for (const { column, ascending, nullsFirst } of sorts) {
@@ -122,6 +127,7 @@ let job;
 
 beforeEach(async () => {
   rows = [];
+  refuseJsonOrder = false;
   const supabase = (await import('../../backend/config/supabase.js')).default;
   supabase.from.mockImplementation(() => table());
   job = await import('../../backend/jobs/ticketSync.job.js');
@@ -188,6 +194,32 @@ describe('cancelled bookings in the window', () => {
     for (let n = 1; n <= 60; n += 1) {
       rows.push(booking(`FLT-CXL-${n}`, `CXL${String(n).padStart(3, '0')}`, `2026-08-01T00:${String(n).padStart(2, '0')}:00.000Z`, { status: 'cancelled' }));
     }
+    rows.push(booking('FLT-HAND', 'HANDMD', day(20)));
+
+    const result = await job.runOnce({ provider: amadeus(), sendEmail: vi.fn(async () => ({ success: true })) });
+
+    expect(result.ticketed).toBe(1);
+    expect(rows.find((r) => r.booking_reference === 'FLT-HAND').booking_details.tickets).toHaveLength(1);
+  });
+});
+
+/**
+ * The least-recently-asked order is the only query in the repo that orders by
+ * a JSON path through PostgREST. If PostgREST ever refuses it, findUnticketed
+ * threw on every tick and ticket sync stopped altogether - worse than the
+ * starvation the order fixes. It falls back to oldest-first instead.
+ */
+describe('when PostgREST refuses to order by ticket_checked_at', () => {
+  it('still finds the bookings, oldest first, and does not stop', async () => {
+    refuseJsonOrder = true;
+    rows.push(booking('FLT-NEW', 'STUCKB', day(5)));
+    rows.push(booking('FLT-OLD', 'STUCKA', day(1)));
+
+    expect((await job.findUnticketed()).map((r) => r.booking_reference)).toEqual(['FLT-OLD', 'FLT-NEW']);
+  });
+
+  it('still records a ticket issued by hand', async () => {
+    refuseJsonOrder = true;
     rows.push(booking('FLT-HAND', 'HANDMD', day(20)));
 
     const result = await job.runOnce({ provider: amadeus(), sendEmail: vi.fn(async () => ({ success: true })) });

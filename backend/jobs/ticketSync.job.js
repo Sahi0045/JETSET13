@@ -100,7 +100,31 @@ const SELECT = 'booking_reference, status, payment_status, booking_details, pass
 const open = (row) => !CLOSED.includes(String(row.status || '').toLowerCase());
 
 export async function findUnticketed({ limit = MAX_PER_TICK } = {}) {
-  const { data, error } = await supabase
+  let { data, error } = await unticketedQuery({ limit, leastRecentlyAsked: true });
+  // Nothing else in the repo orders by a JSON path through PostgREST. If it is
+  // ever refused, this threw on every tick and ticket sync stopped altogether -
+  // worse than the starvation the order fixes. Oldest-first instead, and said.
+  if (error) {
+    log('ordering by ticket_checked_at was refused; reading oldest first instead', { error: error.message });
+    ({ data, error } = await unticketedQuery({ limit, leastRecentlyAsked: false }));
+  }
+
+  if (error) throw new Error(`could not read bookings: ${error.message}`);
+
+  return (data || [])
+    .filter(open)
+    .filter((row) => {
+      const details = row.booking_details || {};
+      // Already has its number: nothing to ask about.
+      if (Array.isArray(details.tickets) && details.tickets.length > 0) return false;
+      if (details.gds?.ticketed === true) return false;
+      return Boolean(details.pnr);
+    })
+    .slice(0, limit);
+}
+
+function unticketedQuery({ limit, leastRecentlyAsked }) {
+  let query = supabase
     .from('bookings')
     .select(SELECT)
     .in('payment_status', PAID)
@@ -125,32 +149,20 @@ export async function findUnticketed({ limit = MAX_PER_TICK } = {}) {
     // whose refund failed stays `paid`, keeps its PNR and was never ticketed,
     // so it matches everything above for ever; filtered only below, sixty of
     // them filled the window and an open booking behind them was never read.
-    .not('status', 'in', `(${CLOSED.join(',')})`)
-    // Least recently asked about first, never-asked first of all.
-    //
-    // Oldest-first alone starved the window the same way from the other end:
-    // a booking that can never be ticketed - Air India refused with 2161, a KU
-    // refused ETKT NOT AUTHORISED, a PDT PNR since purged - never leaves this
-    // population, so once ten of them existed they were the ten asked about
-    // on every tick, and a booking a person ticketed by hand this morning was
-    // never retrieved. `ticket_checked_at` (runOnce) sends each one to the back
-    // once it has been asked, so every booking takes its turn.
-    .order('booking_details->>ticket_checked_at', { ascending: true, nullsFirst: true })
+    .not('status', 'in', `(${CLOSED.join(',')})`);
+  // Least recently asked about first, never-asked first of all.
+  //
+  // Oldest-first alone starved the window the same way from the other end:
+  // a booking that can never be ticketed - Air India refused with 2161, a KU
+  // refused ETKT NOT AUTHORISED, a PDT PNR since purged - never leaves this
+  // population, so once ten of them existed they were the ten asked about
+  // on every tick, and a booking a person ticketed by hand this morning was
+  // never retrieved. `ticket_checked_at` (runOnce) sends each one to the back
+  // once it has been asked, so every booking takes its turn.
+  if (leastRecentlyAsked) query = query.order('booking_details->>ticket_checked_at', { ascending: true, nullsFirst: true });
+  return query
     .order('created_at', { ascending: true })
     .limit(limit * 5);
-
-  if (error) throw new Error(`could not read bookings: ${error.message}`);
-
-  return (data || [])
-    .filter(open)
-    .filter((row) => {
-      const details = row.booking_details || {};
-      // Already has its number: nothing to ask about.
-      if (Array.isArray(details.tickets) && details.tickets.length > 0) return false;
-      if (details.gds?.ticketed === true) return false;
-      return Boolean(details.pnr);
-    })
-    .slice(0, limit);
 }
 
 /**
