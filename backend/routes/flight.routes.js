@@ -151,22 +151,30 @@ async function refundOnFulfillmentFailure(res, { orderId, bookingReference, amou
   // both refuse a booking with `fulfillment_failed`. The caller has already
   // released its claim, and the reversal takes seconds.
   const failingRef = bookingReference || orderId;
+  // Both writes below put back the whole booking_details column from a copy
+  // just read, and neither was pinned to it: a record locator a running chain
+  // committed in between, a payment reconcile or a review stamp was erased -
+  // for the locator, "a reservation nobody can find again". Each is now
+  // written only onto the row it was built from (utils/bookingDetailsGuard.js),
+  // and a lost race reads again and writes again.
   try {
     if (supabase && failingRef) {
-      const { data: failing } = await supabase
-        .from('bookings')
-        .select('id, booking_details')
-        .or((r => `booking_reference.eq.${r},booking_details->>order_id.eq.${r}`)(sanitizeRef(failingRef)))
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (failing && !failing.booking_details?.fulfillment_failed) {
-        await supabase.from('bookings').update({
+      for (let attempt = 1; attempt <= 3; attempt += 1) {
+        const { data: failing } = await supabase
+          .from('bookings')
+          .select('id, status, payment_status, booking_details')
+          .or((r => `booking_reference.eq.${r},booking_details->>order_id.eq.${r}`)(sanitizeRef(failingRef)))
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (!failing || failing.booking_details?.fulfillment_failed) break;
+        const { data: written } = await unchangedSince(supabase.from('bookings').update({
           booking_details: {
             ...failing.booking_details,
             fulfillment_failed: { at: new Date().toISOString(), error: errorMsg, reversal: { action: 'IN_PROGRESS' } },
           },
-        }).eq('id', failing.id);
+        }).eq('id', failing.id), failing).select('id');
+        if (written?.length) break;
       }
     }
   } catch (e) {
@@ -182,7 +190,7 @@ async function refundOnFulfillmentFailure(res, { orderId, bookingReference, amou
   // Record the failure on the booking row created at hosted-checkout (if any).
   try {
     const ref = bookingReference || orderId;
-    if (supabase && ref) {
+    for (let attempt = 1; supabase && ref && attempt <= 3; attempt += 1) {
       const { data: bk } = await supabase
         .from('bookings')
         .select('*')
@@ -190,33 +198,40 @@ async function refundOnFulfillmentFailure(res, { orderId, bookingReference, amou
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
-      if (bk) {
-        // A reversal the gateway refused - or could not attempt - leaves the
-        // customer charged with no booking. Writing that row `cancelled` hid it
-        // from the paid-but-not-ticketed alarm, which skips cancelled rows, and
-        // nothing ever read `fulfillment_failed`, so the one case that needs a
-        // human reached no one. It keeps its status and is flagged instead.
-        // Every caller runs after the payment was verified, so "not reversed"
-        // means the money is still held.
-        const stuck = !reversal.reversed;
-        const now = new Date().toISOString();
-        await supabase.from('bookings').update({
-          ...(stuck ? {} : { status: 'cancelled' }),
-          payment_status: reversal.reversed ? 'refunded' : bk.payment_status,
-          booking_details: {
-            ...bk.booking_details,
-            fulfillment_failed: { at: now, error: errorMsg, reversal },
-            ...(stuck ? {
-              needs_review: {
-                reason: 'charge not reversed after the booking failed',
-                ticketed: false,
-                at: now,
-                reversal: { action: reversal.action || null, error: reversal.error || null }
-              }
-            } : {})
-          },
-          updated_at: now
-        }).eq('id', bk.id);
+      if (!bk) break;
+      // A reversal the gateway refused - or could not attempt - leaves the
+      // customer charged with no booking. Writing that row `cancelled` hid it
+      // from the paid-but-not-ticketed alarm, which skips cancelled rows, and
+      // nothing ever read `fulfillment_failed`, so the one case that needs a
+      // human reached no one. It keeps its status and is flagged instead.
+      // Every caller runs after the payment was verified, so "not reversed"
+      // means the money is still held.
+      const stuck = !reversal.reversed;
+      const now = new Date().toISOString();
+      const { data: written } = await unchangedSince(supabase.from('bookings').update({
+        ...(stuck ? {} : { status: 'cancelled' }),
+        payment_status: reversal.reversed ? 'refunded' : bk.payment_status,
+        booking_details: {
+          ...bk.booking_details,
+          fulfillment_failed: { at: now, error: errorMsg, reversal },
+          ...(stuck ? {
+            needs_review: {
+              reason: 'charge not reversed after the booking failed',
+              ticketed: false,
+              at: now,
+              reversal: { action: reversal.action || null, error: reversal.error || null }
+            }
+          } : {})
+        },
+        updated_at: now
+      }).eq('id', bk.id), bk).select('id');
+      if (written?.length) break;
+      // Out of tries: the outcome - possibly "charge not reversed" - is not on
+      // the row, so the alarms cannot see it. Said, not swallowed.
+      if (attempt === 3) {
+        reportError(new Error('the failed booking outcome could not be recorded: the row kept changing'), {
+          where: 'refundOnFulfillmentFailure', bookingReference: ref, reversed: reversal.reversed === true,
+        });
       }
     }
   } catch (e) {
