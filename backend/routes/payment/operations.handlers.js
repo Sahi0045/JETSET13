@@ -1056,34 +1056,57 @@ async function cancelOtherBooking(res, booking, { reason, email }) {
 
     // 4. Update booking status
     // DB constraint: payment_status IN ('unpaid','partial','paid','refunded','partially_refunded')
-    const { error: updateError } = await supabase
-        .from('bookings')
-        .update({
-            status: 'cancelled',
-            // The money's state, not the attempt's. A refund the gateway
-            // refused leaves the charge exactly where it was - `paid` - yet
-            // this used to write `partially_refunded` regardless, so a
-            // customer who was never paid back read as settled in the admin
-            // panel and in My Trips. Only a reversal that actually happened
-            // changes the payment state.
-            payment_status: cancellationResult.paymentProcessed ?
-                (cancellationResult.paymentAction === 'PARTIAL_REFUND' ? 'partially_refunded' : 'refunded') :
-                booking.payment_status,
-            booking_details: {
-                ...booking.booking_details,
-                cancellation: {
-                    cancelledAt: new Date().toISOString(),
-                    reason,
-                    amadeusCancelled: false,
-                    paymentAction: cancellationResult.paymentAction,
-                    refundAmount: cancellationResult.refundAmount,
-                    cancellationFee: cancellationResult.cancellationFee || 0,
-                    netRefund: (cancellationResult.refundAmount || 0),
-                    ticketsVoided: false
-                }
-            }
-        })
-        .eq('id', booking.id);
+    //
+    // Read again, merge into THAT, and pin the write. This spread the copy read
+    // at the start - before the payments lookup, the ARC read and a refund that
+    // can take seconds - and wrote it back with only `.eq('id')`, so anything
+    // written to the booking meanwhile (a reconcile's captured amount and
+    // receipt, a review flag) was erased. Every other writer of this column
+    // pins with unchangedSince; a write that loses reads again and merges.
+    const cancellation = {
+        cancelledAt: new Date().toISOString(),
+        reason,
+        amadeusCancelled: false,
+        paymentAction: cancellationResult.paymentAction,
+        refundAmount: cancellationResult.refundAmount,
+        cancellationFee: cancellationResult.cancellationFee || 0,
+        netRefund: (cancellationResult.refundAmount || 0),
+        ticketsVoided: false
+    };
+    let updateError = null;
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+        const { data: current, error: readError } = await supabase
+            .from('bookings')
+            .select('status, payment_status, booking_details')
+            .eq('id', booking.id)
+            .single();
+        if (readError || !current) {
+            updateError = readError || new Error('the booking could not be read back');
+            break;
+        }
+        const { data: written, error: writeError } = await unchangedSince(
+            supabase
+                .from('bookings')
+                .update({
+                    status: 'cancelled',
+                    // The money's state, not the attempt's. A refund the gateway
+                    // refused leaves the charge exactly where it was - `paid` - yet
+                    // this used to write `partially_refunded` regardless, so a
+                    // customer who was never paid back read as settled in the admin
+                    // panel and in My Trips. Only a reversal that actually happened
+                    // changes the payment state.
+                    payment_status: cancellationResult.paymentProcessed ?
+                        (cancellationResult.paymentAction === 'PARTIAL_REFUND' ? 'partially_refunded' : 'refunded') :
+                        current.payment_status,
+                    booking_details: { ...(current.booking_details || {}), cancellation }
+                })
+                .eq('id', booking.id),
+            current,
+        ).select('id');
+        if (writeError) { updateError = writeError; break; }
+        if (written?.length) { updateError = null; break; }
+        updateError = new Error('the booking changed while its cancellation was being recorded');
+    }
 
     if (updateError) {
         console.error('❌ Could not update the cancelled booking:', updateError.message);
