@@ -91,8 +91,20 @@ export async function evaluateCoupon(client, { code, orderTotal = 0, bookingType
     const { data: byEmail } = !byAccount && customerEmail ? await usedBy('user_email', customerEmail) : { data: null };
     if (byAccount || byEmail) return { ok: false, status: 400, message: 'You have already used this coupon.' };
     // Another of this customer's checkouts holding the coupon - not the page
-    // set aside above.
-    if (counted.some(isCallers)) {
+    // set aside above. Worded by what it is. A paid booking with no PNR yet
+    // holds the coupon for up to six hours, and in the coupon box it is the
+    // only thing that can refuse it: "started in the last 15 minutes ... once
+    // its payment page has closed" was false of every part of it.
+    const callersOthers = counted.filter(isCallers);
+    if (callersOthers.some((row) => row.payment_status === 'paid')) {
+      return {
+        ok: false,
+        status: 400,
+        message: 'This coupon is already on a paid booking of yours that has not been completed yet, so it cannot be used again. '
+          + 'Please contact us at (877) 538-7380 and we will help.',
+      };
+    }
+    if (callersOthers.length > 0) {
       return {
         ok: false,
         status: 400,
