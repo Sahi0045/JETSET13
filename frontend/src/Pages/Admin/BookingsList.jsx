@@ -6,8 +6,15 @@ import { useRegisterRefresh } from './shell/RefreshContext';
 import './AdminPanel.css';
 import { adminFetch, readAdminResponse } from '../../utils/adminAuth';
 import { needsManualRefund } from '../../utils/bookingStatus';
-import { canVoidPayment, statusOptionsFor } from '../../utils/adminBookingActions';
+import { adminCancelOutcome, canVoidPayment, statusOptionsFor } from '../../utils/adminBookingActions';
 import { attentionLabel } from '../../../../shared/reviewQueue';
+
+/** How a message looks, by what it is telling the admin. */
+const TONE = {
+    success: { bg: '#dcfce7', fg: '#16a34a', border: '#bbf7d0', panel: '#f0fdf4', panelBorder: '#bbf7d0', strong: '#166534', icon: '✅' },
+    warning: { bg: '#fffbeb', fg: '#b45309', border: '#fde68a', panel: '#fffbeb', panelBorder: '#fde68a', strong: '#92400e', icon: '⚠️' },
+    error: { bg: '#fef2f2', fg: '#dc2626', border: '#fecaca', panel: '#fef2f2', panelBorder: '#fecaca', strong: '#991b1b', icon: '❌' },
+};
 
 const BookingsList = () => {
     const [searchParams] = useSearchParams();
@@ -167,39 +174,22 @@ const BookingsList = () => {
             const result = await readAdminResponse(response);
             if (result.success) {
                 const cancellation = result.data?.cancellation || {};
-                const refundAmount = cancellation.refundAmount || result.data?.refundAmount || 0;
-                const cancellationFee = cancellation.cancellationFee || result.data?.cancellationFee || 0;
-                const paymentAction = cancellation.paymentAction || result.data?.paymentAction;
-                const netRefund = result.data?.netRefund || refundAmount;
-
-                // Build detailed success message
-                let message = `Booking ${cancelModal.bookingReference} cancelled successfully.`;
-                
-                if (paymentAction === 'PARTIAL_REFUND' && refundAmount > 0) {
-                    message += ` Net refund of ${formatCurrency(refundAmount)} processed (${formatCurrency(cancellationFee)} cancellation fee applied).`;
-                } else if (paymentAction === 'FEE_CHARGED' || paymentAction === 'FULL_FEE') {
-                    message += ` Cancellation fee of ${formatCurrency(cancellationFee)} has been charged. No refund issued.`;
-                } else if (paymentAction === 'VOID_AND_FEE') {
-                    message += ` Payment voided and cancellation fee of ${formatCurrency(cancellationFee)} charged.`;
-                } else if (paymentAction === 'REFUND' && refundAmount) {
-                    message += ` Full refund of ${formatCurrency(refundAmount)} has been processed.`;
-                } else if (paymentAction === 'VOID') {
-                    message += ` Payment has been voided (reversed).`;
-                } else if (result.data?.refundPending) {
-                    message += ` Refund is pending manual processing.`;
-                }
+                // What happened to the money, read the way the customer pages
+                // and the email read it. This used to be built here from seven
+                // codes, four of which the backend never sends, so a refund ARC
+                // refused came up green as "cancelled successfully".
+                const outcome = adminCancelOutcome(cancellation, {
+                    bookingReference: cancelModal.bookingReference,
+                    paid: cancelModal.totalAmount,
+                });
 
                 setCancelResult({
                     booking: cancelModal,
-                    refundAmount,
-                    cancellationFee,
-                    netRefund,
-                    paymentAction,
-                    refundPending: result.data?.refundPending,
+                    outcome,
                     amadeusCancelled: cancellation.amadeusCancelled
                 });
 
-                setActionMessage({ type: 'success', text: message });
+                setActionMessage({ type: outcome.tone, text: outcome.summary });
                 fetchBookings();
             } else {
                 setActionMessage({ type: 'error', text: result.error || 'Failed to cancel booking' });
@@ -413,17 +403,21 @@ const BookingsList = () => {
             </div>
 
             {/* Action Message */}
-            {actionMessage && (
-                <div style={{
-                    padding: '12px 20px', margin: '0 24px 16px',
-                    borderRadius: '8px', fontWeight: '500', fontSize: '14px',
-                    backgroundColor: actionMessage.type === 'success' ? '#dcfce7' : '#fef2f2',
-                    color: actionMessage.type === 'success' ? '#16a34a' : '#dc2626',
-                    border: `1px solid ${actionMessage.type === 'success' ? '#bbf7d0' : '#fecaca'}`
-                }}>
-                    {actionMessage.type === 'success' ? '✅' : '❌'} {actionMessage.text}
-                </div>
-            )}
+            {actionMessage && (() => {
+                // A warning is neither: a refund held for a decision, or one
+                // whose result was not reported, is not a success and not a
+                // failure the operator caused.
+                const tone = TONE[actionMessage.type] || TONE.error;
+                return (
+                    <div role="status" style={{
+                        padding: '12px 20px', margin: '0 24px 16px',
+                        borderRadius: '8px', fontWeight: '500', fontSize: '14px',
+                        backgroundColor: tone.bg, color: tone.fg, border: `1px solid ${tone.border}`
+                    }}>
+                        {tone.icon} {actionMessage.text}
+                    </div>
+                );
+            })()}
 
             {/* Filter Tabs */}
             <div style={{ padding: '0 24px', marginBottom: '16px' }}>
@@ -970,15 +964,21 @@ const BookingsList = () => {
             )}
 
             {/* Refund Result Modal */}
-            {cancelResult && (
+            {cancelResult && (() => {
+                // Heading, colour and panel all follow what happened to the
+                // money. The old modal said "Booking Cancelled" with a tick over
+                // a green panel whatever the refund did - and left the panel
+                // empty for every outcome it had no branch for, a refused
+                // refund among them.
+                const { outcome } = cancelResult;
+                const tone = TONE[outcome.tone] || TONE.error;
+                return (
                 <div style={modalOverlayStyle}>
-                    <div style={{ ...modalStyle, maxWidth: '450px' }}>
+                    <div style={{ ...modalStyle, maxWidth: '450px' }} role="dialog" aria-labelledby="cancel-result-title">
                         <div style={{ textAlign: 'center', marginBottom: '16px' }}>
-                            <div style={{ fontSize: '48px', marginBottom: '8px' }}>
-                                {cancelResult.paymentAction === 'REFUND' ? '💰' : cancelResult.paymentAction === 'VOID' ? '🔄' : '✅'}
-                            </div>
-                            <h3 style={{ margin: '0 0 4px', fontSize: '20px', color: '#1e293b' }}>
-                                Booking Cancelled
+                            <div style={{ fontSize: '48px', marginBottom: '8px' }}>{tone.icon}</div>
+                            <h3 id="cancel-result-title" style={{ margin: '0 0 4px', fontSize: '20px', color: '#1e293b' }}>
+                                {outcome.title}
                             </h3>
                             <p style={{ color: '#64748b', fontSize: '14px', margin: 0 }}>
                                 {cancelResult.booking?.bookingReference}
@@ -986,84 +986,28 @@ const BookingsList = () => {
                         </div>
 
                         <div style={{
-                            backgroundColor: '#f0fdf4', borderRadius: '8px', padding: '16px',
-                            marginBottom: '16px', border: '1px solid #bbf7d0'
+                            backgroundColor: tone.panel, borderRadius: '8px', padding: '16px',
+                            marginBottom: '16px', border: `1px solid ${tone.panelBorder}`
                         }}>
-                            {cancelResult.paymentAction === 'PARTIAL_REFUND' && (
-                                <>
-                                    <div style={{ fontSize: '13px', color: '#15803d', fontWeight: '600', marginBottom: '4px' }}>
-                                        💰 Net Refund Processed
+                            <div style={{ fontSize: '14px', color: tone.strong, lineHeight: 1.5 }}>
+                                {outcome.summary}
+                            </div>
+                            {outcome.figure && (
+                                <div style={{ marginTop: '12px' }}>
+                                    <div style={{ fontSize: '12px', color: tone.fg, fontWeight: '600' }}>{outcome.figure.label}</div>
+                                    <div style={{ fontSize: '24px', fontWeight: '700', color: tone.strong }}>
+                                        {formatCurrency(outcome.figure.amount)}
                                     </div>
-                                    <div style={{ fontSize: '24px', fontWeight: '700', color: '#166534' }}>
-                                        {formatCurrency(cancelResult.refundAmount)}
-                                    </div>
-                                    <div style={{ fontSize: '12px', color: '#16a34a', marginTop: '4px' }}>
-                                        Net refund after {formatCurrency(cancelResult.cancellationFee)} cancellation fee
-                                    </div>
-                                </>
+                                </div>
                             )}
-                            {(cancelResult.paymentAction === 'FEE_CHARGED' || cancelResult.paymentAction === 'FULL_FEE') && (
-                                <>
-                                    <div style={{ fontSize: '13px', color: '#d97706', fontWeight: '600', marginBottom: '4px' }}>
-                                        💳 Cancellation Fee Charged
-                                    </div>
-                                    <div style={{ fontSize: '20px', fontWeight: '700', color: '#92400e' }}>
-                                        {formatCurrency(cancelResult.cancellationFee)}
-                                    </div>
-                                    <div style={{ fontSize: '12px', color: '#92400e', marginTop: '4px' }}>
-                                        {cancelResult.paymentAction === 'FULL_FEE' ? 'Full booking amount charged as cancellation fee' : 'Cancellation fee has been processed'}
-                                    </div>
-                                </>
+                            {outcome.detail && (
+                                <div style={{ fontSize: '13px', color: tone.strong, marginTop: '12px' }}>
+                                    {outcome.detail}
+                                </div>
                             )}
-                            {cancelResult.paymentAction === 'VOID_AND_FEE' && (
-                                <>
-                                    <div style={{ fontSize: '13px', color: '#d97706', fontWeight: '600', marginBottom: '4px' }}>
-                                        🔄 Payment Voided + Fee Charged
-                                    </div>
-                                    <div style={{ fontSize: '20px', fontWeight: '700', color: '#92400e' }}>
-                                        {formatCurrency(cancelResult.cancellationFee)}
-                                    </div>
-                                    <div style={{ fontSize: '12px', color: '#92400e', marginTop: '4px' }}>
-                                        Original payment voided, cancellation fee charged separately
-                                    </div>
-                                </>
-                            )}
-                            {cancelResult.paymentAction === 'REFUND' && (
-                                <>
-                                    <div style={{ fontSize: '13px', color: '#15803d', fontWeight: '600', marginBottom: '4px' }}>
-                                        💰 Full Refund Processed
-                                    </div>
-                                    <div style={{ fontSize: '24px', fontWeight: '700', color: '#166534' }}>
-                                        {formatCurrency(cancelResult.refundAmount)}
-                                    </div>
-                                    <div style={{ fontSize: '12px', color: '#16a34a', marginTop: '4px' }}>
-                                        Full refund has been initiated to the customer's payment method
-                                    </div>
-                                </>
-                            )}
-                            {cancelResult.paymentAction === 'VOID' && (
-                                <>
-                                    <div style={{ fontSize: '13px', color: '#15803d', fontWeight: '600', marginBottom: '4px' }}>
-                                        🔄 Payment Voided
-                                    </div>
-                                    <div style={{ fontSize: '14px', color: '#166534' }}>
-                                        The payment authorization has been reversed. No charge will appear on the customer's account.
-                                    </div>
-                                </>
-                            )}
-                            {!cancelResult.paymentAction && cancelResult.refundPending && (
-                                <>
-                                    <div style={{ fontSize: '13px', color: '#d97706', fontWeight: '600', marginBottom: '4px' }}>
-                                        ⏳ Refund Pending
-                                    </div>
-                                    <div style={{ fontSize: '14px', color: '#92400e' }}>
-                                        Automatic refund could not be processed. Manual refund of {formatCurrency(cancelResult.booking?.totalAmount)} is required.
-                                    </div>
-                                </>
-                            )}
-                            {!cancelResult.paymentAction && !cancelResult.refundPending && (
-                                <div style={{ fontSize: '14px', color: '#166534' }}>
-                                    Booking has been cancelled successfully.
+                            {outcome.reason && (
+                                <div style={{ fontSize: '12px', color: '#475569', marginTop: '10px' }}>
+                                    <strong>Why:</strong> {outcome.reason}
                                 </div>
                             )}
                         </div>
@@ -1077,12 +1021,13 @@ const BookingsList = () => {
                         <div style={{ display: 'flex', justifyContent: 'center' }}>
                             <button
                                 onClick={() => setCancelResult(null)}
-                                style={{ ...modalBtnPrimary, backgroundColor: '#16a34a', minWidth: '120px' }}
-                            >Done</button>
+                                style={{ ...modalBtnPrimary, backgroundColor: outcome.tone === 'success' ? '#16a34a' : '#334155', minWidth: '120px' }}
+                            >{outcome.tone === 'success' ? 'Done' : 'Close'}</button>
                         </div>
                     </div>
                 </div>
-            )}
+                );
+            })()}
 
             {/* Void Payment Modal */}
             {voidModal && (
