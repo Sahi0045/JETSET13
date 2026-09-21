@@ -76,13 +76,15 @@ describe('the alarm text for a ticketed booking whose numbers did not arrive', (
   const now = new Date('2026-09-22T10:00:00.000Z');
   const flaggedAt = '2026-09-22T07:00:00.000Z';
 
+  // No number at all: only ever after an issue the airline accepted. With some
+  // numbers the wording is per traveller (ticketNumbersPartialAlert.test.js).
   it('has its own section, says the ticket is issued, shows expected vs got, and forbids reissue or refund', () => {
     vi.useFakeTimers();
     vi.setSystemTime(now);
     try {
       const text = buildMessage([row({
-        tickets: [{ number: '2207491175301' }],
-        needs_review: { reason: 'ticket_numbers_not_retrieved', expected: 4, got: 1, at: flaggedAt },
+        tickets: [],
+        needs_review: { reason: 'ticket_numbers_not_retrieved', expected: 4, got: 0, at: flaggedAt },
       })]);
       expect(text).toBe([
         ':ticket: *1 booking ticketed, ticket numbers not read back*',
@@ -91,7 +93,7 @@ describe('the alarm text for a ticketed booking whose numbers did not arrive', (
           + 'Do NOT reissue and do NOT refund: a second ticket charges the fare twice, and a refund leaves a live ticket unpaid for.',
         '',
         '*FLTTICKETS1* — confirmed/paid, 1500.2 USD\n'
-          + 'PNR BMPUST · ticket numbers expected 4, got 1\n'
+          + 'PNR BMPUST · ticket numbers expected 4, got 0\n'
           + 'flagged 3h ago',
       ].join('\n\n'));
       expect(text).not.toMatch(/not ticketed|no ticket was issued|ticket it, or refund it/);

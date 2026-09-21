@@ -175,6 +175,49 @@ export function describeTicketNumbersMissing(booking) {
 }
 
 /**
+ * A numbers-missing flag with SOME numbers: fewer FA lines than travellers.
+ *
+ * The chain writes it after an issue the airline accepted whose numbers are
+ * still landing, and also when a new session finds a PNR ticketed for only
+ * some travellers after our own issue call was refused (bookingChain.js
+ * issueInFreshSessions) - it cannot tell the two apart. With no number at all
+ * the flag only ever follows an accepted issue (readTicketNumbers), so that
+ * one keeps "the ticket IS issued".
+ */
+export function isPartlyTicketed(booking) {
+  const details = booking?.booking_details || {};
+  const review = details.needs_review || {};
+  const got = Number.isFinite(review.got) ? review.got : ticketsOf(details).length;
+  return got > 0 && Number.isFinite(review.expected) && got < review.expected;
+}
+
+/**
+ * One line per partly ticketed booking, per traveller as far as the booking
+ * knows: each FA line by ticket number and PNR passenger reference (never a
+ * name - alerts get forwarded), and how many travellers have none.
+ */
+export function describeTicketNumbersPartial(booking) {
+  const details = booking.booking_details || {};
+  const review = details.needs_review || {};
+  const hours = Math.round((Date.now() - Date.parse(review.at || booking.created_at)) / 36e5);
+  const tickets = ticketsOf(details);
+  const got = Number.isFinite(review.got) ? review.got : tickets.length;
+  const missing = review.expected - got;
+  const passenger = (ticket) => {
+    const ref = ticket.pnrTravelerId ?? null;
+    if (ref == null) return '';
+    return String(ref).endsWith('-INF') ? ` (PNR passenger ${String(ref).slice(0, -4)}, infant)` : ` (PNR passenger ${ref})`;
+  };
+  return [
+    `*${booking.booking_reference}* — ${booking.status}/${booking.payment_status}, ${booking.total_amount} USD`,
+    `PNR ${details.pnr || 'none'} · ticket numbers expected ${review.expected}, got ${got}`,
+    `FA lines (ticketed, do not reissue): ${tickets.map((ticket) => `${ticket.number}${passenger(ticket)}`).join(', ') || 'none recorded'}`,
+    `no FA line (check, issue for that passenger only): ${missing} traveller${missing > 1 ? 's' : ''}`,
+    `flagged ${hours}h ago`,
+  ].join('\n');
+}
+
+/**
  * One line per cancellation carried out but not recorded. What the cancel did,
  * as its flag says - the row itself may still read confirmed and paid. The flag
  * may sit under a later one (unrecordedCancellationOf); that one is named too.
@@ -243,7 +286,10 @@ export function buildMessage(bookings) {
   // ticketed". Listed under that heading it read "no ticket was issued ...
   // ticket it, or refund it" beside "ticketed: yes" - an instruction to issue a
   // second ticket against one payment, or refund a live ticket.
-  const numbersMissing = rest.filter(ticketNumbersMissing);
+  // Only some travellers with a number is not "the ticket IS issued": a
+  // traveller with no FA line may hold no ticket (isPartlyTicketed).
+  const numbersMissing = rest.filter((booking) => ticketNumbersMissing(booking) && !isPartlyTicketed(booking));
+  const partlyTicketed = rest.filter((booking) => ticketNumbersMissing(booking) && isPartlyTicketed(booking));
   // Nor is a PNR with no confirmed seat. Under that heading it read "ticket it,
   // or refund it": ticketing issues a ticket for a seat the airline has not
   // given, and a refund with the PNR still live leaves its confirmed flights
@@ -302,6 +348,18 @@ export function buildMessage(bookings) {
         + 'Do NOT reissue and do NOT refund: a second ticket charges the fare twice, and a refund leaves a live ticket unpaid for.',
       '',
       ...numbersMissing.map(describeTicketNumbersMissing),
+    );
+  }
+  if (partlyTicketed.length) {
+    sections.push(
+      `:busts_in_silhouette: *${partlyTicketed.length} booking${partlyTicketed.length > 1 ? 's' : ''} with ticket numbers for only some travellers*`,
+      'Some travellers have an FA line (a ticket) on the PNR and some do not. The numbers may still be landing, '
+        + 'or the ticket was issued for only some of them: this is also flagged when our own issue call was refused. '
+        + 'A traveller with an FA line IS ticketed: do NOT reissue them, a second ticket charges the fare twice. '
+        + 'A traveller with no FA line may NOT be ticketed: check the PNR, and issue for that passenger only. '
+        + 'Do NOT refund: the travellers with a ticket hold live tickets.',
+      '',
+      ...partlyTicketed.map(describeTicketNumbersPartial),
     );
   }
   if (claims.length) {
