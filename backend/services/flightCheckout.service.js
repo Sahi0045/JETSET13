@@ -126,7 +126,18 @@ export async function priceOfferForCheckout(offer) {
 export async function readPriceSettings(client) {
   const { data, error } = await client.from('price_settings').select('*').single();
   if (error && error.code !== 'PGRST116') throw error;
-  if (!data) return null;
+  if (!data) {
+    // Every flight checkout stops here, and nothing said why. `.single()`
+    // answers PGRST116 for both "no rows" and "more than one row", so what the
+    // driver said is logged - as the admin route logs it - to tell an empty
+    // table from a duplicated row. Still refused rather than picking a row: the
+    // review page computes its total from the same row, and a fee read from one
+    // of two could differ from the total the customer was shown.
+    console.error('No price_settings row could be read; flight checkout is refusing', {
+      pgError: error ? { code: error.code, message: error.message, details: error.details } : null,
+    });
+    return null;
+  }
   return { ...DEFAULT_PRICE_SETTINGS, ...(data.settings || {}) };
 }
 

@@ -166,6 +166,39 @@ describe('verifyFlightCharge', () => {
     expect(result.code).toBe('PRICE_CONFIG_UNAVAILABLE');
   });
 
+  // Every flight checkout stops while the row is missing or duplicated
+  // (`.single()` answers PGRST116 for both), and nothing was logged: on-call saw
+  // a total outage with no line pointing at the table. Still refused - the
+  // review page reads the same row, and a fee picked from one of two rows could
+  // differ from the total the page showed - but said, with what the driver said.
+  it('logs why the price settings could not be read', async () => {
+    const { verifyFlightCharge } = await import('../../backend/services/flightCheckout.service.js');
+    const client = clientFor();
+    const from = client.from;
+    client.from = vi.fn((table) => {
+      const query = from(table);
+      if (table === 'price_settings') {
+        query.single = vi.fn(async () => ({
+          data: null,
+          error: { code: 'PGRST116', message: 'JSON object requested, multiple (or no) rows returned', details: 'The result contains 2 rows' },
+        }));
+      }
+      return query;
+    });
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    try {
+      const result = await verifyFlightCharge({ client, amount: 401, bookingData: bookingFor(1), priceOffer: pricedAt(400) });
+
+      expect(result.code).toBe('PRICE_CONFIG_UNAVAILABLE');
+      const line = logged.mock.calls.find((args) => JSON.stringify(args).includes('price_settings'));
+      expect(line, 'no log line names the price_settings table').toBeTruthy();
+      expect(JSON.stringify(line)).toContain('The result contains 2 rows');
+    } finally {
+      logged.mockRestore();
+    }
+  });
+
   it('applies a coupon it evaluated itself', async () => {
     rows.coupons = { id: 'c1', code: 'FLY10', discount_type: 'percentage', discount_value: 10, min_order_value: 0, max_uses: null, applicable_to: 'all', is_active: true };
 
