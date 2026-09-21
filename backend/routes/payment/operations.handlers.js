@@ -313,7 +313,10 @@ async function releaseCancellation(booking, claim, patch = {}) {
  * booking said the fare was non-refundable - money the airline will not give
  * back. So:
  *
- *   - nothing held at the gateway          -> nothing to refund
+ *   - nothing held at the gateway          -> nothing to refund, unless the
+ *                                             booking says paid and the
+ *                                             gateway never held a payment:
+ *                                             review
  *   - held less than checkout charged      -> review (part already went back)
  *   - never booked, or a PNR with no ticket -> everything held, no fee
  *   - tickets, all voided the same day      -> everything held, less the fee
@@ -331,11 +334,17 @@ async function releaseCancellation(booking, claim, patch = {}) {
  * @returns {{ action: 'nothing_held'|'review'|'refund_all'|'refund_less_fee'|'fee_covers',
  *             fee: number, refundAmount: number, reason: string }}
  */
-export function decideFlightRefund({ heldAmount, paidInFull, everCaptured, hasReservation, gds, rowTicketed, refundable, fee }) {
+export function decideFlightRefund({ heldAmount, paidInFull, everCaptured, hasReservation, gds, rowTicketed, refundable, fee, rowPaid = false }) {
     const heldCents = Math.round((Number(heldAmount) || 0) * 100);
     const review = (reason) => ({ action: 'review', fee: 0, refundAmount: 0, reason });
 
     if (heldCents <= 0) {
+        // The booking says paid and the gateway never held a payment for it:
+        // the row was written by a path that did not ask the gateway, or it
+        // points at a different order from the one charged. This closed as
+        // "nothing to refund" - a reason neither alarm announces and no admin
+        // button acts on - so a customer who was charged was never refunded.
+        if (rowPaid && !everCaptured) return review('the booking was marked paid, but the gateway holds no payment for it');
         return {
             action: 'nothing_held',
             fee: 0,
@@ -581,6 +590,7 @@ async function cancelFlightBooking(res, booking, { reason, email }) {
             || details.needs_review?.reason === 'ticket_numbers_not_retrieved',
         refundable: details.refundable,
         fee: await readCancellationFee(),
+        rowPaid: booking.payment_status === 'paid',
     });
     const currency = payment.capturedCurrency || details.currency || 'USD';
     const returned = await returnFlightPayment(decision, {
@@ -595,9 +605,6 @@ async function cancelFlightBooking(res, booking, { reason, email }) {
     const reviewReasons = [
         decision.action === 'review' ? decision.reason : null,
         returned.reviewReason || null,
-        decision.action === 'nothing_held' && booking.payment_status === 'paid' && !payment.everCaptured
-            ? 'the booking was marked paid, but the gateway holds no payment for it'
-            : null,
         // A ticket past its same-day void window still holds value, and that
         // value is with the airline. It is ours to reclaim under the fare rules;
         // it does not settle itself by cancelling.
