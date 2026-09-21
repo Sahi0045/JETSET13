@@ -183,6 +183,18 @@ describe('decideFlightRefund', () => {
     expect((await decide({ heldAmount: 191, paidInFull: false })).action).toBe('review');
   });
 
+  // The booking says paid and the gateway never held a payment for it: the
+  // row was written by a path that did not ask, or points at another order.
+  // "Nothing to refund" closed that silently; a customer who was charged was
+  // never refunded.
+  it('leaves a booking marked paid that the gateway never held a payment for to a person', async () => {
+    const decision = await decide({ heldAmount: 0, everCaptured: false, rowPaid: true });
+    expect(decision.action).toBe('review');
+    expect(decision.reason).toMatch(/marked paid, but the gateway holds no payment/);
+    expect((await decide({ heldAmount: 0, everCaptured: false, rowPaid: false })).action).toBe('nothing_held');
+    expect((await decide({ heldAmount: 0, everCaptured: true, rowPaid: true })).action).toBe('nothing_held');
+  });
+
   it('works in cents', async () => {
     expect(await decide({ heldAmount: 100.1, gds: ticketsVoided, fee: 33.33 })).toMatchObject({ refundAmount: 66.77 });
   });
@@ -294,6 +306,19 @@ describe('cancelling a flight', () => {
     expect(res.body.cancellation.paymentAction).toBe('NOTHING_TO_REFUND');
     expect(closing().payment_status).toBe('refunded');
     expect(res.body.message).toMatch(/nothing to refund/);
+  });
+
+  it('puts a booking marked paid with no payment at the gateway in front of a person, and pages about it', async () => {
+    axios.get.mockResolvedValue(arcOrder([], 'INITIATED'));
+
+    const res = await cancel(flight());
+
+    expect(axios.put).not.toHaveBeenCalled();
+    expect(res.body.cancellation.paymentAction).toBe('REFUND_UNDER_REVIEW');
+    expect(res.body.message).not.toMatch(/nothing to refund/);
+    const closed = closing();
+    expect(closed.booking_details.needs_review.reason).toMatch(/marked paid, but the gateway holds no payment/);
+    expect(selectUnrefunded([{ ...flight(), status: 'cancelled', payment_status: closed.payment_status, booking_details: closed.booking_details }])).toHaveLength(1);
   });
 
   it('does not refund the whole again when part of it already went back', async () => {

@@ -174,3 +174,63 @@ describe('voiding another kind of payment', () => {
     expect(table.row(REF).status).toBe('confirmed');
   });
 });
+
+// A void is decided from ARC's own transaction list. When the order could not
+// be read, the handler used to void anyway, aiming at whatever id the rows
+// held - for a hotel or a cruise, `booking_details.transaction_id` is the ARC
+// result indicator, not a transaction. And a void ARC carried out but the
+// booking never recorded was reported "Payment voided successfully", leaving
+// the row paid for money that had gone back.
+describe('a void that cannot be checked, or cannot be recorded', () => {
+  it('is refused when ARC cannot be read, before anything is voided, and hands the booking back', async () => {
+    for (const unreadable of [
+      () => axios.get.mockResolvedValue({ status: 503, data: {} }),
+      () => axios.get.mockRejectedValue(new Error('socket hang up')),
+    ]) {
+      axios.put.mockClear();
+      unreadable();
+      const res = await voidWith([flight({ transaction_id: 'SI-RESULT-INDICATOR', gds_chain: { state: 'failed', startedAt: '2026-09-15T07:00:00.000Z' } })]);
+
+      expect(res.statusCode).toBe(503);
+      expect(res.body.success).toBe(false);
+      expect(axios.put).not.toHaveBeenCalled();
+      const row = table.row(REF);
+      expect(row.status).toBe('pending');
+      expect(row.payment_status).toBe('paid');
+      expect(row.booking_details.gds_chain).toEqual({ state: 'failed', startedAt: '2026-09-15T07:00:00.000Z' });
+    }
+  });
+
+  it('does not void a transaction the rows name when ARC shows none to void', async () => {
+    axios.get.mockResolvedValue({ status: 200, data: { status: 'INITIATED', transaction: [] } });
+
+    const res = await voidWith([flight({ transaction_id: 'SI-RESULT-INDICATOR' })]);
+
+    expect(res.statusCode).toBe(400);
+    expect(axios.put).not.toHaveBeenCalled();
+  });
+
+  it('says the void was not recorded when the booking changed hands while ARC answered', async () => {
+    axios.put.mockImplementation(async () => {
+      // Someone else takes the booking between the claim and the write.
+      table.row(REF).booking_details.gds_chain = { state: 'in_progress', startedAt: '2020-01-01T00:00:00.000Z' };
+      return { status: 200, data: { result: 'SUCCESS' } };
+    });
+
+    const res = await voidWith([flight()]);
+
+    expect(axios.put).toHaveBeenCalledTimes(1);
+    expect(res.statusCode).toBe(500);
+    expect(res.body.success).toBe(false);
+    expect(res.body.code).toBe('RECORD_FAILED');
+    expect(res.body.error).toMatch(/went through at ARC Pay/);
+  });
+
+  it('says the void was not recorded when the booking write fails', async () => {
+    const res = await voidWith([flight()], { fail: ({ patch }) => patch?.status === 'cancelled' });
+
+    expect(axios.put).toHaveBeenCalledTimes(1);
+    expect(res.statusCode).toBe(500);
+    expect(res.body.code).toBe('RECORD_FAILED');
+  });
+});

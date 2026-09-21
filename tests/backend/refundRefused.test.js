@@ -139,6 +139,60 @@ describe('when the gateway answers 200 with no verdict', () => {
   });
 });
 
+/**
+ * What a refusal carries back to the caller and into the log.
+ *
+ * The whole reply was logged with JSON.stringify and handed back as
+ * `errorDetails` in the cancel response, which a guest reaches with a booking
+ * reference and an email. A gateway transaction reply can carry the order, the
+ * card holder's name and the billing address alongside the verdict; only the
+ * verdict is anyone's business here.
+ */
+describe('a refusal that carries the payer with it', () => {
+  const refusal = {
+    result: 'FAILURE',
+    response: { gatewayCode: 'DECLINED', acquirerMessage: 'Do not honour' },
+    order: { id: 'FLT123', amount: 291, reference: 'FLT123' },
+    billing: { address: { street: '1 Card Holder Lane', city: 'Springfield' } },
+    sourceOfFunds: { provided: { card: { nameOnCard: 'JANE CARDHOLDER', number: '512345xxxxxx0008' } } },
+    customer: { email: 'jane.cardholder@example.com' },
+  };
+  const PAYER = ['Card Holder Lane', 'JANE CARDHOLDER', '512345xxxxxx0008', 'jane.cardholder@example.com'];
+
+  const expectNoPayer = (res, logged) => {
+    const body = JSON.stringify(res.body);
+    const log = JSON.stringify(logged.mock.calls);
+    for (const secret of PAYER) {
+      expect(body, `${secret} in the response`).not.toContain(secret);
+      expect(log, `${secret} in the log`).not.toContain(secret);
+    }
+    // The verdict is still there for a human to act on.
+    expect(res.body.cancellation.errorDetails?.response?.gatewayCode).toBe('DECLINED');
+  };
+
+  it('keeps the payer out of a flight cancel response and the log', async () => {
+    axios.put.mockResolvedValue({ status: 200, data: refusal });
+    const logged = vi.spyOn(console, 'error');
+
+    const res = await runCancel();
+
+    expect(res.body.cancellation.paymentAction).toBe('REFUND_FAILED');
+    expectNoPayer(res, logged);
+  });
+
+  it('keeps the payer out of a hotel cancel response and the log', async () => {
+    axios.put.mockResolvedValue({ status: 200, data: refusal });
+    const logged = vi.spyOn(console, 'error');
+    supabaseDouble = supabaseFor({ ...booking(), travel_type: 'hotel', booking_details: { order_id: 'FLT123', customer_email: 'traveler@example.com' } });
+    const { handleCancelBookingAction } = await import('../../backend/routes/payment/operations.handlers.js');
+    const res = createResponse();
+    await handleCancelBookingAction(createRequest({ method: 'POST', body: { bookingReference: 'FLT123', reason: 'test', email: 'traveler@example.com' } }), res);
+
+    expect(res.body.cancellation.paymentAction).toBe('REFUND_FAILED');
+    expectNoPayer(res, logged);
+  });
+});
+
 describe('when the gateway accepts the refund', () => {
   it('records a partial refund and the row reflects it', async () => {
     axios.put.mockResolvedValue({ status: 200, data: { result: 'SUCCESS' } });
