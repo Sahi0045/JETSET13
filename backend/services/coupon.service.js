@@ -49,13 +49,23 @@ export async function evaluateCoupon(client, { code, orderTotal = 0, bookingType
 
   // One use per customer: by account, or by email for a guest. A guest passes
   // no user id, so the check used to be skipped for every guest booking.
+  //
+  // And by email for a signed-in customer too, not by account alone. A use can
+  // be recorded with no account on it - a booking made as a guest, or one whose
+  // owner the bookings table rejected so checkout saved it without one - and
+  // the same customer, signed in, was asked only about their account, found
+  // nothing, and was given a one-per-customer coupon again. Two lookups rather
+  // than one `or` filter, so an address is never spliced into a filter string.
   const customerEmail = normalizeEmail(email);
   if (userId || customerEmail) {
-    const base = client.from('coupon_usage').select('id').eq('coupon_id', coupon.id);
-    const { data: existing } = await (userId ? base.eq('user_id', userId) : base.eq('user_email', customerEmail))
+    const usedBy = (column, value) => client.from('coupon_usage').select('id')
+      .eq('coupon_id', coupon.id)
+      .eq(column, value)
       .limit(1)
       .maybeSingle();
-    if (existing) return { ok: false, status: 400, message: 'You have already used this coupon.' };
+    const { data: byAccount } = userId ? await usedBy('user_id', userId) : { data: null };
+    const { data: byEmail } = !byAccount && customerEmail ? await usedBy('user_email', customerEmail) : { data: null };
+    if (byAccount || byEmail) return { ok: false, status: 400, message: 'You have already used this coupon.' };
     const mine = pending.some((row) => (userId && row.user_id === userId)
       || (customerEmail && normalizeEmail(row.booking_details?.customer_email) === customerEmail));
     if (mine) {

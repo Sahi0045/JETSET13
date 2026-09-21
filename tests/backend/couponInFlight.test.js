@@ -38,8 +38,9 @@ const client = ({ coupon = COUPON, bookings = [], usage = [] } = {}) => ({
       limit: () => query,
       maybeSingle: async () => {
         if (table === 'coupons') return { data: coupon, error: null };
-        const byUser = filters.find(([, column]) => column === 'user_id');
-        return { data: usage.find((row) => !byUser || row.user_id === byUser[2]) ?? null, error: null };
+        // The per-customer lookups: by account, and by email.
+        const who = filters.filter(([op, column]) => op === 'eq' && ['user_id', 'user_email'].includes(column));
+        return { data: usage.find((row) => who.every(([, column, value]) => row[column] === value)) ?? null, error: null };
       },
       then: (resolve) => {
         if (table === 'bookings') {

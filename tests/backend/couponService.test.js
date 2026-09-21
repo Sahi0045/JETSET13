@@ -120,6 +120,32 @@ describe('evaluateCoupon', () => {
     expect(result.message).toMatch(/already used/);
   });
 
+  // A use can be recorded with no account on it: a booking made as a guest, or
+  // one whose owner the bookings table rejected, so checkout saved it without
+  // one. The same customer signed in was then asked only about their account,
+  // found nothing, and was given the one-per-customer coupon again.
+  it('refuses a signed-in customer whose earlier use was recorded by email alone', async () => {
+    const { client } = fakeClient({ usage: [{ coupon_id: 'c1', user_id: null, user_email: 'jane@example.com' }] });
+
+    const result = await evaluateCoupon(client, {
+      code: 'SAVE10', orderTotal: 100, bookingType: 'flights', userId: 'user-1', email: 'Jane@Example.com',
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.message).toMatch(/already used/);
+  });
+
+  it('still refuses a signed-in customer by account when the use carries another email', async () => {
+    const { client } = fakeClient({ usage: [{ coupon_id: 'c1', user_id: 'user-1', user_email: 'old@example.com' }] });
+
+    const result = await evaluateCoupon(client, {
+      code: 'SAVE10', orderTotal: 100, bookingType: 'flights', userId: 'user-1', email: 'jane@example.com',
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.message).toMatch(/already used/);
+  });
+
   it('lets another guest use it', async () => {
     const { client } = fakeClient({ usage: [{ coupon_id: 'c1', user_email: 'jane@example.com' }] });
 
