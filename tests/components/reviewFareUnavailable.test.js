@@ -36,7 +36,10 @@ describe('the review page on a fare that is no longer available', () => {
   it('swaps the flight on this page rather than leaving it', () => {
     expect(review).toMatch(/const chooseAlternative = \(choice\) => \{/);
     expect(review).toMatch(/setPassengerData\(\(current\) => rebuildTravellers\(current, choice\.originalOffer\.travelerPricings, blankTraveller\)\);/);
-    expect(review).toMatch(/navigate\(`\$\{routerLocation\.pathname\}\$\{routerLocation\.search\}`, \{\s*replace: true,\s*state: \{ \.\.\.\(routerLocation\.state \|\| \{\}\), flightData \},/);
+    // Everything the page was given - the search and the attempt id too - with
+    // only the flight swapped; back from the login page all of it is in
+    // reviewState and none in the router state (reviewPageFlow.test.jsx).
+    expect(review).toMatch(/navigate\(`\$\{routerLocation\.pathname\}\$\{routerLocation\.search\}`, \{\s*replace: true,\s*state: \{ \.\.\.\(routerLocation\.state \|\| \{\}\), \.\.\.\(reviewState \|\| \{\}\), flightData \},/);
   });
 
   // The fare that was just refused must not be offered straight back.

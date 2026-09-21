@@ -369,9 +369,13 @@ function FlightBookingConfirmation() {
       setGroupEditorOpen(false);
       // Into router state, like an arrival from search: the page reads the
       // flight from there, and a refresh or the login round trip keeps it.
+      // Built from `reviewState`, not only the router state: back from the
+      // login page the flight, the search and the attempt id come from this
+      // tab's storage and the router state is empty, so the attempt id - what
+      // ties the traveller draft to this booking - was dropped here.
       navigate(`${routerLocation.pathname}${routerLocation.search}`, {
         replace: true,
-        state: { ...(routerLocation.state || {}), flightData, searchData: { ...(reviewState.searchData || {}), ...search } },
+        state: { ...(routerLocation.state || {}), ...(reviewState || {}), flightData, searchData: { ...(reviewState.searchData || {}), ...search } },
       });
     } catch {
       setGroupChange({ busy: false, problem: 'We could not reach the flight search. Please try again.', unavailable: null });
@@ -478,9 +482,15 @@ function FlightBookingConfirmation() {
     setAlternatives(null);
     setNotice(null);
     setFareNotice('Flight changed, and your traveller details are as you left them. Please check the new total before you pay.');
+    // Everything the page was given - the search and the attempt id too - with
+    // only the flight swapped. Back from the login page all of it lives in
+    // `reviewState` and none in the router state, and taking the router state
+    // alone dropped the search: "See all flights" went to the landing page,
+    // and a second refusal searched without the cabin, so a business booking
+    // was offered economy fares as "same route, same dates, same travellers".
     navigate(`${routerLocation.pathname}${routerLocation.search}`, {
       replace: true,
-      state: { ...(routerLocation.state || {}), flightData },
+      state: { ...(routerLocation.state || {}), ...(reviewState || {}), flightData },
     });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
