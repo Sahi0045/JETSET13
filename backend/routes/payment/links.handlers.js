@@ -3,7 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { supabase, ARC_PAY_CONFIG, getArcPayAuthConfig, ARC_SETTLEMENT_CURRENCY } from './arcpay.config.js';
 import { getCallerInfo, generateLinkToken } from './payment.helpers.js';
 import { generatePaymentLinkTemplate } from '../../services/email/templates.js';
-import { reconcileBookingPayment, CHECKOUT_REUSE_WINDOW_MS } from './checkout.handlers.js';
+import { reconcileBookingPayment, CHECKOUT_REUSE_WINDOW_MS, ARC_PAGE_TIMEOUT_SECONDS } from './checkout.handlers.js';
 import { inspectArcOrder } from './operations.handlers.js';
 import { errorSummary } from '../../utils/errorSummary.js';
 
@@ -329,7 +329,7 @@ export async function handleProcessPaymentLink(req, res) {
                     billingAddress: 'MANDATORY',
                     customerEmail: 'MANDATORY'
                 },
-                timeout: 900
+                timeout: ARC_PAGE_TIMEOUT_SECONDS
             },
             order: {
                 id: orderId,

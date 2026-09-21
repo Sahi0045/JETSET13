@@ -15,19 +15,31 @@ import { arcFailureSummary } from './payment.helpers.js';
 const sanitizeRef = (v) => String(v ?? '').replace(/[^A-Za-z0-9_-]/g, '') || '__none__';
 
 /**
+ * How long ARC keeps a hosted payment page open (`interaction.timeout`), for
+ * every page this file and links.handlers.js open. One number, so the reuse
+ * window below cannot drift from it.
+ */
+export const ARC_PAGE_TIMEOUT_SECONDS = 900;
+
+/**
  * How long an unpaid flight checkout is handed back, rather than a second one
- * opened for the same trip: the payment page's whole life on ARC
- * (`interaction.timeout: 900` below) and a minute more. Within it the page can
- * still be paid, so it is the one handed back; after it, it cannot.
+ * opened for the same trip: the payment page's life on ARC less its last
+ * minute. Within it the page can still be paid, so it is the one handed back.
  *
  * This was five minutes, chosen so a page handed back had most of its time
  * left. But from minute five to minute fifteen the first page was still live
  * when a second was opened beside it, and a customer who finished both was
- * charged twice. A page handed back late may now run out while the customer is
- * on it; ARC then sends them to the cancel page and the next Pay opens a fresh
- * one - a retry, where the old gap cost a second charge.
+ * charged twice. Then it was sixteen - the page's life and a minute more - and
+ * from minute fifteen to sixteen every Pay click handed back a page ARC had
+ * already closed, so the customer could not pay at all. It ends before the
+ * page does: a page handed back has a minute left at least, and in that last
+ * minute a second page may open beside it - the one gap left, which the order
+ * route's duplicate-payment hold (flight.routes.js findDuplicateBooking)
+ * catches for a flight. A page handed back late may still run out while the
+ * customer is on it; ARC then sends them to the cancel page and the next Pay
+ * opens a fresh one.
  */
-export const CHECKOUT_REUSE_WINDOW_MS = 16 * 60 * 1000;
+export const CHECKOUT_REUSE_WINDOW_MS = (ARC_PAGE_TIMEOUT_SECONDS - 60) * 1000;
 
 /** What hosted checkout sells. `flight` is the one whose fare the airline prices. */
 const HOSTED_CHECKOUT_TYPES = ['flight', 'hotel', 'cruise', 'package'];
@@ -302,7 +314,7 @@ export async function handleInitiatePayment(req, res) {
                 action: {
                     '3DSecure': 'MANDATORY'
                 },
-                timeout: 900
+                timeout: ARC_PAGE_TIMEOUT_SECONDS
             },
             order: {
                 id: payment.id,
@@ -677,7 +689,7 @@ export async function handleHostedCheckout(req, res) {
                     billingAddress: 'MANDATORY',
                     customerEmail: 'MANDATORY'
                 },
-                timeout: 900
+                timeout: ARC_PAGE_TIMEOUT_SECONDS
             },
             order: {
                 id: orderId,

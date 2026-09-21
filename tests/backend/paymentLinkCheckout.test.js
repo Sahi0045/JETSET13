@@ -120,6 +120,19 @@ describe('a second Pay click on a link', () => {
     expect(openedSessions()).toHaveLength(0);
   });
 
+  // The link reused a page for sixteen minutes, one more than ARC keeps it
+  // open, so a Pay click in that minute got back a page that was already shut.
+  it('in the last minute of the earlier page, opens a fresh one rather than hand back a page about to close', async () => {
+    seed({ payments: [earlierPage({ created_at: minutesAgo(14.5) })] });
+
+    const res = await process();
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.reused).toBeUndefined();
+    expect(openedSessions()).toHaveLength(1);
+    expect(openedSessions()[0][1].interaction.timeout).toBe(900);
+  });
+
   it('after an earlier page expired unpaid opens a fresh one', async () => {
     seed({ payments: [earlierPage({ created_at: minutesAgo(40) })] });
 
