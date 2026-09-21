@@ -336,9 +336,12 @@ async function flagUnrecordedCancellation(bookingId, review) {
 async function releaseCancellation(booking, claim, patch = {}) {
     const current = (await readBookingDetails(booking.id)) || claim.details;
     const { gds_chain: _ours, ...rest } = current;
+    // A patch may be worked out from the booking as it now reads, so a flag it
+    // writes can keep the one already there (see cancelFlightBooking).
+    const extra = typeof patch === 'function' ? patch(current) : patch;
     const { error } = await supabase
         .from('bookings')
-        .update({ booking_details: { ...rest, ...(claim.prior ? { gds_chain: claim.prior } : {}), ...patch } })
+        .update({ booking_details: { ...rest, ...(claim.prior ? { gds_chain: claim.prior } : {}), ...extra } })
         .eq('id', booking.id)
         .eq('booking_details->gds_chain->>startedAt', claim.stamp);
     if (error) console.error('⚠️ Could not release the cancellation claim:', error.message);
@@ -500,6 +503,31 @@ async function returnFlightPayment(decision, { arcOrderId, currency, reason }) {
     }
 }
 
+/** A ticket number as digits, so "125-2412345671" and "1252412345671" are one ticket. */
+const ticketDigits = (number) => String(number ?? '').replace(/\D/g, '');
+
+/** The ticket numbers in `earlier`, then those in `later` not already among them. */
+const unionTickets = (earlier = [], later = []) => {
+    const seen = new Set();
+    return [...(Array.isArray(earlier) ? earlier : []), ...(Array.isArray(later) ? later : [])]
+        .filter((number) => {
+            const digits = ticketDigits(number);
+            if (!digits || seen.has(digits)) return false;
+            seen.add(digits);
+            return true;
+        });
+};
+
+/**
+ * The review flag already on a booking, kept under a new one as `previous`.
+ *
+ * A later cancel wrote its own flag over the one before, and the one before is
+ * where a partial void said which tickets it voided ("voided X but not Y - the
+ * PNR is left live") - lost at the moment a person needed it. Same shape as
+ * flagUnrecordedCancellation's.
+ */
+const keepingPrevious = (details) => (details?.needs_review ? { previous: details.needs_review } : {});
+
 /**
  * Cancel a flight: take the booking, learn what the gateway holds, release the
  * seats, then return what the tickets and the fare say is owed - in that order,
@@ -604,13 +632,29 @@ async function cancelFlightBooking(res, booking, { reason, email }) {
                 pnr,
                 reason: supplierError?.technicalError || supplierError?.error || supplierError?.message || 'cancel returned no success'
             });
-            await releaseCancellation(booking, claim, {
-                needs_review: {
-                    reason: 'GDS cancellation failed; refund withheld to avoid paying out against a live booking',
-                    pnr,
-                    detail: supplierError?.technicalError || supplierError?.message || null,
-                    at: new Date().toISOString()
-                }
+            // A void that went through for some tickets and not the others
+            // (bookingChain.js partialVoid). Which is which goes on the flag for
+            // the desk, and the voided ones on the booking itself: a cancel on a
+            // later day finds every ticket past its void window and would list
+            // the voided one as a refund to claim from the airline - money that
+            // already came back with the void.
+            const voidedNow = Array.isArray(supplierError?.voidedTickets) ? supplierError.voidedTickets : [];
+            const unvoidedNow = Array.isArray(supplierError?.unvoidedTickets) ? supplierError.unvoidedTickets : [];
+            await releaseCancellation(booking, claim, (current) => {
+                const voidedSoFar = unionTickets(current?.voided_tickets, voidedNow);
+                return {
+                    ...(voidedSoFar.length ? { voided_tickets: voidedSoFar } : {}),
+                    needs_review: {
+                        reason: 'GDS cancellation failed; refund withheld to avoid paying out against a live booking',
+                        pnr,
+                        detail: supplierError?.technicalError || supplierError?.message || null,
+                        ...(voidedNow.length || unvoidedNow.length
+                            ? { voided_tickets: voidedNow, unvoided_tickets: unvoidedNow }
+                            : {}),
+                        at: new Date().toISOString(),
+                        ...keepingPrevious(current),
+                    }
+                };
             });
             const text = 'We could not cancel your reservation with the airline. '
                 + 'Our team has been alerted and will complete it - please call (877) 538-7380 if it is urgent.';
@@ -620,13 +664,25 @@ async function cancelFlightBooking(res, booking, { reason, email }) {
     }
 
     // 4. What is owed, and 5. return it.
+    //
+    // A ticket an earlier attempt voided is not a refund to claim from the
+    // airline. On a later day every ticket is past its void window, so the
+    // chain lists the voided one with the rest; its value came back with the
+    // void. Left out here, and if that leaves none, the tickets were voided.
+    const voidedEarlier = Array.isArray(details.voided_tickets) ? details.voided_tickets : [];
+    const voidedDigits = new Set(voidedEarlier.map(ticketDigits));
+    const listedForClaim = gds?.requiresAirlineRefund || [];
+    const requiresAirlineRefund = listedForClaim.filter((number) => !voidedDigits.has(ticketDigits(number)));
+    const settled = gds && requiresAirlineRefund.length < listedForClaim.length
+        ? { ...gds, requiresAirlineRefund, voided: true }
+        : gds;
     const tickets = Array.isArray(details.tickets) ? details.tickets : [];
     const decision = decideFlightRefund({
         heldAmount: payment.heldAmount,
         paidInFull: payment.paid === true,
         everCaptured: payment.everCaptured === true,
         hasReservation: Boolean(pnr),
-        gds,
+        gds: settled,
         rowTicketed: details.gds?.ticketed === true || tickets.length > 0
             || details.needs_review?.reason === 'ticket_numbers_not_retrieved',
         refundable: details.refundable,
@@ -642,7 +698,6 @@ async function cancelFlightBooking(res, booking, { reason, email }) {
     console.log('💰 Cancellation refund:', returned.paymentAction, returned.refundAmount, '-', decision.reason);
 
     const now = new Date().toISOString();
-    const requiresAirlineRefund = gds?.requiresAirlineRefund || [];
     const reviewReasons = [
         decision.action === 'review' ? decision.reason : null,
         returned.reviewReason || null,
@@ -656,7 +711,7 @@ async function cancelFlightBooking(res, booking, { reason, email }) {
         bookingId: booking.id,
         bookingReference,
         amadeusCancelled: Boolean(gds?.success),
-        ticketsVoided: Boolean(gds?.voided),
+        ticketsVoided: Boolean(settled?.voided),
         requiresAirlineRefund,
         paymentProcessed: Boolean(returned.paymentProcessed),
         paymentAction: returned.paymentAction,
@@ -710,6 +765,9 @@ async function cancelFlightBooking(res, booking, { reason, email }) {
                             source: 'cancellation',
                             at: now,
                             ...(requiresAirlineRefund.length ? { tickets: requiresAirlineRefund } : {}),
+                            // Voided before, so not among the tickets to claim.
+                            ...(voidedEarlier.length ? { voided_tickets: voidedEarlier } : {}),
+                            ...keepingPrevious(current),
                         }
                     }
                     : {})
