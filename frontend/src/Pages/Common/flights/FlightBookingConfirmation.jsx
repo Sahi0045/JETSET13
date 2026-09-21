@@ -614,6 +614,12 @@ function FlightBookingConfirmation() {
     const returnLeg = returnLegOf(flightData);
     const returnSegments = returnLeg ? returnLeg.segments.map(toReviewSegment) : [];
 
+    // Every flight on the offer, the flights home included - what checkout
+    // decides passports and Secure Flight by (backend/utils/itinerary.js). The
+    // page read the flights out only, so a round trip connecting abroad on the
+    // way home drew no passport fields, and checkout refused it for them.
+    const offerSegments = (flightData.originalOffer?.itineraries ?? []).flatMap((itinerary) => itinerary?.segments ?? []);
+
     return {
       bookingId: bookingId || null,
       flight: {
@@ -692,12 +698,16 @@ function FlightBookingConfirmation() {
       // International if any leg crosses a border, not only the two ends: a
       // connection abroad needs a passport too. This compared the two airport
       // codes, so every flight with different ends - all of them - counted.
-      isInternational: (flightData.segments || []).some((seg) =>
-        isInternationalRoute(seg.departure?.airport, seg.arrival?.airport))
+      isInternational: offerSegments.some((seg) =>
+        isInternationalRoute(seg?.departure?.iataCode, seg?.arrival?.iataCode))
+        || (flightData.segments || []).some((seg) =>
+          isInternationalRoute(seg.departure?.airport, seg.arrival?.airport))
         || isInternationalRoute(flightData.departure.airport, flightData.arrival.airport),
       // Any flight in or out of the US: everyone needs a date of birth.
-      secureFlight: (flightData.segments || []).some((seg) =>
-        isUnitedStatesAirport(seg.departure?.airport) || isUnitedStatesAirport(seg.arrival?.airport))
+      secureFlight: offerSegments.some((seg) =>
+        isUnitedStatesAirport(seg?.departure?.iataCode) || isUnitedStatesAirport(seg?.arrival?.iataCode))
+        || (flightData.segments || []).some((seg) =>
+          isUnitedStatesAirport(seg.departure?.airport) || isUnitedStatesAirport(seg.arrival?.airport))
         || isUnitedStatesAirport(flightData.departure.airport) || isUnitedStatesAirport(flightData.arrival.airport)
     };
   };

@@ -96,6 +96,50 @@ describe('choosing another fare after the round trip through the login page', ()
   });
 });
 
+// Whether a trip crosses a border was read from the flights out only. A round
+// trip whose way home connects abroad - Mumbai to Delhi through Dubai - read
+// as domestic, so no passport fields were drawn; checkout, which reads every
+// itinerary (backend/utils/itinerary.js), then refused the booking for the
+// passport number the page never asked for. The server's own answer corrects
+// the page when the arrival price check succeeds; this is the page on its own,
+// when that check fails.
+describe('a round trip that goes abroad only on the way home', () => {
+  it('asks for passports, as checkout will', async () => {
+    const fare = offer({
+      id: '1',
+      itineraries: [
+        { segments: [segment('DEL', 'BOM', '2026-11-15T08:00:00', '2026-11-15T10:00:00')] },
+        { segments: [
+          segment('BOM', 'DXB', '2026-11-22T08:00:00', '2026-11-22T10:00:00', { carrier: 'EK', number: '501' }),
+          segment('DXB', 'DEL', '2026-11-22T12:00:00', '2026-11-22T17:00:00', { carrier: 'EK', number: '510' }),
+        ] },
+      ],
+    });
+    vi.stubGlobal('fetch', airline({ price: { 1: serverError } }));
+
+    renderReviewPage(FlightBookingConfirmation, { state: { flightData: reviewFlight(fare), searchData: { from: 'DEL', to: 'BOM', departDate: '2026-11-15', returnDate: '2026-11-22' } } });
+
+    expect(await screen.findByText(/We couldn't check this fare with the airline just now/)).toBeTruthy();
+    expect(screen.getByLabelText(/Passport Number/)).toBeTruthy();
+  });
+
+  it('still leaves them out of a trip that stays in one country both ways', async () => {
+    const fare = offer({
+      id: '1',
+      itineraries: [
+        { segments: [segment('DEL', 'BOM', '2026-11-15T08:00:00', '2026-11-15T10:00:00')] },
+        { segments: [segment('BOM', 'DEL', '2026-11-22T08:00:00', '2026-11-22T10:00:00', { number: '102' })] },
+      ],
+    });
+    vi.stubGlobal('fetch', airline({ price: { 1: serverError } }));
+
+    renderReviewPage(FlightBookingConfirmation, { state: { flightData: reviewFlight(fare), searchData: { from: 'DEL', to: 'BOM', departDate: '2026-11-15', returnDate: '2026-11-22' } } });
+
+    expect(await screen.findByText(/We couldn't check this fare with the airline just now/)).toBeTruthy();
+    expect(screen.queryByLabelText(/Passport Number/)).toBeNull();
+  });
+});
+
 /** The withdrawn-fare panel, once it has something to say. */
 const alternativesPanel = async () => (await screen.findByText('Fares available now')).closest('section');
 const chooseFlight = (panel, flightNumber) => {
