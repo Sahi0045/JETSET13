@@ -1056,16 +1056,50 @@ function FlightBookingConfirmation() {
    * when the tab does; the reasoning is in utils/flightTravellerDraft.js.
    *
    * On a timer rather than on every keystroke: a passport number is a dozen
-   * renders, and the only moment this has to have caught up is when the page
-   * goes away, which is at least a second after the last key.
+   * renders. Two moments cannot wait for it, and are written at once:
+   *
+   * - The fare changes (another flight chosen, the travellers changed). The
+   *   draft is tied to the fare, so until it is rewritten a reload reads the
+   *   new fare, finds the old one, and restores nothing - every name and
+   *   passport number gone, the loss the alternatives panel exists to prevent.
+   * - The page goes away (`pagehide`: a reload, a discarded tab), with a change
+   *   still waiting on the timer.
    */
+  const pendingDraft = React.useRef(null);
+  const draftFare = React.useRef(null);
   useEffect(() => {
     if (passengerData.length === 0) return undefined;
     const offer = reviewState?.flightData?.originalOffer;
     if (!offer) return undefined;
-    const timer = setTimeout(() => saveTravellerDraft(passengerData, offer, { attemptId: reviewState?.attemptId }), 800);
+    const attemptId = reviewState?.attemptId;
+    const save = () => {
+      pendingDraft.current = null;
+      saveTravellerDraft(passengerData, offer, { attemptId });
+    };
+    if (draftFare.current !== null && draftFare.current !== offer) {
+      draftFare.current = offer;
+      save();
+      return undefined;
+    }
+    draftFare.current = offer;
+    pendingDraft.current = { offer, attemptId, save };
+    const timer = setTimeout(save, 800);
     return () => clearTimeout(timer);
   }, [passengerData, reviewState?.flightData?.originalOffer, reviewState?.attemptId]);
+
+  useEffect(() => {
+    const onPageHide = () => {
+      const pending = pendingDraft.current;
+      if (!pending) return;
+      // Only over a draft this page still holds. Logging out removes it
+      // (Navbar.jsx) just before the page goes, and writing it back here left
+      // every passport number typed in the tab for whoever came next.
+      if (!readTravellerDraft(pending.offer, { attemptId: pending.attemptId })) return;
+      pending.save();
+    };
+    window.addEventListener('pagehide', onPageHide);
+    return () => window.removeEventListener('pagehide', onPageHide);
+  }, []);
 
   const toggleEditMode = () => {
     setEditMode(!editMode);

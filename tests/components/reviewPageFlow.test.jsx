@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   airline, fareUnavailable, offer, renderReviewPage, reviewFlight, searchResult, segment, serverError, where,
 } from './reviewPageHarness.jsx';
+import { clearTravellerDraft, readTravellerDraft } from '../../frontend/src/utils/flightTravellerDraft.js';
 
 const harness = async (name) => (await import('./reviewPageHarness.jsx')).pageMocks[name];
 vi.mock('../../frontend/src/Pages/Common/Navbar', () => harness('navbar'));
@@ -293,6 +294,80 @@ describe('a price check that fails after the flight or the travellers change', (
     await waitFor(() => expect(fetch.priceRequests.map((body) => body.flightOffer.id)).toEqual(['1', '2']));
     const notice = (await screen.findByText(/Updated for 2 adults/)).closest('[role="status"]');
     await waitFor(() => expect(notice.textContent).toMatch(/We couldn't check this fare with the airline just now/));
+  });
+});
+
+// The traveller draft is written 800 ms after the last change, and a new
+// flight or a new group restarted that wait with the draft still tied to the
+// old fare. A reload inside it - a phone discarding the tab - read the draft
+// for the new fare, found the old one, and every name, date of birth and
+// passport number was gone: the loss the alternatives panel exists to prevent.
+describe('the traveller draft', () => {
+  const searchData = { from: 'DEL', to: 'BOM', departDate: '2026-11-15', adults: 1 };
+  const attemptId = 'attempt-3';
+  const draftSaved = (fare, check) => waitFor(() => expect(check(readTravellerDraft(fare, { attemptId }))).toBe(true), { timeout: 2000 });
+
+  it('is written for the new flight the moment another one is chosen', async () => {
+    const dead = delBom('1');
+    const alternative = delBom('2', { number: '202', total: '250.00', at: '12:00' });
+    vi.stubGlobal('fetch', airline({ price: { 1: fareUnavailable }, search: [[searchResult(dead), searchResult(alternative)]] }));
+    renderReviewPage(FlightBookingConfirmation, { state: { flightData: reviewFlight(dead), searchData, attemptId } });
+
+    await screen.findByRole('button', { name: 'Choose' });
+    fireEvent.change(screen.getByLabelText(/First Name/), { target: { value: 'Jane' } });
+    await draftSaved(dead, (draft) => draft?.[0]?.firstName === 'Jane');
+    fireEvent.click(screen.getByRole('button', { name: 'Choose' }));
+
+    // What a reload right now would restore.
+    expect(readTravellerDraft(alternative, { attemptId })?.[0]?.firstName).toBe('Jane');
+  });
+
+  it('is written for the new group the moment the travellers change', async () => {
+    const one = delBom('1');
+    const two = { ...delBom('2'), travelerPricings: [...one.travelerPricings, { ...one.travelerPricings[0], travelerId: '2' }] };
+    vi.stubGlobal('fetch', airline({ search: [[searchResult(two)]] }));
+    renderReviewPage(FlightBookingConfirmation, { state: { flightData: reviewFlight(one), searchData, attemptId } });
+
+    fireEvent.change(await screen.findByLabelText(/First Name/), { target: { value: 'Jane' } });
+    await draftSaved(one, (draft) => draft?.[0]?.firstName === 'Jane');
+    fireEvent.click(screen.getByRole('button', { name: /Add or remove travellers/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Add one adult/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Update price' }));
+    await waitFor(() => expect(where.current.state?.flightData?.originalOffer?.id).toBe('2'));
+
+    const draft = readTravellerDraft(two, { attemptId });
+    expect(draft).toHaveLength(2);
+    expect(draft[0].firstName).toBe('Jane');
+  });
+
+  it('is written when the page goes away, not lost with the wait', async () => {
+    const fare = delBom('1');
+    vi.stubGlobal('fetch', airline());
+    renderReviewPage(FlightBookingConfirmation, { state: { flightData: reviewFlight(fare), searchData, attemptId } });
+    const firstName = await screen.findByLabelText(/First Name/);
+    await draftSaved(fare, (draft) => Array.isArray(draft));
+
+    fireEvent.change(firstName, { target: { value: 'Jane' } });
+    window.dispatchEvent(new Event('pagehide'));
+
+    expect(readTravellerDraft(fare, { attemptId })?.[0]?.firstName).toBe('Jane');
+  });
+
+  // Logging out removes the draft (Navbar.jsx) just before the page goes.
+  // Writing it back on the way out would leave every passport number typed in
+  // the tab for whoever uses the browser next.
+  it('is not written back after signing out removed it', async () => {
+    const fare = delBom('1');
+    vi.stubGlobal('fetch', airline());
+    renderReviewPage(FlightBookingConfirmation, { state: { flightData: reviewFlight(fare), searchData, attemptId } });
+    const firstName = await screen.findByLabelText(/First Name/);
+    await draftSaved(fare, (draft) => Array.isArray(draft));
+
+    fireEvent.change(firstName, { target: { value: 'Jane' } });
+    clearTravellerDraft();
+    window.dispatchEvent(new Event('pagehide'));
+
+    expect(readTravellerDraft(fare, { attemptId })).toBeNull();
   });
 });
 
