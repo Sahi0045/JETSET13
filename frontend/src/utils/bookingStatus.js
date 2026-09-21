@@ -117,12 +117,22 @@ export function needsManualRefund(booking) {
   return ['failed', 'review', 'pending'].includes(refundStatus(booking)?.key);
 }
 
+/** Flagged for review, and neither cancelled nor ticketed since. */
+const flaggedOpen = (booking) => Boolean(reviewOf(booking))
+  && String(booking?.status || '').toUpperCase() !== 'CANCELLED' && ticketState(booking) !== 'issued';
+
 /** Does someone need to act on this booking? */
 export function needsAttention(booking) {
   const status = String(booking?.status || '').toUpperCase();
   if (status === 'FAILED') return true;
   if (['failed', 'review', 'pending'].includes(refundStatus(booking)?.key)) return true;
-  return Boolean(reviewOf(booking)) && status !== 'CANCELLED' && ticketState(booking) !== 'issued';
+  // A flight refunded without being cancelled (paymentReturned) waits on
+  // nobody: its flag stays, and it was badged "Needs attention" and listed
+  // under Failed while the same booking unflagged read "Refunded". Its
+  // sentence still says what happened (attentionMessage).
+  const isFlight = String(booking?.type || booking?.travel_type || '').toLowerCase() === 'flight';
+  if (isFlight && paymentReturned(booking)) return false;
+  return flaggedOpen(booking);
 }
 
 /**
@@ -145,7 +155,7 @@ export function attentionMessage(booking) {
     }
     return null;
   }
-  if (!needsAttention(booking)) return null;
+  if (!needsAttention(booking) && !flaggedOpen(booking)) return null;
   // Said from the payment record: a flagged booking refunded since reads
   // refunded, and "our team is looking after your payment" was false of it.
   const returned = paymentReturned(booking);
