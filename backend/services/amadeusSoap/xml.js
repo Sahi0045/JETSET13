@@ -36,6 +36,11 @@ export const each = (items, build) => (items || []).map(build).filter(Boolean).j
  * Blank credentials and traveller data out of an envelope before it is logged.
  * Applied unconditionally wherever an envelope could reach a log sink, so no
  * future caller can leak a password or a passport by forgetting to redact.
+ *
+ * The passport is not in travellerInfo: it rides in the free text of SSR DOCS
+ * and SSR FOID, beside the CTCE and CTCM contact SSRs, all inside
+ * serviceRequest - in the request we build and in the PNR Amadeus echoes back.
+ * Those went to the log whole until serviceRequest was blanked too.
  */
 export const redactEnvelope = (xml) => String(xml ?? '')
   .replace(/(<(?:\w+:)?Password[^>]*>)[\s\S]*?(<\/(?:\w+:)?Password>)/gi, '$1[REDACTED]$2')
@@ -43,4 +48,5 @@ export const redactEnvelope = (xml) => String(xml ?? '')
   .replace(/(<(?:\w+:)?SecurityToken>)[\s\S]*?(<\/(?:\w+:)?SecurityToken>)/gi, '$1[REDACTED]$2')
   .replace(/<travellerInfo>[\s\S]*?<\/travellerInfo>/gi, '<travellerInfo>[REDACTED]</travellerInfo>')
   .replace(/<passengerData>[\s\S]*?<\/passengerData>/gi, '<passengerData>[REDACTED]</passengerData>')
-  .replace(/<freetextData>[\s\S]*?<\/freetextData>/gi, '<freetextData>[REDACTED]</freetextData>');
+  .replace(/<freetextData>[\s\S]*?<\/freetextData>/gi, '<freetextData>[REDACTED]</freetextData>')
+  .replace(/<serviceRequest>[\s\S]*?<\/serviceRequest>/gi, '<serviceRequest>[REDACTED]</serviceRequest>');
