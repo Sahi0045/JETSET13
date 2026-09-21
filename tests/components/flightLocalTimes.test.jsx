@@ -1,6 +1,6 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import FlightCard from '../../frontend/src/Pages/Common/flights/FlightCard.jsx';
 import FlightCancellationPolicy from '../../frontend/src/Pages/Common/flights/FlightCancellationPolicy.jsx';
 import { airportClockLabel, arrivalDayOffset, legDateLabel, minutesBetweenAirportTimes } from '../../frontend/src/Pages/Common/flights/searchResults.js';
@@ -47,6 +47,35 @@ describe('the dates on a result card', () => {
     />);
 
     expect(screen.queryByText('+1')).toBeNull();
+  });
+});
+
+describe('the ticketing deadline on a result card, seen from New York', () => {
+  // Amadeus's LAST TKT DTE is a calendar day ("18SEP26" -> "2026-09-18").
+  // `new Date('2026-09-18')` is UTC midnight, which in every American zone is
+  // the evening of the 17th: the card told a US customer to book a day sooner
+  // than the airline needed, and on the deadline day showed a date already
+  // gone. The review page already read the same field as a calendar day.
+  let originalTz;
+  beforeAll(() => {
+    originalTz = process.env.TZ;
+    process.env.TZ = 'America/New_York';
+  });
+  afterAll(() => {
+    if (originalTz === undefined) delete process.env.TZ;
+    else process.env.TZ = originalTz;
+  });
+
+  it('prints the day the airline gave', () => {
+    render(<FlightCard
+      flight={{ ...flight({ time: '08:00', rawDate: '2026-09-25' }, { time: '11:00', rawDate: '2026-09-25' }), lastTicketingDate: '2026-09-18' }}
+      onViewPrices={() => {}}
+    />);
+    fireEvent.click(screen.getByText(/Flight\s+Details/));
+
+    const bookBy = screen.getByText('Book by:').parentElement;
+    expect(bookBy.textContent).toContain('Sep 18');
+    expect(bookBy.textContent).not.toContain('Sep 17');
   });
 });
 
