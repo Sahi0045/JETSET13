@@ -137,6 +137,12 @@ function FlightBookingConfirmation() {
   // server at checkout. Null until the check answers; the search price stands.
   const [pricedFare, setPricedFare] = useState(null);
   const [fareNotice, setFareNotice] = useState(null);
+  // The notice a swap - another flight chosen, the travellers changed - puts
+  // up while the airline has yet to price the new offer. A failed check only
+  // filled an empty notice, and the swap had just filled it, so the customer
+  // read "Flight changed..." over a total the airline never confirmed and was
+  // not told. The failed check now adds itself to this one.
+  const swapNotice = React.useRef(null);
   // The airline refused to price this fare: the way on is a new search.
   const [fareGone, setFareGone] = useState(false);
   // The fares on sale now for this same search, fetched when the fare dies so
@@ -368,7 +374,8 @@ function FlightBookingConfirmation() {
       setPricedFare(null);
       setAppliedCoupon(null);
       couponBase.current = null;
-      setFareNotice(`Updated for ${describeGroup(group)} on the same flight and fare. Please check the new total.`);
+      swapNotice.current = `Updated for ${describeGroup(group)} on the same flight and fare. Please check the new total.`;
+      setFareNotice(swapNotice.current);
       setGroupChange({ busy: false, problem: null, unavailable: null });
       setGroupEditorOpen(false);
       // Into router state, like an arrival from search: the page reads the
@@ -493,7 +500,8 @@ function FlightBookingConfirmation() {
     setFareGone(false);
     setAlternatives(null);
     setNotice(null);
-    setFareNotice('Flight changed, and your traveller details are as you left them. Please check the new total before you pay.');
+    swapNotice.current = 'Flight changed, and your traveller details are as you left them. Please check the new total before you pay.';
+    setFareNotice(swapNotice.current);
     // Everything the page was given - the search and the attempt id too - with
     // only the flight swapped. Back from the login page all of it lives in
     // `reviewState` and none in the router state, and taking the router state
@@ -806,9 +814,17 @@ function FlightBookingConfirmation() {
     setFareGone(false);
     // A check that fails is said, not swallowed: the page used to go on
     // quoting the search price as if the airline had confirmed it.
+    //
+    // Any other notice already up says something that matters more - the
+    // coupon removed, a changed fare - and stays. A swap's own notice is the
+    // exception: it is about this very check, so the warning joins it.
     const couldNotCheck = () => {
       if (cancelled) return;
-      setFareNotice((notice) => notice || "We couldn't check this fare with the airline just now. The total below is from your search. It is checked again before you pay, and nothing is charged if it has changed.");
+      const warning = "We couldn't check this fare with the airline just now. The total below is from your search. It is checked again before you pay, and nothing is charged if it has changed.";
+      setFareNotice((notice) => {
+        if (!notice) return warning;
+        return notice === swapNotice.current ? `${notice} ${warning}` : notice;
+      });
     };
     (async () => {
       try {

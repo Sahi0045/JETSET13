@@ -252,6 +252,50 @@ describe('a return flight with a technical stop', () => {
   });
 });
 
+// The notice for a failed price check only ever filled an empty slot, and a
+// swap - another flight chosen, or travellers changed - had just filled it
+// with its own reassurance. The customer read "Flight changed, and your
+// traveller details are as you left them" over a total the airline had never
+// confirmed, and was not told.
+describe('a price check that fails after the flight or the travellers change', () => {
+  const searchData = { from: 'DEL', to: 'BOM', departDate: '2026-11-15', adults: 1 };
+
+  it('says the new fare could not be checked, after another flight is chosen', async () => {
+    const dead = delBom('1');
+    const alternative = delBom('2', { number: '202', total: '250.00', at: '12:00' });
+    const fetch = airline({
+      price: { 1: fareUnavailable, 2: serverError },
+      search: [[searchResult(dead), searchResult(alternative)]],
+    });
+    vi.stubGlobal('fetch', fetch);
+
+    renderReviewPage(FlightBookingConfirmation, { state: { flightData: reviewFlight(dead), searchData } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Choose' }));
+
+    // The new offer was sent to the airline, and the check failed.
+    await waitFor(() => expect(fetch.priceRequests.map((body) => body.flightOffer.id)).toEqual(['1', '2']));
+    const notice = (await screen.findByText(/Flight changed, and your traveller details are as you left them/)).closest('[role="status"]');
+    await waitFor(() => expect(notice.textContent).toMatch(/We couldn't check this fare with the airline just now/));
+    expect(notice.textContent.match(/We couldn't check this fare/g)).toHaveLength(1);
+  });
+
+  it('says the new fare could not be checked, after the travellers change', async () => {
+    const one = delBom('1');
+    const two = { ...delBom('2'), travelerPricings: [...one.travelerPricings, { ...one.travelerPricings[0], travelerId: '2' }] };
+    const fetch = airline({ price: { 2: serverError }, search: [[searchResult(two)]] });
+    vi.stubGlobal('fetch', fetch);
+
+    renderReviewPage(FlightBookingConfirmation, { state: { flightData: reviewFlight(one), searchData } });
+    fireEvent.click(await screen.findByRole('button', { name: /Add or remove travellers/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Add one adult/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Update price' }));
+
+    await waitFor(() => expect(fetch.priceRequests.map((body) => body.flightOffer.id)).toEqual(['1', '2']));
+    const notice = (await screen.findByText(/Updated for 2 adults/)).closest('[role="status"]');
+    await waitFor(() => expect(notice.textContent).toMatch(/We couldn't check this fare with the airline just now/));
+  });
+});
+
 /** Fill the first traveller in enough for Pay to go ahead on a domestic trip. */
 const fillLeadTraveller = async () => {
   fireEvent.change(await screen.findByLabelText(/First Name/), { target: { value: 'Jane' } });
