@@ -194,6 +194,8 @@ describe('a re-queue that did not land', () => {
     expect(table.row(REF).booking_details.gds_chain).toMatchObject({ state: 'queued', queueAttempts: 1 });
   });
 
+  // Picked up, since round 2, but only to drop the stored order (see 'a
+  // finished booking that still holds its stored order' below).
   it('is not replayed while a human, a refund or a returned payment owns it', async () => {
     const later = Date.now() + 10 * 60_000;
     const owned = [
@@ -201,9 +203,10 @@ describe('a re-queue that did not land', () => {
       { ...released(), booking_reference: 'FLTQRF', booking_details: { ...released().booking_details, fulfillment_failed: { at: minuteAgo() } } },
       { ...released(), booking_reference: 'FLTQRP', payment_status: 'refunded' },
     ];
-    const { findRunnable } = await load(owned);
+    const { findRunnable, queueActionFor } = await load(owned);
 
-    expect(await findRunnable({ now: later, env: 'production' })).toEqual([]);
+    const picked = await findRunnable({ now: later, env: 'production' });
+    expect(picked.map((row) => queueActionFor(row, { now: later }))).toEqual(['clear', 'clear', 'clear']);
   });
 });
 
@@ -284,6 +287,76 @@ describe('a failed chain the queue would replay', () => {
 
     expect(queueActionFor(finished(AUTO_COMPLETE_WINDOW_MS - 60_000), { now })).toBe('replay');
     expect(queueActionFor(finished(AUTO_COMPLETE_WINDOW_MS + 60_000), { now })).toBe('hand-over');
+  });
+});
+
+/**
+ * clearQueuedOrder gave up on one failed read (silently) and on one write
+ * error, and after a final failure nothing selected the row again. The row
+ * kept the passengers' passport numbers and dates of birth, and the admin's
+ * Void Payment refuses a booking still holding a queued order (BOOKING_BUSY).
+ * A finished row still holding one is now picked up - to clear it, never to
+ * replay it.
+ */
+describe('a finished booking that still holds its stored order', () => {
+  const finished = {
+    'a person owns it': strandedRow({ finishedAt: minuteAgo() }, { needs_review: { reason: 'queued booking could not be completed', source: 'booking-queue', at: minuteAgo() } }),
+    'a refund has been started': strandedRow({ finishedAt: minuteAgo() }, { fulfillment_failed: { at: minuteAgo() } }),
+    'the payment went back': strandedRow({ finishedAt: minuteAgo() }, {}, { payment_status: 'refunded' }),
+  };
+
+  it.each(Object.keys(finished))('is cleared, and never replayed, when %s', async (name) => {
+    const before = snapshot(finished[name]);
+    const { route, sendEmail } = await tickWith([finished[name]]);
+
+    expect(route).not.toHaveBeenCalled();
+    expect(sendEmail).not.toHaveBeenCalled();
+    const details = table.row(REF).booking_details;
+    expect(details.queued_order).toBeUndefined();
+    expect(details.queued_env).toBeUndefined();
+    expect(details.needs_review).toEqual(before.booking_details.needs_review);
+  });
+
+  it('is cleared after a failed read, which is logged and read again', async () => {
+    let failedReads = 0;
+    await tickWith([finished['a person owns it']], {
+      fail: ({ filters, patch }) => {
+        const clearRead = !patch && filters.some(([op, column]) => op === 'eq' && column === 'booking_reference');
+        if (clearRead && failedReads === 0) {
+          failedReads += 1;
+          return true;
+        }
+        return false;
+      },
+    });
+
+    expect(failedReads).toBe(1);
+    expect(table.row(REF).booking_details.queued_order).toBeUndefined();
+  });
+
+  it('is cleared after a failed write, which is tried again', async () => {
+    let failedWrites = 0;
+    await tickWith([finished['a person owns it']], {
+      fail: ({ patch }) => {
+        const clearing = patch?.booking_details && !('queued_order' in patch.booking_details);
+        if (clearing && failedWrites === 0) {
+          failedWrites += 1;
+          return true;
+        }
+        return false;
+      },
+    });
+
+    expect(failedWrites).toBe(1);
+    expect(table.row(REF).booking_details.queued_order).toBeUndefined();
+  });
+
+  it('is left alone while a chain is still running on it', async () => {
+    const running = strandedRow({ state: 'in_progress', startedAt: new Date().toISOString() }, { needs_review: { reason: 'x', at: minuteAgo() } });
+    const { route } = await tickWith([running]);
+
+    expect(route).not.toHaveBeenCalled();
+    expect(table.row(REF).booking_details.queued_order).toEqual(ORDER);
   });
 });
 

@@ -81,12 +81,19 @@ export async function findRunnable({ limit = MAX_PER_TICK, now = Date.now(), env
     return [];
   }
 
-  return (data || []).filter((row) => {
-    // Local dev and production share this database: never touch a booking
-    // another environment queued.
-    if (row.booking_details?.queued_env !== env) return false;
-    return queueActionFor(row, { now }) !== null;
-  }).slice(0, limit);
+  // Local dev and production share this database: never touch a booking
+  // another environment queued.
+  const acted = (data || [])
+    .filter((row) => row.booking_details?.queued_env === env)
+    .map((row) => ({ row, action: queueActionFor(row, { now }) }))
+    .filter(({ action }) => action !== null);
+  // Clearing takes no Amadeus slot, so it is not counted against `limit`: a
+  // row whose clear keeps failing stays at the front of this oldest-first read,
+  // and counted, five of them would have stopped every paid booking behind them.
+  return [
+    ...acted.filter(({ action }) => action !== 'clear').slice(0, limit),
+    ...acted.filter(({ action }) => action === 'clear'),
+  ].map(({ row }) => row);
 }
 
 /**
@@ -109,6 +116,16 @@ export function queueActionFor(row, { now = Date.now() } = {}) {
     const retryAfter = Date.parse(chain.retryAfter ?? '');
     return Number.isFinite(retryAfter) && retryAfter > now ? null : 'replay';
   }
+  // Finished, with the order still stored: a person owns it (`needs_review`,
+  // which the queue's own final failure writes), the route has started a
+  // reversal (`fulfillment_failed`), or the money went back. Picked up to drop
+  // the order - passport numbers and dates of birth, and what makes the
+  // admin's Void Payment answer BOOKING_BUSY - and never replayed. Before, a
+  // clear that failed once was never tried again: nothing selected these rows.
+  // Not while a chain still holds the booking.
+  const settled = details.needs_review || details.fulfillment_failed
+    || ['refunded', 'partially_refunded'].includes(row.payment_status);
+  if (settled) return liveChainState(chain, now) ? null : 'clear';
   // Let go by the route and never queued again. Before a retryable 503 the
   // route releases its claim, which writes the chain `failed`
   // (releaseBookingChain), and retryLater puts it back to `queued`. When
@@ -118,12 +135,8 @@ export function queueActionFor(row, { now = Date.now() } = {}) {
   // nobody told. Nothing is running it, so it is run again, after the same
   // wait a re-queue would have had.
   //
-  // Not while something else owns the outcome: a human (`needs_review`, which
-  // the queue's own final failure writes), a reversal the route has started
-  // (`fulfillment_failed`), or money already returned.
+  // Not while something else owns the outcome - settled above.
   if (chain.state === 'failed') {
-    if (details.needs_review || details.fulfillment_failed) return null;
-    if (['refunded', 'partially_refunded'].includes(row.payment_status)) return null;
     // And only while it is young enough to book. Round 1 replayed a failed
     // chain of any age, and one with no finish time at once: on deploy every
     // stranded row would have gone through /order, so a payment staff had
@@ -191,12 +204,23 @@ async function clearQueuedOrder(bookingReference) {
   // again, so one lost race kept that data for good, and the GDPR erasure job
   // defers any booking still holding a queued order (gdpr.controller.js), so
   // the customer's erasure request was refused on every run after it.
+  //
+  // A failed read or write is logged and tried again too. A read error used to
+  // look like "nothing to clear" and return in silence, and a write error gave
+  // up after one try. Past these tries the worker picks the row up again on a
+  // later tick (queueActionFor answers 'clear'), so a bad minute is not for good.
   for (let attempt = 0; attempt < CLEAR_TRIES; attempt += 1) {
-    const { data: row } = await supabase
+    const { data: row, error: readError } = await supabase
       .from('bookings')
       .select('status, payment_status, booking_details')
       .eq('booking_reference', bookingReference)
       .single();
+    if (readError) {
+      // No such row: nothing holds the order any more.
+      if (readError.code === 'PGRST116') return;
+      log('queued order not cleared: the booking could not be read', { bookingReference, attempt: attempt + 1, error: readError.message });
+      continue;
+    }
     if (!row?.booking_details?.queued_order) return;
     const { queued_order: _order, queued_env: _env, ...rest } = row.booking_details;
     // Pinned, like every other writer of this column. A replay that the worker
@@ -210,12 +234,12 @@ async function clearQueuedOrder(bookingReference) {
       row,
     ).select('booking_reference');
     if (error) {
-      log('queued order not cleared', { bookingReference, error: error.message });
-      return;
+      log('queued order not cleared', { bookingReference, attempt: attempt + 1, error: error.message });
+      continue;
     }
     if (written?.length) return;
   }
-  log('queued order not cleared: the booking kept changing while it was being read', { bookingReference, tries: CLEAR_TRIES });
+  log('queued order not cleared after every try; a later tick clears it', { bookingReference, tries: CLEAR_TRIES });
 }
 
 /**
