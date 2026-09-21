@@ -1220,6 +1220,9 @@ function FlightBookingConfirmation() {
         flightData: flightDataForArcPay,
         // So a cancelled payment can come back to this search's results too.
         searchData: reviewState?.searchData ?? null,
+        // And to this booking's traveller draft, not one any booking of the
+        // same flight and party could restore (utils/flightTravellerDraft.js).
+        attemptId: reviewState?.attemptId ?? null,
         // When this draft was written. It holds every traveller's name, date of
         // birth and passport number, and nothing removed it when a customer
         // reached ARC Pay and closed the tab - see clearStaleStoredBookings.

@@ -37,6 +37,9 @@ export const pageMocks = {
   savedTravellers: { useSavedTravellers: () => savedTravellers, useSaveTravellers: () => saveTravellers },
   location: { useLocationContext: () => location },
   nothing: { default: () => null },
+  // Checkout refuses, so Pay never leaves the page: what the page saved on
+  // its way to the payment page is what a test reads.
+  arcPay: { default: { createHostedCheckout: async () => ({ success: false, error: { error: 'Declined in test.' } }) } },
 };
 
 /** An Amadeus segment as the offer carries it. */
@@ -154,10 +157,12 @@ const Probe = () => {
 /**
  * Render the review page. `state` is the router state an arrival from search
  * carries; leave it out for an arrival with none (back from the login page).
+ * `search` is the query string, e.g. "?payment=cancelled" for the return from
+ * a cancelled payment.
  */
-export function renderReviewPage(Page, { state } = {}) {
+export function renderReviewPage(Page, { state, search = '' } = {}) {
   return render(
-    <MemoryRouter initialEntries={[{ pathname: '/flights/booking-confirmation', state: state ?? null }]}>
+    <MemoryRouter initialEntries={[{ pathname: '/flights/booking-confirmation', search, state: state ?? null }]}>
       <Routes>
         <Route path="/flights/booking-confirmation" element={<><Page /><Probe /></>} />
         <Route path="*" element={<Probe />} />

@@ -16,6 +16,7 @@ vi.mock('../../frontend/src/Context/LocationContext', () => harness('location'))
 vi.mock('../../frontend/src/components/CouponInput', () => harness('nothing'));
 vi.mock('../../frontend/src/Pages/Common/flights/FlightFareRules', () => harness('nothing'));
 vi.mock('../../frontend/src/Pages/Common/flights/FlightCancellationPolicy', () => harness('nothing'));
+vi.mock('../../frontend/src/Services/ArcPayService', () => harness('arcPay'));
 
 const { default: FlightBookingConfirmation } = await import('../../frontend/src/Pages/Common/flights/FlightBookingConfirmation.jsx');
 
@@ -137,6 +138,43 @@ describe('a round trip that goes abroad only on the way home', () => {
 
     expect(await screen.findByText(/We couldn't check this fare with the airline just now/)).toBeTruthy();
     expect(screen.queryByLabelText(/Passport Number/)).toBeNull();
+  });
+});
+
+/** Fill the first traveller in enough for Pay to go ahead on a domestic trip. */
+const fillLeadTraveller = async () => {
+  fireEvent.change(await screen.findByLabelText(/First Name/), { target: { value: 'Jane' } });
+  fireEvent.change(screen.getByLabelText(/Last Name/), { target: { value: 'Doe' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Female' }));
+  fireEvent.change(screen.getByLabelText(/Mobile No/), { target: { value: '5550100' } });
+};
+
+// The attempt id ties the traveller draft to one booking: without it, two
+// bookings of the same flight for the same party share a draft, and one
+// customer's names and passport numbers fill the other's form
+// (utils/flightTravellerDraft.js). The booking saved for the payment page did
+// not carry it, so after a cancelled payment the tab was back in exactly that
+// unguarded state.
+describe('a cancelled payment', () => {
+  it('comes back with the attempt it left with', async () => {
+    const fare = delBom('1');
+    vi.stubGlobal('fetch', airline());
+    const first = renderReviewPage(FlightBookingConfirmation, {
+      state: { flightData: reviewFlight(fare), searchData: { from: 'DEL', to: 'BOM', departDate: '2026-11-15' }, attemptId: 'attempt-9' },
+    });
+    await fillLeadTraveller();
+
+    fireEvent.click(screen.getByRole('button', { name: /^Pay US\$/ }));
+    await waitFor(() => expect(sessionStorage.getItem('pendingFlightBooking')).toBeTruthy());
+    expect(JSON.parse(sessionStorage.getItem('pendingFlightBooking')).attemptId).toBe('attempt-9');
+    first.unmount();
+
+    // ARC's cancel link: this page, marked, with no router state.
+    renderReviewPage(FlightBookingConfirmation, { search: '?payment=cancelled' });
+
+    expect(await screen.findByText(/Payment was cancelled - nothing was charged/)).toBeTruthy();
+    await waitFor(() => expect(where.current.state?.flightData).toBeTruthy());
+    expect(where.current.state.attemptId).toBe('attempt-9');
   });
 });
 
