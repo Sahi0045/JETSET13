@@ -2102,9 +2102,18 @@ router.post('/date-prices', async (req, res) => {
       return res.status(400).json({ success: false, error: 'from, to and dates[] are required' });
     }
 
+    // Resolved once, and the same codes key the cache AND go to the search. The
+    // key used the curated table ("New York" -> JFK) while the search was sent
+    // the raw text and the dataset resolved it ("New York" -> NYC, every New
+    // York airport), so Newark and LaGuardia fares were served under the JFK
+    // key and the strip quoted prices no JFK flight sells. The search page
+    // resolves through the same table, so the strip matches the search it
+    // links to.
+    const origin = resolveToIATACode(from) || from;
+    const destination = resolveToIATACode(to) || to;
     const ws = describeWsConfig();
     const cacheKey = CacheKeys.flightBrowse('date-prices', [
-      resolveToIATACode(from), resolveToIATACode(to),
+      origin, destination,
       `${adults || 1}-${children || 0}-${infants || 0}-${travelClass || 'any'}`,
       dates.slice().sort().join(','),
       // The strip quotes the cheapest fare of the day, so it has to be built
@@ -2114,7 +2123,7 @@ router.post('/date-prices', async (req, res) => {
     ]);
 
     const payload = await withCache(cacheKey, TTL.FLIGHT_CALENDAR, () => FlightProvider.getCalendarPrices({
-      from, to, adults, children, infants, travelClass, dates,
+      from: origin, to: destination, adults, children, infants, travelClass, dates,
     }));
 
     // null means nothing could be priced, so nothing was cached. The strip
@@ -4221,14 +4230,25 @@ router.post('/calendar-prices', async (req, res) => {
       return res.status(400).json({ success: false, error: 'origin, destination and dates[] are required' });
     }
 
+    // Resolved once and used for both the key and the search, as /date-prices
+    // does and for the same reason: the key read "New York" as JFK while the
+    // search read it as NYC.
+    const from = resolveToIATACode(origin) || origin;
+    const to = resolveToIATACode(destination) || destination;
+    const ws = describeWsConfig();
+
     // Redis-backed, replacing an in-process Map that was per-instance and lost
     // on every restart - and on Vercel, on every cold start.
     const cacheKey = CacheKeys.flightBrowse('calendar-prices', [
-      resolveToIATACode(origin), resolveToIATACode(destination), dates.slice().sort().join(','),
+      from, to, dates.slice().sort().join(','),
+      // The cheapest fare of the day, under the rules search sells by: without
+      // this a carrier or interline pair just blocked went on being quoted for
+      // the life of the cache. See /date-prices.
+      searchFilterKey({}, ws.unticketableCarriers, ws.interline),
     ]);
 
     const payload = await withCache(cacheKey, TTL.FLIGHT_CALENDAR, () => FlightProvider.getCalendarPrices({
-      from: origin, to: destination, adults: 1, dates,
+      from, to, adults: 1, dates,
     }));
 
     if (!payload) return res.json({ success: false, prices: {}, error: 'No prices available' });

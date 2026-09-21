@@ -309,6 +309,55 @@ describe('calendar endpoints', () => {
     await expect(producer()).resolves.toBeNull();
   });
 
+  /**
+   * The key a strip is cached under names the airports its search used.
+   *
+   * A typed city was keyed through the route's curated table ("New York" ->
+   * JFK) while the search itself was sent the raw text and resolved by the
+   * dataset ("New York" -> NYC, every New York airport). The Newark and
+   * LaGuardia fares were then served under the JFK key to a customer who
+   * searched JFK, and the strip quoted a price no JFK flight sells. The search
+   * page resolves "New York" to JFK, so the strip that links to it does too.
+   */
+  describe.each([
+    ['date-prices', (city) => ({ from: city, to: 'LHR', dates: ['2099-11-15'], adults: 1 })],
+    ['calendar-prices', (city) => ({ origin: city, destination: 'LHR', dates: ['2099-11-15'] })],
+  ])('/%s for a typed city', (endpoint, body) => {
+    const originsSent = () => axios.post.mock.calls
+      .map(([, xml]) => /<departureLocalization>[\s\S]*?<locationId>([A-Z]{3})<\/locationId>/.exec(String(xml))?.[1])
+      .filter(Boolean);
+
+    it('searches the airports its cache key names', async () => {
+      const { withCache } = await import('../../../backend/services/cache.service.js');
+      axios.post.mockReset();
+      axios.post.mockResolvedValue(reply(fixture('mptbs-oneway-jfk-lhr')));
+      const app = await makeApp();
+
+      await request(app).post(`/api/flights/${endpoint}`).send(body('New York'));
+
+      const key = withCache.mock.calls.at(-1)?.[0];
+      expect(key).toContain(':JFK:LHR:');
+      expect(originsSent().length).toBeGreaterThan(0);
+      expect(new Set(originsSent())).toEqual(new Set(['JFK']));
+    });
+  });
+
+  // The calendar quotes the cheapest fare of the day, so a carrier or interline
+  // pair this office has stopped selling must not be served from a key built
+  // before the rule changed - as the date strip's key already knows.
+  it('keys /calendar-prices by the carrier and interline rules, as /date-prices is', async () => {
+    const { withCache } = await import('../../../backend/services/cache.service.js');
+    axios.post.mockResolvedValue(reply(fixture('mptbs-oneway-jfk-lhr')));
+    const app = await makeApp();
+    const keyUnder = async (carriers) => {
+      vi.stubEnv('AMADEUS_WS_UNTICKETABLE_CARRIERS', carriers);
+      await request(app).post('/api/flights/calendar-prices').send({ origin: 'JFK', destination: 'LHR', dates: ['2099-11-15'] });
+      return withCache.mock.calls.at(-1)?.[0];
+    };
+
+    expect(await keyUnder('B6')).not.toBe(await keyUnder('B6,LH'));
+  });
+
   it('rejects a request with no dates before calling Amadeus', async () => {
     const app = await makeApp();
     const res = await request(app).post('/api/flights/date-prices').send({ from: 'JFK', to: 'LHR' });
