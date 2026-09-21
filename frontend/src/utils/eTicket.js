@@ -17,7 +17,7 @@
  *     validatingCarrier: 'AI'|null, issuedOn: '2026-09-04'|null }
  */
 
-import { NO_CONFIRMED_SEAT_REVIEW_REASON, noConfirmedSeatOf } from '../../../shared/reviewQueue';
+import { NO_CONFIRMED_SEAT_REVIEW_REASON, noConfirmedSeatOf, ticketNumbersMissingOf } from '../../../shared/reviewQueue';
 
 /**
  * A booking reaches the UI in two different shapes, and both are live:
@@ -117,9 +117,10 @@ export function ticketState(bookingData) {
   if (isCancelledBooking(bookingData)) return 'cancelled';
   if (resolveTickets(bookingData).length > 0) return 'issued';
 
-  for (const read of REVIEW_PATHS) {
-    if (read(bookingData)?.reason === 'ticket_numbers_not_retrieved') return 'pending';
-  }
+  // Under a refused cancel's flag too (sentByServer): the ticket was issued
+  // whatever flag sits on top now, and the top reason alone read "none".
+  const numbersMissing = sentByServer(bookingData, 'ticket_numbers_missing') ?? Boolean(ticketNumbersMissingOf(bookingData));
+  if (numbersMissing) return 'pending';
 
   return 'none';
 }

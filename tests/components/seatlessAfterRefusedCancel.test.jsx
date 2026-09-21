@@ -40,6 +40,7 @@ const afterRefusedCancel = {
   needs_review: {
     reason: 'GDS cancellation failed; refund withheld to avoid paying out against a live booking',
     no_confirmed_seat: true,
+    ticket_numbers_missing: false,
   },
 };
 

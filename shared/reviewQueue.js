@@ -67,6 +67,20 @@ export const isTicketed = (details) => details?.gds?.ticketed === true || ticket
 export const TICKET_NUMBERS_MISSING = 'ticket_numbers_not_retrieved';
 
 /**
+ * The numbers-missing flag on a booking, on top or under a later one, or null.
+ *
+ * It records a fact about the airline record - a ticket WAS issued - so it is
+ * read past a resolved flag too: a person dealing with the booking does not
+ * un-issue its ticket. Read from the top alone, a refused cancel on top of it
+ * made the booking look unticketed: the customer's pages said the ticket was
+ * not issued, and a later cancel whose retrieve missed the FA lines could
+ * refund in full over a live ticket.
+ */
+export const ticketNumbersMissingOf = (booking) => flagInForce(
+  booking, (review) => review.reason === TICKET_NUMBERS_MISSING, { pastResolved: true },
+);
+
+/**
  * The order route's flag on a PNR the airline confirmed no seat on: a flight
  * came back from commit waitlisted, requested, unable or cancelled (the
  * chain's step 'segmentStatus', bookingChain.js NOT_A_SEAT_AT_COMMIT). The PNR

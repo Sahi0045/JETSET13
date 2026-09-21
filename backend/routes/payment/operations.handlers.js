@@ -28,6 +28,7 @@ import { canReachAmadeus } from '../../utils/amadeusReach.js';
 import { unchangedSince } from '../../utils/bookingDetailsGuard.js';
 import { DEFAULT_PRICE_SETTINGS } from '../../config/priceDefaults.js';
 import { cancellationMessage, refundOutcome } from '../../../shared/cancellationOutcome.js';
+import { ticketNumbersMissingOf } from '../../../shared/reviewQueue.js';
 import { reconcileBookingPayment } from './checkout.handlers.js';
 import { errorSummary } from '../../utils/errorSummary.js';
 import { orderVoided, voidsPayment } from '../../utils/arcTransactions.js';
@@ -689,8 +690,10 @@ async function cancelFlightBooking(res, booking, { reason, email }) {
         everCaptured: payment.everCaptured === true,
         hasReservation: Boolean(pnr),
         gds: settled,
+        // The numbers-missing flag under a refused cancel's flag too: the
+        // ticket was issued whatever flag sits on top now.
         rowTicketed: details.gds?.ticketed === true || tickets.length > 0
-            || details.needs_review?.reason === 'ticket_numbers_not_retrieved',
+            || Boolean(ticketNumbersMissingOf(booking)),
         refundable: details.refundable,
         fee: await readCancellationFee(),
         rowPaid: booking.payment_status === 'paid',
