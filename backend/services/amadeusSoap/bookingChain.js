@@ -271,10 +271,18 @@ const callStep = async (ctx, { step, operation, bodyXml, pnr, committed, tickete
  * numbers are not there yet waits again and retries a few times before
  * leaving the PNR for manual follow-up. Non-fatal throughout: the tickets
  * exist whether or not we capture their numbers on this request.
+ *
+ * `expected` is one ticket per traveller, a lap infant included: the
+ * 2ADT+1CH+1INF certification booking (BMPUST, PDT 17 Sep 2026) carried four
+ * FA elements for its four travellers. The loop used to stop at the first
+ * retrieve carrying ANY ticket, so a PNR read while the numbers were still
+ * landing locked in a partial set - and a non-empty list raised no flag, so
+ * every later reader took two tickets of four as the whole booking.
  */
-const readTicketNumbers = async (ctx, { pnr, order, offer, bookingReference, config }) => {
+const readTicketNumbers = async (ctx, { pnr, order, offer, bookingReference, config, expected = 1 }) => {
   let tickets = order.tickets;
   let current = order;
+  const wanted = Math.max(1, expected);
   const attempts = Math.max(1, config.ticketRetrieveRetries + 1);
   await sleep(config.ticketRetrieveInitialMs);
   for (let attempt = 1; attempt <= attempts; attempt++) {
@@ -288,12 +296,14 @@ const readTicketNumbers = async (ctx, { pnr, order, offer, bookingReference, con
         ticketed: true,
       });
       const found = readTickets(retrieved);
-      if (found.length) {
+      // Keep the most complete set seen, so a later short read cannot lose a
+      // number an earlier one had.
+      if (found.length > (tickets?.length ?? 0)) {
         tickets = found;
         current = buildFlightOrder(retrieved, { flightOffers: [offer], bookingReference });
         current.tickets = tickets;
-        break;
       }
+      if (found.length >= wanted) break;
     } catch (cause) {
       log.warn({ pnr, attempt, reason: cause?.technicalError ?? cause?.message }, 'reading ticket numbers failed');
     }
@@ -304,6 +314,14 @@ const readTicketNumbers = async (ctx, { pnr, order, offer, bookingReference, con
     // follow-up rather than silently confirm a booking with no ticket number.
     current.needsReview = { reason: 'ticket_numbers_not_retrieved', at: new Date().toISOString() };
     log.warn({ pnr, attempts }, 'ticket numbers not in PNR after retries; flagged for manual follow-up');
+  } else if (tickets.length < wanted) {
+    // Some numbers, not all. The same reason as none at all - the e-ticket and
+    // the confirmation email already read it as "issued, number pending" - with
+    // the count, so the desk knows it is looking for the missing ones.
+    current.needsReview = {
+      reason: 'ticket_numbers_not_retrieved', expected: wanted, got: tickets.length, at: new Date().toISOString(),
+    };
+    log.warn({ pnr, attempts, expected: wanted, got: tickets.length }, 'not every traveller\'s ticket number is in the PNR after retries; flagged for manual follow-up');
   }
   return { tickets, order: current };
 };
@@ -324,8 +342,16 @@ const readTicketNumbers = async (ctx, { pnr, order, offer, bookingReference, con
  * tried regardless. A ticket already on the PNR is read, never issued again.
  * Refusals because the airline is not ready are retried the same way, up to
  * the configured number, counting one already met in the booking session.
+ *
+ * "Already ticketed" means a ticket for every traveller (`expectedTickets`).
+ * Finding ANY ticket used to end the loop as ticketed and done, so a PNR seen
+ * with one ticket of three - still landing, or issued in part - was recorded
+ * complete. It is not issued again either (the traveller who has a ticket would
+ * get a second one): it is read again, and flagged if still short.
  */
-const issueInFreshSessions = async (booked, { offer, bookingReference, config, notReadyRefusals = 0 }) => {
+const issueInFreshSessions = async (booked, {
+  offer, bookingReference, config, notReadyRefusals = 0, expectedTickets = 1,
+}) => {
   const { pnr } = booked;
   const waitStarted = Date.now();
   let refusals = notReadyRefusals;
@@ -346,10 +372,20 @@ const issueInFreshSessions = async (booked, { offer, bookingReference, config, n
       });
 
       const existing = readTickets(current);
-      if (existing.length > 0) {
+      if (existing.length >= expectedTickets) {
         const order = buildFlightOrder(current, { flightOffers: [offer], bookingReference });
         order.tickets = existing;
         return { ticketed: true, tickets: existing, order };
+      }
+      if (existing.length > 0) {
+        const partial = buildFlightOrder(current, { flightOffers: [offer], bookingReference });
+        partial.tickets = existing;
+        return {
+          ticketed: true,
+          ...(await readTicketNumbers(ctx, {
+            pnr, order: partial, offer, bookingReference, config, expected: expectedTickets,
+          })),
+        };
       }
 
       const locators = airSegmentLocators(current);
@@ -382,7 +418,12 @@ const issueInFreshSessions = async (booked, { offer, bookingReference, config, n
         return { waiting: true, notReady: true };
       }
       if (!readIssueTicketReply(issueReply).issued) return { ticketed: false };
-      return { ticketed: true, ...(await readTicketNumbers(ctx, { pnr, order: booked.order, offer, bookingReference, config })) };
+      return {
+        ticketed: true,
+        ...(await readTicketNumbers(ctx, {
+          pnr, order: booked.order, offer, bookingReference, config, expected: expectedTickets,
+        })),
+      };
       }, { config });
     } catch (cause) {
       if (cause instanceof BookingChainError) throw cause;
@@ -847,7 +888,9 @@ export const runBookingChain = async (p) => {
     // ---- 9. Read the ticket numbers back (with retries) --------------------
     let tickets = order.tickets;
     if (config.autoTicket && ticketed) {
-      ({ tickets, order } = await readTicketNumbers(ctx, { pnr, order, offer, bookingReference, config }));
+      ({ tickets, order } = await readTicketNumbers(ctx, {
+        pnr, order, offer, bookingReference, config, expected: travelers.length,
+      }));
     }
 
     log.info({
@@ -875,7 +918,9 @@ export const runBookingChain = async (p) => {
 
   const { issueInNewSession, notReadyRefusals, ...result } = booked;
   if (!issueInNewSession) return result;
-  return issueInFreshSessions(result, { offer, bookingReference, config, notReadyRefusals });
+  return issueInFreshSessions(result, {
+    offer, bookingReference, config, notReadyRefusals, expectedTickets: travelers.length,
+  });
 };
 
 /**

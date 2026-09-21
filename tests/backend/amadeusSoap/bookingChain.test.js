@@ -828,6 +828,93 @@ describe('after the PNR exists', () => {
     expect(result.tickets?.length ?? 0).toBe(0)
     expect(result.order.needsReview?.reason).toBe('ticket_numbers_not_retrieved')
   })
+
+  // One ticket per traveller: the 2ADT+1CH+1INF certification booking (BMPUST,
+  // 17 Sep 2026) came back with four FA elements for four travellers. The
+  // retrieve loop stopped at the first reply carrying ANY ticket, so a PNR read
+  // while the numbers were still landing locked in a partial set, and nothing
+  // downstream could tell it from a complete one.
+  const couple = [
+    { firstName: 'John', lastName: 'Smith', gender: 'MALE' },
+    { firstName: 'Jane', lastName: 'Smith', gender: 'FEMALE' },
+  ];
+  const retrieveWithTickets = (count) => envelope('PNR_Reply',
+    pnrHeaderXml
+    + '<dataElementsMaster>'
+    + Array.from({ length: count }, (_, i) => '<dataElementsIndiv><elementManagementData><segmentName>FA</segmentName></elementManagementData>'
+      + `<otherDataFreetext><longFreetext>FA PAX 057-241234567${i}/ETAI/USD221.70/04SEP26/SCK1S2400</longFreetext></otherDataFreetext>`
+      + '</dataElementsIndiv>').join('')
+    + '</dataElementsMaster>', SESSION);
+
+  it('keeps reading until every traveller has a ticket number', async () => {
+    vi.stubEnv('AMADEUS_WS_AUTO_TICKET', 'true');
+    vi.stubEnv('AMADEUS_WS_TICKET_RETRIEVE_INITIAL_MS', '0');
+    vi.stubEnv('AMADEUS_WS_TICKET_RETRIEVE_DELAY_MS', '0');
+    vi.stubEnv('AMADEUS_WS_TICKET_RETRIEVE_RETRIES', '3');
+    const { runBookingChain } = await loadChain();
+    queueReplies(sellOk, addOk, fopOk, priceOk, tstOk, commitOk, fopOk, issueOk, retrieveWithTickets(1), retrieveWithTickets(2));
+
+    const result = await runBookingChain({ offer: offer(), travelers: couple });
+
+    expect(result.tickets).toHaveLength(2);
+    expect(result.order.needsReview).toBeUndefined();
+  });
+
+  it('flags a booking whose tickets never all appear, saying how many are missing', async () => {
+    vi.stubEnv('AMADEUS_WS_AUTO_TICKET', 'true');
+    vi.stubEnv('AMADEUS_WS_TICKET_RETRIEVE_INITIAL_MS', '0');
+    vi.stubEnv('AMADEUS_WS_TICKET_RETRIEVE_DELAY_MS', '0');
+    vi.stubEnv('AMADEUS_WS_TICKET_RETRIEVE_RETRIES', '2');
+    const { runBookingChain } = await loadChain();
+    queueReplies(sellOk, addOk, fopOk, priceOk, tstOk, commitOk, fopOk, issueOk,
+      retrieveWithTickets(1), retrieveWithTickets(1), retrieveWithTickets(1));
+
+    const result = await runBookingChain({ offer: offer(), travelers: couple });
+
+    expect(result.ticketed).toBe(true);
+    // The number that did arrive is kept, not thrown away.
+    expect(result.tickets).toHaveLength(1);
+    expect(result.order.needsReview).toMatchObject({ reason: 'ticket_numbers_not_retrieved', expected: 2, got: 1 });
+  });
+
+  // A new-session look that finds a PNR already carrying tickets used to read
+  // it as done, however many were there. One ticket of two is not done - and
+  // issuing again is not the answer either (a second ticket for the traveller
+  // who has one), so it is read again and, if still short, flagged.
+  it('does not take a partly ticketed PNR in a new session as ticketed and done', async () => {
+    vi.stubEnv('AMADEUS_WS_AUTO_TICKET', 'true');
+    vi.stubEnv('AMADEUS_WS_TICKET_RETRIEVE_INITIAL_MS', '0');
+    vi.stubEnv('AMADEUS_WS_TICKET_RETRIEVE_DELAY_MS', '0');
+    vi.stubEnv('AMADEUS_WS_TICKET_RETRIEVE_RETRIES', '1');
+    const notReady = envelope('DocIssuance_IssueTicketReply',
+      '<processingStatus><statusCode>X</statusCode></processingStatus><errorGroup><errorOrWarningCodeDetails><errorDetails><errorCode>9125</errorCode></errorDetails></errorOrWarningCodeDetails>'
+      + '<errorWarningDescription><freeText>ETKT DISALLOWED - NEED AIRLINE R/LOC-RETRY</freeText></errorWarningDescription></errorGroup>', SESSION);
+    const { runBookingChain } = await loadChain();
+    queueReplies(sellOk, addOk, fopOk, priceOk, tstOk, commitOk, fopOk, notReady, signOutOk,
+      retrieveWithTickets(1), retrieveWithTickets(1), retrieveWithTickets(1));
+
+    const result = await runBookingChain({ offer: offer(), travelers: couple });
+
+    const sent = axios.post.mock.calls.map(([, body]) => String(body));
+    expect(sent.filter((body) => body.includes('<DocIssuance_IssueTicket'))).toHaveLength(1);
+    expect(result.ticketed).toBe(true);
+    expect(result.order.needsReview).toMatchObject({ reason: 'ticket_numbers_not_retrieved', expected: 2, got: 1 });
+  });
+
+  it('still takes a fully ticketed PNR in a new session as done, without reading it again', async () => {
+    vi.stubEnv('AMADEUS_WS_AUTO_TICKET', 'true');
+    const { runBookingChain } = await loadChain();
+    queueReplies(sellOk, addOk, fopOk, priceOk, tstOk, commitOk, fopOk,
+      envelope('DocIssuance_IssueTicketReply', '<processingStatus><statusCode>X</statusCode></processingStatus><errorGroup><errorOrWarningCodeDetails><errorDetails><errorCode>9125</errorCode></errorDetails></errorOrWarningCodeDetails></errorGroup>', SESSION),
+      signOutOk, retrieveWithTickets(2));
+
+    const result = await runBookingChain({ offer: offer(), travelers: couple });
+
+    const sent = axios.post.mock.calls.map(([, body]) => String(body));
+    expect(sent.filter((body) => body.includes('<PNR_Retrieve'))).toHaveLength(1);
+    expect(result.tickets).toHaveLength(2);
+    expect(result.order.needsReview).toBeUndefined();
+  });
 });
 
 describe('session hygiene', () => {
