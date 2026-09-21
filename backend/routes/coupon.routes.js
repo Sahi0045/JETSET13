@@ -29,7 +29,12 @@ router.post('/validate', async (req, res) => {
         // The same evaluation checkout runs on the total it computes itself.
         // `max_discount_amount` caps what one booking may give away - see
         // services/coupon.service.js.
-        const result = await evaluateCoupon(supabase, { code, orderTotal, bookingType, userId });
+        //
+        // A preview: this box knows no trip, so the caller's own open payment
+        // pages do not refuse the coupon here. After cancelling at ARC they did,
+        // for 15 minutes, because of the page just left. Checkout asks again
+        // with the trip and enforces the rule; nothing is granted here.
+        const result = await evaluateCoupon(supabase, { code, orderTotal, bookingType, userId, preview: true });
         if (!result.ok) {
             return res.status(result.status).json({ success: false, message: result.message });
         }

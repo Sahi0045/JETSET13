@@ -9,10 +9,16 @@ import { flightsKey, travellerNamesKey } from '../utils/tripMatch.js';
  * `orderTotal`, and the page then charged the `finalTotal` it was handed -
  * frozen at the moment the coupon was applied, whatever changed afterwards.
  *
+ * `preview` is the coupon box's question (POST /coupons/validate), asked with
+ * no trip: the caller's own unpaid payment pages neither refuse the coupon nor
+ * count toward its limit there. Checkout asks again with the trip and enforces
+ * both. Without it a customer who cancelled at ARC was refused their own
+ * coupon for 15 minutes, because of the page they had just left.
+ *
  * @param {object} client  a Supabase client
  * @returns {Promise<{ok: true, coupon, discountAmount, finalTotal} | {ok: false, status, message}>}
  */
-export async function evaluateCoupon(client, { code, orderTotal = 0, bookingType = 'all', userId, email, trip = null } = {}) {
+export async function evaluateCoupon(client, { code, orderTotal = 0, bookingType = 'all', userId, email, trip = null, preview = false } = {}) {
   if (!code) return { ok: false, status: 400, message: 'Coupon code is required.' };
 
   const { data: coupon, error } = await client
@@ -37,8 +43,26 @@ export async function evaluateCoupon(client, { code, orderTotal = 0, bookingType
   // used its coupon yet: every open checkout passed both limits, and a
   // one-per-customer coupon applied to two trips at once was given twice.
   const pending = await pendingCouponCheckouts(client, coupon);
+  const customerEmail = normalizeEmail(email);
+  const isCallers = (row) => Boolean((userId && row.user_id === userId)
+    || (customerEmail && normalizeEmail(row.booking_details?.customer_email) === customerEmail));
+  // The customer's own unpaid payment page for this same trip. A customer who
+  // cancelled at ARC, corrected a passport number and pressed Pay again after
+  // the five minutes a page is handed back for found that page, still inside
+  // its 15, and was refused their coupon as "already on another booking" - and
+  // charged in full - or, with the coupon at its last use, told it had reached
+  // its limit. The rules are about two trips at once; two payments for one
+  // trip are held for a human by the order route (findDuplicateBooking), so the
+  // coupon cannot be given twice this way. A payment already taken is never
+  // set aside: that protection stands. In a preview, with no trip, any of the
+  // caller's own unpaid pages - checkout decides.
+  const sameTripPage = (row) => Boolean(trip)
+    && couponTripKey(row.booking_details?.pending_booking_data?.bookingData?.originalOffer,
+      row.booking_details?.pending_booking_data?.bookingData?.passengerData) === trip;
+  const setAside = (row) => isCallers(row) && row.payment_status !== 'paid' && (preview || sameTripPage(row));
+  const counted = pending.filter((row) => !setAside(row));
   if (coupon.max_uses !== null && coupon.max_uses !== undefined
-    && Number(coupon.current_uses || 0) + pending.length >= coupon.max_uses) {
+    && Number(coupon.current_uses || 0) + counted.length >= coupon.max_uses) {
     return { ok: false, status: 400, message: 'This coupon has reached its maximum usage limit.' };
   }
   if (parseFloat(coupon.min_order_value) > 0 && parseFloat(orderTotal) < parseFloat(coupon.min_order_value)) {
@@ -57,7 +81,6 @@ export async function evaluateCoupon(client, { code, orderTotal = 0, bookingType
   // the same customer, signed in, was asked only about their account, found
   // nothing, and was given a one-per-customer coupon again. Two lookups rather
   // than one `or` filter, so an address is never spliced into a filter string.
-  const customerEmail = normalizeEmail(email);
   if (userId || customerEmail) {
     const usedBy = (column, value) => client.from('coupon_usage').select('id')
       .eq('coupon_id', coupon.id)
@@ -67,20 +90,9 @@ export async function evaluateCoupon(client, { code, orderTotal = 0, bookingType
     const { data: byAccount } = userId ? await usedBy('user_id', userId) : { data: null };
     const { data: byEmail } = !byAccount && customerEmail ? await usedBy('user_email', customerEmail) : { data: null };
     if (byAccount || byEmail) return { ok: false, status: 400, message: 'You have already used this coupon.' };
-    // Not the customer's own unpaid payment page for this same trip. A customer
-    // who cancelled at ARC, corrected a passport number and pressed Pay again
-    // after the five minutes a page is handed back for found that page, still
-    // inside its 15, and was refused their coupon as "already on another
-    // booking" - and charged in full. The rule is about two trips at once; two
-    // payments for one trip are held for a human by the order route
-    // (findDuplicateBooking), so the coupon cannot be given twice this way.
-    const sameTripPage = (row) => Boolean(trip) && row.payment_status !== 'paid'
-      && couponTripKey(row.booking_details?.pending_booking_data?.bookingData?.originalOffer,
-        row.booking_details?.pending_booking_data?.bookingData?.passengerData) === trip;
-    const mine = pending.some((row) => ((userId && row.user_id === userId)
-      || (customerEmail && normalizeEmail(row.booking_details?.customer_email) === customerEmail))
-      && !sameTripPage(row));
-    if (mine) {
+    // Another of this customer's checkouts holding the coupon - not the page
+    // set aside above.
+    if (counted.some(isCallers)) {
       return {
         ok: false,
         status: 400,

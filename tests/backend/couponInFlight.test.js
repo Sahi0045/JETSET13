@@ -144,6 +144,86 @@ describe('a coupon on a checkout that has not finished', () => {
 
       expect(result.ok).toBe(false);
     });
+
+    /**
+     * Nor does it count toward the coupon's limit. With max_uses 5 and 4 used,
+     * the customer's own abandoned page for this trip made it 4 + 1 - "This
+     * coupon has reached its maximum usage limit" - to the one customer the
+     * fifth use was going to.
+     */
+    const lastUse = { ...COUPON, max_uses: 5, current_uses: 4 };
+
+    it('does not count toward the coupon\'s limit', async () => {
+      const result = await evaluate(client({ coupon: lastUse, bookings: [openPageFor(offer, jane)] }), { trip: await tripOf(offer, jane) });
+
+      expect(result.ok).toBe(true);
+    });
+
+    it('still counts toward it when it is another customer\'s page, or a payment already taken', async () => {
+      const others = await evaluate(
+        client({ coupon: lastUse, bookings: [openPageFor(offer, jane, { user_id: 'user-9', booking_details: { customer_email: 'x@example.com', verified_charge: { coupon: { code: 'ONCE20' } } } })] }),
+        { trip: await tripOf(offer, jane) },
+      );
+      expect(others.ok).toBe(false);
+      expect(others.message).toMatch(/maximum usage/);
+
+      const paid = await evaluate(client({ coupon: lastUse, bookings: [openPageFor(offer, jane, { payment_status: 'paid' })] }), { trip: await tripOf(offer, jane) });
+      expect(paid.ok).toBe(false);
+      expect(paid.message).toMatch(/maximum usage/);
+    });
+  });
+
+  /**
+   * The coupon box (CouponInput.jsx -> POST /coupons/validate) asks with no
+   * trip. After a customer cancelled at ARC, it refused their own coupon for
+   * 15 minutes - "already on another booking you started" - because of the
+   * page they had just left. It is a preview: checkout asks again with the
+   * trip and enforces the rule there.
+   */
+  describe('a preview from the coupon box', () => {
+    const preview = (c, over = {}) => evaluate(c, { preview: true, email: undefined, ...over });
+
+    it('is not refused because of the customer\'s own open payment page', async () => {
+      const result = await preview(client({ bookings: [checkoutRow()] }));
+
+      expect(result.ok).toBe(true);
+    });
+
+    it('does not count the customer\'s own open page toward the limit', async () => {
+      const result = await preview(client({ coupon: { ...COUPON, max_uses: 5, current_uses: 4 }, bookings: [checkoutRow()] }));
+
+      expect(result.ok).toBe(true);
+    });
+
+    it('still refuses a coupon the customer has used, one at its limit, and one on their payment waiting to be booked', async () => {
+      const used = await preview(client({ usage: [{ booking_reference: 'FLTBOOKED', user_id: 'user-1' }] }));
+      expect(used.ok).toBe(false);
+      expect(used.message).toMatch(/already used/);
+
+      const full = await preview(client({ coupon: { ...COUPON, max_uses: 5, current_uses: 5 } }));
+      expect(full.ok).toBe(false);
+
+      const paidWaiting = await preview(client({ bookings: [checkoutRow({ payment_status: 'paid', created_at: minutesAgo(30) })] }));
+      expect(paidWaiting.ok).toBe(false);
+    });
+  });
+
+  describe('POST /coupons/validate', () => {
+    it('does not refuse the caller their coupon because of their own open payment page', async () => {
+      const { default: express } = await import('express');
+      const { default: request } = await import('supertest');
+      const supabase = (await import('../../backend/config/supabase.js')).default;
+      supabase.from.mockImplementation(client({ coupon: { ...COUPON, max_uses: 5, current_uses: 4 }, bookings: [checkoutRow()] }).from);
+      const { default: routes } = await import('../../backend/routes/coupon.routes.js');
+      const app = express();
+      app.use(express.json());
+      app.use('/api/coupons', routes);
+
+      const res = await request(app).post('/api/coupons/validate').send({ code: 'ONCE20', orderTotal: 500, bookingType: 'flight', userId: 'user-1' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+    });
   });
 
   it('ignores a payment page that closed, a cancelled checkout and one whose use is already counted', async () => {
