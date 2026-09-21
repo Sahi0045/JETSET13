@@ -74,6 +74,32 @@ export function arcSucceeded(response) {
     return status >= 200 && status < 300 && response?.data?.result === 'SUCCESS';
 }
 
+/**
+ * What an ARC reply that refused something says, without what it carried.
+ *
+ * A gateway transaction reply can carry the order, the card holder's name and
+ * the billing address alongside the verdict. Refusals were logged with
+ * JSON.stringify and handed back whole as `errorDetails` in the cancel
+ * response, which a guest reaches with a booking reference and an email -
+ * the thing checkout.handlers.js is careful not to do with the same object.
+ * The verdict is what a person acts on: the result, the gateway code, and
+ * ARC's own error cause and explanation.
+ */
+export function arcFailureSummary(data) {
+    if (!data || typeof data !== 'object') return null;
+    return {
+        result: data.result ?? null,
+        ...(data.response?.gatewayCode ? { response: { gatewayCode: data.response.gatewayCode } } : {}),
+        ...(data.error ? {
+            error: {
+                cause: data.error.cause ?? null,
+                explanation: data.error.explanation ?? null,
+                field: data.error.field ?? null,
+            },
+        } : {}),
+    };
+}
+
 export function getCallerInfo(req) {
     try {
         // Prefer the httpOnly session cookie (web); fall back to Bearer (mobile).

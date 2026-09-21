@@ -20,7 +20,7 @@ async function requireBookingStaff(req, res) {
     }
     return true;
 }
-import { arcSucceeded } from './payment.helpers.js';
+import { arcSucceeded, arcFailureSummary } from './payment.helpers.js';
 import { resolveBookingUserId } from '../../utils/bookingOwner.js';
 import { emailIsBookers, hasBookingOwner, isBookingOwner } from '../../utils/bookingAccess.js';
 import { liveChainState } from '../../utils/bookingChainClaim.js';
@@ -488,8 +488,8 @@ async function returnFlightPayment(decision, { arcOrderId, currency, reason }) {
                 if (arcSucceeded(refundResponse)) {
                     return { paymentAction: 'PARTIAL_REFUND', refundAmount: decision.refundAmount, cancellationFee: decision.fee, paymentProcessed: true, refundTransactionId: refundTxnId };
                 }
-                console.error('❌ ARC Pay REFUND failed:', refundResponse?.status, JSON.stringify(refundResponse?.data));
-                return { paymentAction: 'REFUND_FAILED', refundAmount: 0, cancellationFee: decision.fee, errorDetails: refundResponse?.data ?? null };
+                console.error('❌ ARC Pay REFUND failed:', refundResponse?.status, arcFailureSummary(refundResponse?.data));
+                return { paymentAction: 'REFUND_FAILED', refundAmount: 0, cancellationFee: decision.fee, errorDetails: arcFailureSummary(refundResponse?.data) };
             } catch (error) {
                 console.error('❌ ARC Pay REFUND did not complete:', error.message);
                 return { paymentAction: 'REFUND_UNDER_REVIEW', refundAmount: 0, cancellationFee: decision.fee, reviewReason: `refund request did not complete: ${error.message}` };
@@ -907,11 +907,11 @@ async function cancelOtherBooking(res, booking, { reason, email }) {
                             }).eq('id', payment.id);
                             if (refundDbErr) console.error('⚠️ payments refund-status update failed:', refundDbErr.message);
                         } else {
-                            console.error('❌ ARC Pay REFUND failed:', refundResponse.status, JSON.stringify(refundResponse.data));
+                            console.error('❌ ARC Pay REFUND failed:', refundResponse.status, arcFailureSummary(refundResponse.data));
                             cancellationResult.paymentAction = 'REFUND_FAILED';
                             cancellationResult.refundAmount = 0;
                             cancellationResult.cancellationFee = cancellationFee;
-                            cancellationResult.errorDetails = refundResponse.data;
+                            cancellationResult.errorDetails = arcFailureSummary(refundResponse.data);
                         }
                     } else {
                         // Cancellation fee >= original amount → no refund due
@@ -1032,11 +1032,11 @@ async function cancelOtherBooking(res, booking, { reason, email }) {
                         cancellationResult.cancellationFee = cancellationFee;
                         cancellationResult.refundTransactionId = refundTxnId;
                     } else {
-                        console.error('❌ ARC Pay REFUND failed:', refundResp.status, JSON.stringify(refundResp.data));
+                        console.error('❌ ARC Pay REFUND failed:', refundResp.status, arcFailureSummary(refundResp.data));
                         cancellationResult.paymentAction = 'REFUND_FAILED';
                         cancellationResult.refundAmount = 0;
                         cancellationResult.cancellationFee = cancellationFee;
-                        cancellationResult.errorDetails = refundResp.data;
+                        cancellationResult.errorDetails = arcFailureSummary(refundResp.data);
                     }
                 } else {
                     cancellationResult.paymentProcessed = true;
@@ -1376,7 +1376,7 @@ export async function handlePaymentRefund(req, res) {
 
         if (!arcSucceeded(refundResponse)) {
             await releasePaymentRefund(claimedPaymentId, heldClaim);
-            console.error('❌ ARC Pay refund refused:', refundResponse.status, JSON.stringify(refundResponse.data));
+            console.error('❌ ARC Pay refund refused:', refundResponse.status, arcFailureSummary(refundResponse.data));
             // Nothing is written. `refund_pending` is not a value the payments
             // CHECK constraint allows and no job ever read it, so recording it
             // only told the operator a refund was under way that nothing would
@@ -1384,7 +1384,7 @@ export async function handlePaymentRefund(req, res) {
             return res.status(400).json({
                 success: false,
                 error: 'ARC Pay refused the refund. Nothing has been refunded - check the order in ARC Pay before trying again.',
-                details: refundResponse.data
+                details: arcFailureSummary(refundResponse.data)
             });
         }
 
@@ -1650,13 +1650,13 @@ export async function handlePaymentVoid(req, res) {
         // result at all counted as a successful void, and the booking was
         // written cancelled and refunded on it. Only SUCCESS is a void.
         if (!arcSucceeded(voidResponse)) {
-            console.error('❌ ARC Pay VOID failed:', voidResponse.status, JSON.stringify(voidResponse.data));
+            console.error('❌ ARC Pay VOID failed:', voidResponse.status, arcFailureSummary(voidResponse.data));
             await giveBack();
             return res.status(400).json({
                 success: false,
                 error: 'Failed to void payment. It may have already settled — use Cancel & Refund instead.',
                 orderStatus,
-                details: voidResponse.data
+                details: arcFailureSummary(voidResponse.data)
             });
         }
 
@@ -2205,9 +2205,9 @@ export async function reverseArcPaymentForOrder(orderId, { amount, currency = 'U
             if (arcSucceeded(refundResp)) {
                 return { reversed: true, action: 'REFUND', amount: refundAmt, transactionId: refundTxnId };
             }
-            return { reversed: false, action: 'FAILED', error: 'VOID and REFUND both failed', details: refundResp.data };
+            return { reversed: false, action: 'FAILED', error: 'VOID and REFUND both failed', details: arcFailureSummary(refundResp.data) };
         }
-        return { reversed: false, action: 'FAILED', error: 'VOID failed and no amount available to refund', details: voidResp?.data ?? null };
+        return { reversed: false, action: 'FAILED', error: 'VOID failed and no amount available to refund', details: arcFailureSummary(voidResp?.data) };
     } catch (err) {
         return { reversed: false, action: 'FAILED', error: err.message };
     }

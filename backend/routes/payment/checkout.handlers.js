@@ -10,6 +10,7 @@ import { unchangedSince } from '../../utils/bookingDetailsGuard.js';
 import { toPnrName } from '../../../shared/passengerName.js';
 import { errorSummary } from '../../utils/errorSummary.js';
 import { orderVoided } from '../../utils/arcTransactions.js';
+import { arcFailureSummary } from './payment.helpers.js';
 
 const sanitizeRef = (v) => String(v ?? '').replace(/[^A-Za-z0-9_-]/g, '') || '__none__';
 
@@ -1448,7 +1449,7 @@ export async function handlePaymentCallback(req, res) {
                             return res.redirect(`/payment/success?paymentId=${payment.id}`);
                         }
                     } catch (payError) {
-                        console.error('PAY call failed:', payError.response?.data || payError.message);
+                        console.error('PAY call failed:', payError.response ? arcFailureSummary(payError.response.data) : payError.message);
                     }
                 }
             }
