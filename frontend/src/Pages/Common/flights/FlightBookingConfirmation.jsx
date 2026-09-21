@@ -141,8 +141,12 @@ function FlightBookingConfirmation() {
   const [fareGone, setFareGone] = useState(false);
   // The fares on sale now for this same search, fetched when the fare dies so
   // the customer changes flight here instead of starting the booking again.
-  // { busy, error, flights, switching } - see FlightFareGoneAlternatives.jsx.
+  // { busy, error, flights, switching, refusedAll } - see FlightFareGoneAlternatives.jsx.
   const [alternatives, setAlternatives] = useState(null);
+  // Every fare the airline has refused on this page, by fareIdentity. Only the
+  // last one used to be left out of the alternatives, so after a second
+  // refusal the first - cheapest, and listed first - was offered again.
+  const refusedFares = React.useRef(new Set());
   const [checkingOut, setCheckingOut] = useState(false);
   // One payment page per trip. React state alone let a quick second click in
   // before Pay re-rendered disabled, and `checkingOut` was cleared as soon as
@@ -409,6 +413,10 @@ function FlightBookingConfirmation() {
    */
   const loadAlternatives = async (deadOffer) => {
     const offer = deadOffer ?? reviewState?.flightData?.originalOffer;
+    // Remembered before anything can fail: a fare refused while the search
+    // is down is still refused when it answers again.
+    const dead = fareIdentity(offer);
+    if (dead) refusedFares.current.add(dead);
     const search = offer ? searchForGroup(reviewState?.searchData, offer, groupFromOffer(offer)) : null;
     if (!search?.from || !search?.to || !search?.departDate) {
       setAlternatives({ busy: false, error: null, flights: [], switching: false });
@@ -433,13 +441,17 @@ function FlightBookingConfirmation() {
         return;
       }
 
-      // Not the fare that just died: offering it back would refuse again.
-      const dead = fareIdentity(offer);
-      const flights = (body.data ?? [])
-        .filter((flight) => flight?.originalOffer && fareIdentity(flight.originalOffer) !== dead)
+      // Not a fare that has already died on this page - the one just refused,
+      // or one refused before it: offering it back would refuse again.
+      const found = (body.data ?? []).filter((flight) => flight?.originalOffer);
+      const flights = found
+        .filter((flight) => !refusedFares.current.has(fareIdentity(flight.originalOffer)))
         .sort((a, b) => Number(a.price?.amount ?? a.price?.total) - Number(b.price?.amount ?? b.price?.total))
         .slice(0, 5);
-      setAlternatives({ busy: false, error: null, flights, switching: false });
+      // The search found fares and the airline has refused every one of them
+      // here: that is what the panel says, not that the route has nothing.
+      const refusedAll = found.length > 0 && flights.length === 0;
+      setAlternatives({ busy: false, error: null, flights, switching: false, refusedAll });
     } catch {
       setAlternatives({
         busy: false,

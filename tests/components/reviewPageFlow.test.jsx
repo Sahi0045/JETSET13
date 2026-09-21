@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, fireEvent, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   airline, fareUnavailable, offer, renderReviewPage, reviewFlight, searchResult, segment, serverError, where,
@@ -93,5 +93,56 @@ describe('choosing another fare after the round trip through the login page', ()
     fireEvent.click(screen.getByRole('button', { name: 'Update price' }));
     await waitFor(() => expect(where.current.state?.flightData?.originalOffer?.travelerPricings).toHaveLength(2));
     expect(where.current.state).toMatchObject({ attemptId: 'attempt-7', searchData: { travelClass: 'BUSINESS', adults: 2 } });
+  });
+});
+
+/** The withdrawn-fare panel, once it has something to say. */
+const alternativesPanel = async () => (await screen.findByText('Fares available now')).closest('section');
+const chooseFlight = (panel, flightNumber) => {
+  fireEvent.click(within(panel).getByText(new RegExp(flightNumber)).closest('li').querySelector('button'));
+};
+
+// Only the fare that died last was left out. After a second refusal the first
+// dead fare - the cheapest, so listed first - was offered again, and choosing
+// it cost another pricing round trip to be refused by the fare the customer
+// started with.
+describe('a second refusal on the same page', () => {
+  const searchData = { from: 'DEL', to: 'BOM', departDate: '2026-11-15', adults: 1 };
+  const first = delBom('1', { number: '101', total: '100.00' });
+  const second = delBom('2', { number: '202', total: '150.00', at: '12:00' });
+  const third = delBom('3', { number: '303', total: '200.00', at: '16:00' });
+
+  it('never offers back a fare the airline has already refused here', async () => {
+    const everything = [searchResult(first), searchResult(second), searchResult(third)];
+    const fetch = airline({ price: { 1: fareUnavailable, 2: fareUnavailable }, search: [everything] });
+    vi.stubGlobal('fetch', fetch);
+
+    renderReviewPage(FlightBookingConfirmation, { state: { flightData: reviewFlight(first), searchData } });
+
+    await waitFor(async () => expect(within(await alternativesPanel()).getAllByRole('button', { name: 'Choose' })).toHaveLength(2));
+    chooseFlight(await alternativesPanel(), 'AI-202');
+
+    await waitFor(() => expect(fetch.searchRequests).toHaveLength(2));
+    await waitFor(async () => expect(within(await alternativesPanel()).getAllByRole('button', { name: 'Choose' })).toHaveLength(1));
+    const panel = await alternativesPanel();
+    expect(within(panel).queryByText(/AI-101/)).toBeNull();
+    expect(within(panel).queryByText(/AI-202/)).toBeNull();
+    expect(within(panel).getByText(/AI-303/)).toBeTruthy();
+  });
+
+  it('says the airline refused them all, rather than that the route has nothing', async () => {
+    const fetch = airline({ price: { 1: fareUnavailable, 2: fareUnavailable }, search: [[searchResult(first), searchResult(second)]] });
+    vi.stubGlobal('fetch', fetch);
+
+    renderReviewPage(FlightBookingConfirmation, { state: { flightData: reviewFlight(first), searchData } });
+
+    await waitFor(async () => expect(within(await alternativesPanel()).getAllByRole('button', { name: 'Choose' })).toHaveLength(1));
+    chooseFlight(await alternativesPanel(), 'AI-202');
+
+    await waitFor(() => expect(fetch.searchRequests).toHaveLength(2));
+    const panel = await alternativesPanel();
+    await waitFor(() => expect(within(panel).getByText(/The airline has refused every fare this search found/)).toBeTruthy());
+    expect(within(panel).queryByRole('button', { name: 'Choose' })).toBeNull();
+    expect(within(panel).queryByText(/nothing else on this route/)).toBeNull();
   });
 });

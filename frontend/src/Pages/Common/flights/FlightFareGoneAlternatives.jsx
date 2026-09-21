@@ -66,7 +66,7 @@ function FlightFareGoneAlternatives({ state, onChoose, onSearchAgain }) {
   // No state yet means the search is about to start, not that there is nothing
   // to show: the panel appears the moment the fare is refused, so the customer
   // never sees the dead fare with no way forward.
-  const { busy, error, flights, switching } = state ?? { busy: true, error: null, flights: null, switching: false };
+  const { busy, error, flights, switching, refusedAll } = state ?? { busy: true, error: null, flights: null, switching: false };
 
   return (
     <section
@@ -121,8 +121,13 @@ function FlightFareGoneAlternatives({ state, onChoose, onSearchAgain }) {
 
       {!busy && !error && flights?.length === 0 && (
         <div className="px-4 py-5 sm:px-5">
+          {/* The search did find fares - the airline has refused each of them
+              on this page already. "Nothing else on this route" is not true
+              then, and hides why. */}
           <p className="text-sm text-gray-600">
-            The airlines have nothing else on this route for these dates right now. Try another date, or search again.
+            {refusedAll
+              ? 'The airline has refused every fare this search found. Try another date, or search again.'
+              : 'The airlines have nothing else on this route for these dates right now. Try another date, or search again.'}
           </p>
           <button
             type="button"

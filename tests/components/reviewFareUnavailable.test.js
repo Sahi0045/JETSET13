@@ -42,10 +42,11 @@ describe('the review page on a fare that is no longer available', () => {
     expect(review).toMatch(/navigate\(`\$\{routerLocation\.pathname\}\$\{routerLocation\.search\}`, \{\s*replace: true,\s*state: \{ \.\.\.\(routerLocation\.state \|\| \{\}\), \.\.\.\(reviewState \|\| \{\}\), flightData \},/);
   });
 
-  // The fare that was just refused must not be offered straight back.
+  // The fare that was just refused must not be offered straight back - nor
+  // any refused before it (reviewPageFlow.test.jsx follows two refusals).
   it('leaves the refused fare out of the alternatives', () => {
-    expect(review).toMatch(/const dead = fareIdentity\(offer\);/);
-    expect(review).toMatch(/fareIdentity\(flight\.originalOffer\) !== dead/);
+    expect(review).toMatch(/const dead = fareIdentity\(offer\);\s*if \(dead\) refusedFares\.current\.add\(dead\);/);
+    expect(review).toMatch(/!refusedFares\.current\.has\(fareIdentity\(flight\.originalOffer\)\)/);
   });
 
   // A different group is a different fare, so the search that finds the
