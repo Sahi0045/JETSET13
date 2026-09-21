@@ -29,11 +29,41 @@ export class AmadeusSoapError extends Error {
   }
 }
 
+/**
+ * Which PNR element an error belongs to: "SSR FOID", "SSR DOCS", "RM", "NM".
+ *
+ * PNR_Reply reports a per-element refusal inside the `dataElementsIndiv` for
+ * that element, so the element's own identity is one level up from the error.
+ * Without it every rejection looks the same, and a refused optional SSR cannot
+ * be told apart from a refused name.
+ */
+const elementLabelOf = (node) => {
+  const segment = txt(at(node, 'elementManagementData.segmentName'));
+  if (!segment) return null;
+  const ssrType = txt(at(node, 'serviceRequest.ssr.type'));
+  return ssrType ? `${segment} ${ssrType}` : segment;
+};
+
+/**
+ * Elements a booking demonstrably survives without.
+ *
+ * Deliberately short, and every entry earned its place from a real reply:
+ * Gulf Air refused our FOID with 1919 on 15 Sep 2026 and the PNR still
+ * committed (BAW8IY) and reached issuance. RM and OS are our own remarks -
+ * the airline refusing one cannot stop a ticket.
+ *
+ * Anything not named here is treated as an element the booking needs, so an
+ * unrecognised refusal still fails early rather than after the charge.
+ */
+const SURVIVABLE_ELEMENT = /^(SSR FOID|RM|OS)$/i;
+
 /** Collect every error-ish message Amadeus puts in a reply, across schemas. */
 const collectMessages = (body) => {
   const found = [];
-  const visit = (node, depth = 0) => {
+  const visit = (node, depth = 0, element = null) => {
     if (!node || typeof node !== 'object' || depth > 8) return;
+    // An element's identity applies to the error nested inside it.
+    const here = elementLabelOf(node) ?? element;
     for (const [key, value] of Object.entries(node)) {
       // Amadeus names the error container differently per schema, and two of
       // them were missing here. FOP_CreateFormOfPayment reports a refusal in
@@ -66,10 +96,15 @@ const collectMessages = (body) => {
       if (/^(errorMessage|errorGroup|generalErrorInfo|errorAtMessageLevel|errorItinerarylevel|errorAtSegmentLevel|elementErrorInformation|nameError|applicationError|transmissionError|errorReturn|errorInfo)$/i.test(key)) {
         for (const entry of arr(value)) {
           const text = JSON.stringify(entry);
-          if (text && text !== '{}' && text !== '""') found.push(entry);
+          // Only an element-level container inherits the element's name. A
+          // message-level refusal is about the whole request, whatever
+          // element happens to enclose it in the tree.
+          if (text && text !== '{}' && text !== '""') {
+            found.push({ node: entry, element: /^elementErrorInformation$/i.test(key) ? here : null });
+          }
         }
       } else if (typeof value === 'object') {
-        visit(value, depth + 1);
+        visit(value, depth + 1, here);
       }
     }
   };
@@ -144,13 +179,14 @@ const describe = (node) => {
 
 /**
  * Inspect a parsed reply body.
- * @returns {{ ok: true } | { ok: false, empty: true } | { ok: false, error: AmadeusSoapError }}
+ * @returns {{ ok: true, warnings?: Array<{element: string, code: string, text: string}> }
+ *   | { ok: false, empty: true } | { ok: false, error: AmadeusSoapError }}
  */
 export const inspectReply = (body, operation) => {
   const nodes = collectMessages(body);
   if (nodes.length === 0) return { ok: true };
 
-  const described = nodes.map(describe);
+  const described = nodes.map((n) => ({ ...describe(n.node), element: n.element }));
 
   // DocIssuance_IssueTicket reports SUCCESS inside an errorGroup whose
   // errorCode is the literal string "OK" — Amadeus's own "electronic ticketing
@@ -165,7 +201,23 @@ export const inspectReply = (body, operation) => {
     return { ok: true };
   }
 
-  const blob = described.map((d) => `${d.code} ${d.text}`).join(' | ').trim();
+  // One element the airline refused is not the same as the request being
+  // refused. Treating them alike made a rejected FOID throw away a booking the
+  // customer had already paid for, and that the GDS would have sold: our own
+  // capture of 15 Sep 2026 has Gulf Air refusing the FOID with 1919 while DOCS,
+  // CTCE and CTCM were accepted, and that PNR committed as BAW8IY. The refusal
+  // still has to be visible - it being invisible is what #162 fixed - so it
+  // comes back as a warning for the caller to log against the booking.
+  const survivable = described.filter((d) => d.element && SURVIVABLE_ELEMENT.test(d.element));
+  const fatal = described.filter((d) => !(d.element && SURVIVABLE_ELEMENT.test(d.element)));
+  if (fatal.length === 0) {
+    return {
+      ok: true,
+      warnings: survivable.map((d) => ({ element: d.element, code: d.code, text: d.text })),
+    };
+  }
+
+  const blob = fatal.map((d) => `${d.code} ${d.text}`).join(' | ').trim();
   const rule = ERROR_CATALOGUE.find((r) => r.match.test(blob));
 
   // "No fare found" is a successful search with no results, not a failure -
