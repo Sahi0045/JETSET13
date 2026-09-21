@@ -26,7 +26,7 @@ import { flightsKey, travellerNamesKey } from '../utils/tripMatch.js';
 import { needsDateOfBirth } from '../../shared/travellerDetails.js';
 import { buildFlightOrderBody, orderDataFromCheckoutRow } from '../../shared/flightOrderBody.js';
 import { statusChangeRefusal } from '../../shared/bookingStatusChange.js';
-import { attentionOf, reviewResolution, ticketsOf, isTicketed } from '../../shared/reviewQueue.js';
+import { attentionOf, reviewResolution, ticketsOf, isTicketed, NO_CONFIRMED_SEAT_REVIEW_REASON } from '../../shared/reviewQueue.js';
 import { errorSummary } from '../utils/errorSummary.js';
 import { flightSearchLimiter, guestBookingLimiter } from '../middleware/security.js';
 import { liveChainState } from '../utils/bookingChainClaim.js';
@@ -1006,8 +1006,9 @@ const HELD_REVIEW_REASON_PREFIXES = ['chain failed after commit at ', 'order rou
  * prefix above, so the customer was sent "the airline is holding your seats
  * ... You do not need to do anything" - false. No honest email for this case
  * exists, so none is sent: the flag pages a person, who contacts the customer.
+ * Defined in shared/reviewQueue.js, which the alarm reads too.
  */
-export const NO_CONFIRMED_SEAT_REVIEW_REASON = 'chain failed after commit at segmentStatus';
+export { NO_CONFIRMED_SEAT_REVIEW_REASON };
 
 /**
  * Which email a booking still owes its customer.

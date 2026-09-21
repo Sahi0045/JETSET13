@@ -33,6 +33,17 @@ export const isTicketed = (details) => details?.gds?.ticketed === true || ticket
  */
 export const TICKET_NUMBERS_MISSING = 'ticket_numbers_not_retrieved';
 
+/**
+ * The order route's flag on a PNR the airline confirmed no seat on: a flight
+ * came back from commit waitlisted, requested, unable or cancelled (the
+ * chain's step 'segmentStatus', bookingChain.js NOT_A_SEAT_AT_COMMIT). The PNR
+ * is live, nothing is ticketed, and the customer has paid. Defined here so the
+ * route that writes it and the alarm that reads it share one value
+ * (frontend/src/utils/eTicket.js keeps the customer pages' copy; a test keeps
+ * the two equal).
+ */
+export const NO_CONFIRMED_SEAT_REVIEW_REASON = 'chain failed after commit at segmentStatus';
+
 /** What a member of staff recorded when they dealt with it, or null. */
 export const reviewResolution = (booking) => {
   const review = detailsOf(booking)?.needs_review;

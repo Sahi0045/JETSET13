@@ -24,7 +24,7 @@ import { postToSlack } from './slackAlert.js';
 import { unchangedSince } from '../utils/bookingDetailsGuard.js';
 import { queueEnvironment } from '../utils/queueEnvironment.js';
 import {
-  TICKET_NUMBERS_MISSING, isUnrecordedCancellation, needsAirlineRefundClaim, ticketsOf,
+  NO_CONFIRMED_SEAT_REVIEW_REASON, TICKET_NUMBERS_MISSING, isUnrecordedCancellation, needsAirlineRefundClaim, ticketsOf,
 } from '../../shared/reviewQueue.js';
 
 /**
@@ -190,6 +190,10 @@ export function describeUnrecordedCancellation(booking) {
 const ticketNumbersMissing = (booking) => !needsAirlineRefundClaim(booking)
   && booking?.booking_details?.needs_review?.reason === TICKET_NUMBERS_MISSING;
 
+// A PNR the airline confirmed no seat on (the chain's step 'segmentStatus').
+const noConfirmedSeat = (booking) => !needsAirlineRefundClaim(booking)
+  && booking?.booking_details?.needs_review?.reason === NO_CONFIRMED_SEAT_REVIEW_REASON;
+
 export function buildMessage(bookings) {
   // Its own section before anything else: the seats and the money moved and
   // the record says neither. Under "paid but not ticketed" it read "ticket it,
@@ -202,7 +206,13 @@ export function buildMessage(bookings) {
   // ticket it, or refund it" beside "ticketed: yes" - an instruction to issue a
   // second ticket against one payment, or refund a live ticket.
   const numbersMissing = rest.filter(ticketNumbersMissing);
-  const unticketed = rest.filter((booking) => !needsAirlineRefundClaim(booking) && !ticketNumbersMissing(booking));
+  // Nor is a PNR with no confirmed seat. Under that heading it read "ticket it,
+  // or refund it": ticketing issues a ticket for a seat the airline has not
+  // given, and a refund with the PNR still live leaves its confirmed flights
+  // held with nothing paid for them.
+  const seatless = rest.filter(noConfirmedSeat);
+  const unticketed = rest.filter((booking) => !needsAirlineRefundClaim(booking) && !ticketNumbersMissing(booking)
+    && !noConfirmedSeat(booking));
   const sections = [];
   if (unrecorded.length) {
     sections.push(
@@ -212,6 +222,18 @@ export function buildMessage(bookings) {
         + 'the money may already have gone back.',
       '',
       ...unrecorded.map(describeUnrecordedCancellation),
+    );
+  }
+  if (seatless.length) {
+    sections.push(
+      `:no_entry: *${seatless.length} booking${seatless.length > 1 ? 's' : ''} paid, with no confirmed seat from the airline*`,
+      'The airline has not confirmed a seat on every flight (waitlisted, requested, unable or cancelled at commit). '
+        + 'The PNR is live, nothing is ticketed, and the customer has paid and was told a person will contact them. '
+        + 'Do NOT ticket this PNR: that issues a ticket for a seat the airline has not given. '
+        + 'Secure the seat with the airline, or cancel the PNR and then refund. '
+        + 'Do not refund while the PNR is live: its confirmed flights would stay held with nothing paid for them.',
+      '',
+      ...seatless.map(describeBooking),
     );
   }
   if (unticketed.length) {
