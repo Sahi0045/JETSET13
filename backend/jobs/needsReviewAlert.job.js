@@ -281,10 +281,12 @@ export function describeFailedCancellation(booking) {
   // of a booking the chain ticketed and could not read the numbers back for
   // (ticket_numbers_not_retrieved, found under the refused cancel's flag too):
   // staff told there is no ticket could cancel and refund in full over live
-  // tickets. A void is of an issued ticket, so it counts.
+  // tickets. A void is of an issued ticket, so it counts. So does a ticket any
+  // attempt named as not voided, not only the latest: the line said
+  // "ticketed: NO" beside an earlier attempt's live ticket it listed.
   const numbersMissing = Boolean(ticketNumbersMissingOf(booking));
   const ticketed = isTicketed(details) || numbersMissing || flags.some((flag) => flag.ticketed === true)
-    || voided.length > 0 || (Array.isArray(review.unvoided_tickets) && review.unvoided_tickets.length > 0);
+    || voided.length > 0 || flags.some((flag) => Array.isArray(flag.unvoided_tickets) && flag.unvoided_tickets.length > 0);
   let tickets;
   if (Array.isArray(review.unvoided_tickets)) {
     // This attempt's own report: every ticket on the PNR it did not void.
