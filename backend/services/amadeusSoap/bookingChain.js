@@ -1290,29 +1290,46 @@ export const cancelBooking = async (recordLocator) => {
     // and a cancel then is refused - on PDT an Etihad and an Air Canada booking
     // were both left live this way. It is not a refusal to cancel: Amadeus says
     // to ignore it, redisplay the PNR and try again, which is what this does, twice.
-    for (let attempt = 1; ; attempt += 1) {
-      try {
-        await callStep(ctx, {
-          step: 'cancel',
-          operation: 'PNR_Cancel',
-          bodyXml: buildCancelBody(recordLocator),
-          pnr: recordLocator,
-          committed: true,
-          ticketed: tickets.length > 0,
-        });
-        break;
-      } catch (cause) {
-        const simultaneous = String(cause?.amadeusCode ?? '') === '8111'
-          || /SIMULTANEOUS CHANGES/i.test(String(cause?.technicalError ?? ''));
-        if (!simultaneous || attempt >= 3) throw cause;
-        log.warn({ pnr: recordLocator, attempt }, 'PNR_Cancel met simultaneous changes; ignoring it and retrying');
-        await sleep(config.cancelRetryDelayMs);
-        // Ignore the refused cancel before looking again. A plain retrieve here
-        // answered 31 FINISH OR IGNORE, because the failed change was still
-        // pending in the session - which is what left most cancels in the
-        // 15 Sep airline test unfinished.
-        await callStep(ctx, { step: 'ignore', operation: 'PNR_AddMultiElements', bodyXml: buildIgnoreBody(), pnr: recordLocator, committed: true });
+    try {
+      for (let attempt = 1; ; attempt += 1) {
+        try {
+          await callStep(ctx, {
+            step: 'cancel',
+            operation: 'PNR_Cancel',
+            bodyXml: buildCancelBody(recordLocator),
+            pnr: recordLocator,
+            committed: true,
+            ticketed: tickets.length > 0,
+          });
+          break;
+        } catch (cause) {
+          const simultaneous = String(cause?.amadeusCode ?? '') === '8111'
+            || /SIMULTANEOUS CHANGES/i.test(String(cause?.technicalError ?? ''));
+          if (!simultaneous || attempt >= 3) throw cause;
+          log.warn({ pnr: recordLocator, attempt }, 'PNR_Cancel met simultaneous changes; ignoring it and retrying');
+          await sleep(config.cancelRetryDelayMs);
+          // Ignore the refused cancel before looking again. A plain retrieve here
+          // answered 31 FINISH OR IGNORE, because the failed change was still
+          // pending in the session - which is what left most cancels in the
+          // 15 Sep airline test unfinished.
+          await callStep(ctx, { step: 'ignore', operation: 'PNR_AddMultiElements', bodyXml: buildIgnoreBody(), pnr: recordLocator, committed: true });
+        }
       }
+    } catch (cause) {
+      // The tickets are void and the itinerary is not cancelled. The error said
+      // nothing of the void, so the handler recorded no voided ticket, and a
+      // cancel on a later day - every ticket past its void window by then -
+      // listed the void ones as refunds to claim from the airline. Said the way
+      // a partial void says it (partialVoid): which were voided, and which were
+      // not - only tickets from an earlier day, which no void here touched.
+      if (voided) {
+        const voidedNumbers = voidable.map((t) => t.number);
+        cause.voidedTickets = voidedNumbers;
+        cause.unvoidedTickets = unvoidable.filter((t) => t.number).map((t) => t.number);
+        cause.technicalError = `${cause.technicalError ?? cause.message ?? 'PNR_Cancel failed'}`
+          + `; tickets voided ${voidedNumbers.join(', ')} - the PNR is left live`;
+      }
+      throw cause;
     }
 
     log.info({
