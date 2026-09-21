@@ -200,6 +200,41 @@ const voidFailedForNow = (cause) => String(cause?.amadeusCode ?? '') === '5795'
   || cause?.code === 'ECONNABORTED'
   || /timeout of \d+ms exceeded/i.test(String(cause?.technicalError ?? cause?.message ?? ''));
 
+/**
+ * Which tickets a void that failed overall DID void.
+ *
+ * Ticket_CancelDocument answers once per document, and a two-ticket void can
+ * come back voided for one and refused for the other. That was collapsed to
+ * one boolean and the error named no ticket, so the desk (needs_review.detail,
+ * written from technicalError) could not tell the ticket now void at Amadeus
+ * from the one still live - and a cancel on a later day would list the void
+ * one as a refund to claim from the airline. The reply's number carries a
+ * check digit ours does not, so it is matched as a prefix, as
+ * readVoidTicketReply does; a reply without numbers is reported as a count
+ * rather than guessed at by position.
+ */
+const partialVoid = (result, voidable) => {
+  const documents = result.documents ?? [];
+  const numbered = documents.length > 0 && documents.every((document) => document.number);
+  if (!numbered) {
+    const count = documents.filter((document) => document.voided).length;
+    return {
+      voided: null,
+      unvoided: null,
+      text: count > 0 ? `; ${count} of ${voidable.length} documents answered voided, which ones the reply does not say` : '',
+    };
+  }
+  const isVoided = (ticket) => documents.some((document) => document.voided
+    && document.number.startsWith(ticket.number.replace(/\D/g, '')));
+  const voided = voidable.filter(isVoided).map((ticket) => ticket.number);
+  const unvoided = voidable.filter((ticket) => !isVoided(ticket)).map((ticket) => ticket.number);
+  return {
+    voided,
+    unvoided,
+    text: voided.length > 0 ? `; voided ${voided.join(', ')} but not ${unvoided.join(', ')} - the PNR is left live` : '',
+  };
+};
+
 /** Seats are held per passenger; an infant travels on a lap and holds none. */
 const seatCount = (travelers) => travelers.filter((t) => t.ptc !== 'INF' && t.ptc !== 'HELD_INFANT').length;
 
@@ -1187,10 +1222,11 @@ export const cancelBooking = async (recordLocator) => {
         const result = readVoidTicketReply(voidReply, documentNumbers);
         if (!result.voided) {
           const inspected = inspectReply(voidReply, 'Ticket_CancelDocument');
+          const partly = partialVoid(result, voidable);
           if (voidFailedForNow(inspected.error)) {
-            return { retryVoid: true, reason: inspected.error?.technicalError ?? null };
+            return { retryVoid: true, reason: `${inspected.error?.technicalError ?? 'void failed for now'}${partly.text}` };
           }
-          throw new BookingChainError({
+          const failure = new BookingChainError({
             step: 'voidTicket',
             pnr: recordLocator,
             committed: true,
@@ -1198,9 +1234,13 @@ export const cancelBooking = async (recordLocator) => {
             cause: inspected.error ?? undefined,
             error: 'We could not void the ticket',
             code: 502,
-            technicalError: inspected.error?.technicalError
-              ?? `Ticket_CancelDocument responseType ${result.responseType || 'absent'} status ${result.status || 'absent'}`,
+            technicalError: (inspected.error?.technicalError
+              ?? `Ticket_CancelDocument responseType ${result.responseType || 'absent'} status ${result.status || 'absent'}`)
+              + partly.text,
           });
+          failure.voidedTickets = partly.voided;
+          failure.unvoidedTickets = partly.unvoided;
+          throw failure;
         }
         voided = true;
         log.info({ pnr: recordLocator, tickets: voidable.length }, 'tickets voided');
