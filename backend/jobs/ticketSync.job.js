@@ -121,6 +121,21 @@ export async function findUnticketed({ limit = MAX_PER_TICK } = {}) {
     // `eq 'false'` on NULL is NULL, so a plain `.eq` would silently skip
     // exactly the rows this job exists to find.
     .or('booking_details->gds->>ticketed.is.null,booking_details->gds->>ticketed.eq.false')
+    // Closed bookings in the query too, for the same reason. A cancellation
+    // whose refund failed stays `paid`, keeps its PNR and was never ticketed,
+    // so it matches everything above for ever; filtered only below, sixty of
+    // them filled the window and an open booking behind them was never read.
+    .not('status', 'in', `(${CLOSED.join(',')})`)
+    // Least recently asked about first, never-asked first of all.
+    //
+    // Oldest-first alone starved the window the same way from the other end:
+    // a booking that can never be ticketed - Air India refused with 2161, a KU
+    // refused ETKT NOT AUTHORISED, a PDT PNR since purged - never leaves this
+    // population, so once ten of them existed they were the ten asked about
+    // on every tick, and a booking a person ticketed by hand this morning was
+    // never retrieved. `ticket_checked_at` (runOnce) sends each one to the back
+    // once it has been asked, so every booking takes its turn.
+    .order('booking_details->>ticket_checked_at', { ascending: true, nullsFirst: true })
     .order('created_at', { ascending: true })
     .limit(limit * 5);
 
@@ -137,6 +152,15 @@ export async function findUnticketed({ limit = MAX_PER_TICK } = {}) {
     })
     .slice(0, limit);
 }
+
+/**
+ * Outcomes that leave a booking where it was: asked about, nothing found.
+ *
+ * Only these are stamped. A ticket that was found but could not be recorded
+ * ('not-recorded') is not: it should be asked about again at once, not after
+ * every other booking has had its turn.
+ */
+const ASKED_NOTHING_FOUND = new Set(['still-unticketed', 'unreadable']);
 
 /**
  * Tickets this job recorded whose owner has not been told yet.
@@ -313,7 +337,15 @@ export async function runOnce({ limit = MAX_PER_TICK, provider = FlightProvider,
   const rows = await findUnticketed({ limit });
   const results = [];
   for (const row of rows) {
-    results.push(await syncOne(row, { provider, sendEmail }));
+    const result = await syncOne(row, { provider, sendEmail });
+    results.push(result);
+    // When it was asked, and nothing more: not a verdict on the ticket, which
+    // is why syncOne itself still writes nothing for these outcomes. It is
+    // what puts this booking behind the ones not yet asked (findUnticketed).
+    // A stamp that does not land costs one extra turn at the front, no more.
+    if (ASKED_NOTHING_FOUND.has(result.outcome)) {
+      await patchBookingDetails(row.booking_reference, { ticket_checked_at: new Date().toISOString() });
+    }
   }
 
   // Tickets recorded on an earlier tick whose owner still has not been told -
