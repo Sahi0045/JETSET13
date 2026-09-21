@@ -141,6 +141,48 @@ describe('a round trip that goes abroad only on the way home', () => {
   });
 });
 
+// One flight number that lands on the way (AI2592 DEL-BOM stops at Indore,
+// #168). The results page counts that stop and so does the strip on this
+// page - "1 Stop" - while the panel right under it said "Direct Flight" and
+// named nowhere.
+describe('a single flight with a technical stop', () => {
+  it('says it stops, and where, under a strip that says the same', async () => {
+    const fare = offer({
+      id: '1',
+      itineraries: [{ segments: [segment('DEL', 'BOM', '2026-11-15T08:00:00', '2026-11-15T11:30:00', {
+        number: '2592', stops: [{ iataCode: 'IDR', arrivalAt: '2026-11-15T09:30:00', departureAt: '2026-11-15T10:15:00' }],
+      })] }],
+    });
+    vi.stubGlobal('fetch', airline());
+    const flightData = reviewFlight(fare, {
+      stops: 1,
+      stopDetails: [{ airport: 'IDR', duration: '0h 45m', technical: true }],
+      segments: [{
+        departure: { airport: 'DEL', time: '08:00', at: '2026-11-15T08:00:00' },
+        arrival: { airport: 'BOM', time: '11:30', at: '2026-11-15T11:30:00' },
+        airline: { code: 'AI', name: 'Air India' },
+        flightNumber: 'AI 2592',
+        duration: 'PT3H30M',
+      }],
+    });
+
+    const { container } = renderReviewPage(FlightBookingConfirmation, { state: { flightData } });
+
+    expect(await screen.findByText('1 Stop')).toBeTruthy();
+    expect(screen.queryByText('Direct Flight')).toBeNull();
+    expect(container.querySelector('.stops-label').textContent).toMatch(/1 Stop.*IDR/);
+  });
+
+  it('still says Direct Flight for a flight that does not stop', async () => {
+    vi.stubGlobal('fetch', airline());
+
+    const { container } = renderReviewPage(FlightBookingConfirmation, { state: { flightData: reviewFlight(delBom('1')) } });
+
+    expect(await screen.findByText('Direct Flight')).toBeTruthy();
+    expect(container.querySelector('.stops-label').textContent.trim()).toBe('Direct Flight');
+  });
+});
+
 /** Fill the first traveller in enough for Pay to go ahead on a domestic trip. */
 const fillLeadTraveller = async () => {
   fireEvent.change(await screen.findByLabelText(/First Name/), { target: { value: 'Jane' } });

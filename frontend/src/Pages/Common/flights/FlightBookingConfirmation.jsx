@@ -1675,8 +1675,19 @@ function FlightBookingConfirmation() {
                       <div className="path-line">
                         <div className="plane-icon">&#9992;</div>
                       </div>
+                      {/* One flight number can still land on the way - a
+                          technical stop (AI2592 DEL-BOM stops at Indore,
+                          #168). This said "Direct Flight" regardless, right
+                          under a strip reading "1 Stop", and named nowhere. */}
                       <div className="stops-label">
-                        Direct Flight
+                        {Number(bookingDetails?.flight?.stops) > 0
+                          ? [
+                            `${bookingDetails.flight.stops} Stop${bookingDetails.flight.stops > 1 ? 's' : ''}`,
+                            ...(bookingDetails.flight.stopDetails || [])
+                              .filter((stop) => stop?.airport)
+                              .map((stop) => `${getCityName(stop.airport)} (${stop.airport})`),
+                          ].join(' · ')
+                          : 'Direct Flight'}
                       </div>
                     </div>
 
