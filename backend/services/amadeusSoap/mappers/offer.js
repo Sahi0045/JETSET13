@@ -295,14 +295,14 @@ const buildDictionaries = (reply, offers = []) => {
  * combination carries for itself, and `_ama.recommendationId` still names the
  * recommendation.
  *
- * @param {object} ctx { reply, flightIndexes, currency, config, searchSignature }
+ * @param {object} ctx { reply, flightIndexes, currency, config }
  */
 const mapRecommendation = (recommendation, ctx) => arr(recommendation.segmentFlightRef)
   .map((flightRef, index) => mapCombination(recommendation, flightRef, index + 1, ctx))
   .filter(Boolean);
 
 const mapCombination = (recommendation, flightRef, combination, ctx) => {
-  const { reply, flightIndexes, currency, config, searchSignature } = ctx;
+  const { reply, flightIndexes, currency, config } = ctx;
   const itemNumber = atTxt(recommendation, 'itemNumber.itemNumberId.number');
   const legs = resolveLegs(flightRef, flightIndexes);
   if (legs.length === 0) return null;
@@ -472,7 +472,11 @@ const mapCombination = (recommendation, flightRef, combination, ctx) => {
       recommendationId: itemNumber,
       combination,
       searchedAt: new Date().toISOString(),
-      searchSignature,
+      // No `searchSignature`. It was stamped here as the way to "detect a
+      // search whose parameters changed between search and booking", and no
+      // code ever compared it. A booking is guarded by the offer's own
+      // segments, its age (offerMaxAgeMin) and the order route's traveller
+      // check - not by a field that only looked like a guard.
       refundable: pricing.refundable,
       paxRefs: paxProducts.flatMap((p) => {
         const ptc = atTxt(p, 'paxReference.ptc') || 'ADT';
