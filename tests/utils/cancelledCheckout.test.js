@@ -47,10 +47,19 @@ describe('readCancelledCheckout', () => {
     sessionStorage.setItem('pendingFlightBooking', JSON.stringify(saved));
 
     expect(readCancelledCheckout()).toEqual({
-      reviewState: { flightData: saved.selectedFlight, searchData: saved.searchData },
+      reviewState: { flightData: saved.selectedFlight, searchData: saved.searchData, attemptId: null },
       travellers: saved.passengerData,
       contact: saved.bookingDetails.contact,
     });
+  });
+
+  // What ties the traveller draft to this booking and no other
+  // (utils/flightTravellerDraft.js). Dropped here, the tab was back to a draft
+  // any booking of the same flight and party could restore.
+  it('restores the attempt the booking was made under', () => {
+    sessionStorage.setItem('pendingFlightBooking', JSON.stringify({ ...saved, attemptId: 'attempt-9' }));
+
+    expect(readCancelledCheckout().reviewState.attemptId).toBe('attempt-9');
   });
 
   // The draft is this tab's. In the browser-wide slot it outlived a closed tab

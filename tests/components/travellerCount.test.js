@@ -47,7 +47,8 @@ describe('adding or removing travellers on the review page', () => {
   it('swaps in the new offer, checks its price again and keeps what was typed', () => {
     expect(review).toMatch(/setPassengerData\(\(current\) => rebuildTravellers\(current, match\.originalOffer\.travelerPricings, blankTraveller\)\)/);
     expect(review).toMatch(/setPricedFare\(null\);/);
-    expect(review).toMatch(/state: \{ \.\.\.\(routerLocation\.state \|\| \{\}\), flightData, searchData:/);
+    // The attempt id is kept too, however the page was reached (reviewPageFlow.test.jsx).
+    expect(review).toMatch(/state: \{ \.\.\.\(routerLocation\.state \|\| \{\}\), \.\.\.\(reviewState \|\| \{\}\), flightData, searchData:/);
     expect(review).toMatch(/contact: previous\.contact/);
   });
 

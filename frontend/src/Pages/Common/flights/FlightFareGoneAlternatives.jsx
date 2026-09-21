@@ -1,6 +1,12 @@
 import React from 'react';
 import { ArrowRight, Loader2, RefreshCw } from 'lucide-react';
-import Price from '../../../Components/Price';
+// What the card is charged, in US dollars - the same figure, from the same
+// formula, as the summary beside the panel and the charge checkout verifies.
+// <Price> converted the airline fare alone at whatever rate it had (the
+// hardcoded table when the live fetch failed): a rupee figure without the fee,
+// directly above a dollar total with it (utils/chargeDisplay.js).
+import ChargeAmount from '../../../Components/ChargeAmount';
+import { computeFlightCharge, travellerTypesOf } from '../../../../../shared/flightCharge';
 
 /**
  * The fares on sale now, shown where the dead one was.
@@ -22,7 +28,12 @@ import Price from '../../../Components/Price';
  * the page and keeps every field already filled in.
  */
 
-const Row = ({ flight, onChoose, busy }) => {
+const Row = ({ flight, onChoose, busy, priceConfig }) => {
+  const charge = computeFlightCharge({
+    fareTotal: flight.price?.amount ?? Number(flight.price?.grandTotal ?? flight.price?.total),
+    travellerTypes: travellerTypesOf(flight.originalOffer),
+    config: priceConfig,
+  });
   const stops = flight.stops === 0
     ? 'Non-stop'
     : `${flight.stops} ${flight.stops === 1 ? 'stop' : 'stops'}`;
@@ -47,7 +58,7 @@ const Row = ({ flight, onChoose, busy }) => {
 
       <div className="ml-auto flex items-center gap-3">
         <span className="font-grotesk text-[17px] font-bold text-ink">
-          <Price amount={flight.price?.amount ?? Number(flight.price?.grandTotal ?? flight.price?.total)} />
+          <ChargeAmount amount={charge.total} />
         </span>
         <button
           type="button"
@@ -62,11 +73,11 @@ const Row = ({ flight, onChoose, busy }) => {
   );
 };
 
-function FlightFareGoneAlternatives({ state, onChoose, onSearchAgain }) {
+function FlightFareGoneAlternatives({ state, priceConfig, onChoose, onSearchAgain }) {
   // No state yet means the search is about to start, not that there is nothing
   // to show: the panel appears the moment the fare is refused, so the customer
   // never sees the dead fare with no way forward.
-  const { busy, error, flights, switching } = state ?? { busy: true, error: null, flights: null, switching: false };
+  const { busy, error, flights, switching, refusedAll } = state ?? { busy: true, error: null, flights: null, switching: false };
 
   return (
     <section
@@ -77,6 +88,7 @@ function FlightFareGoneAlternatives({ state, onChoose, onSearchAgain }) {
         <h3 className="font-grotesk text-[17px] font-bold text-ink">Fares available now</h3>
         <p className="mt-0.5 text-[13px] text-gray-500">
           Same route, same dates, same travellers. Everything you have typed is kept - pick a flight and carry on.
+          {' '}Each price is the total for all travellers in US dollars, including our service fee.
         </p>
       </header>
 
@@ -104,7 +116,7 @@ function FlightFareGoneAlternatives({ state, onChoose, onSearchAgain }) {
         <>
           <ul className="m-0 list-none p-0">
             {flights.map((flight) => (
-              <Row key={flight.id ?? flight.flightNumber} flight={flight} onChoose={onChoose} busy={switching} />
+              <Row key={flight.id ?? flight.flightNumber} flight={flight} onChoose={onChoose} busy={switching} priceConfig={priceConfig} />
             ))}
           </ul>
           <div className="border-t border-gray-100 px-4 py-3 sm:px-5">
@@ -121,8 +133,13 @@ function FlightFareGoneAlternatives({ state, onChoose, onSearchAgain }) {
 
       {!busy && !error && flights?.length === 0 && (
         <div className="px-4 py-5 sm:px-5">
+          {/* The search did find fares - the airline has refused each of them
+              on this page already. "Nothing else on this route" is not true
+              then, and hides why. */}
           <p className="text-sm text-gray-600">
-            The airlines have nothing else on this route for these dates right now. Try another date, or search again.
+            {refusedAll
+              ? 'The airline has refused every fare this search found. Try another date, or search again.'
+              : 'The airlines have nothing else on this route for these dates right now. Try another date, or search again.'}
           </p>
           <button
             type="button"

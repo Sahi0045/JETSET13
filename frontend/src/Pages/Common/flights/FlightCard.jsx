@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import Price from '../../../Components/Price';
 import { formatCheckedBag } from '../../../utils/baggage';
+import { formatCalendarDate } from '../../../utils/dateUtils';
 import { arrivalDayOffset, layoverLabel, layoversOf, legDateLabel, seatsLeftLabel } from './searchResults';
 
 const AIRLINE_LOGO_FALLBACK = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiByeD0iOCIgZmlsbD0iIzM3NzNmNCIvPgo8dGV4dCB4PSIyMCIgeT0iMjgiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxOCIgZmlsbD0id2hpdGUiIHRleHQtYW5jaG9yPSJtaWRkbGUiPuKciO+4jzwvdGV4dD4KPHN2Zz4K';
@@ -511,10 +512,14 @@ function FlightCard({ flight, onBook, onViewPrices, priceStats, cityMap = {} }) 
             {flight.validatingAirlineCodes?.length > 0 && (
               <span><span className="text-gray-400">Issued by:</span> <span className="font-medium">{flight.validatingAirlineCodes.join(', ')}</span></span>
             )}
+            {/* A calendar day (LAST TKT DTE "18SEP26" -> "2026-09-18"). Read
+                with `new Date(...)` it was UTC midnight, the evening before in
+                every American zone: a US customer was told to book a day
+                early, and on the deadline day saw a date already past. */}
             {flight.lastTicketingDate && (
               <span>
                 <span className="text-gray-400">Book by:</span>{' '}
-                <span className="font-medium">{new Date(flight.lastTicketingDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                <span className="font-medium">{formatCalendarDate(flight.lastTicketingDate, { month: 'short', day: 'numeric' })}</span>
               </span>
             )}
           </div>

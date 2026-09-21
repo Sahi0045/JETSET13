@@ -137,12 +137,22 @@ function FlightBookingConfirmation() {
   // server at checkout. Null until the check answers; the search price stands.
   const [pricedFare, setPricedFare] = useState(null);
   const [fareNotice, setFareNotice] = useState(null);
+  // The notice a swap - another flight chosen, the travellers changed - puts
+  // up while the airline has yet to price the new offer. A failed check only
+  // filled an empty notice, and the swap had just filled it, so the customer
+  // read "Flight changed..." over a total the airline never confirmed and was
+  // not told. The failed check now adds itself to this one.
+  const swapNotice = React.useRef(null);
   // The airline refused to price this fare: the way on is a new search.
   const [fareGone, setFareGone] = useState(false);
   // The fares on sale now for this same search, fetched when the fare dies so
   // the customer changes flight here instead of starting the booking again.
-  // { busy, error, flights, switching } - see FlightFareGoneAlternatives.jsx.
+  // { busy, error, flights, switching, refusedAll } - see FlightFareGoneAlternatives.jsx.
   const [alternatives, setAlternatives] = useState(null);
+  // Every fare the airline has refused on this page, by fareIdentity. Only the
+  // last one used to be left out of the alternatives, so after a second
+  // refusal the first - cheapest, and listed first - was offered again.
+  const refusedFares = React.useRef(new Set());
   const [checkingOut, setCheckingOut] = useState(false);
   // One payment page per trip. React state alone let a quick second click in
   // before Pay re-rendered disabled, and `checkingOut` was cleared as soon as
@@ -364,14 +374,19 @@ function FlightBookingConfirmation() {
       setPricedFare(null);
       setAppliedCoupon(null);
       couponBase.current = null;
-      setFareNotice(`Updated for ${describeGroup(group)} on the same flight and fare. Please check the new total.`);
+      swapNotice.current = `Updated for ${describeGroup(group)} on the same flight and fare. Please check the new total.`;
+      setFareNotice(swapNotice.current);
       setGroupChange({ busy: false, problem: null, unavailable: null });
       setGroupEditorOpen(false);
       // Into router state, like an arrival from search: the page reads the
       // flight from there, and a refresh or the login round trip keeps it.
+      // Built from `reviewState`, not only the router state: back from the
+      // login page the flight, the search and the attempt id come from this
+      // tab's storage and the router state is empty, so the attempt id - what
+      // ties the traveller draft to this booking - was dropped here.
       navigate(`${routerLocation.pathname}${routerLocation.search}`, {
         replace: true,
-        state: { ...(routerLocation.state || {}), flightData, searchData: { ...(reviewState.searchData || {}), ...search } },
+        state: { ...(routerLocation.state || {}), ...(reviewState || {}), flightData, searchData: { ...(reviewState.searchData || {}), ...search } },
       });
     } catch {
       setGroupChange({ busy: false, problem: 'We could not reach the flight search. Please try again.', unavailable: null });
@@ -405,6 +420,10 @@ function FlightBookingConfirmation() {
    */
   const loadAlternatives = async (deadOffer) => {
     const offer = deadOffer ?? reviewState?.flightData?.originalOffer;
+    // Remembered before anything can fail: a fare refused while the search
+    // is down is still refused when it answers again.
+    const dead = fareIdentity(offer);
+    if (dead) refusedFares.current.add(dead);
     const search = offer ? searchForGroup(reviewState?.searchData, offer, groupFromOffer(offer)) : null;
     if (!search?.from || !search?.to || !search?.departDate) {
       setAlternatives({ busy: false, error: null, flights: [], switching: false });
@@ -429,13 +448,17 @@ function FlightBookingConfirmation() {
         return;
       }
 
-      // Not the fare that just died: offering it back would refuse again.
-      const dead = fareIdentity(offer);
-      const flights = (body.data ?? [])
-        .filter((flight) => flight?.originalOffer && fareIdentity(flight.originalOffer) !== dead)
+      // Not a fare that has already died on this page - the one just refused,
+      // or one refused before it: offering it back would refuse again.
+      const found = (body.data ?? []).filter((flight) => flight?.originalOffer);
+      const flights = found
+        .filter((flight) => !refusedFares.current.has(fareIdentity(flight.originalOffer)))
         .sort((a, b) => Number(a.price?.amount ?? a.price?.total) - Number(b.price?.amount ?? b.price?.total))
         .slice(0, 5);
-      setAlternatives({ busy: false, error: null, flights, switching: false });
+      // The search found fares and the airline has refused every one of them
+      // here: that is what the panel says, not that the route has nothing.
+      const refusedAll = found.length > 0 && flights.length === 0;
+      setAlternatives({ busy: false, error: null, flights, switching: false, refusedAll });
     } catch {
       setAlternatives({
         busy: false,
@@ -477,10 +500,17 @@ function FlightBookingConfirmation() {
     setFareGone(false);
     setAlternatives(null);
     setNotice(null);
-    setFareNotice('Flight changed, and your traveller details are as you left them. Please check the new total before you pay.');
+    swapNotice.current = 'Flight changed, and your traveller details are as you left them. Please check the new total before you pay.';
+    setFareNotice(swapNotice.current);
+    // Everything the page was given - the search and the attempt id too - with
+    // only the flight swapped. Back from the login page all of it lives in
+    // `reviewState` and none in the router state, and taking the router state
+    // alone dropped the search: "See all flights" went to the landing page,
+    // and a second refusal searched without the cabin, so a business booking
+    // was offered economy fares as "same route, same dates, same travellers".
     navigate(`${routerLocation.pathname}${routerLocation.search}`, {
       replace: true,
-      state: { ...(routerLocation.state || {}), flightData },
+      state: { ...(routerLocation.state || {}), ...(reviewState || {}), flightData },
     });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -591,6 +621,24 @@ function FlightBookingConfirmation() {
     // on the page they confirmed.
     const returnLeg = returnLegOf(flightData);
     const returnSegments = returnLeg ? returnLeg.segments.map(toReviewSegment) : [];
+    // How often the flight home lands before it arrives: each change of plane
+    // and each technical stop inside one flight (a segment's `stops`). The
+    // results page counts both; this counted segments alone, so one flight
+    // number that lands on the way read "Direct". An alternative chosen on
+    // this page has no results-page description, so the offer is counted.
+    const returnItinerarySegments = flightData.originalOffer?.itineraries?.[1]?.segments ?? [];
+    const returnStops = Number.isFinite(flightData.returnLeg?.stops)
+      ? flightData.returnLeg.stops
+      : returnItinerarySegments.length > 0
+        ? returnItinerarySegments.length - 1
+          + returnItinerarySegments.reduce((count, seg) => count + (Array.isArray(seg?.stops) ? seg.stops.length : 0), 0)
+        : returnSegments.length - 1;
+
+    // Every flight on the offer, the flights home included - what checkout
+    // decides passports and Secure Flight by (backend/utils/itinerary.js). The
+    // page read the flights out only, so a round trip connecting abroad on the
+    // way home drew no passport fields, and checkout refused it for them.
+    const offerSegments = (flightData.originalOffer?.itineraries ?? []).flatMap((itinerary) => itinerary?.segments ?? []);
 
     return {
       bookingId: bookingId || null,
@@ -643,7 +691,7 @@ function FlightBookingConfirmation() {
         returnLeg: returnSegments.length > 0 ? {
           segments: returnSegments,
           duration: returnLeg.duration,
-          stops: returnSegments.length - 1,
+          stops: returnStops,
           departureCity: returnSegments[0].departure.cityName,
           arrivalCity: returnSegments[returnSegments.length - 1].arrival.cityName,
         } : null,
@@ -670,12 +718,16 @@ function FlightBookingConfirmation() {
       // International if any leg crosses a border, not only the two ends: a
       // connection abroad needs a passport too. This compared the two airport
       // codes, so every flight with different ends - all of them - counted.
-      isInternational: (flightData.segments || []).some((seg) =>
-        isInternationalRoute(seg.departure?.airport, seg.arrival?.airport))
+      isInternational: offerSegments.some((seg) =>
+        isInternationalRoute(seg?.departure?.iataCode, seg?.arrival?.iataCode))
+        || (flightData.segments || []).some((seg) =>
+          isInternationalRoute(seg.departure?.airport, seg.arrival?.airport))
         || isInternationalRoute(flightData.departure.airport, flightData.arrival.airport),
       // Any flight in or out of the US: everyone needs a date of birth.
-      secureFlight: (flightData.segments || []).some((seg) =>
-        isUnitedStatesAirport(seg.departure?.airport) || isUnitedStatesAirport(seg.arrival?.airport))
+      secureFlight: offerSegments.some((seg) =>
+        isUnitedStatesAirport(seg?.departure?.iataCode) || isUnitedStatesAirport(seg?.arrival?.iataCode))
+        || (flightData.segments || []).some((seg) =>
+          isUnitedStatesAirport(seg.departure?.airport) || isUnitedStatesAirport(seg.arrival?.airport))
         || isUnitedStatesAirport(flightData.departure.airport) || isUnitedStatesAirport(flightData.arrival.airport)
     };
   };
@@ -762,9 +814,17 @@ function FlightBookingConfirmation() {
     setFareGone(false);
     // A check that fails is said, not swallowed: the page used to go on
     // quoting the search price as if the airline had confirmed it.
+    //
+    // Any other notice already up says something that matters more - the
+    // coupon removed, a changed fare - and stays. A swap's own notice is the
+    // exception: it is about this very check, so the warning joins it.
     const couldNotCheck = () => {
       if (cancelled) return;
-      setFareNotice((notice) => notice || "We couldn't check this fare with the airline just now. The total below is from your search. It is checked again before you pay, and nothing is charged if it has changed.");
+      const warning = "We couldn't check this fare with the airline just now. The total below is from your search. It is checked again before you pay, and nothing is charged if it has changed.";
+      setFareNotice((notice) => {
+        if (!notice) return warning;
+        return notice === swapNotice.current ? `${notice} ${warning}` : notice;
+      });
     };
     (async () => {
       try {
@@ -996,16 +1056,50 @@ function FlightBookingConfirmation() {
    * when the tab does; the reasoning is in utils/flightTravellerDraft.js.
    *
    * On a timer rather than on every keystroke: a passport number is a dozen
-   * renders, and the only moment this has to have caught up is when the page
-   * goes away, which is at least a second after the last key.
+   * renders. Two moments cannot wait for it, and are written at once:
+   *
+   * - The fare changes (another flight chosen, the travellers changed). The
+   *   draft is tied to the fare, so until it is rewritten a reload reads the
+   *   new fare, finds the old one, and restores nothing - every name and
+   *   passport number gone, the loss the alternatives panel exists to prevent.
+   * - The page goes away (`pagehide`: a reload, a discarded tab), with a change
+   *   still waiting on the timer.
    */
+  const pendingDraft = React.useRef(null);
+  const draftFare = React.useRef(null);
   useEffect(() => {
     if (passengerData.length === 0) return undefined;
     const offer = reviewState?.flightData?.originalOffer;
     if (!offer) return undefined;
-    const timer = setTimeout(() => saveTravellerDraft(passengerData, offer, { attemptId: reviewState?.attemptId }), 800);
+    const attemptId = reviewState?.attemptId;
+    const save = () => {
+      pendingDraft.current = null;
+      saveTravellerDraft(passengerData, offer, { attemptId });
+    };
+    if (draftFare.current !== null && draftFare.current !== offer) {
+      draftFare.current = offer;
+      save();
+      return undefined;
+    }
+    draftFare.current = offer;
+    pendingDraft.current = { offer, attemptId, save };
+    const timer = setTimeout(save, 800);
     return () => clearTimeout(timer);
   }, [passengerData, reviewState?.flightData?.originalOffer, reviewState?.attemptId]);
+
+  useEffect(() => {
+    const onPageHide = () => {
+      const pending = pendingDraft.current;
+      if (!pending) return;
+      // Only over a draft this page still holds. Logging out removes it
+      // (Navbar.jsx) just before the page goes, and writing it back here left
+      // every passport number typed in the tab for whoever came next.
+      if (!readTravellerDraft(pending.offer, { attemptId: pending.attemptId })) return;
+      pending.save();
+    };
+    window.addEventListener('pagehide', onPageHide);
+    return () => window.removeEventListener('pagehide', onPageHide);
+  }, []);
 
   const toggleEditMode = () => {
     setEditMode(!editMode);
@@ -1188,6 +1282,9 @@ function FlightBookingConfirmation() {
         flightData: flightDataForArcPay,
         // So a cancelled payment can come back to this search's results too.
         searchData: reviewState?.searchData ?? null,
+        // And to this booking's traveller draft, not one any booking of the
+        // same flight and party could restore (utils/flightTravellerDraft.js).
+        attemptId: reviewState?.attemptId ?? null,
         // When this draft was written. It holds every traveller's name, date of
         // birth and passport number, and nothing removed it when a customer
         // reached ARC Pay and closed the tab - see clearStaleStoredBookings.
@@ -1569,6 +1666,7 @@ function FlightBookingConfirmation() {
             {fareGone && (
               <FlightFareGoneAlternatives
                 state={alternatives}
+                priceConfig={priceConfig}
                 onChoose={chooseAlternative}
                 onSearchAgain={searchAgain}
               />
@@ -1639,8 +1737,19 @@ function FlightBookingConfirmation() {
                       <div className="path-line">
                         <div className="plane-icon">&#9992;</div>
                       </div>
+                      {/* One flight number can still land on the way - a
+                          technical stop (AI2592 DEL-BOM stops at Indore,
+                          #168). This said "Direct Flight" regardless, right
+                          under a strip reading "1 Stop", and named nowhere. */}
                       <div className="stops-label">
-                        Direct Flight
+                        {Number(bookingDetails?.flight?.stops) > 0
+                          ? [
+                            `${bookingDetails.flight.stops} Stop${bookingDetails.flight.stops > 1 ? 's' : ''}`,
+                            ...(bookingDetails.flight.stopDetails || [])
+                              .filter((stop) => stop?.airport)
+                              .map((stop) => `${getCityName(stop.airport)} (${stop.airport})`),
+                          ].join(' · ')
+                          : 'Direct Flight'}
                       </div>
                     </div>
 

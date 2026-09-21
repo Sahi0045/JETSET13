@@ -23,11 +23,16 @@ export const isCancelledReturn = (search) => new URLSearchParams(search || '').g
 
 /**
  * The review page as it was before the payment page opened: its router state
- * (the flight and the search), the travellers and the contact details. Null
- * when nothing usable was saved.
+ * (the flight, the search and the attempt id), the travellers and the contact
+ * details. Null when nothing usable was saved.
+ *
+ * The attempt id is what ties the traveller draft to this booking and no other
+ * (utils/flightTravellerDraft.js). It was left behind here, like
+ * flightReviewResume.js once did, so after a cancelled payment the draft fell
+ * back to the route-and-party fingerprint any booking of the same flight shares.
  *
  * @param {Storage} [storage]
- * @returns {{ reviewState: { flightData: object, searchData: object|null }, travellers: object[], contact: object|null }|null}
+ * @returns {{ reviewState: { flightData: object, searchData: object|null, attemptId: string|null }, travellers: object[], contact: object|null }|null}
  */
 export function readCancelledCheckout(storage = globalThis.sessionStorage) {
   try {
@@ -36,7 +41,7 @@ export function readCancelledCheckout(storage = globalThis.sessionStorage) {
     // Without the airline's offer there is no fare to price or book.
     if (!flightData?.originalOffer) return null;
     return {
-      reviewState: { flightData, searchData: saved.searchData ?? null },
+      reviewState: { flightData, searchData: saved.searchData ?? null, attemptId: saved.attemptId ?? null },
       travellers: Array.isArray(saved.passengerData) ? saved.passengerData : [],
       contact: saved.bookingDetails?.contact ?? null,
     };
