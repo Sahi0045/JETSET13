@@ -1397,8 +1397,30 @@ export function buildBookingRow(bookingData, userId) {
 // Helper to handle duplicate booking_reference
 const MERGE_TRIES = 3;
 
+/** The bookings table refused the row's owner: a foreign key on user_id, or RLS. */
+const ownerRefused = (error) => error?.code === '23503' || error?.code === '42501'
+  || /violates foreign key|row-level security/i.test(error?.message || '');
+
+/**
+ * A paid booking whose outcome could not be written is reported, not just
+ * logged. The route still answers the customer (savedToDatabase: false), so
+ * without this a live PNR could sit behind checkout's `pending` row - no
+ * itinerary, no travellers, no confirmation email - with nothing said.
+ */
+const reportMergeFailure = (bookingData, reason) => reportError(
+  new Error(`the booking outcome could not be saved: ${reason}`),
+  { where: 'handleDuplicateBookingMerge', bookingReference: bookingData.bookingReference, pnr: bookingData.pnr || null },
+);
+
 export async function handleDuplicateBookingMerge(bookingData, rowTemplate) {
   console.log('🔄 Booking reference already exists, merging into the checkout row...');
+
+  // Set once the table has refused the template's owner. Checkout saves its row
+  // without the owner when `bookings.user_id` refuses the id (a travel agent's
+  // token, a legacy login), so that row has none - and the merge put the same
+  // refused id straight back, the same foreign key refused it, and the whole
+  // save was abandoned. The id is still kept, in booking_details.original_user_id.
+  let withoutTemplateOwner = false;
 
   for (let tries = 0; tries < MERGE_TRIES; tries += 1) {
     const { data: existingBooking } = await supabase
@@ -1435,7 +1457,7 @@ export async function handleDuplicateBookingMerge(bookingData, rowTemplate) {
     const update = {
       ...rowTemplate,
       booking_details: mergedDetails,
-      user_id: existingBooking?.user_id || rowTemplate.user_id || null,
+      user_id: existingBooking?.user_id || (withoutTemplateOwner ? null : rowTemplate.user_id) || null,
     };
     // Never resurrect a cancelled booking, or re-mark returned money as paid.
     if (existingBooking?.status === 'cancelled') update.status = 'cancelled';
@@ -1461,8 +1483,15 @@ export async function handleDuplicateBookingMerge(bookingData, rowTemplate) {
       console.warn('↻ The booking changed while it was being saved; merging again', { bookingReference: bookingData.bookingReference });
       continue;
     }
+    if (updateError && !withoutTemplateOwner && update.user_id && update.user_id !== existingBooking?.user_id
+      && ownerRefused(updateError)) {
+      console.warn('The booking owner was refused, merging without one', { bookingReference: bookingData.bookingReference, code: updateError.code });
+      withoutTemplateOwner = true;
+      continue;
+    }
     if (updateError) {
       console.error('❌ Update with merged data failed:', updateError.message);
+      reportMergeFailure(bookingData, updateError.message);
       return null;
     }
 
@@ -1474,6 +1503,7 @@ export async function handleDuplicateBookingMerge(bookingData, rowTemplate) {
   }
 
   console.error('❌ Booking not saved: it kept changing while it was being merged', { bookingReference: bookingData.bookingReference });
+  reportMergeFailure(bookingData, 'it kept changing while it was being merged');
   return null;
 }
 
