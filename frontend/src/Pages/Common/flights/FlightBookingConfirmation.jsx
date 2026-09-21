@@ -1591,6 +1591,7 @@ function FlightBookingConfirmation() {
             {fareGone && (
               <FlightFareGoneAlternatives
                 state={alternatives}
+                priceConfig={priceConfig}
                 onChoose={chooseAlternative}
                 onSearchAgain={searchAgain}
               />

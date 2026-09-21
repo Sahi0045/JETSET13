@@ -120,6 +120,8 @@ describe('a second refusal on the same page', () => {
     renderReviewPage(FlightBookingConfirmation, { state: { flightData: reviewFlight(first), searchData } });
 
     await waitFor(async () => expect(within(await alternativesPanel()).getAllByRole('button', { name: 'Choose' })).toHaveLength(2));
+    // Priced as the summary charges it: the fare plus the page's service fee.
+    expect(within(await alternativesPanel()).getByText('US$160.00')).toBeTruthy();
     chooseFlight(await alternativesPanel(), 'AI-202');
 
     await waitFor(() => expect(fetch.searchRequests).toHaveLength(2));
