@@ -288,6 +288,47 @@ async function claimCancellation(booking, { requireNoReservation = false } = {})
 }
 
 /**
+ * Leave a review flag on a booking whose cancellation was carried out - seats
+ * released, money moved - but whose record could not be written.
+ *
+ * That write is pinned to the cancellation's claim, and when another request
+ * had taken the booking in the meantime it matched nothing: the booking kept
+ * reading as it did before, with no cancellation record and no flag, so
+ * neither alarm and not the admin list could find it. The only record was a
+ * console line. This flag is written on top of whatever the booking now holds,
+ * pinned to that (utils/bookingDetailsGuard.js) so it undoes nobody's write.
+ * `tickets` are the ones still to be claimed from the airline, as the
+ * cancellation's own review lists them, which is what makes a ticketed booking
+ * announced. Returns whether the flag was written.
+ */
+async function flagUnrecordedCancellation(bookingId, review) {
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+        const { data: row, error: readError } = await supabase
+            .from('bookings')
+            .select('status, payment_status, booking_details')
+            .eq('id', bookingId)
+            .single();
+        if (readError || !row) return false;
+        const details = row.booking_details || {};
+        const { data: wrote, error: writeError } = await unchangedSince(
+            supabase
+                .from('bookings')
+                .update({
+                    booking_details: {
+                        ...details,
+                        needs_review: { ...review, ...(details.needs_review ? { previous: details.needs_review } : {}) },
+                    },
+                })
+                .eq('id', bookingId),
+            row,
+        ).select('id');
+        if (writeError) return false;
+        if (wrote?.length) return true;
+    }
+    return false;
+}
+
+/**
  * Hand the booking back after a cancellation that did not happen, restoring
  * whatever held it before. Conditioned on this cancellation's own stamp, so a
  * release can never undo a claim someone else took after this one expired.
@@ -701,6 +742,17 @@ async function cancelFlightBooking(res, booking, { reason, email }) {
             paymentAction: cancellationResult.paymentAction,
             error: updateError ? updateError.message : 'the booking moved to another request mid-cancel',
         });
+        const flagged = await flagUnrecordedCancellation(booking.id, {
+            reason: `cancellation carried out but not recorded: ${gds?.success ? 'airline reservation released' : 'no airline reservation'}, `
+                + `payment ${cancellationResult.paymentAction} ${cancellationResult.refundAmount || 0} ${currency}; `
+                + 'check the airline and ARC Pay and record it by hand',
+            source: 'cancellation',
+            at: now,
+            paymentAction: cancellationResult.paymentAction,
+            refundAmount: cancellationResult.refundAmount || 0,
+            ...(requiresAirlineRefund.length ? { tickets: requiresAirlineRefund } : {}),
+        }).catch(() => false);
+        if (!flagged) console.error('❌ Could not flag the unrecorded cancellation for review either', { bookingReference });
         const text = 'Your cancellation was processed, but we could not save it. Please do not try again - '
             + 'call (877) 538-7380 and we will confirm what happened to your payment.';
         return res.status(500).json({ success: false, error: text, message: text, cancellation: cancellationResult });
