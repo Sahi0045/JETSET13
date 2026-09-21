@@ -317,6 +317,21 @@ describe('what a search returns', () => {
       expect(card.durationMinutes).toBeGreaterThan(0);
     }
   });
+
+  // This WSAP's Master Pricer request has no price ceiling, and maxPrice was
+  // accepted, keyed, and never sent: fares far over the cap came back as if
+  // they satisfied it, each through a fresh live search. Neither app sends it -
+  // both filter the results they are given - so it is refused, not faked.
+  it('refuses a price ceiling it cannot apply, before searching', async () => {
+    axios.post.mockResolvedValue(reply(fixture('mptbs-oneway-jfk-lhr')));
+    const app = await makeApp();
+    const res = await request(app).post('/api/flights/search')
+      .send({ from: 'JFK', to: 'LHR', departDate: inDays(60), adults: 1, maxPrice: 50 });
+
+    expect(res.status).toBe(400);
+    expect(res.body.success).toBe(false);
+    expect(axios.post).not.toHaveBeenCalled();
+  });
 });
 
 describe('kill switch', () => {

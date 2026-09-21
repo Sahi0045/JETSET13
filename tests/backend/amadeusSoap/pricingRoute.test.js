@@ -358,6 +358,56 @@ describe('calendar endpoints', () => {
     expect(await keyUnder('B6')).not.toBe(await keyUnder('B6,LH'));
   });
 
+  // The cheapest-day widget is cached for twelve hours. After a carrier is
+  // added to AMADEUS_WS_UNTICKETABLE_CARRIERS - because issuance refused one of
+  // its tickets - it went on advertising that carrier's fare under a key that
+  // could not see the change.
+  it('keys /cheapest-dates by the carrier and interline rules', async () => {
+    const { withCache } = await import('../../../backend/services/cache.service.js');
+    axios.post.mockResolvedValue(reply(fixture('mptbs-oneway-jfk-lhr')));
+    const app = await makeApp();
+    const keyUnder = async (carriers) => {
+      vi.stubEnv('AMADEUS_WS_UNTICKETABLE_CARRIERS', carriers);
+      await request(app).get('/api/flights/cheapest-dates')
+        .query({ origin: 'JFK', destination: 'LHR', departureDate: '2099-11-15', oneWay: 'true' });
+      return withCache.mock.calls.at(-1)?.[0];
+    };
+
+    expect(await keyUnder('B6')).not.toBe(await keyUnder('B6,LH'));
+  });
+
+  // The calendar samples one-way fares with no stop or trip-length filter - it
+  // has no other way to (see getCheapestFlightDates). These were validated into
+  // the cache key and then dropped, so a non-stop request was answered with
+  // connecting fares as if they were non-stop.
+  it.each([
+    ['nonStop', { nonStop: 'true' }],
+    ['duration', { duration: '7' }],
+    ['a round trip', { oneWay: 'false' }],
+  ])('/cheapest-dates says it cannot filter by %s, rather than ignoring it', async (_label, extra) => {
+    axios.post.mockReset();
+    axios.post.mockResolvedValue(reply(fixture('mptbs-oneway-jfk-lhr')));
+    const app = await makeApp();
+
+    const res = await request(app).get('/api/flights/cheapest-dates')
+      .query({ origin: 'JFK', destination: 'LHR', departureDate: '2099-11-15', ...extra });
+
+    expect(res.status).toBe(400);
+    expect(res.body.success).toBe(false);
+    expect(axios.post).not.toHaveBeenCalled();
+  });
+
+  it('/cheapest-dates still answers the one-way question both apps ask', async () => {
+    axios.post.mockResolvedValue(reply(fixture('mptbs-oneway-jfk-lhr')));
+    const app = await makeApp();
+
+    const res = await request(app).get('/api/flights/cheapest-dates')
+      .query({ origin: 'JFK', destination: 'LHR', departureDate: '2099-11-15', oneWay: 'true' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.length).toBeGreaterThan(0);
+  });
+
   it('rejects a request with no dates before calling Amadeus', async () => {
     const app = await makeApp();
     const res = await request(app).post('/api/flights/date-prices').send({ from: 'JFK', to: 'LHR' });

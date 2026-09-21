@@ -70,6 +70,18 @@ const flightSearchSchema = z
   .superRefine((body, ctx) => {
     const problem = searchDateProblem(body);
     if (problem) ctx.addIssue({ code: 'custom', path: [problem.field], message: problem.message });
+    // This WSAP's Master Pricer request has no price ceiling. maxPrice was
+    // accepted, put in the cache key and never sent, so fares far over the cap
+    // came back as if they met it - each through a fresh live search. Neither
+    // app sends it (both filter the results they are given), so it is refused
+    // rather than pretended.
+    if (body.maxPrice !== undefined && body.maxPrice !== null && body.maxPrice !== '') {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['maxPrice'],
+        message: 'Flight search cannot filter by price. Leave maxPrice out and filter the results by price instead.',
+      });
+    }
   });
 
 const router = express.Router();
@@ -4195,14 +4207,37 @@ router.get('/cheapest-dates', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Origin and destination are required' });
     }
 
+    // The calendar samples one-way fares a few days either side of the date,
+    // with no stop or trip-length filter - Fare_MasterPricerCalendar, which
+    // could do more, is barred on this WSAP (getCheapestFlightDates). These
+    // three were validated into the cache key and then dropped, so a non-stop
+    // request was answered with connecting fares as if they were non-stop.
+    // Neither app sends them; the one-way question both apps ask is answered.
+    const unsupported = nonStop === 'true' ? 'non-stop flights'
+      : duration ? 'trip length'
+        : oneWay === 'false' ? 'round trips'
+          : null;
+    if (unsupported) {
+      return res.status(400).json({
+        success: false,
+        error: `The cheapest-dates calendar cannot filter by ${unsupported}; it samples one-way fares only.`,
+      });
+    }
+
     console.log(`💰 Cheapest dates: ${origin} → ${destination}`);
-    const cacheKey = CacheKeys.flightBrowse('cheapest-dates', [origin, destination, departureDate, viewBy || 'DATE', oneWay, nonStop, duration]);
+    const ws = describeWsConfig();
+    const cacheKey = CacheKeys.flightBrowse('cheapest-dates', [
+      origin, destination, departureDate, viewBy || 'DATE',
+      // The cheapest day is quoted under the rules search sells by. Without
+      // this a carrier just added to AMADEUS_WS_UNTICKETABLE_CARRIERS - or an
+      // interline pair just blocked - was advertised for the twelve hours of
+      // the cache. See /date-prices.
+      searchFilterKey({}, ws.unticketableCarriers, ws.interline),
+    ]);
     const result = await withCache(cacheKey, TTL.FLIGHT_BROWSE, async () => {
       const r = await FlightProvider.getCheapestFlightDates(origin, destination, {
         departureDate,
-        oneWay: oneWay === 'true',
-        duration: duration ? parseInt(duration) : undefined,
-        nonStop: nonStop === 'true',
+        oneWay: true,
         viewBy: viewBy || 'DATE'
       });
       // Only cache successful, non-empty responses — never cache failures/empties.
