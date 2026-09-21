@@ -213,7 +213,11 @@ describe('what it does with a checkout', () => {
 
   beforeEach(() => {
     send = vi.fn(async () => 'confirmed');
-    flag = vi.fn(async () => true);
+    // What flagForReview answers when the flag landed. It used to be stubbed
+    // `true` - a value it never answers now - so these tests could only ever
+    // see the path where flagging worked. abandonedCheckoutFlag.test.js drives
+    // the real one, lost races included.
+    flag = vi.fn(async () => 'flagged');
   });
 
   it('does nothing to a checkout that was not paid, and keeps asking while it still could be', async () => {

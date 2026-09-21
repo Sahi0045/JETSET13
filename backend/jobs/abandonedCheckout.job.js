@@ -134,42 +134,78 @@ export function selectCandidates(rows = [], { now = Date.now(), site = siteForEn
  * read. Conditional on the row still being untouched, so a customer who came
  * back in the meantime is never overwritten.
  */
-async function flagForReview(row, reason) {
-  const { data: fresh, error: readError } = await supabase
-    .from('bookings')
-    .select('status, payment_status, booking_details')
-    .eq('id', row.id)
-    .single();
-  if (readError || !fresh) return false;
+/**
+ * How many times a flag that lost its race is read and tried again - the same
+ * as the needs-review alarm's own mark (needsReviewAlert.job.js MARK_TRIES).
+ */
+const FLAG_TRIES = 3;
 
-  const details = fresh.booking_details || {};
-  if (fresh.status !== 'pending' || ['refunded', 'partially_refunded'].includes(fresh.payment_status)) return false;
-  if (details.pnr || details.queued_order || details.needs_review) return false;
-  // Same rule as selectCandidates: a RUNNING chain owns the booking, a dead one
-  // does not. Testing for the key meant the rows selectCandidates now admits -
-  // the whole point of that change - were selected and then flagged nowhere.
-  if (liveChainState(details.gds_chain)) return false;
-
-  // Pinned to the row as just read, which includes the chain's state and stamp
-  // (utils/bookingDetailsGuard.js), so a chain that starts in between still
-  // wins. The old `.is(gds_chain, null)` could never be true for these rows.
-  const { error } = await unchangedSince(
-    supabase
+/**
+ * @returns {Promise<'flagged' | 'not-needed' | 'retry'>}
+ *   'flagged'     the flag is on the row;
+ *   'not-needed'  the row has moved on and someone else owns it - a PNR, the
+ *                 queue, a human, a refund;
+ *   'retry'       nothing was decided: ask about this checkout again.
+ *
+ * It used to answer a boolean, and `settle` ignored it. Worse, a write whose
+ * compare-and-set matched no row reported true: the update had no `.select()`,
+ * and supabase-js answers `{ data: null, error: null }` for an update that
+ * touched nothing. So a race lost to `reconcileBookingPayment` writing
+ * `arc_captured_amount` - the ordinary one - read as flagged, the checkout was
+ * called settled, and the row stayed paid with no PNR, no queued order and no
+ * flag: invisible to every alarm and to this job. The guard's own contract
+ * (utils/bookingDetailsGuard.js) is that a lost race is read and decided
+ * again; this now does that.
+ */
+export async function flagForReview(row, reason) {
+  for (let attempt = 0; attempt < FLAG_TRIES; attempt += 1) {
+    const { data: fresh, error: readError } = await supabase
       .from('bookings')
-      .update({
-        booking_details: {
-          ...details,
-          needs_review: { reason, at: new Date().toISOString(), ticketed: false, source: 'abandoned-checkout' },
-        },
-      })
-      .eq('id', row.id),
-    fresh,
-  );
-  if (error) {
-    log('could not flag for review', { bookingReference: row.booking_reference, error: error.message });
-    return false;
+      .select('status, payment_status, booking_details')
+      .eq('id', row.id)
+      .single();
+    // A read that failed decided nothing. It used to be read as "nothing to
+    // flag", and the checkout was never looked at again.
+    if (readError || !fresh) {
+      log('could not read a checkout to flag it', { bookingReference: row.booking_reference, error: readError?.message || 'no row' });
+      return 'retry';
+    }
+
+    const details = fresh.booking_details || {};
+    if (fresh.status !== 'pending' || ['refunded', 'partially_refunded'].includes(fresh.payment_status)) return 'not-needed';
+    if (details.pnr || details.queued_order || details.needs_review) return 'not-needed';
+    // Same rule as selectCandidates: a RUNNING chain owns the booking, a dead one
+    // does not. Testing for the key meant the rows selectCandidates now admits -
+    // the whole point of that change - were selected and then flagged nowhere.
+    // Owning it now is not finishing it: a chain that fails leaves this row paid
+    // and unbooked, so it is asked about again rather than called settled.
+    if (liveChainState(details.gds_chain)) return 'retry';
+
+    // Pinned to the row as just read, which includes the chain's state and stamp
+    // (utils/bookingDetailsGuard.js), so a chain that starts in between still
+    // wins. The old `.is(gds_chain, null)` could never be true for these rows.
+    const { data: written, error } = await unchangedSince(
+      supabase
+        .from('bookings')
+        .update({
+          booking_details: {
+            ...details,
+            needs_review: { reason, at: new Date().toISOString(), ticketed: false, source: 'abandoned-checkout' },
+          },
+        })
+        .eq('id', row.id),
+      fresh,
+    ).select('booking_reference');
+    if (error) {
+      log('could not flag for review', { bookingReference: row.booking_reference, error: error.message });
+      return 'retry';
+    }
+    if (written?.length) return 'flagged';
+    // Matched no row: something wrote in between. Read it again and decide again.
   }
-  return true;
+
+  log('could not flag for review: the booking kept changing', { bookingReference: row.booking_reference, tries: FLAG_TRIES });
+  return 'retry';
 }
 
 /**
@@ -191,18 +227,21 @@ export async function settle(row, { now = Date.now(), reconcile = reconcileBooki
   if (noSuchOrder) return { outcome: 'not-paid', final: age > PAYABLE_MS };
   if (!payment.paid) return { outcome: 'not-paid', final: age > PAYABLE_MS };
 
+  // Neither of these two sends anything, so asking again when the flag did not
+  // land costs one reconcile and one more try. Calling them settled regardless
+  // is what left a paid, unbooked row with no flag and no alarm.
   if (age > AUTO_COMPLETE_WINDOW_MS) {
-    await flag(row, `Paid, but the customer never came back to finish booking. Checkout was ${Math.floor(age / HOUR)}h ago, `
+    const flagged = await flag(row, `Paid, but the customer never came back to finish booking. Checkout was ${Math.floor(age / HOUR)}h ago, `
       + 'too late to book automatically: book it by hand or refund it.');
-    return { outcome: 'flagged-late', final: true };
+    return { outcome: 'flagged-late', final: flagged !== 'retry' };
   }
 
   const { body, problem } = buildFlightOrderBody(orderDataFromCheckoutRow(row));
   if (problem) {
     const missing = problem === 'OFFER_MISSING' ? 'no flight offer' : 'incomplete traveller details';
-    await flag(row, `Paid, but the customer never came back to finish booking, and the saved checkout has ${missing}, `
+    const flagged = await flag(row, `Paid, but the customer never came back to finish booking, and the saved checkout has ${missing}, `
       + 'so it could not be booked automatically.');
-    return { outcome: 'flagged-incomplete', final: true };
+    return { outcome: 'flagged-incomplete', final: flagged !== 'retry' };
   }
 
   // What the paying browser would have posted, with the proof only it held.
@@ -215,13 +254,21 @@ export async function settle(row, { now = Date.now(), reconcile = reconcileBooki
     case 'in-progress':
       // The booking queue, or the customer's own browser, has it now.
       return { outcome: result, final: true };
-    case 'failed':
+    case 'failed': {
       // The route reversed the charge or recorded why it could not, and emailed
       // the customer. Only a refusal that left the row exactly as checkout wrote
       // it still needs a human, and flagging checks for that.
-      await flag(row, 'Paid, but the customer never came back, and booking it automatically was refused '
+      const flagged = await flag(row, 'Paid, but the customer never came back, and booking it automatically was refused '
         + 'with nothing recorded on the booking. Book it by hand or refund it.');
+      // Settled even when the flag did not land. Asking again re-runs this from
+      // the top and sends the order a second time, and `replay` has already
+      // recorded the failure (flagFinalFailure) and emailed the customer - a
+      // second send is a second failure email. The lost flag is said instead.
+      if (flagged === 'retry') {
+        log('refused booking could not be flagged for review', { bookingReference: row.booking_reference });
+      }
       return { outcome: 'failed', final: true };
+    }
     default:
       return { outcome: 'retry', final: false };
   }
