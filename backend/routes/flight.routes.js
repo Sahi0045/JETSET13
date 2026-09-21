@@ -3210,16 +3210,18 @@ router.post('/order', optionalProtect, async (req, res) => {
     if (!orderResponse || !orderResponse.success) {
       const errorMsg = orderResponse?.error || 'Amadeus service returned unsuccessful response';
       console.error('❌ Flight order creation failed:', errorMsg);
-      {
-        return await refundOnFulfillmentFailure(res, {
-          orderId: arcOrderId,
-          bookingReference: req.body.bookingReference,
-          amount: totalAmount || amount,
-          currency: firstOffer?.price?.currency || 'USD',
-          errorMsg
-        });
-      }
-      throw new Error(errorMsg);
+      // Let the booking go before refunding it, as the thrown-failure path does.
+      // Left at in_progress, the refunded booking read as still being confirmed
+      // for the claim's lifetime. Not over a committed PNR, whose state the
+      // commit recorded.
+      if (!committedPnr) await releaseBookingChain(req.body.bookingReference, 'provider-unsuccessful');
+      return await refundOnFulfillmentFailure(res, {
+        orderId: arcOrderId,
+        bookingReference: req.body.bookingReference,
+        amount: totalAmount || amount,
+        currency: firstOffer?.price?.currency || 'USD',
+        errorMsg
+      });
     }
 
     console.log('✅ Flight order created successfully');
@@ -3227,6 +3229,8 @@ router.post('/order', optionalProtect, async (req, res) => {
     // PRODUCTION: a "successful" MOCK response means no real ticket was issued — reverse the charge.
     if (process.env.NODE_ENV === 'production' && typeof orderResponse.mode === 'string' && orderResponse.mode.toUpperCase().includes('MOCK')) {
       console.error('❌ Amadeus returned a MOCK booking in production (no real ticket):', orderResponse.mode);
+      // Released first, for the same reason as the unsuccessful answer above.
+      if (!committedPnr) await releaseBookingChain(req.body.bookingReference, 'mock-in-production');
       return await refundOnFulfillmentFailure(res, {
         orderId: arcOrderId,
         bookingReference: req.body.bookingReference,
