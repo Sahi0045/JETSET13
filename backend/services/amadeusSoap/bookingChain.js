@@ -1271,7 +1271,13 @@ export const cancelBooking = async (recordLocator) => {
               + partly.text,
           });
           failure.voidedTickets = partly.voided;
-          failure.unvoidedTickets = partly.unvoided;
+          // Every ticket on the PNR this left live: the same-day ones whose void
+          // failed, and the earlier-day ones no void here touched. Slack prints
+          // this list as the complete "still live" set, and it named only the
+          // first kind. Left null when the reply did not say which documents
+          // failed: then nobody knows the full set.
+          failure.unvoidedTickets = partly.unvoided === null ? null
+            : [...partly.unvoided, ...unvoidable.filter((t) => t.number).map((t) => t.number)];
           throw failure;
         }
         voided = true;
