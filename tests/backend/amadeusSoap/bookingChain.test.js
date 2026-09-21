@@ -206,6 +206,34 @@ describe('failing before the PNR is committed', () => {
       .rejects.toMatchObject({ step: 'sell', committed: false, code: 409 });
   });
 
+  // The shape of every real refusal on disk (16-Book-Unavailable-Class, PDT 17
+  // Sep 2026): UNS on the segment AND a message-level 288. callStep read the
+  // error container first and threw a 502 "temporarily unavailable", so the 409
+  // branch above was dead for every refusal Amadeus has actually sent.
+  it('reports a real UNS / 288 refusal as the seats gone, not as an outage', async () => {
+    const { runBookingChain } = await loadChain();
+    queueReplies(envelope('Air_SellFromRecommendationReply',
+      '<message><messageFunctionDetails><messageFunction>183</messageFunction></messageFunctionDetails></message>'
+      + '<errorAtMessageLevel><errorSegment><errorDetails><errorCode>288</errorCode><errorCategory>EC</errorCategory></errorDetails></errorSegment></errorAtMessageLevel>'
+      + '<itineraryDetails><segmentInformation><actionDetails><quantity>1</quantity><statusCode>UNS</statusCode></actionDetails></segmentInformation></itineraryDetails>', SESSION));
+
+    const failure = await runBookingChain({ offer: offer(), travelers }).catch((error) => error);
+
+    expect(failure).toMatchObject({
+      step: 'sell', committed: false, code: 409, error: 'That flight is no longer available at this price', amadeusCode: '288',
+    });
+    expect(failure.technicalError).toContain('UNS');
+  });
+
+  it('still reports a sell with no segment status the way Amadeus classified it', async () => {
+    const { runBookingChain } = await loadChain();
+    queueReplies(envelope('Air_SellFromRecommendationReply',
+      '<errorAtMessageLevel><errorSegment><errorDetails><errorCode>288</errorCode><errorCategory>EC</errorCategory></errorDetails></errorSegment></errorAtMessageLevel>', SESSION));
+
+    await expect(runBookingChain({ offer: offer(), travelers }))
+      .rejects.toMatchObject({ step: 'sell', committed: false, code: 502 });
+  });
+
   it('reports a failure while adding names as uncommitted', async () => {
     const { runBookingChain } = await loadChain();
     queueReplies(sellOk, errorReply('SOMETHING WENT WRONG'));

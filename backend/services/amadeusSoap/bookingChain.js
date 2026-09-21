@@ -261,8 +261,11 @@ const withPassengerTypes = (travelers, offer) => {
  * `inspectReply` classifies "no results" as an empty success, which is right
  * for a search and wrong for every call here: there is no such thing as an
  * empty sell. Booking treats it as the failure it is.
+ *
+ * `refusalOf` reads a reply that answers the question itself before its error
+ * containers are classified, and returns the error to throw, or null.
  */
-const callStep = async (ctx, { step, operation, bodyXml, pnr, committed, ticketed }) => {
+const callStep = async (ctx, { step, operation, bodyXml, pnr, committed, ticketed, refusalOf }) => {
   let result;
   try {
     result = await ctx.call(operation, bodyXml);
@@ -271,6 +274,8 @@ const callStep = async (ctx, { step, operation, bodyXml, pnr, committed, tickete
   }
 
   const reply = replyOf(result);
+  const refusal = refusalOf?.(reply);
+  if (refusal) throw refusal;
   const inspected = inspectReply(reply, operation);
   if (!inspected.ok) {
     throw new BookingChainError({
@@ -584,24 +589,35 @@ export const runBookingChain = async (p) => {
 
     // ---- 1. Sell -----------------------------------------------------------
     // Holds the seats. Never retried: a retried sell is a second booking.
+    //
+    // UC between search and sell is normal, not exceptional: the fare class
+    // sold out in the seconds since the customer chose it. It has to read as
+    // a clean "gone", because the refund path is what happens next.
+    const sellRefused = (answer, cause) => new BookingChainError({
+      step: 'sell',
+      cause,
+      error: 'That flight is no longer available at this price',
+      code: 409,
+      technicalError: `segment status ${answer.statuses.join(',') || 'absent'}${cause?.amadeusCode ? ` (${cause.amadeusCode})` : ''}`,
+    });
     const sellReply = await callStep(ctx, {
       step: 'sell',
       operation: 'Air_SellFromRecommendation',
       bodyXml: buildAirSellBody({ segments: ama.segments, seats: seatCount(travelers) }),
+      // The segment statuses first, as confirmSeats reads them. Every real
+      // refusal on disk (16-Book-Unavailable-Class, PDT 17 Sep 2026) is UNS on
+      // each segment WITH a message-level 288, and callStep classified the 288
+      // first: a 502 "temporarily unavailable" for a class that had simply
+      // gone. A reply with no segment status keeps Amadeus's own classification.
+      refusalOf: (reply) => {
+        const answer = readAirSellReply(reply, { expectedSegments: ama.segments.length });
+        if (answer.sold || answer.statuses.length === 0) return null;
+        return sellRefused(answer, inspectReply(reply, 'Air_SellFromRecommendation').error ?? undefined);
+      },
     });
 
     const sold = readAirSellReply(sellReply, { expectedSegments: ama.segments.length });
-    if (!sold.sold) {
-      // UC between search and sell is normal, not exceptional: the fare class
-      // sold out in the seconds since the customer chose it. It has to read as
-      // a clean "gone", because the refund path is what happens next.
-      throw new BookingChainError({
-        step: 'sell',
-        error: 'That flight is no longer available at this price',
-        code: 409,
-        technicalError: `segment status ${sold.statuses.join(',') || 'absent'}`,
-      });
-    }
+    if (!sold.sold) throw sellRefused(sold);
 
     // ---- 2. Names and contact elements -------------------------------------
     // toDDMMYY throws on an unparseable date, and this runs after the seats are
