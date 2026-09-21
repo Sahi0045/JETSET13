@@ -1070,19 +1070,45 @@ async function claimConfirmationEmail(bookingReference, { failOpen = false } = {
 /** Write down how a claimed send went, while the claim is still this request's. */
 async function recordConfirmationEmail(bookingReference, claimedAt, outcome) {
   if (!supabase || !bookingReference || !claimedAt) return;
-  const { data: row } = await supabase
-    .from('bookings')
-    .select('booking_details')
-    .eq('booking_reference', bookingReference)
-    .single();
-  const details = row?.booking_details;
-  if (!details) return;
-  const { error } = await supabase
-    .from('bookings')
-    .update({ booking_details: { ...details, confirmation_email: { ...details.confirmation_email, ...outcome, claimed_at: claimedAt } } })
-    .eq('booking_reference', bookingReference)
-    .eq('booking_details->confirmation_email->>claimed_at', claimedAt);
-  if (error) console.error('⚠️ Could not record the confirmation email:', error.message);
+  // Checked, and tried again. The write was pinned to this claim and never
+  // asked whether it matched: a whole-column write of booking_details landing
+  // while the email went out - a copy read before the claim - left it matching
+  // nothing, and the booking stayed owed its confirmation, so every later retry
+  // sent it again. Now a lost race reads again and re-applies the outcome,
+  // pinned to the row as read (utils/bookingDetailsGuard.js), unless another
+  // sender has claimed the email since: that claim is theirs to record.
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    const { data: row } = await supabase
+      .from('bookings')
+      .select('status, payment_status, booking_details')
+      .eq('booking_reference', bookingReference)
+      .single();
+    const details = row?.booking_details;
+    if (!details) return;
+    const current = details.confirmation_email || null;
+    const ours = current?.claimed_at === claimedAt;
+    if (!ours && current?.claimed_at && String(current.claimed_at) > String(claimedAt)) {
+      console.warn('Confirmation email outcome not recorded: it was claimed again since', { bookingReference });
+      return;
+    }
+    let write = unchangedSince(
+      supabase
+        .from('bookings')
+        .update({ booking_details: { ...details, confirmation_email: { ...(ours ? current : {}), ...outcome, claimed_at: claimedAt } } })
+        .eq('booking_reference', bookingReference),
+      row,
+    );
+    write = current?.claimed_at
+      ? write.eq('booking_details->confirmation_email->>claimed_at', current.claimed_at)
+      : write.is('booking_details->confirmation_email->>claimed_at', null);
+    const { data, error } = await write.select('booking_reference');
+    if (error) {
+      console.error('⚠️ Could not record the confirmation email:', error.message);
+      return;
+    }
+    if (data?.length) return;
+  }
+  console.error('Confirmation email outcome not recorded: the booking kept changing', { bookingReference });
 }
 
 /**

@@ -239,6 +239,43 @@ describe('a retried order for a booking that is already made', () => {
     expect(claims.map((write) => write.matched)).toEqual([1, 0]);
   });
 
+  // The email went out, and recording it matched nothing: a whole-column write
+  // of booking_details landed while it was sending, from a copy read before the
+  // claim. The write was not checked, so the booking was left owed - and every
+  // later retry sent the confirmation again.
+  it('records a sent email even when a stale copy of the booking landed while it was sending', async () => {
+    const { table } = await appWith([bookedRow()]);
+    send.mockImplementation(async () => {
+      delete table.row(REF).booking_details.confirmation_email;
+      return { success: true };
+    });
+    const { sendConfirmationOnce } = await import('../../backend/routes/flight.routes.js');
+
+    const first = await sendConfirmationOnce(REF, { customerEmail: 'jane@example.com' });
+    expect(first.sent).toBe(true);
+    expect(emailRecord(table)?.state).toBe('sent');
+
+    const again = await sendConfirmationOnce(REF, { customerEmail: 'jane@example.com' });
+    expect(again.sent).toBe(false);
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+
+  // Another sender claimed it after this one's claim expired: that claim is
+  // theirs to record, and is not overwritten.
+  it("does not overwrite a newer claim with this one's outcome", async () => {
+    const { table } = await appWith([bookedRow()]);
+    const theirs = new Date(Date.now() + 60_000).toISOString();
+    send.mockImplementation(async () => {
+      table.row(REF).booking_details.confirmation_email = { state: 'sending', claimed_at: theirs, attempt: 2 };
+      return { success: true };
+    });
+    const { sendConfirmationOnce } = await import('../../backend/routes/flight.routes.js');
+
+    await sendConfirmationOnce(REF, { customerEmail: 'jane@example.com' });
+
+    expect(emailRecord(table)).toMatchObject({ state: 'sending', claimed_at: theirs });
+  });
+
   it('sends nothing for a booking a human is sorting out', async () => {
     const { app } = await appWith([bookedRow({ booking_details: { needs_review: { reason: 'GDS cancellation failed; refund withheld to avoid paying out against a live booking' } } })]);
 
