@@ -24,7 +24,8 @@ import { postToSlack } from './slackAlert.js';
 import { unchangedSince } from '../utils/bookingDetailsGuard.js';
 import { queueEnvironment } from '../utils/queueEnvironment.js';
 import {
-  NO_CONFIRMED_SEAT_REVIEW_REASON, TICKET_NUMBERS_MISSING, isUnrecordedCancellation, needsAirlineRefundClaim, ticketsOf,
+  NO_CONFIRMED_SEAT_REVIEW_REASON, TICKET_NUMBERS_MISSING, isFailedCancellation, isUnrecordedCancellation,
+  needsAirlineRefundClaim, ticketsOf,
 } from '../../shared/reviewQueue.js';
 
 /**
@@ -73,6 +74,10 @@ export function selectUnannounced(rows = []) {
     // tickets leaves none to claim, and the booking still reads ticketed, so
     // the checks below skipped it: seats and money moved, nobody told.
     if (isUnrecordedCancellation(booking)) return true;
+    // A cancel the airline refused. The PNR is live and the customer was told
+    // our team had been alerted, but a ticketed booking - one whose void went
+    // through for some tickets only, too - was skipped below as done.
+    if (isFailedCancellation(booking)) return true;
 
     // The ticket turned up later, by retry or by hand. Not the chain's own
     // "issued, but the numbers did not all arrive": that row is ticketed by
@@ -187,6 +192,31 @@ export function describeUnrecordedCancellation(booking) {
   ].join('\n');
 }
 
+/**
+ * One line per cancellation the airline did not carry out. Which tickets were
+ * voided and which are still live, as the cancel recorded them; when it did not
+ * say, the booking's tickets are listed as they are, never guessed live.
+ */
+export function describeFailedCancellation(booking) {
+  const details = booking.booking_details || {};
+  const review = details.needs_review || {};
+  const hours = Math.round((Date.now() - Date.parse(review.at || booking.created_at)) / 36e5);
+  const voided = Array.isArray(review.voided_tickets) ? review.voided_tickets : [];
+  const live = Array.isArray(review.unvoided_tickets) ? review.unvoided_tickets : null;
+  const onBooking = ticketsOf(details).map((ticket) => ticket.number);
+  const tickets = live
+    ? `tickets voided: ${voided.join(', ') || 'none'} · still live: ${live.join(', ') || 'none'}`
+    : voided.length ? `tickets voided: ${voided.join(', ')} · still live: not recorded`
+      : onBooking.length ? `tickets voided: none recorded · on the booking: ${onBooking.join(', ')}`
+        : 'no tickets issued';
+  return [
+    `*${booking.booking_reference}* — ${booking.status}/${booking.payment_status}, ${booking.total_amount} USD`,
+    `PNR ${details.pnr || review.pnr || 'none'} · ${tickets}`,
+    `airline: ${review.detail || 'no detail recorded'}`,
+    `flagged ${hours}h ago`,
+  ].join('\n');
+}
+
 const ticketNumbersMissing = (booking) => !needsAirlineRefundClaim(booking)
   && booking?.booking_details?.needs_review?.reason === TICKET_NUMBERS_MISSING;
 
@@ -199,7 +229,10 @@ export function buildMessage(bookings) {
   // the record says neither. Under "paid but not ticketed" it read "ticket it,
   // or refund it" - a second refund of money already returned.
   const unrecorded = bookings.filter(isUnrecordedCancellation);
-  const rest = bookings.filter((booking) => !isUnrecordedCancellation(booking));
+  // A cancel the airline refused: under "paid but not ticketed" it read
+  // "ticket it, or refund it" - a refund against a live PNR.
+  const cancelFailed = bookings.filter((booking) => !isUnrecordedCancellation(booking) && isFailedCancellation(booking));
+  const rest = bookings.filter((booking) => !isUnrecordedCancellation(booking) && !isFailedCancellation(booking));
   const claims = rest.filter(needsAirlineRefundClaim);
   // A ticketed booking whose numbers did not arrive is NOT "paid but not
   // ticketed". Listed under that heading it read "no ticket was issued ...
@@ -222,6 +255,18 @@ export function buildMessage(bookings) {
         + 'the money may already have gone back.',
       '',
       ...unrecorded.map(describeUnrecordedCancellation),
+    );
+  }
+  if (cancelFailed.length) {
+    sections.push(
+      `:x: *${cancelFailed.length} cancellation${cancelFailed.length > 1 ? 's' : ''} the airline did not carry out*`,
+      'The customer asked to cancel and was told our team would complete it. '
+        + 'The airline did not cancel the PNR, so it is still live, and no refund was made. '
+        + 'Cancel the PNR with the airline first. Do NOT refund until it is cancelled: '
+        + 'a refund against a live PNR pays out for flights the customer still holds. '
+        + 'A traveller whose ticket was voided cannot fly on it.',
+      '',
+      ...cancelFailed.map(describeFailedCancellation),
     );
   }
   if (seatless.length) {

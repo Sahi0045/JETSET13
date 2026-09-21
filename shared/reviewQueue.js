@@ -88,9 +88,25 @@ export function isUnrecordedCancellation(booking) {
 }
 
 /**
+ * A cancellation the airline did not carry out (payment/operations.handlers.js
+ * cancelFlightBooking): PNR_Cancel or a ticket void was refused, so the PNR is
+ * live, no refund was made, and the customer was told "Our team has been
+ * alerted and will complete it".
+ *
+ * The booking still reads ticketed when it was, so every "ticketed, so done"
+ * rule skipped it - including a void that went through for some tickets and
+ * not the others - and nobody was alerted. A later cancel that went through
+ * supersedes it: the booking then reads cancelled.
+ */
+export function isFailedCancellation(booking) {
+  const review = detailsOf(booking)?.needs_review;
+  return review?.source === 'cancellation' && review.cancelFailed === true && statusOf(booking) !== 'cancelled';
+}
+
+/**
  * What still needs doing on this booking, or null.
  *
- * @returns {null | { kind: 'not_ticketed'|'review'|'airline_refund'|'unrecorded_cancellation',
+ * @returns {null | { kind: 'not_ticketed'|'review'|'airline_refund'|'unrecorded_cancellation'|'cancel_failed',
  *                    reason: string, since: string|null, tickets?: string[] }}
  */
 export function attentionOf(booking) {
@@ -111,6 +127,16 @@ export function attentionOf(booking) {
     };
   }
 
+  // Before the ticketed check below, for the same reason: the PNR is live, and
+  // a ticketed booking read as done.
+  if (isFailedCancellation(booking)) {
+    return {
+      kind: 'cancel_failed',
+      reason: review.reason || 'the airline did not cancel the reservation',
+      since: review.at || null,
+    };
+  }
+
   // A cancelled booking whose tickets were past the void window: the airline
   // owes the money back and somebody has to claim it. This one IS on a
   // cancelled booking, so it is decided before the cancelled check below.
@@ -125,8 +151,10 @@ export function attentionOf(booking) {
   // Any other cancellation that asked for a person - a refund the gateway
   // refused, one left for review. Nothing is owed by the airline, so it is not
   // labelled a claim (it used to be, whenever the booking had ticket numbers,
-  // voided or not); but it is not settled either, so it stays on the list.
-  if (review?.source === 'cancellation') {
+  // voided or not); but it is not settled either, so it stays on the list. Not
+  // a failed cancel a later one completed (isFailedCancellation): nothing is
+  // left to do on that.
+  if (review?.source === 'cancellation' && review.cancelFailed !== true) {
     return { kind: 'review', reason: review.reason || 'flagged for review', since: review.at || null };
   }
 
@@ -149,6 +177,7 @@ export function attentionOf(booking) {
 export const attentionLabel = (attention) => {
   if (!attention) return null;
   if (attention.kind === 'unrecorded_cancellation') return 'Cancelled, but not recorded';
+  if (attention.kind === 'cancel_failed') return 'Cancel failed at the airline';
   if (attention.kind === 'airline_refund') return 'Refund to claim from the airline';
   if (attention.kind === 'not_ticketed') return 'Paid, seats held, no ticket';
   return 'Flagged for review';

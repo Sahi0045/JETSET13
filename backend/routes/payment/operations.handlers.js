@@ -646,6 +646,12 @@ async function cancelFlightBooking(res, booking, { reason, email }) {
                     ...(voidedSoFar.length ? { voided_tickets: voidedSoFar } : {}),
                     needs_review: {
                         reason: 'GDS cancellation failed; refund withheld to avoid paying out against a live booking',
+                        // Said outright, so the alarm and the desk list find it
+                        // on a ticketed booking too (isFailedCancellation). With
+                        // neither, "ticketed, so done" skipped it, while the
+                        // customer was told below that our team had been alerted.
+                        source: 'cancellation',
+                        cancelFailed: true,
                         pnr,
                         detail: supplierError?.technicalError || supplierError?.message || null,
                         ...(voidedNow.length || unvoidedNow.length
