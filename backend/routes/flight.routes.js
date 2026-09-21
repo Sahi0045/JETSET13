@@ -24,6 +24,7 @@ import { UNTICKETED_REVIEW_REASON } from '../jobs/needsReviewAlert.job.js';
 import { itinerariesFromOffer, returnDateOf } from '../../shared/bookingItineraries.js';
 import { flightsKey, travellerNamesKey } from '../utils/tripMatch.js';
 import { needsDateOfBirth } from '../../shared/travellerDetails.js';
+import { buildFlightOrderBody, orderDataFromCheckoutRow } from '../../shared/flightOrderBody.js';
 import { statusChangeRefusal } from '../../shared/bookingStatusChange.js';
 import { attentionOf, reviewResolution, ticketsOf, isTicketed } from '../../shared/reviewQueue.js';
 import { errorSummary } from '../utils/errorSummary.js';
@@ -2544,8 +2545,23 @@ router.post('/order', optionalProtect, async (req, res) => {
     // appeared in the customer's My Trips - see utils/bookingOwner.js.
     const userId = resolveBookingUserId(req);
 
-    // Ensure travelers is always an array (even if empty) to prevent validation errors
-    const travelersList = Array.isArray(travelers) ? travelers : (travelers ? [travelers] : []);
+    // ---- Who is travelling? The people checkout verified. --------------------
+    //
+    // Checkout checked every traveller against the fare before the card was
+    // charged - a printable name, a date of birth, a passport valid to the last
+    // flight on a trip abroad - and kept them on this row. This route used to
+    // book the `travelers` in its own request body instead, and re-check only
+    // names, a gender and a date of birth. A body with the same people and no
+    // passports passed, the chain sold and committed a PNR, and the airline
+    // would not ticket it without the travel document: a charge, a committed
+    // PNR and a refund. A body naming anyone else was booked in their names
+    // against this payment. So the row's travellers are booked, rebuilt exactly
+    // as the order page and the abandoned-checkout job rebuild them
+    // (shared/flightOrderBody.js). The body's are used only for a row that holds
+    // none, which no checkout since verification began has written.
+    const verifiedTravellers = buildFlightOrderBody(orderDataFromCheckoutRow(existing)).passengerDetails;
+    const bodyTravellers = Array.isArray(travelers) ? travelers : (travelers ? [travelers] : []);
+    const travelersList = verifiedTravellers.length > 0 ? verifiedTravellers : bodyTravellers;
 
     // ---- Which fare? The one checkout verified. -------------------------------
     //
@@ -3246,7 +3262,8 @@ router.post('/order', optionalProtect, async (req, res) => {
       priceGrandTotal: firstOffer?.price?.grandTotal || firstOffer?.price?.total || null,
       priceFees: firstOffer?.price?.fees || [],
       fareBreakdown: fareBreakdown || null,
-      passengerDetails: passengerDetails || amadeusTravelers.map((t) => ({
+      // Who was booked: the verified travellers, not the request's list.
+      passengerDetails: (verifiedTravellers.length > 0 ? verifiedTravellers : passengerDetails) || amadeusTravelers.map((t) => ({
         id: t.id,
         firstName: t.name.firstName,
         lastName: t.name.lastName,
