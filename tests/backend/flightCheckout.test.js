@@ -166,6 +166,88 @@ describe('verifyFlightCharge', () => {
     expect(result.code).toBe('PRICE_CONFIG_UNAVAILABLE');
   });
 
+  /**
+   * The flights the travellers are checked against are the flights sold.
+   *
+   * Documents, ages and passport expiry are decided from `itineraries`; the
+   * flights priced, sold and booked are `_ama.segments`. The mapper builds the
+   * two from the same reply, one for one, and nothing checked they still
+   * agreed: an offer showing a domestic hop over a real international
+   * `_ama` passed without passports, and one with no itineraries skipped every
+   * age and passport-expiry check. Refused before pricing.
+   */
+  describe('an offer whose flights shown are not the flights sold', () => {
+    const sold = [{ legIndex: 0, boardPoint: 'JFK', offPoint: 'LHR', departureDate: '151126', marketingCarrier: 'BA', flightNumber: '178', rbd: 'Y' }];
+    const shown = (from, to, at = '2026-11-15T19:25:00') => [{
+      segments: [{ id: '1', carrierCode: 'BA', number: '178', departure: { iataCode: from, at }, arrival: { iataCode: to } }],
+    }];
+    const withFlights = (itineraries) => {
+      const booking = bookingFor(1);
+      booking.originalOffer = { ...booking.originalOffer, itineraries, _ama: { segments: sold } };
+      return booking;
+    };
+
+    it('refuses a trip shown as somewhere else', async () => {
+      const priceOffer = pricedAt(400);
+      const result = await verify({ amount: 401, bookingData: withFlights(shown('JFK', 'BOS')), priceOffer });
+
+      expect(result.code).toBe('OFFER_MISSING');
+      expect(priceOffer).not.toHaveBeenCalled();
+    });
+
+    it('refuses a trip shown on another day', async () => {
+      const priceOffer = pricedAt(400);
+      const result = await verify({ amount: 401, bookingData: withFlights(shown('JFK', 'LHR', '2026-12-15T19:25:00')), priceOffer });
+
+      expect(result.code).toBe('OFFER_MISSING');
+      expect(priceOffer).not.toHaveBeenCalled();
+    });
+
+    it('refuses a trip shown with no flights at all', async () => {
+      const priceOffer = pricedAt(400);
+      const result = await verify({ amount: 401, bookingData: withFlights([]), priceOffer });
+
+      expect(result.code).toBe('OFFER_MISSING');
+      expect(priceOffer).not.toHaveBeenCalled();
+    });
+
+    it('prices a trip shown as it is sold', async () => {
+      const priceOffer = pricedAt(400);
+      const result = await verify({ amount: 401, bookingData: withFlights(shown('JFK', 'LHR')), priceOffer });
+
+      expect(priceOffer).toHaveBeenCalledTimes(1);
+      expect(result.ok).toBe(true);
+    });
+
+    // The check must never refuse a genuine offer. Every offer the mapper makes
+    // from the recorded search replies - one-way, round trip, connections,
+    // families - goes through it.
+    it.each([
+      'mptbs-oneway-jfk-lhr', 'mptbs-roundtrip', 'mptbs-roundtrip-uneven-availability', 'mptbs-nonstop-business',
+      'mptbs-family-del-bom', 'mptbs-infant-family-del-bom', 'mptbs-shared-price-combinations',
+    ])('lets every offer mapped from %s through', async (name) => {
+      const { mapMasterPricerReply } = await import('../../backend/services/amadeusSoap/mappers/offer.js');
+      const { parseSoap, unwrapEnvelope } = await import('../../backend/services/amadeusSoap/parseXml.js');
+      const xml = readFileSync(new URL(`../fixtures/amadeus/${name}.xml`, import.meta.url), 'utf8');
+      const { body } = unwrapEnvelope(parseSoap(xml));
+      const { offers } = mapMasterPricerReply(body[Object.keys(body).find((k) => k !== 'Fault')], {
+        config: { wsap: '1ASIWJETJEC', officeId: 'SCK1S2400', currency: 'USD' },
+        searchSignature: 'test',
+      });
+      expect(offers.length).toBeGreaterThan(0);
+
+      for (const offer of offers) {
+        const priceOffer = vi.fn().mockRejectedValue(new Error('stop here'));
+        const booking = {
+          originalOffer: offer,
+          passengerData: offer.travelerPricings.map((p, i) => ({ firstName: `P${i}`, lastName: 'Doe', gender: 'female', dateOfBirth: '1990-01-01', type: p.travelerType })),
+        };
+        await verify({ amount: 1, bookingData: booking, priceOffer });
+        expect(priceOffer, `offer ${offer.id} was refused before pricing`).toHaveBeenCalledTimes(1);
+      }
+    });
+  });
+
   // Pricing is where the seats are sold and released at the airline. A
   // checkout that cannot be charged for want of the fee settings is refused
   // before that, not after a sell it could never use.
