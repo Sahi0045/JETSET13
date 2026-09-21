@@ -999,6 +999,17 @@ export function confirmationEmailOwed(booking) {
 const HELD_REVIEW_REASON_PREFIXES = ['chain failed after commit at ', 'order route failed after commit'];
 
 /**
+ * The flag the committed branch writes when the airline left a segment
+ * waitlisted, requested, unable or cancelled at commit (the chain's step
+ * 'segmentStatus', bookingChain.js NOT_A_SEAT_AT_COMMIT). The PNR exists but
+ * no seat is confirmed, and the server will not ticket it. It matched the held
+ * prefix above, so the customer was sent "the airline is holding your seats
+ * ... You do not need to do anything" - false. No honest email for this case
+ * exists, so none is sent: the flag pages a person, who contacts the customer.
+ */
+export const NO_CONFIRMED_SEAT_REVIEW_REASON = 'chain failed after commit at segmentStatus';
+
+/**
  * Which email a booking still owes its customer.
  *
  *  - 'confirmation': what the success path sends (reservation or confirmation);
@@ -1019,6 +1030,7 @@ export function confirmationEmailKind(booking) {
   if (details.confirmation_email?.state === 'sent') return null;
   const review = details.needs_review;
   if (!review || EMAILED_REVIEW_REASONS.has(review.reason)) return 'confirmation';
+  if (review.reason === NO_CONFIRMED_SEAT_REVIEW_REASON) return null;
   const reason = String(review.reason || '');
   return HELD_REVIEW_REASON_PREFIXES.some((prefix) => reason.startsWith(prefix)) ? 'held' : null;
 }
@@ -2469,7 +2481,12 @@ router.post('/order', optionalProtect, async (req, res) => {
     // this the second one sells a second set of seats against a single charge.
     // The answer says what the booking actually is: it used to report
     // CONFIRMED for any row with a PNR, ticketed or not.
-    if (existing.booking_details?.pnr) {
+    // Not a PNR the airline confirmed a seat on, while a person is still on it:
+    // answered as the review below answers it, not "This booking already
+    // exists", which the order page renders as "Your seats are reserved".
+    const awaitingSeat = existing.booking_details?.needs_review?.reason === NO_CONFIRMED_SEAT_REVIEW_REASON
+      && !existing.booking_details.needs_review.resolved_at;
+    if (existing.booking_details?.pnr && !awaitingSeat) {
       const details = existing.booking_details;
       // Committed and still working: the request that holds this booking is
       // queueing it and issuing the ticket. Answered as it was before the
@@ -3180,6 +3197,25 @@ router.post('/order', optionalProtect, async (req, res) => {
           ticketed: providerError.ticketed,
           bookingReference: req.body.bookingReference
         });
+        // The airline confirmed no seat on at least one flight: the chain's own
+        // words, and no email. The generic answer below - "Your seats are
+        // reserved ... We will email you as soon as it is issued" - and the
+        // Reservation Held email were both false of it, and the server will
+        // not issue this ticket. The flag above pages a person, who contacts
+        // the customer. Not a 2xx, so no client shows its held-seat screen.
+        if (providerError.step === 'segmentStatus') {
+          const message = providerError.error
+            || 'The airline has not confirmed a seat on every flight - our team will contact you';
+          return res.status(409).json({
+            success: false,
+            code: 'BOOKING_NEEDS_REVIEW',
+            needsReview: true,
+            bookingReference: req.body.bookingReference,
+            pnr: providerError.pnr || null,
+            error: message,
+            message
+          });
+        }
         // This answer promises an email; it used to send none.
         await sendHeldForReviewEmail(req.body.bookingReference, req.body);
         // "Your seats are reserved" is true when a record locator came back.
