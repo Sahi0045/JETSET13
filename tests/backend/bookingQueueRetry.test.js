@@ -207,6 +207,86 @@ describe('a re-queue that did not land', () => {
   });
 });
 
+/** The worker's own tick, with the order route answered by `route`. */
+const stubAmadeus = () => {
+  vi.stubEnv('AMADEUS_WS_ENDPOINT', 'https://node.test.invalid/1ASIWJETJEC');
+  vi.stubEnv('AMADEUS_WS_USERNAME', 'WSTEST');
+  vi.stubEnv('AMADEUS_WS_PASSWORD', 'pw');
+  vi.stubEnv('AMADEUS_WS_OFFICE_ID', 'SCK1S2400');
+};
+const tickWith = async (rows, { route = answer(200, { success: true, pnr: 'ABC123' }), ...options } = {}) => {
+  stubAmadeus();
+  const loaded = await load(rows, options);
+  vi.stubGlobal('fetch', route);
+  const worker = loaded.startBookingQueueWorker({ port: 5004, intervalMs: 3_600_000 });
+  try {
+    await worker.tick();
+  } finally {
+    worker.stop();
+    vi.unstubAllGlobals();
+  }
+  return { ...loaded, route };
+};
+const daysAgo = (days) => new Date(Date.now() - days * 24 * 3_600_000).toISOString();
+const hoursAgo = (hours) => new Date(Date.now() - hours * 3_600_000).toISOString();
+/** A chain the route let go of (`failed`) that nothing queued again. */
+const strandedRow = (chain = {}, details = {}, over = {}) => queuedRow(
+  { state: 'failed', failedStep: 'unexpected-error', startedAt: undefined, ...chain },
+  { queued_env: queueEnvironment(), ...details },
+  over,
+);
+
+/**
+ * Round 1 replayed a failed chain of ANY age - and one with no finishedAt at
+ * once. On deploy every stranded row would have gone through /order: a payment
+ * staff had settled by hand booked weeks late, or a refunded one emailed "we
+ * could not confirm your booking". The codebase's rule for a paid booking that
+ * never got booked is abandonedCheckout's: book or refund within six hours,
+ * past that a human decides. The queue now follows it.
+ */
+describe('a failed chain the queue would replay', () => {
+  it('is never replayed when it finished thirty days ago: a person is told instead', async () => {
+    const { route, sendEmail } = await tickWith([strandedRow({ finishedAt: daysAgo(30) })]);
+
+    expect(route).not.toHaveBeenCalled();
+    const details = table.row(REF).booking_details;
+    expect(details.needs_review).toMatchObject({ source: 'booking-queue', ticketed: false });
+    expect(details.needs_review.reason).toMatch(/not replayed/);
+    expect(details.queued_order).toBeUndefined();
+    expect(emailed(sendEmail)).toMatch(/Our team has been alerted/);
+  });
+
+  it('is never replayed when it records no time at all', async () => {
+    const { route } = await tickWith([strandedRow({ finishedAt: undefined })]);
+
+    expect(route).not.toHaveBeenCalled();
+    expect(table.row(REF).booking_details.needs_review.reason).toMatch(/not replayed/);
+  });
+
+  it('is replayed within six hours, reading when it was queued when it records no finish', async () => {
+    const { route } = await tickWith([strandedRow({ finishedAt: undefined, queuedAt: hoursAgo(1) })]);
+
+    expect(route).toHaveBeenCalledTimes(1);
+    expect(table.row(REF).booking_details.needs_review).toBeUndefined();
+  });
+
+  it('is replayed when it finished two hours ago', async () => {
+    const { route } = await tickWith([strandedRow({ finishedAt: hoursAgo(2) })]);
+
+    expect(route).toHaveBeenCalledTimes(1);
+  });
+
+  it('turns at the abandoned-checkout window, not at some other number', async () => {
+    const { AUTO_COMPLETE_WINDOW_MS } = await import('../../backend/jobs/abandonedCheckout.job.js');
+    const { queueActionFor } = await load([]);
+    const now = Date.now();
+    const finished = (ms) => strandedRow({ finishedAt: new Date(now - ms).toISOString() });
+
+    expect(queueActionFor(finished(AUTO_COMPLETE_WINDOW_MS - 60_000), { now })).toBe('replay');
+    expect(queueActionFor(finished(AUTO_COMPLETE_WINDOW_MS + 60_000), { now })).toBe('hand-over');
+  });
+});
+
 describe('a final failure', () => {
   it('is flagged for review when the route recorded nothing, so the alarm announces it', async () => {
     const { replay, sendEmail } = await load([queuedRow()]);

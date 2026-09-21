@@ -44,6 +44,16 @@ export const QUEUED_CHAIN_TTL_MS = 30 * 60 * 1000;
 export const MAX_QUEUE_ATTEMPTS = 10;
 
 /**
+ * How long a paid booking that was never booked is still completed
+ * automatically - booked, or refunded - before a person decides instead.
+ *
+ * The abandoned-checkout job's rule (jobs/abandonedCheckout.job.js), and the
+ * booking queue's for a failed chain it would replay (jobs/bookingQueue.job.js).
+ * Here so the two read one number: they import each other's module otherwise.
+ */
+export const AUTO_COMPLETE_WINDOW_MS = 6 * 60 * 60 * 1000;
+
+/**
  * What currently holds the booking, or null when nothing does.
  *
  * A claim without a readable stamp cannot be aged, and is treated as released,

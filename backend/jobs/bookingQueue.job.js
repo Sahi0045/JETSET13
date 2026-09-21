@@ -20,7 +20,9 @@ import { getSemaphore } from '../services/amadeusSoap/semaphore.js';
 import { sendEmail } from '../services/emailService.js';
 // The order route's own TTL: a claim older than this was left by a request
 // that died, and its booking needs running again.
-import { CHAIN_CLAIM_TTL_MS as CLAIM_TTL_MS, MAX_QUEUE_ATTEMPTS, liveChainState } from '../utils/bookingChainClaim.js';
+import {
+  AUTO_COMPLETE_WINDOW_MS, CHAIN_CLAIM_TTL_MS as CLAIM_TTL_MS, MAX_QUEUE_ATTEMPTS, liveChainState,
+} from '../utils/bookingChainClaim.js';
 import { queueEnvironment } from '../utils/queueEnvironment.js';
 import { unchangedSince } from '../utils/bookingDetailsGuard.js';
 const MAX_PER_TICK = 5;
@@ -83,37 +85,96 @@ export async function findRunnable({ limit = MAX_PER_TICK, now = Date.now(), env
     // Local dev and production share this database: never touch a booking
     // another environment queued.
     if (row.booking_details?.queued_env !== env) return false;
-    const chain = row.booking_details?.gds_chain || {};
-    if (row.booking_details?.pnr || row.status === 'cancelled') return true; // finished: only needs clearing
-    if (chain.state === 'queued') {
-      // Waiting out a retry delay (retryLater).
-      const retryAfter = Date.parse(chain.retryAfter ?? '');
-      return !(Number.isFinite(retryAfter) && retryAfter > now);
-    }
-    // Let go by the route and never queued again. Before a retryable 503 the
-    // route releases its claim, which writes the chain `failed`
-    // (releaseBookingChain), and retryLater puts it back to `queued`. When
-    // that write does not land - an error, or the database not answering the
-    // read before it - the row keeps its order and a `failed` chain, and
-    // without this branch no job ever looked at it again: charged, not booked,
-    // nobody told. Nothing is running it, so it is run again, after the same
-    // wait a re-queue would have had.
-    //
-    // Not while something else owns the outcome: a human (`needs_review`, which
-    // the queue's own final failure writes), a reversal the route has started
-    // (`fulfillment_failed`), or money already returned.
-    if (chain.state === 'failed') {
-      const details = row.booking_details;
-      if (details.needs_review || details.fulfillment_failed) return false;
-      if (['refunded', 'partially_refunded'].includes(row.payment_status)) return false;
-      const finishedAt = Date.parse(chain.finishedAt ?? '');
-      return !(Number.isFinite(finishedAt) && now - finishedAt < RETRY_DELAY_MS);
-    }
-    // A replay that died mid-chain leaves its claim behind; once it is stale,
-    // run the booking again rather than strand a paid customer.
-    return chain.state === 'in_progress'
-      && chain.startedAt && now - Date.parse(chain.startedAt) > CLAIM_TTL_MS;
+    return queueActionFor(row, { now }) !== null;
   }).slice(0, limit);
+}
+
+/**
+ * What the worker does with a row that still holds a queued order.
+ *
+ *  - 'replay':    run it through the order route;
+ *  - 'clear':     it is finished - only drop the stored order;
+ *  - 'hand-over': a failed chain too old to replay - flag it for a person and
+ *                 tell the customer, never book it;
+ *  - null:        leave it this tick.
+ *
+ * @returns {'replay'|'clear'|'hand-over'|null}
+ */
+export function queueActionFor(row, { now = Date.now() } = {}) {
+  const details = row?.booking_details || {};
+  const chain = details.gds_chain || {};
+  if (details.pnr || row.status === 'cancelled') return 'clear';
+  if (chain.state === 'queued') {
+    // Waiting out a retry delay (retryLater).
+    const retryAfter = Date.parse(chain.retryAfter ?? '');
+    return Number.isFinite(retryAfter) && retryAfter > now ? null : 'replay';
+  }
+  // Let go by the route and never queued again. Before a retryable 503 the
+  // route releases its claim, which writes the chain `failed`
+  // (releaseBookingChain), and retryLater puts it back to `queued`. When
+  // that write does not land - an error, or the database not answering the
+  // read before it - the row keeps its order and a `failed` chain, and
+  // without this branch no job ever looked at it again: charged, not booked,
+  // nobody told. Nothing is running it, so it is run again, after the same
+  // wait a re-queue would have had.
+  //
+  // Not while something else owns the outcome: a human (`needs_review`, which
+  // the queue's own final failure writes), a reversal the route has started
+  // (`fulfillment_failed`), or money already returned.
+  if (chain.state === 'failed') {
+    if (details.needs_review || details.fulfillment_failed) return null;
+    if (['refunded', 'partially_refunded'].includes(row.payment_status)) return null;
+    // And only while it is young enough to book. Round 1 replayed a failed
+    // chain of any age, and one with no finish time at once: on deploy every
+    // stranded row would have gone through /order, so a payment staff had
+    // settled by hand was booked weeks late, and one refunded in the ARC
+    // portal was emailed "we could not confirm your booking". The rule for a
+    // paid booking never booked is abandonedCheckout's - book or refund within
+    // AUTO_COMPLETE_WINDOW_MS, past that a person decides. A row that records
+    // no time at all is taken as old.
+    const stoppedAt = Date.parse(chain.finishedAt || chain.queuedAt || '');
+    if (!Number.isFinite(stoppedAt) || now - stoppedAt > AUTO_COMPLETE_WINDOW_MS) return 'hand-over';
+    return now - stoppedAt < RETRY_DELAY_MS ? null : 'replay';
+  }
+  // A replay that died mid-chain leaves its claim behind; once it is stale,
+  // run the booking again rather than strand a paid customer.
+  return chain.state === 'in_progress' && chain.startedAt && now - Date.parse(chain.startedAt) > CLAIM_TTL_MS
+    ? 'replay'
+    : null;
+}
+
+/**
+ * A failed chain past the replay window: flagged for a person, and the customer
+ * told, instead of booked. Flagged first - if that cannot be written nothing is
+ * sent and the order is kept, so the next tick tries again rather than email a
+ * customer that a team nobody told has been alerted.
+ */
+async function handOver(row) {
+  const ref = row.booking_reference;
+  const alerted = await flagFinalFailure(ref, null, null, {
+    reason: `queued booking's chain failed more than ${AUTO_COMPLETE_WINDOW_MS / 3_600_000} hours ago and was not replayed; `
+      + 'check the airline and ARC Pay, then book or refund it by hand',
+  });
+  if (!alerted) {
+    log('stale failed booking could not be flagged; will try again', { bookingReference: ref });
+    return 'retry';
+  }
+  log('stale failed booking handed to a person, not replayed', { bookingReference: ref });
+  await notifyFailure(row.booking_details?.queued_order, ref, {}, { alerted });
+  await clearQueuedOrder(ref);
+  return 'handed-over';
+}
+
+/** One row the worker picked, done as queueActionFor says. */
+export async function runQueued(row, { baseUrl, fetchImpl, now = Date.now() } = {}) {
+  const action = queueActionFor(row, { now });
+  if (action === 'hand-over') return handOver(row);
+  if (action === 'clear') {
+    await clearQueuedOrder(row.booking_reference);
+    return 'already-finished';
+  }
+  if (action === 'replay') return replay(row, { baseUrl, ...(fetchImpl ? { fetchImpl } : {}) });
+  return 'skipped';
 }
 
 /**
@@ -321,7 +382,7 @@ async function retryLater(bookingReference, { now = Date.now() } = {}) {
  *
  * @returns {Promise<boolean>} whether the booking now carries a review flag
  */
-async function flagFinalFailure(bookingReference, status, body, { now = Date.now() } = {}) {
+async function flagFinalFailure(bookingReference, status, body, { now = Date.now(), reason = null } = {}) {
   if (body?.refunded === true) return false;
   const read = async () => {
     const { data, error } = await supabase
@@ -346,7 +407,7 @@ async function flagFinalFailure(bookingReference, status, body, { now = Date.now
       booking_details: {
         ...details,
         needs_review: {
-          reason: `queued booking could not be completed (${body?.code || `HTTP ${status}`}); the payment may still be held`,
+          reason: reason || `queued booking could not be completed (${body?.code || `HTTP ${status}`}); the payment may still be held`,
           source: 'booking-queue',
           ticketed: false,
           at,
@@ -469,7 +530,7 @@ export function startBookingQueueWorker({ port, intervalMs = 5000 } = {}) {
       const free = Math.min(freeSlots(), MAX_PER_TICK);
       if (free === 0) return;
       const rows = await findRunnable({ limit: free });
-      await Promise.all(rows.map((row) => replay(row, { baseUrl })));
+      await Promise.all(rows.map((row) => runQueued(row, { baseUrl })));
     } catch (error) {
       log('tick failed', { error: error.message });
     } finally {

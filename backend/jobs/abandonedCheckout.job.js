@@ -34,7 +34,7 @@ import supabase from '../config/supabase.js';
 import { reconcileBookingPayment } from '../routes/payment/checkout.handlers.js';
 import { replay } from './bookingQueue.job.js';
 import { queueEnvironment } from '../utils/queueEnvironment.js';
-import { liveChainState } from '../utils/bookingChainClaim.js';
+import { AUTO_COMPLETE_WINDOW_MS, liveChainState } from '../utils/bookingChainClaim.js';
 import { unchangedSince } from '../utils/bookingDetailsGuard.js';
 import { buildFlightOrderBody, orderDataFromCheckoutRow } from '../../shared/flightOrderBody.js';
 
@@ -43,8 +43,8 @@ const HOUR = 60 * MINUTE;
 
 /** The customer's browser normally books within seconds of paying; it gets this long first. */
 export const GRACE_MS = 30 * MINUTE;
-/** Past this, a paid checkout goes to a human rather than being booked. */
-export const AUTO_COMPLETE_WINDOW_MS = 6 * HOUR;
+/** Past this, a paid checkout goes to a human rather than being booked. The booking queue reads the same number. */
+export { AUTO_COMPLETE_WINDOW_MS };
 /** A hosted checkout can still be paid for a while after it opens; until then "unpaid" is not final. */
 export const PAYABLE_MS = 3 * HOUR;
 /** How long before a checkout with no answer yet is asked about again. */
