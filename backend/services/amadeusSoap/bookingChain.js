@@ -352,7 +352,11 @@ const readTicketNumbers = async (ctx, { pnr, order, offer, bookingReference, con
   if (!tickets?.length) {
     // Ticket issued but its number has not surfaced yet — flag for manual
     // follow-up rather than silently confirm a booking with no ticket number.
-    current.needsReview = { reason: 'ticket_numbers_not_retrieved', at: new Date().toISOString() };
+    // With the count, as the partial case below, so the alarm can say how many
+    // numbers the desk is looking for.
+    current.needsReview = {
+      reason: 'ticket_numbers_not_retrieved', expected: wanted, got: 0, at: new Date().toISOString(),
+    };
     log.warn({ pnr, attempts }, 'ticket numbers not in PNR after retries; flagged for manual follow-up');
   } else if (tickets.length < wanted) {
     // Some numbers, not all. The same reason as none at all - the e-ticket and

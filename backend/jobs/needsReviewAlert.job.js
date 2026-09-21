@@ -23,7 +23,7 @@ import supabase from '../config/supabase.js';
 import { postToSlack } from './slackAlert.js';
 import { unchangedSince } from '../utils/bookingDetailsGuard.js';
 import { queueEnvironment } from '../utils/queueEnvironment.js';
-import { TICKET_NUMBERS_MISSING, needsAirlineRefundClaim } from '../../shared/reviewQueue.js';
+import { TICKET_NUMBERS_MISSING, needsAirlineRefundClaim, ticketsOf } from '../../shared/reviewQueue.js';
 
 /**
  * Whether the Slack alarms may run in this process: on the stack that names
@@ -145,9 +145,35 @@ export function describeAirlineClaim(booking) {
   ].join('\n');
 }
 
+/**
+ * One line per ticketed booking whose ticket numbers did not all come back.
+ * Expected against got, so the desk knows how many numbers it is looking for;
+ * "unknown" when the chain did not record the count, never a guess.
+ */
+export function describeTicketNumbersMissing(booking) {
+  const details = booking.booking_details || {};
+  const review = details.needs_review || {};
+  const hours = Math.round((Date.now() - Date.parse(review.at || booking.created_at)) / 36e5);
+  const expected = Number.isFinite(review.expected) ? review.expected : 'unknown';
+  const got = Number.isFinite(review.got) ? review.got : ticketsOf(details).length;
+  return [
+    `*${booking.booking_reference}* — ${booking.status}/${booking.payment_status}, ${booking.total_amount} USD`,
+    `PNR ${details.pnr || 'none'} · ticket numbers expected ${expected}, got ${got}`,
+    `flagged ${hours}h ago`,
+  ].join('\n');
+}
+
+const ticketNumbersMissing = (booking) => !needsAirlineRefundClaim(booking)
+  && booking?.booking_details?.needs_review?.reason === TICKET_NUMBERS_MISSING;
+
 export function buildMessage(bookings) {
   const claims = bookings.filter(needsAirlineRefundClaim);
-  const unticketed = bookings.filter((booking) => !needsAirlineRefundClaim(booking));
+  // A ticketed booking whose numbers did not arrive is NOT "paid but not
+  // ticketed". Listed under that heading it read "no ticket was issued ...
+  // ticket it, or refund it" beside "ticketed: yes" - an instruction to issue a
+  // second ticket against one payment, or refund a live ticket.
+  const numbersMissing = bookings.filter(ticketNumbersMissing);
+  const unticketed = bookings.filter((booking) => !needsAirlineRefundClaim(booking) && !ticketNumbersMissing(booking));
   const sections = [];
   if (unticketed.length) {
     sections.push(
@@ -155,6 +181,16 @@ export function buildMessage(bookings) {
       'The customer has paid and no ticket was issued. Each one needs a human: ticket it, or refund it.',
       '',
       ...unticketed.map(describeBooking),
+    );
+  }
+  if (numbersMissing.length) {
+    sections.push(
+      `:ticket: *${numbersMissing.length} booking${numbersMissing.length > 1 ? 's' : ''} ticketed, ticket numbers not read back*`,
+      'The ticket IS issued: the airline accepted the issue, the customer has paid and holds a live ticket. '
+        + 'Only the ticket numbers did not reach us. Read them from the PNR (its FA lines) and record them on the booking. '
+        + 'Do NOT reissue and do NOT refund: a second ticket charges the fare twice, and a refund leaves a live ticket unpaid for.',
+      '',
+      ...numbersMissing.map(describeTicketNumbersMissing),
     );
   }
   if (claims.length) {

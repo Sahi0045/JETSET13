@@ -855,6 +855,8 @@ describe('after the PNR exists', () => {
     expect(result.ticketed).toBe(true)
     expect(result.tickets?.length ?? 0).toBe(0)
     expect(result.order.needsReview?.reason).toBe('ticket_numbers_not_retrieved')
+    // The alarm prints expected against got; none arrived of one wanted.
+    expect(result.order.needsReview).toMatchObject({ expected: 1, got: 0 })
   })
 
   // One ticket per traveller: the 2ADT+1CH+1INF certification booking (BMPUST,
