@@ -30,6 +30,14 @@ const reviewOf = (booking) =>
 
 const pnrOf = (booking) => booking?.pnr || booking?.booking_details?.pnr || booking?.bookingDetails?.pnr || null;
 
+/**
+ * The review flag the order route writes when the airline left a flight
+ * waitlisted, requested, unable or cancelled at commit (NO_CONFIRMED_SEAT_REVIEW_REASON
+ * in backend/routes/flight.routes.js; a test keeps the two equal). There is a
+ * PNR, but no confirmed seat.
+ */
+export const NO_CONFIRMED_SEAT_REVIEW_REASON = 'chain failed after commit at segmentStatus';
+
 const money = (amount, currency) => {
   try {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency || 'USD' }).format(amount);
@@ -121,6 +129,10 @@ export function attentionMessage(booking) {
     return null;
   }
   if (!needsAttention(booking)) return null;
+  // A PNR is not a seat: "your seats are reserved" was false of this one.
+  if (reviewOf(booking)?.reason === NO_CONFIRMED_SEAT_REVIEW_REASON) {
+    return 'The airline has not confirmed a seat on every flight, so no ticket has been issued. Our team will contact you.';
+  }
   return pnrOf(booking)
     ? 'Your seats are reserved, but your ticket has not been issued yet. Our team is working on it and will email you.'
     : 'Your booking could not be completed with the airline. Our team is looking after your payment and will email you.';

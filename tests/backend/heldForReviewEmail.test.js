@@ -358,6 +358,14 @@ describe('a booking the airline confirmed no seat on', () => {
     expect(confirmationEmailKind(row)).toBeNull();
   });
 
+  // My Trips reads the same flag (frontend/src/utils/bookingStatus.js), and
+  // must not say "your seats are reserved" either.
+  it('is the reason My Trips knows as "no confirmed seat"', async () => {
+    const routes = await import('../../backend/routes/flight.routes.js');
+    const myTrips = await import('../../frontend/src/utils/bookingStatus.js');
+    expect(myTrips.NO_CONFIRMED_SEAT_REVIEW_REASON).toBe(routes.NO_CONFIRMED_SEAT_REVIEW_REASON);
+  });
+
   // A queued booking replayed into this answer is a final failure to the
   // booking queue, which keeps the flag and emails its own "we could not
   // confirm your booking ... our team will contact you" - true of this case.

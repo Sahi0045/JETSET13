@@ -132,6 +132,19 @@ describe('what needs attention, in words', () => {
     expect(unbooked).not.toMatch(/seats are reserved/);
   });
 
+  // The order route holds a PNR the airline left waitlisted, requested,
+  // unable or cancelled at commit (chain step 'segmentStatus') for a person.
+  // No seat is confirmed, so "your seats are reserved" is false of it.
+  // (heldForReviewEmail.test.js checks the reason is the one the route writes.)
+  it('does not tell a booking with no confirmed seat that its seats are reserved', () => {
+    const noSeat = attentionMessage({
+      type: 'flight', status: 'pending_ticketing', pnr: 'ABC123', needs_review: { reason: 'chain failed after commit at segmentStatus' },
+    });
+    expect(noSeat).not.toMatch(/seats are reserved/);
+    expect(noSeat).toMatch(/airline has not confirmed a seat on every flight/);
+    expect(noSeat).toMatch(/our team will contact you/i);
+  });
+
   it('says nothing about a booking that is fine', () => {
     expect(attentionMessage({ type: 'flight', status: 'confirmed', pnr: 'ABC123', tickets: [{ number: '1' }] })).toBeNull();
     expect(attentionMessage({ status: 'cancelled', cancellation: { paymentAction: 'VOID', refundAmount: 10 } })).toBeNull();
