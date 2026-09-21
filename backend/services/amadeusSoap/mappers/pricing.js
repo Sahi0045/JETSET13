@@ -70,7 +70,13 @@ const readSegments = (fareInfoGroup) => arr(fareInfoGroup.segmentLevelGroup).map
     segmentId: String(index + 1),
     fareBasis: atTxt(segment, 'fareBasis.additionalFareDetails.rateClass'),
     class: atTxt(segment, 'segmentInformation.flightIdentification.bookingClass'),
-    cabin: CABIN_BY_DESIGNATOR[atTxt(segment, 'cabinGroup.cabinSegment.cabinDesignator')] ?? undefined,
+    // `cabinGroup.cabinSegment.cabinDesignator`, read here before, is in no
+    // pricing reply: every captured one states the cabin as cabinProduct/cabin
+    // and as bookingClassDetails/option beside the RBD - J / C on the TP
+    // business fare (PDT, 17 Sep 2026). So pricing never corrected a cabin the
+    // search had left empty.
+    cabin: CABIN_BY_DESIGNATOR[atTxt(segment, 'flightProductInformationType.cabinProduct.cabin')
+      || atTxt(segment, 'cabinGroup.cabinSegment.bookingClassDetails.option')] ?? undefined,
     includedCheckedBags: bag === undefined || bag === null
       ? undefined
       // No `weightUnit`: this reply does not know it. `mergeCheckedBags` keeps
@@ -174,7 +180,14 @@ export const applyPricingToOffer = (reply, offer) => {
   // Each group prices one passenger type; the offer total is the sum across
   // every passenger, which is what was charged.
   const total = perGroup.reduce((sum, g) => sum + (g.total ?? 0) * g.paxCount, 0);
-  const base = perGroup.reduce((sum, g) => sum + (g.base ?? 0) * g.paxCount, 0);
+  // The same rule as `total`, which the comment above explains: a group whose
+  // base is not stated in the offer's currency makes the base unknown, not
+  // smaller. `g.base ?? 0` summed it as nothing, so a family whose child group
+  // had B in INR and no E read two adults' base beside a total for three, and
+  // the review page's tax line (total - base) grew by the child's fare. Unknown,
+  // it keeps the search's base, as each traveller's pricing below already does.
+  const baseKnown = perGroup.every((g) => g.base !== null && Number.isFinite(g.base));
+  const base = baseKnown ? perGroup.reduce((sum, g) => sum + g.base * g.paxCount, 0) : null;
 
   const travelerPricings = (offer.travelerPricings ?? []).map((pricing, index) => {
     // An infant is priced under its adult's reference (operations/
@@ -206,7 +219,20 @@ export const applyPricingToOffer = (reply, offer) => {
     };
   });
 
-  const fees = perGroup[0].taxes.map((tax) => ({ amount: tax.amount, type: 'TAX', code: tax.code }));
+  // Every traveller's taxes. This listed the FIRST group's taxes once, beside
+  // a total covering every passenger: the 2ADT+1CHD family priced at 279.30 on
+  // a 229.00 base - 50.30 of tax - with fees adding up to 17.00. Summed per tax
+  // (country and type) times the travellers in each group, in cents.
+  const feeCents = new Map();
+  for (const group of perGroup) {
+    for (const tax of group.taxes) {
+      const key = `${tax.code}|${tax.type}`;
+      const entry = feeCents.get(key) ?? { code: tax.code, cents: 0 };
+      entry.cents += Math.round(Number(tax.amount) * 100) * group.paxCount;
+      feeCents.set(key, entry);
+    }
+  }
+  const fees = [...feeCents.values()].map(({ code, cents }) => ({ amount: (cents / 100).toFixed(2), type: 'TAX', code }));
   const penalties = perGroup.flatMap((g) => g.text).filter((t) => /REFUND|PENALT|CHANGE/i.test(t.text));
 
   return {
@@ -216,7 +242,7 @@ export const applyPricingToOffer = (reply, offer) => {
       price: {
         currency,
         total: total.toFixed(2),
-        base: base.toFixed(2),
+        base: base === null ? offer.price?.base : base.toFixed(2),
         grandTotal: total.toFixed(2),
         fees,
       },

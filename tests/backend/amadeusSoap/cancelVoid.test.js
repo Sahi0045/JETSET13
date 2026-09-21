@@ -215,6 +215,33 @@ describe('cancelling', () => {
     expect(didCancel()).toBe(false);
   });
 
+  // One ticket of two is void at Amadeus now, while the PNR stays live. The
+  // per-document answers were collapsed to one boolean and the error named no
+  // ticket, so the desk - reading needs_review.detail - could not tell the
+  // destroyed ticket from the live one, and a later cancel would list the void
+  // one as a refund to claim from the airline.
+  it('says which ticket was voided and which was not when a void half-succeeds', async () => {
+    const { cancelBooking } = await loadChain();
+    axios.post
+      .mockResolvedValueOnce(reply(retrievedWithTwoTickets(todayDDMMMYY())))
+      .mockResolvedValueOnce(reply(envelope('Ticket_CancelDocumentReply',
+        '<transactionResults><responseDetails><responseType>X</responseType><statusCode>O</statusCode></responseDetails>'
+        + '<ticketNumbers><documentDetails><number>22074911749321</number></documentDetails></ticketNumbers></transactionResults>'
+        + '<transactionResults><responseDetails><responseType>X</responseType><statusCode>N</statusCode></responseDetails>'
+        + '<errorGroup><errorOrWarningCodeDetails><errorDetails><errorCode>5458</errorCode></errorDetails></errorOrWarningCodeDetails>'
+        + '<errorWarningDescription><freeText>NOT AUTHORISED</freeText></errorWarningDescription></errorGroup>'
+        + '<ticketNumbers><documentDetails><number>22074911749332</number></documentDetails></ticketNumbers></transactionResults>', true)))
+      .mockResolvedValue(reply(ok('Security_SignOutReply')));
+
+    const failure = await cancelBooking('ABC123').catch((error) => error);
+
+    expect(didCancel()).toBe(false);
+    expect(failure).toMatchObject({
+      step: 'voidTicket', voidedTickets: ['220-7491174932'], unvoidedTickets: ['220-7491174933'],
+    });
+    expect(failure.technicalError).toMatch(/voided 220-7491174932.*not 220-7491174933/);
+  });
+
   // Every answer said voided, but there was one answer for two tickets.
   it('does not cancel when the reply answers only one of two tickets', async () => {
     const { cancelBooking } = await loadChain();

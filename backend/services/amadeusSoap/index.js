@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import logger from '../logger.js';
 import { reportError } from '../monitoring.js';
 import { isCityCode, resolveToIata, searchLocations as searchAirports } from '../airportsIndex.js';
@@ -32,12 +31,6 @@ const log = logger.child({ svc: 'amadeus-ws' });
  *   - methods the routes wrap in try/catch THROW {success:false, error, code}
  *   - advisory methods RETURN a soft-fail object and never throw
  */
-
-/** Detect a search whose parameters changed between search and booking. */
-const signatureOf = (p) => createHash('sha1')
-  .update([p.from, p.to, p.departDate, p.returnDate ?? '', p.adults ?? 1, p.children ?? 0, p.infants ?? 0, p.travelClass ?? ''].join('|'))
-  .digest('hex')
-  .slice(0, 12);
 
 const reportIfAlerting = (error) => {
   if (error instanceof AmadeusSoapError && error.alert) {
@@ -132,10 +125,7 @@ const searchFlights = async (params) => {
     throw status.error;
   }
 
-  const { offers: mapped, dictionaries, currency } = mapMasterPricerReply(reply, {
-    config,
-    searchSignature: signatureOf(request),
-  });
+  const { offers: mapped, dictionaries, currency } = mapMasterPricerReply(reply, { config });
 
   // A fare plated on a carrier this office cannot ticket is not offered: the
   // customer would pay, we would book, and issuance would refuse the ticket.
@@ -593,7 +583,12 @@ const getCheapestFlightDates = async (origin, destination, options = {}) => {
   const result = await getCalendarPrices({
     from: origin, to: destination, adults: 1, dates,
   });
-  if (!result.success) return { success: false, data: [], error: result.error };
+  // null is getCalendarPrices saying no date priced (so withCache stores
+  // nothing). Read as an object it threw a TypeError, which withCache took for
+  // a cache fault and answered by running every live search a second time.
+  if (!result?.success) {
+    return { success: false, data: [], error: result?.error ?? 'no fare could be priced for these dates' };
+  }
 
   const currency = result.currency;
   return {

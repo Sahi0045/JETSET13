@@ -206,6 +206,34 @@ describe('failing before the PNR is committed', () => {
       .rejects.toMatchObject({ step: 'sell', committed: false, code: 409 });
   });
 
+  // The shape of every real refusal on disk (16-Book-Unavailable-Class, PDT 17
+  // Sep 2026): UNS on the segment AND a message-level 288. callStep read the
+  // error container first and threw a 502 "temporarily unavailable", so the 409
+  // branch above was dead for every refusal Amadeus has actually sent.
+  it('reports a real UNS / 288 refusal as the seats gone, not as an outage', async () => {
+    const { runBookingChain } = await loadChain();
+    queueReplies(envelope('Air_SellFromRecommendationReply',
+      '<message><messageFunctionDetails><messageFunction>183</messageFunction></messageFunctionDetails></message>'
+      + '<errorAtMessageLevel><errorSegment><errorDetails><errorCode>288</errorCode><errorCategory>EC</errorCategory></errorDetails></errorSegment></errorAtMessageLevel>'
+      + '<itineraryDetails><segmentInformation><actionDetails><quantity>1</quantity><statusCode>UNS</statusCode></actionDetails></segmentInformation></itineraryDetails>', SESSION));
+
+    const failure = await runBookingChain({ offer: offer(), travelers }).catch((error) => error);
+
+    expect(failure).toMatchObject({
+      step: 'sell', committed: false, code: 409, error: 'That flight is no longer available at this price', amadeusCode: '288',
+    });
+    expect(failure.technicalError).toContain('UNS');
+  });
+
+  it('still reports a sell with no segment status the way Amadeus classified it', async () => {
+    const { runBookingChain } = await loadChain();
+    queueReplies(envelope('Air_SellFromRecommendationReply',
+      '<errorAtMessageLevel><errorSegment><errorDetails><errorCode>288</errorCode><errorCategory>EC</errorCategory></errorDetails></errorSegment></errorAtMessageLevel>', SESSION));
+
+    await expect(runBookingChain({ offer: offer(), travelers }))
+      .rejects.toMatchObject({ step: 'sell', committed: false, code: 502 });
+  });
+
   it('reports a failure while adding names as uncommitted', async () => {
     const { runBookingChain } = await loadChain();
     queueReplies(sellOk, errorReply('SOMETHING WENT WRONG'));
@@ -617,6 +645,43 @@ describe('after the PNR exists', () => {
     expect(commitOptions()).toEqual(['0', '11']);
   });
 
+  // TL is waitlisted and TN only requested, each after a schedule change; HL,
+  // HN, UN and the rest say the same without one. None of them is a seat. They
+  // were accepted with change advice like TK and then queued, ticketed and
+  // emailed as confirmed - or, with auto-ticketing off, emailed as a held
+  // reservation under a "schedule changed" flag that tells the desk to mention
+  // new times, not that the customer has no seat. The sell refuses HL and WL for
+  // this reason (airSell.js); the commit has to as well.
+  it.each(['TL', 'TN', 'HL', 'HN', 'UN', 'UC', 'NO', 'HX'])(
+    'hands a segment the airline left at %s at commit to a person, and never tickets it',
+    async (status) => {
+      vi.stubEnv('AMADEUS_WS_AUTO_TICKET', 'true');
+      vi.stubEnv('AMADEUS_WS_TICKET_RETRIEVE_INITIAL_MS', '0');
+      const { runBookingChain } = await loadChain();
+      const onCommitted = vi.fn();
+      queueReplies(sellOk, addOk, fopOk, priceOk, tstOk, withSegmentStatus(status), withSegmentStatus(status), fopOk, issueOk, retrieveWithTicket);
+
+      const failure = await runBookingChain({ offer: offer(), travelers, onCommitted }).catch((error) => error);
+
+      // Post-commit: the order route holds it for staff, never refunds it blind.
+      expect(failure).toMatchObject({ name: 'BookingChainError', committed: true, ticketed: false, pnr: 'ABC123' });
+      expect(failure.technicalError).toContain(status);
+      // The PNR was still handed over before anything else was decided.
+      expect(onCommitted).toHaveBeenCalledWith(expect.objectContaining({ pnr: 'ABC123' }));
+      const sent = axios.post.mock.calls.map(([, body]) => String(body));
+      expect(sent.some((body) => body.includes('<DocIssuance_IssueTicket'))).toBe(false);
+      expect(commitOptions()).toEqual(['0', '11']);
+    },
+  );
+
+  it('does the same with auto-ticketing off, rather than answer a held reservation', async () => {
+    const { runBookingChain } = await loadChain();
+    queueReplies(sellOk, addOk, fopOk, priceOk, tstOk, withSegmentStatus('TL'), withSegmentStatus('HL'), fopOk);
+
+    await expect(runBookingChain({ offer: offer(), travelers }))
+      .rejects.toMatchObject({ committed: true, ticketed: false, pnr: 'ABC123' });
+  });
+
   // The route reads `committed` to decide whether refunding is safe. A ticketed
   // booking that gets refunded leaves the customer flying for free and the
   // airline billing us.
@@ -791,6 +856,93 @@ describe('after the PNR exists', () => {
     expect(result.tickets?.length ?? 0).toBe(0)
     expect(result.order.needsReview?.reason).toBe('ticket_numbers_not_retrieved')
   })
+
+  // One ticket per traveller: the 2ADT+1CH+1INF certification booking (BMPUST,
+  // 17 Sep 2026) came back with four FA elements for four travellers. The
+  // retrieve loop stopped at the first reply carrying ANY ticket, so a PNR read
+  // while the numbers were still landing locked in a partial set, and nothing
+  // downstream could tell it from a complete one.
+  const couple = [
+    { firstName: 'John', lastName: 'Smith', gender: 'MALE' },
+    { firstName: 'Jane', lastName: 'Smith', gender: 'FEMALE' },
+  ];
+  const retrieveWithTickets = (count) => envelope('PNR_Reply',
+    pnrHeaderXml
+    + '<dataElementsMaster>'
+    + Array.from({ length: count }, (_, i) => '<dataElementsIndiv><elementManagementData><segmentName>FA</segmentName></elementManagementData>'
+      + `<otherDataFreetext><longFreetext>FA PAX 057-241234567${i}/ETAI/USD221.70/04SEP26/SCK1S2400</longFreetext></otherDataFreetext>`
+      + '</dataElementsIndiv>').join('')
+    + '</dataElementsMaster>', SESSION);
+
+  it('keeps reading until every traveller has a ticket number', async () => {
+    vi.stubEnv('AMADEUS_WS_AUTO_TICKET', 'true');
+    vi.stubEnv('AMADEUS_WS_TICKET_RETRIEVE_INITIAL_MS', '0');
+    vi.stubEnv('AMADEUS_WS_TICKET_RETRIEVE_DELAY_MS', '0');
+    vi.stubEnv('AMADEUS_WS_TICKET_RETRIEVE_RETRIES', '3');
+    const { runBookingChain } = await loadChain();
+    queueReplies(sellOk, addOk, fopOk, priceOk, tstOk, commitOk, fopOk, issueOk, retrieveWithTickets(1), retrieveWithTickets(2));
+
+    const result = await runBookingChain({ offer: offer(), travelers: couple });
+
+    expect(result.tickets).toHaveLength(2);
+    expect(result.order.needsReview).toBeUndefined();
+  });
+
+  it('flags a booking whose tickets never all appear, saying how many are missing', async () => {
+    vi.stubEnv('AMADEUS_WS_AUTO_TICKET', 'true');
+    vi.stubEnv('AMADEUS_WS_TICKET_RETRIEVE_INITIAL_MS', '0');
+    vi.stubEnv('AMADEUS_WS_TICKET_RETRIEVE_DELAY_MS', '0');
+    vi.stubEnv('AMADEUS_WS_TICKET_RETRIEVE_RETRIES', '2');
+    const { runBookingChain } = await loadChain();
+    queueReplies(sellOk, addOk, fopOk, priceOk, tstOk, commitOk, fopOk, issueOk,
+      retrieveWithTickets(1), retrieveWithTickets(1), retrieveWithTickets(1));
+
+    const result = await runBookingChain({ offer: offer(), travelers: couple });
+
+    expect(result.ticketed).toBe(true);
+    // The number that did arrive is kept, not thrown away.
+    expect(result.tickets).toHaveLength(1);
+    expect(result.order.needsReview).toMatchObject({ reason: 'ticket_numbers_not_retrieved', expected: 2, got: 1 });
+  });
+
+  // A new-session look that finds a PNR already carrying tickets used to read
+  // it as done, however many were there. One ticket of two is not done - and
+  // issuing again is not the answer either (a second ticket for the traveller
+  // who has one), so it is read again and, if still short, flagged.
+  it('does not take a partly ticketed PNR in a new session as ticketed and done', async () => {
+    vi.stubEnv('AMADEUS_WS_AUTO_TICKET', 'true');
+    vi.stubEnv('AMADEUS_WS_TICKET_RETRIEVE_INITIAL_MS', '0');
+    vi.stubEnv('AMADEUS_WS_TICKET_RETRIEVE_DELAY_MS', '0');
+    vi.stubEnv('AMADEUS_WS_TICKET_RETRIEVE_RETRIES', '1');
+    const notReady = envelope('DocIssuance_IssueTicketReply',
+      '<processingStatus><statusCode>X</statusCode></processingStatus><errorGroup><errorOrWarningCodeDetails><errorDetails><errorCode>9125</errorCode></errorDetails></errorOrWarningCodeDetails>'
+      + '<errorWarningDescription><freeText>ETKT DISALLOWED - NEED AIRLINE R/LOC-RETRY</freeText></errorWarningDescription></errorGroup>', SESSION);
+    const { runBookingChain } = await loadChain();
+    queueReplies(sellOk, addOk, fopOk, priceOk, tstOk, commitOk, fopOk, notReady, signOutOk,
+      retrieveWithTickets(1), retrieveWithTickets(1), retrieveWithTickets(1));
+
+    const result = await runBookingChain({ offer: offer(), travelers: couple });
+
+    const sent = axios.post.mock.calls.map(([, body]) => String(body));
+    expect(sent.filter((body) => body.includes('<DocIssuance_IssueTicket'))).toHaveLength(1);
+    expect(result.ticketed).toBe(true);
+    expect(result.order.needsReview).toMatchObject({ reason: 'ticket_numbers_not_retrieved', expected: 2, got: 1 });
+  });
+
+  it('still takes a fully ticketed PNR in a new session as done, without reading it again', async () => {
+    vi.stubEnv('AMADEUS_WS_AUTO_TICKET', 'true');
+    const { runBookingChain } = await loadChain();
+    queueReplies(sellOk, addOk, fopOk, priceOk, tstOk, commitOk, fopOk,
+      envelope('DocIssuance_IssueTicketReply', '<processingStatus><statusCode>X</statusCode></processingStatus><errorGroup><errorOrWarningCodeDetails><errorDetails><errorCode>9125</errorCode></errorDetails></errorOrWarningCodeDetails></errorGroup>', SESSION),
+      signOutOk, retrieveWithTickets(2));
+
+    const result = await runBookingChain({ offer: offer(), travelers: couple });
+
+    const sent = axios.post.mock.calls.map(([, body]) => String(body));
+    expect(sent.filter((body) => body.includes('<PNR_Retrieve'))).toHaveLength(1);
+    expect(result.tickets).toHaveLength(2);
+    expect(result.order.needsReview).toBeUndefined();
+  });
 });
 
 describe('session hygiene', () => {

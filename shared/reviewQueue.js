@@ -25,6 +25,14 @@ export const ticketsOf = (details) => (Array.isArray(details?.tickets) ? details
 /** Whether the airline has issued a ticket, by either of the two records of it. */
 export const isTicketed = (details) => details?.gds?.ticketed === true || ticketsOf(details).length > 0;
 
+/**
+ * The booking chain's flag on a booking it DID ticket: issuance answered OK,
+ * but not every ticket number surfaced in the PNR (bookingChain.js
+ * readTicketNumbers). The row is ticketed by definition, so a "ticketed means
+ * done" check skipped it - and nobody was ever told to find the numbers.
+ */
+export const TICKET_NUMBERS_MISSING = 'ticket_numbers_not_retrieved';
+
 /** What a member of staff recorded when they dealt with it, or null. */
 export const reviewResolution = (booking) => {
   const review = detailsOf(booking)?.needs_review;
@@ -62,7 +70,7 @@ export function attentionOf(booking) {
 
   if (['cancelled', 'refunded'].includes(statusOf(booking))) return null;
   if (['refunded', 'partially_refunded', 'reversed'].includes(paymentOf(booking))) return null;
-  if (isTicketed(details)) return null;
+  if (isTicketed(details) && review?.reason !== TICKET_NUMBERS_MISSING) return null;
 
   if (review) {
     return { kind: 'review', reason: review.reason || 'flagged for review', since: review.at || null };

@@ -120,6 +120,16 @@ export const ERROR_CATALOGUE = Object.freeze([
   // the booking stands and needs a human; alert so it is never mistaken for a
   // code regression again.
   { match: /\b2161\b|prohibited ticketing carrier/i, code: 502, error: 'Your ticket could not be issued automatically - our team will complete it', alert: true },
+  // The other standing refusals issuance gave this office on PDT: "KU ETKT: NOT
+  // AUTHORISED" (EN and BF the same, 15 Sep 2026), 8100 ETKT THIS CARRIER NOT
+  // VALID THIS MARKET (GF), and 8102 NO INTERLINE BETWEEN CARRIERS (B6-LH, 16
+  // Sep). They fell to the default - "temporarily unavailable", no alert - so a
+  // carrier that starts refusing was counted as supplier flakiness. The British
+  // spelling is why the credentials rule above never matched. Matched on the
+  // ETKT wording, not the bare codes, so a refused void (5458 NOT AUTHORISED)
+  // or an unrelated 8100 elsewhere is not caught here; a COMMUNICATIONS LINE
+  // UNAVAILABLE is a link failure and stays transient.
+  { match: /\bETKT\b.*(NOT AUTHORI[SZ]ED|NOT VALID THIS MARKET|NO INTERLINE BETWEEN CARRIERS)/i, code: 502, error: 'Your ticket could not be issued automatically - our team will complete it', alert: true },
 ]);
 
 export const DEFAULT_ERROR = Object.freeze({ code: 502, error: 'Flight service temporarily unavailable' });
