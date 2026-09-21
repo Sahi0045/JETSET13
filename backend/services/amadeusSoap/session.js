@@ -68,6 +68,10 @@ export const callStateless = async (operationName, bodyXml, options = {}) => {
 export const withSession = async (fn, options = {}) => {
   const config = options.config ?? getWsConfig();
   let session = null;
+  // The highest SequenceNumber this session has SENT. The reply's number is the
+  // one to build on, but a call that gets no reply leaves only this: whether it
+  // reached Amadeus cannot be known, and if it did, its number is used up.
+  let lastSent = 0;
 
   const ctx = {
     get sessionId() { return session?.sessionId ?? null; },
@@ -80,12 +84,22 @@ export const withSession = async (fn, options = {}) => {
         ? {
           status: 'InSeries',
           sessionId: session.sessionId,
-          // Amadeus may skip numbers; always echo the reply's value + 1 rather
-          // than counting locally.
-          sequenceNumber: String((Number.parseInt(session.sequenceNumber, 10) || 0) + 1),
+          // Amadeus may skip numbers, so build on the reply's value rather than
+          // counting locally - but never below a number already SENT. After a
+          // call that got no reply the reply's value is stale: in the booking
+          // chain a Queue_PlacePNR that timed out left DocIssuance_IssueTicket
+          // going out with the number the queue call had used, and Amadeus
+          // refuses a reused number (93|Session|Illogical conversation), so the
+          // ticket failed to issue. A read timeout means the request went out,
+          // which is our captured case.
+          sequenceNumber: String(Math.max(Number.parseInt(session.sequenceNumber, 10) || 0, lastSent) + 1),
           securityToken: session.securityToken,
         }
         : { status: 'Start' };
+      // Recorded before sending, so it survives whatever the send does - a
+      // timeout, a reset, or a reply that cannot be parsed and escapes as a raw
+      // throw. It used to be computed and thrown away.
+      if (outgoing.sequenceNumber) lastSent = Math.max(lastSent, Number(outgoing.sequenceNumber));
 
       // The permit is already held for the whole session (below), so each call
       // inside it must not try to take a second one - with a low limit that is
@@ -144,7 +158,19 @@ export const withSession = async (fn, options = {}) => {
       if (session?.sessionId && session.status !== 'End') {
         // Own try/catch and own short timeout: a hung sign-out must never become
         // the caller's error, and must never mask the real one.
-        await signOutQuietly(session, config);
+        //
+        // One past the number SENT first, then one past the number last
+        // REPLIED. They differ only when a call got no reply, and then which is
+        // right depends on whether it reached Amadeus - which cannot be known.
+        // Our 15 Sep capture (flow log 10): reply 1, a Ticket_CancelDocument
+        // sent at 2 timed out, and the sign-out at 2 was refused "93|Session|
+        // Illogical conversation" - Amadeus had used 2. Signing out at the
+        // reply's number alone left that session, and the seats a seat check
+        // had sold in it, open until it expired.
+        const replied = Number.parseInt(session.sequenceNumber, 10) || 0;
+        await signOutQuietly(session, config, {
+          sequenceNumbers: [...new Set([Math.max(lastSent, replied) + 1, replied + 1])],
+        });
       }
     } finally {
       getSemaphore(config).release();
@@ -152,33 +178,60 @@ export const withSession = async (fn, options = {}) => {
   }
 };
 
-const signOutQuietly = async (session, config = getWsConfig()) => {
-  try {
-    await postEnvelope({
-      operation: OPERATIONS.Security_SignOut,
-      bodyXml: `    <Security_SignOut xmlns="${OPERATIONS.Security_SignOut.namespace}"/>`,
-      session: {
-        status: 'End',
+/**
+ * Close a session, trying each of `sequenceNumbers` in turn until one is
+ * accepted. Never throws; answers whether the session was closed.
+ *
+ * Without `sequenceNumbers` it is one past the session's last reply, as it
+ * always was - the stateless path, where every call had its reply.
+ */
+const signOutQuietly = async (session, config = getWsConfig(), { sequenceNumbers } = {}) => {
+  // A session opened by a stateless call comes back without a SequenceNumber;
+  // parseInt(undefined) + 1 is NaN, and Amadeus rejects the header outright
+  // rather than saying which field is wrong.
+  const numbers = sequenceNumbers?.length
+    ? sequenceNumbers
+    : [(Number.parseInt(session.sequenceNumber, 10) || 0) + 1];
+
+  let lastCause = null;
+  for (const sequenceNumber of numbers) {
+    try {
+      await postEnvelope({
+        operation: OPERATIONS.Security_SignOut,
+        bodyXml: `    <Security_SignOut xmlns="${OPERATIONS.Security_SignOut.namespace}"/>`,
+        session: {
+          status: 'End',
+          sessionId: session.sessionId,
+          sequenceNumber: String(sequenceNumber),
+          securityToken: session.securityToken,
+        },
+        config,
+        timeoutMs: 5000,
+        bypassSemaphore: true,
+      });
+      return true;
+    } catch (cause) {
+      lastCause = cause;
+      // Amadeus answers a refused sign-out with the session header it holds.
+      // It used to be discarded; it is the one clue to what it expected.
+      log.warn({
         sessionId: session.sessionId,
-        // A session opened by a stateless call comes back without a
-        // SequenceNumber; parseInt(undefined) + 1 is NaN, and Amadeus rejects
-        // the header outright rather than saying which field is wrong.
-        sequenceNumber: String((Number.parseInt(session.sequenceNumber, 10) || 0) + 1),
-        securityToken: session.securityToken,
-      },
-      config,
-      timeoutMs: 5000,
-      bypassSemaphore: true,
-    });
-  } catch (cause) {
-    // `message` is the customer-facing string and says nothing useful in a log.
-    // A leaked session counts against the WSAP quota until it expires, so the
-    // raw Amadeus text is the only thing here worth having.
-    log.warn({
-      sessionId: session.sessionId,
-      reason: cause?.technicalError ?? cause?.message,
-    }, 'Security_SignOut failed; session will expire server-side');
+        sentSequence: sequenceNumber,
+        amadeusSequence: cause?.session?.sequenceNumber ?? null,
+        reason: cause?.technicalError ?? cause?.message,
+      }, 'Security_SignOut refused');
+    }
   }
+
+  // `message` is the customer-facing string and says nothing useful in a log.
+  // A leaked session counts against the WSAP quota until it expires, so the
+  // raw Amadeus text is the only thing here worth having.
+  log.warn({
+    sessionId: session.sessionId,
+    tried: numbers,
+    reason: lastCause?.technicalError ?? lastCause?.message,
+  }, 'Security_SignOut failed; session will expire server-side');
+  return false;
 };
 
 export { signOutQuietly };
