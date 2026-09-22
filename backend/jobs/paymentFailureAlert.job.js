@@ -95,14 +95,64 @@ export function describeFailure(booking) {
   ].join('\n');
 }
 
-export function buildMessage(bookings) {
-  const owed = bookings.reduce((sum, b) => sum + (Number(b.total_amount) || 0), 0);
+/**
+ * Why the cancel held the refund, as it recorded it.
+ *
+ * The cancel's own review flag carries the fullest reason - the decision and
+ * anything the payment step added, such as a reversal that ended unknown - and
+ * `basis` is the decision alone. A fallback cancel writes neither, only why it
+ * was cancelled.
+ */
+function heldReasonOf(booking) {
+  const details = booking.booking_details || {};
+  const review = details.needs_review?.source === 'cancellation' ? details.needs_review.reason : null;
+  const reason = review || details.cancellation?.basis || details.cancellation?.reason || 'no reason was recorded';
+  return String(reason).slice(0, 240);
+}
+
+/** One line per held refund. Nothing failed here, and the row does not lie. */
+export function describeHeld(booking) {
+  const cancellation = booking.booking_details?.cancellation || {};
+  const hours = Math.round(
+    (Date.now() - Date.parse(cancellation.cancelledAt || booking.created_at)) / 36e5,
+  );
   return [
-    `:money_with_wings: *${bookings.length} cancelled booking${bookings.length > 1 ? 's' : ''} where the refund never went through* — ${owed.toFixed(2)} USD`,
-    'ARC Pay did not return the money, but the booking is stored as refunded, so nothing else will ever flag it. These need refunding by hand.',
-    '',
-    ...bookings.map(describeFailure),
-  ].join('\n\n');
+    `*${booking.booking_reference}* — ${booking.total_amount} USD taken, nothing returned yet`,
+    `held because: ${heldReasonOf(booking)}`,
+    `cancelled ${hours}h ago · the row reads ${booking.status}/${booking.payment_status}`,
+  ].join('\n');
+}
+
+const countOf = (bookings) => `${bookings.length} cancelled booking${bookings.length > 1 ? 's' : ''}`;
+const totalOf = (bookings) => bookings.reduce((sum, b) => sum + (Number(b.total_amount) || 0), 0).toFixed(2);
+
+export function buildMessage(bookings) {
+  // REFUND_UNDER_REVIEW is not a refund that failed: the cancel refused to move
+  // money it could not tell was owed - a ticket the airline may still hold, a
+  // fare whose rules decide the amount - and the row, cancelled/paid, says so.
+  // Told "these need refunding by hand", staff would refund what may be a live
+  // ticket. It gets its own section, and the reason it was held.
+  const held = bookings.filter((b) => b.booking_details?.cancellation?.paymentAction === 'REFUND_UNDER_REVIEW');
+  const failed = bookings.filter((b) => !held.includes(b));
+  const sections = [];
+  if (failed.length) {
+    sections.push(
+      `:money_with_wings: *${countOf(failed)} where the refund never went through* — ${totalOf(failed)} USD`,
+      'ARC Pay did not return the money, but the booking is stored as refunded, so nothing else will ever flag it. These need refunding by hand.',
+      '',
+      ...failed.map(describeFailure),
+    );
+  }
+  if (held.length) {
+    if (sections.length) sections.push('');
+    sections.push(
+      `:hourglass_flowing_sand: *${countOf(held)} whose refund is held for a person to decide* — ${totalOf(held)} USD taken`,
+      'Nothing was refunded, on purpose: the cancel could not tell what is owed. Check the tickets with the airline first, then decide what goes back and record it on the desk.',
+      '',
+      ...held.map(describeHeld),
+    );
+  }
+  return sections.join('\n\n');
 }
 
 /**
