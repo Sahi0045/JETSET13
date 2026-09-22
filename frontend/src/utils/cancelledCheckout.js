@@ -31,8 +31,13 @@ export const isCancelledReturn = (search) => new URLSearchParams(search || '').g
  * flightReviewResume.js once did, so after a cancelled payment the draft fell
  * back to the route-and-party fingerprint any booking of the same flight shares.
  *
+ * And the coupon code, when one was applied: the page left for ARC with it,
+ * and came back without it, so the customer typed it again. Only the code -
+ * the review page checks it again before applying it (FlightBookingConfirmation
+ * couponToRestore), since it may have expired or been used up meanwhile.
+ *
  * @param {Storage} [storage]
- * @returns {{ reviewState: { flightData: object, searchData: object|null, attemptId: string|null }, travellers: object[], contact: object|null }|null}
+ * @returns {{ reviewState: { flightData: object, searchData: object|null, attemptId: string|null }, travellers: object[], contact: object|null, couponCode?: string }|null}
  */
 export function readCancelledCheckout(storage = globalThis.sessionStorage) {
   try {
@@ -44,6 +49,7 @@ export function readCancelledCheckout(storage = globalThis.sessionStorage) {
       reviewState: { flightData, searchData: saved.searchData ?? null, attemptId: saved.attemptId ?? null },
       travellers: Array.isArray(saved.passengerData) ? saved.passengerData : [],
       contact: saved.bookingDetails?.contact ?? null,
+      ...(saved.couponCode ? { couponCode: String(saved.couponCode) } : {}),
     };
   } catch {
     return null;
