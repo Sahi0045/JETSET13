@@ -2014,7 +2014,23 @@ export async function handlePaymentRetrieve(req, res) {
 
 const roundCents = (value) => Math.round(Number(value) * 100) / 100;
 
-/** REFUND exactly `amount` on an ARC order. Never throws. */
+/**
+ * ARC Pay answered, and the answer is no: a reply it wrote itself - not a
+ * gateway or proxy error - whose result is FAILURE or ERROR. Money is known not
+ * to have moved. Anything else short of SUCCESS (no reply at all, a 5xx, a
+ * PENDING or UNKNOWN result, a reply with no result) says nothing about whether
+ * the refund was made.
+ */
+const arcRefused = (response) => Number(response?.status) < 500
+    && ['FAILURE', 'ERROR'].includes(response?.data?.result);
+
+/**
+ * REFUND exactly `amount` on an ARC order. Never throws.
+ *
+ * `refused` only when ARC Pay said no. A request that broke after it was sent,
+ * or an answer that is not one, is `ok: false` and not `refused`: the money
+ * may have gone back.
+ */
 async function refundArcAmount(orderId, { amount, currency = 'USD', reason = 'Admin refund' }) {
     const transactionId = `refund-admin-${Date.now()}`;
     try {
@@ -2023,10 +2039,12 @@ async function refundArcAmount(orderId, { amount, currency = 'USD', reason = 'Ad
             apiOperation: 'REFUND',
             transaction: { amount: amount.toFixed(2), currency, reference: String(reason).substring(0, 40) },
         }, { headers: getArcPayAuthConfig().headers, validateStatus: () => true });
-        return { ok: arcSucceeded(resp), transactionId, httpStatus: resp?.status ?? null };
+        const ok = arcSucceeded(resp);
+        if (!ok) console.error('❌ Admin ARC refund not accepted:', resp?.status, arcFailureSummary(resp?.data));
+        return { ok, refused: !ok && arcRefused(resp), transactionId, httpStatus: resp?.status ?? null };
     } catch (error) {
         console.error('❌ Admin ARC refund error:', error.message);
-        return { ok: false, transactionId, httpStatus: null };
+        return { ok: false, refused: false, transactionId, httpStatus: null };
     }
 }
 
@@ -2103,11 +2121,52 @@ async function releaseManualRefund(booking, claim) {
 }
 
 /**
+ * A refund sent from here that ARC Pay never answered, kept on the booking in
+ * place of the claim.
+ *
+ * The claim alone cannot guard it: it lapses in minutes, and after that a
+ * press read "ARC holds 171", saw room for another 120 and sent it. So the
+ * refund is written down - how much, and what ARC showed as refunded before it
+ * - and every later press compares ARC's ledger with that before sending
+ * anything. The claim goes in the same write, so Check ARC Pay can run at once.
+ * Conditioned on our own claim stamp, as the release is.
+ */
+async function noteUnansweredRefund(booking, claim, unanswered) {
+    const details = await readBookingDetails(booking.id);
+    if (!details?.cancellation) return false;
+    const { manual_refund_claim: _mine, ...cancellation } = details.cancellation;
+    const { data, error } = await supabase
+        .from('bookings')
+        .update({ booking_details: { ...details, cancellation: { ...cancellation, unansweredRefund: unanswered } } })
+        .eq('id', booking.id)
+        .eq(MANUAL_REFUND_CLAIM, claim.stamp)
+        .select('id');
+    if (error || !data?.length) {
+        console.error('❌ Could not record the unanswered refund; the claim is left to expire:', error?.message || 'the claim was lost', {
+            bookingReference: booking.booking_reference, ...unanswered,
+        });
+        return false;
+    }
+    return true;
+}
+
+/**
  * ARC could not be asked. A 400 or a 404 is ARC saying it has no such order -
  * an answer. Anything else, a 5xx included, is an outage, and used to read as
  * "ARC Pay shows no payment for this booking".
  */
 const gatewayDown = (result) => Boolean(result?.gatewayUnavailable) && ![400, 404].includes(result.gatewayStatus);
+
+/** Whether ARC's reading shows money returned since the unanswered refund was sent. */
+const returnedSinceUnanswered = (unanswered, reading) => reading?.voided === true
+    || roundCents(reading?.refundedTotal ?? 0) > roundCents(unanswered?.refundedBefore ?? 0) + 0.009;
+
+/**
+ * Too soon for ARC's silence about an unanswered refund to mean it never
+ * happened: the claim's own lifetime, far longer than a refund takes to appear.
+ * A time that cannot be read counts as recent.
+ */
+const unansweredRecently = (unanswered) => !(Date.now() - Date.parse(unanswered?.at) >= MANUAL_REFUND_CLAIM_TTL_MS);
 
 export async function settleManualFlightRefund(booking, { mode = 'sync', amount, reason = 'Admin refund', adminId = null } = {}) {
     const answer = (status, body) => ({ status, body });
@@ -2167,7 +2226,30 @@ export async function settleManualFlightRefund(booking, { mode = 'sync', amount,
     const currency = initialDetails.arc_captured_currency || initialDetails.currency || 'USD';
     let manual = { mode, reason, by: adminId, at: new Date().toISOString() };
 
-    if (mode === 'refund') {
+    // A refund an earlier press sent and never heard back about (below). ARC's
+    // ledger decides it before anything else is sent: money returned since then
+    // means it went through - or someone refunded in the portal - and either
+    // way nothing more goes out; what ARC shows is recorded, as Check ARC Pay
+    // would. Nothing returned, and too soon for that to mean anything: nothing
+    // is sent. Nothing returned long after: it never happened.
+    const unanswered = claim.details.cancellation?.unansweredRefund || null;
+    let sending = mode === 'refund';
+    if (sending && unanswered) {
+        if (returnedSinceUnanswered(unanswered, before)) {
+            sending = false;
+            manual = { ...manual, mode: 'sync', earlierUnanswered: unanswered };
+        } else if (unansweredRecently(unanswered)) {
+            return giveUp(409, {
+                success: false,
+                code: 'REFUND_UNANSWERED',
+                error: `A refund of ${roundCents(unanswered.amount).toFixed(2)} ${unanswered.currency || currency} was sent to ARC Pay `
+                    + `at ${unanswered.at} and never answered, and ARC Pay does not show it yet. Nothing was sent now. `
+                    + 'Press Check ARC Pay in a few minutes to see whether it went through before sending anything.',
+            });
+        }
+    }
+
+    if (sending) {
         const wanted = roundCents(amount);
         const held = roundCents(before.heldAmount ?? 0);
         if (!Number.isFinite(wanted) || wanted <= 0) {
@@ -2182,8 +2264,26 @@ export async function settleManualFlightRefund(booking, { mode = 'sync', amount,
         }
         const orderId = initialDetails.order_id || booking.booking_reference;
         const refund = await refundArcAmount(orderId, { amount: wanted, currency, reason });
-        if (!refund.ok) {
+        if (refund.refused) {
             return giveUp(502, { success: false, code: 'REFUND_REFUSED', error: 'ARC Pay did not accept the refund. Nothing was recorded; try again or refund in the ARC portal and then sync.' });
+        }
+        if (!refund.ok) {
+            // Sent, and no answer: ARC Pay may have refunded. Not handed back as
+            // "not accepted" - that is what sent the same refund twice.
+            await noteUnansweredRefund(booking, claim, {
+                amount: wanted,
+                currency,
+                transactionId: refund.transactionId,
+                at: new Date().toISOString(),
+                by: adminId,
+                refundedBefore: roundCents(before.refundedTotal ?? 0),
+            });
+            return answer(502, {
+                success: false,
+                code: 'REFUND_UNANSWERED',
+                error: `The refund of ${wanted.toFixed(2)} ${currency} was sent to ARC Pay and no answer came back, so it may have gone through. `
+                    + 'Do not send it again: press Check ARC Pay first (Sync from ARC in the admin panel), which records what ARC Pay shows.',
+            });
         }
         manual = { ...manual, amount: wanted, transactionId: refund.transactionId };
     }
@@ -2201,17 +2301,29 @@ export async function settleManualFlightRefund(booking, { mode = 'sync', amount,
     const held = roundCents(voided ? 0 : confirmed ? (after.heldAmount ?? 0) : Math.max(0, (before.heldAmount ?? 0) - (manual.amount ?? 0)));
     if (!confirmed) manual = { ...manual, unconfirmed: 'ARC Pay could not be asked again after the refund; recorded from the refund it accepted' };
 
+    // An unanswered refund stays on the booking while it may still land: ARC
+    // shows nothing returned since it was sent, and it is too soon to say it
+    // never went through. Anything else settles it - this press sent a refund
+    // ARC accepted, or ARC's ledger now answers for it.
+    const stillUnanswered = Boolean(unanswered) && !manual.transactionId
+        && unansweredRecently(unanswered) && !returnedSinceUnanswered(unanswered, source);
+
     if (!(returnedTotal > 0)) {
         return giveUp(409, {
             success: false,
             code: 'NO_REFUND_FOUND',
-            error: 'ARC Pay shows no refund for this booking yet. Refund it first, here or in the ARC portal.',
+            error: stillUnanswered
+                ? `ARC Pay does not show the refund of ${roundCents(unanswered.amount).toFixed(2)} ${unanswered.currency || currency} `
+                    + `sent at ${unanswered.at} yet. Nothing was recorded; check again in a few minutes before sending anything.`
+                : 'ARC Pay shows no refund for this booking yet. Refund it first, here or in the ARC portal.',
         });
     }
 
     // Re-read: reconcile writes the row too, and this must not undo that.
     const currentDetails = (await readBookingDetails(booking.id)) || claim.details;
-    const { manual_refund_claim: _claim, stillHeld: _before, ...previous } = currentDetails.cancellation || {};
+    const {
+        manual_refund_claim: _claim, stillHeld: _before, unansweredRefund: _unanswered, ...previous
+    } = currentDetails.cancellation || {};
     const fullyReturned = held <= 0.009;
     // What ARC still holds is a fee only when the cancel decided to keep one and
     // what is held is no more than that fee. Everything held was recorded as
@@ -2227,6 +2339,7 @@ export async function settleManualFlightRefund(booking, { mode = 'sync', amount,
         refundAmount: returnedTotal,
         cancellationFee: feeKept ? held : 0,
         ...(stillHeld > 0 ? { stillHeld } : {}),
+        ...(stillUnanswered ? { unansweredRefund: unanswered } : {}),
         currency,
         manualRefund: { ...manual, previousPaymentAction: previous.paymentAction ?? null },
     };
@@ -2261,7 +2374,9 @@ export async function settleManualFlightRefund(booking, { mode = 'sync', amount,
     console.log('💵 Manual refund recorded', { bookingReference: booking.booking_reference, mode, returnedTotal, held, stillHeld });
     return answer(200, {
         success: true,
-        message: cancellationMessage({ cancellation }),
+        message: manual.earlierUnanswered
+            ? `ARC Pay shows the refund sent at ${manual.earlierUnanswered.at} went through, so nothing more was sent. ${cancellationMessage({ cancellation })}`
+            : cancellationMessage({ cancellation }),
         paymentStatus,
         cancellation,
     });
