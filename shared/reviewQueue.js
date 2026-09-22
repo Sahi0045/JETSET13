@@ -317,6 +317,9 @@ export function isUnrecordedCancellation(booking) {
   return unrecordedCancellationOf(booking) !== null;
 }
 
+/** flagUnrecordedCancellation's flag (payment/operations.handlers.js). */
+const isUnrecordedCancellationFlag = (review) => review.source === 'cancellation' && review.unrecorded === true;
+
 /**
  * The unrecorded-cancellation flag on a booking, or null - on top, or under a
  * later one.
@@ -328,8 +331,27 @@ export function isUnrecordedCancellation(booking) {
  * person resolved settles everything under it (flagInForce).
  */
 export function unrecordedCancellationOf(booking) {
-  return flagInForce(booking, (review) => review.source === 'cancellation' && review.unrecorded === true);
+  return flagInForce(booking, isUnrecordedCancellationFlag);
 }
+
+/**
+ * The unrecorded-cancellation flag, for what the customer is told: read past a
+ * resolved flag too, until the booking is recorded cancelled; or null.
+ *
+ * The flag records a fact about the airline record - the reservation
+ * released, the tickets voided, the money moved - as well as a job for a
+ * person. "Mark as handled" says a person dealt with it, not that any of that
+ * was undone, and it is refused nothing: with the booking left confirmed, a
+ * reload of the order page was answered ALREADY_BOOKED and ticketed with the
+ * void number ("Booking Confirmed!"), and every booking read offered its
+ * E-Ticket again. Only the booking can say otherwise, and the record it keeps
+ * of that is its status.
+ *
+ * The customer's answers and pages only. The desk list and the alarm read
+ * unrecordedCancellationOf: a person resolving the flag takes it off them.
+ */
+export const unrecordedCancellationForCustomerOf = (booking) => (statusOf(booking) === 'cancelled' ? null
+  : flagInForce(booking, isUnrecordedCancellationFlag, { pastResolved: true }));
 
 /**
  * A cancellation the airline did not carry out (payment/operations.handlers.js

@@ -194,8 +194,10 @@ describe('the held-for-review email', () => {
   });
 
   it("passes over it for the lead traveller's email first", async () => {
-    // The order's own travellers, when it names any (confirmationEmailFromRow).
-    expect(await heldEmailTo(order({ travelers: [{ ...order().travelers[0], email: 'jane.t@example.com' }] }))).toBe('jane.t@example.com');
+    // The lead traveller checkout verified, as the success path takes it
+    // (confirmationEmailFromRow) - not the order body's, which the order page
+    // sends with no email.
+    expect(await heldEmailTo(order(), checkoutRow({ email: 'jane.t@example.com' }))).toBe('jane.t@example.com');
   });
 
   it('still goes to a usable contact email first', async () => {

@@ -137,6 +137,7 @@ describe('fence: bookings with nothing voided', () => {
       no_confirmed_seat: false,
       ticket_numbers_missing: false,
       commit_unknown: false,
+      unrecorded_cancellation: false,
     });
   });
 });

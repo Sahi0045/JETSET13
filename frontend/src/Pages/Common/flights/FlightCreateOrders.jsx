@@ -10,6 +10,7 @@ import withPageElements from '../PageWrapper';
 import { endpoints } from '@/config/api';
 import { useSupabaseAuth } from '../../../contexts/SupabaseAuthContext';
 import { buildFlightOrderBody } from '../../../../../shared/flightOrderBody';
+import { isUsableEmail } from '../../../../../shared/email';
 import { itinerariesFromOffer, returnDateOf } from '../../../../../shared/bookingItineraries';
 import { clearStoredBookings } from '../../../utils/bookingStorage';
 import { clearTravellerDraft } from '../../../utils/flightTravellerDraft';
@@ -237,8 +238,12 @@ function FlightCreateOrders() {
             bookingDetails: bookingData?.bookingDetails,
             calculatedFare: bookingData?.calculatedFare,
 
-            // Contact info
-            customerEmail: bookingData?.passengerData?.[0]?.email || orderData?.customerEmail || ''
+            // The first address that can be delivered to, in the order
+            // orderDataFromCheckoutRow takes them: the one the payment
+            // callback handed over (checkout's), then the lead traveller's.
+            // The lead's was put first whatever it held, and a typed
+            // "jane@gmailcom" hid the callback's good one.
+            customerEmail: [orderData?.customerEmail, bookingData?.passengerData?.[0]?.email].find(isUsableEmail) || ''
           };
 
         }

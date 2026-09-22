@@ -1,4 +1,6 @@
-import { NO_CONFIRMED_SEAT_REVIEW_REASON, hasNoConfirmedSeat, isCommitUnknown, isPaid, ticketState, ticketsVoided } from './eTicket';
+import {
+  NO_CONFIRMED_SEAT_REVIEW_REASON, hasNoConfirmedSeat, isCancellationUnrecorded, isCommitUnknown, isPaid, ticketState, ticketsVoided,
+} from './eTicket';
 import {
   REFUND_DONE_ACTIONS,
   REFUND_REVIEW_ACTIONS,
@@ -154,6 +156,16 @@ export function attentionMessage(booking) {
       return 'This booking is cancelled, but no refund has been recorded for it yet. Our team will check it and email you.';
     }
     return null;
+  }
+  // A cancel that went through and could not be recorded
+  // (isCancellationUnrecorded). The row reads confirmed, paid and ticketed,
+  // and the customer was told the cancellation was processed, not to try
+  // again, and to call. Read before anything that reads the row's payment or
+  // tickets: neither says what happened.
+  if (isCancellationUnrecorded(booking)) {
+    return 'Your cancellation went through, but our record of it is still being updated, so this booking may not show as cancelled yet. '
+      + 'It is not valid for travel. Our team will confirm what happened to your payment - please do not try again. '
+      + 'If you have any questions, call (877) 538-7380 with your booking reference.';
   }
   if (!needsAttention(booking) && !flaggedOpen(booking)) return null;
   // Said from the payment record: a flagged booking refunded since reads
