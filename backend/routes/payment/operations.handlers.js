@@ -1289,6 +1289,9 @@ async function sendCancellationEmail(booking, email, cancellationResult) {
             // promised "refund due ... 5-10 business days" on every
             // cancellation, including the ones where the gateway refused.
             paymentAction: cancellationResult.paymentAction,
+            // A refund sent and never answered is not one that was not made:
+            // the office email must not tell the desk to refund it by hand.
+            ...(cancellationResult.reversalOutcomeUnknown ? { reversalOutcomeUnknown: true } : {}),
             currency: cancellationResult.currency || 'USD'
         };
 
