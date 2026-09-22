@@ -26,7 +26,7 @@ const REFUNDABLE_OPTIONS = [
 const STOP_OPTIONS = [
   { value: 'any', label: 'Any' },
   { value: '0', label: 'Non-stop' },
-  { value: '1', label: '1 Stop' },
+  { value: '1', label: 'Up to 1 stop' },
 ];
 
 function FlightFilterSidebar({
