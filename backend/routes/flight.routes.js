@@ -1346,6 +1346,10 @@ function duplicatePaymentAnswer(bookingReference, paymentState = 'held', { first
     needsReview: true,
     bookingReference,
     paymentState,
+    // Said to the booking queue too, whose email about a queued second
+    // payment said "a trip you had already booked" (bookingQueue.job.js
+    // failureCopy).
+    firstCommitUnknown: Boolean(firstCommitUnknown),
     error: message,
     message,
   };
