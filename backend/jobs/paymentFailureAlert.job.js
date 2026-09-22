@@ -121,10 +121,24 @@ function failedLead(failed) {
     + `so nothing else will ever flag ${many ? 'them' : 'it'}. These need refunding by hand.`;
 }
 
-/** The review flag the cancel wrote with its cancellation record, if any. */
+/**
+ * The review flag the cancel wrote with its cancellation record, if any.
+ *
+ * Not every flag with source 'cancellation' on top is this cancel's. A fallback
+ * cancel the airline carried out (flight.routes.js DELETE /order) writes a
+ * cancellation and no flag, so an earlier cancel the airline REFUSED stayed on
+ * top, and its "refund withheld to avoid paying out against a live booking"
+ * was printed as why this one held the refund. A refused cancel never writes a
+ * cancellation (cancelFailed), and the cancel's own flag is written with its
+ * cancellation, at the same moment - never before it. A flag with no time
+ * recorded is taken as the cancel's, as it always was.
+ */
 function cancelReviewOf(booking) {
-  const review = booking.booking_details?.needs_review;
-  return review?.source === 'cancellation' ? review : null;
+  const details = booking.booking_details || {};
+  const review = details.needs_review;
+  if (review?.source !== 'cancellation' || review.cancelFailed) return null;
+  if (Date.parse(review.at) < Date.parse(details.cancellation?.cancelledAt)) return null;
+  return review;
 }
 
 /**
