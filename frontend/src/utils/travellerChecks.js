@@ -41,8 +41,14 @@ export function travellerProblems(traveller, {
   // A guest's ticket goes to this address, and it is their only way back to the
   // booking - there is no account for it to appear under. Checkout refuses a
   // guest without one.
-  if (index === 0 && bookingAsGuest && !isUsableEmail(contactEmail || t.email)) {
+  const email = String(contactEmail || t.email || '').trim();
+  if (index === 0 && bookingAsGuest && !isUsableEmail(email)) {
     add('Enter an email address. Your ticket is sent there, and it is how you find this booking without an account.');
+  } else if (index === 0 && email && !isUsableEmail(email)) {
+    // A signed-in customer may leave it blank - the account's address is used -
+    // but one they typed is where the ticket goes, so "jane@gmailcom" has to be
+    // put right before payment rather than lose the confirmation.
+    add('Enter the email address in full, like name@example.com, or leave it blank to use your account\'s email.');
   }
   return problems;
 }

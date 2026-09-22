@@ -33,6 +33,7 @@ import {
 import { errorSummary } from '../utils/errorSummary.js';
 import { flightSearchLimiter, guestBookingLimiter } from '../middleware/security.js';
 import { liveChainState } from '../utils/bookingChainClaim.js';
+import { isUsableEmail } from '../services/guestBooking.service.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -3548,10 +3549,16 @@ router.post('/order', optionalProtect, async (req, res) => {
         // No placeholder recipient: a confirmation sent to an address we made
         // up was reported as sent while the customer received nothing. The
         // address checkout recorded is the last resort; with none, the
-        // customer send is skipped and says so.
-        let finalEmail = contactInfo?.email || req.body.customerEmail || '';
-        if (!finalEmail && fallbackTraveler?.email) finalEmail = fallbackTraveler.email;
-        if (!finalEmail) finalEmail = dbBooking.booking_details?.customer_email || '';
+        // customer send is skipped and says so. An address that cannot be
+        // delivered to is passed over: a signed-in customer's mistyped
+        // "jane@gmailcom" was sent the email, and the account's address
+        // checkout recorded never got it.
+        const finalEmail = [
+          contactInfo?.email,
+          req.body.customerEmail,
+          fallbackTraveler?.email,
+          dbBooking.booking_details?.customer_email,
+        ].find(isUsableEmail) || '';
 
         const bookingEmailData = {
           customerEmail: finalEmail,
