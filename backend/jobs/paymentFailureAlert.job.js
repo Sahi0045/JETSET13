@@ -24,6 +24,7 @@
 import supabase from '../config/supabase.js';
 import { unchangedSince } from '../utils/bookingDetailsGuard.js';
 import { postToSlack } from './slackAlert.js';
+import { readEveryCandidate } from './alarmCandidates.js';
 import { alarmsMayRun } from './needsReviewAlert.job.js';
 import { queueEnvironment } from '../utils/queueEnvironment.js';
 
@@ -187,15 +188,17 @@ export async function runOnce({ webhookUrl = process.env.ALERT_SLACK_WEBHOOK_URL
   // no webhook and no production secrets.
   if (!webhookUrl && !dryRun) return { skipped: 'no ALERT_SLACK_WEBHOOK_URL' };
 
-  const { data, error } = await supabase
+  // Every page, not the first: a refund that worked is never stamped, so it
+  // stays in this set, and a first page of 200 of them hid every failed refund
+  // behind it (alarmCandidates.js).
+  const { data, error } = await readEveryCandidate(() => supabase
     .from('bookings')
     .select('booking_reference, status, payment_status, total_amount, created_at, booking_details')
     .not('booking_details->cancellation', 'is', null)
     // Every cancellation keeps its record for years. Without this the 200 oldest
     // were read every run, and once 200 existed a failed refund was never seen.
     .is('booking_details->cancellation->>alerted_at', null)
-    .order('created_at', { ascending: true })
-    .limit(200);
+    .order('created_at', { ascending: true }), log);
 
   if (error) throw new Error(`could not read bookings: ${error.message}`);
 
