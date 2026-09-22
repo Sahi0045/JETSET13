@@ -5352,14 +5352,19 @@ router.post('/admin-bookings/:id/resolve-review', protect, bookingStaff, async (
     if (!booking) return res.status(404).json({ success: false, error: 'Booking not found' });
 
     const details = booking.booking_details || {};
-    if (details.needs_review?.resolved_at) {
+    // A flag marked handled before a refund failed does not settle the refund
+    // (shared/reviewQueue.js): the booking is still on the list, so it is
+    // still something to handle.
+    const attention = attentionOf(booking);
+    if (details.needs_review?.resolved_at && !attention) {
       const text = 'This booking was already marked as handled.';
       return res.status(409).json({ success: false, code: 'ALREADY_RESOLVED', error: text, message: text });
     }
-    if (!attentionOf(booking)) {
+    if (!attention) {
       const text = 'There is nothing to handle on this booking.';
       return res.status(409).json({ success: false, code: 'NOTHING_TO_RESOLVE', error: text, message: text });
     }
+    const openFlag = details.needs_review?.resolved_at ? null : details.needs_review;
 
     const at = new Date().toISOString();
     const by = req.user?.email || req.user?.id || 'staff';
@@ -5368,10 +5373,17 @@ router.post('/admin-bookings/:id/resolve-review', protect, bookingStaff, async (
       .update({
         booking_details: {
           ...details,
-          // Created when it is missing: the alarm names paid-but-not-ticketed
-          // bookings that were never flagged, and those need a record too.
+          // Created when it is missing: the alarms name paid-but-not-ticketed
+          // bookings and refused refunds that were never flagged, and those
+          // need a record too - under what was wrong, and over any earlier
+          // flag, which is kept.
           needs_review: {
-            ...(details.needs_review || { reason: 'PNR committed, never ticketed', ticketed: false, at }),
+            ...(openFlag || {
+              reason: attention.reason,
+              ...(attention.kind === 'not_ticketed' ? { ticketed: false } : {}),
+              at,
+              ...(details.needs_review ? { previous: details.needs_review } : {}),
+            }),
             resolved_at: at,
             resolved_by: by,
             resolution: note,

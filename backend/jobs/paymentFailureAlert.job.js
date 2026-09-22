@@ -29,6 +29,7 @@ import { postToSlack } from './slackAlert.js';
 import { readEveryCandidate } from './alarmCandidates.js';
 import { alarmsMayRun } from './needsReviewAlert.job.js';
 import { queueEnvironment } from '../utils/queueEnvironment.js';
+import { REFUND_NOT_RETURNED_ACTIONS, refundNotReturnedOf } from '../../shared/reviewQueue.js';
 
 const DEFAULT_INTERVAL_MS = 15 * 60 * 1000;
 // Staggered behind the needs-review job so two alarms waking at once cannot
@@ -39,49 +40,29 @@ const log = (msg, extra = {}) => console.log(`[PaymentFailureAlert] ${msg}`, ext
 
 /**
  * Every branch of the ARC Pay cancel path that ends without returning money.
- *
- * Taken from the handler rather than from observed data: only REFUND_FAILED has
- * happened so far, and an alarm that only knows about the failure it has
- * already seen is worth very little.
+ * Kept in shared/reviewQueue.js with the rule below, so the desk lists what
+ * this announces.
  */
-export const FAILED_PAYMENT_ACTIONS = [
-  'REFUND_FAILED',           // ARC Pay refused the refund
-  'VOID_FAILED',             // ARC Pay refused the void
-  'VOID_MISSING_TXN_ID',     // nothing to void against; not even attempted
-  'MANUAL_PROCESS_REQUIRED', // the handler threw mid-refund
-  // Not attempted, on purpose: a flight whose fare or tickets leave the amount
-  // to a person (payment/operations.handlers.js decideFlightRefund). Nothing
-  // else pages about it - the needs-review watch skips cancelled bookings - so
-  // without this it is money owed that nobody is told about. Also a reversal
-  // sent and never answered (reversalOutcomeUnknown), where it may not be owed.
-  'REFUND_UNDER_REVIEW',
-];
+export const FAILED_PAYMENT_ACTIONS = REFUND_NOT_RETURNED_ACTIONS;
 
 /**
- * Which cancelled bookings still owe the customer money.
+ * Which cancelled bookings still owe the customer money, and have not been
+ * announced yet.
  *
  * Exported and pure so the decision can be tested without a database - it is
- * the part that decides whether this channel stays trusted or gets muted.
+ * the part that decides whether this channel stays trusted or gets muted. The
+ * rule itself is shared/reviewQueue.js refundNotReturnedOf, which the desk's
+ * "Needs attention" list reads too: it used to be written here alone, and the
+ * desk never listed a refund ARC Pay refused.
  *
  * @param {Array<object>} rows - booking rows carrying `booking_details`
  * @returns {Array<object>} the rows worth announcing
  */
 export function selectUnrefunded(rows = []) {
   return rows.filter((booking) => {
-    const cancellation = booking?.booking_details?.cancellation;
-    if (!cancellation) return false;                                    // never cancelled
-    if (cancellation.alerted_at) return false;                          // already announced once
-    if (!FAILED_PAYMENT_ACTIONS.includes(cancellation.paymentAction)) return false;
-
-    // Nothing was ever taken, so there is nothing to give back. Older rows
-    // (HTLMR07MJV4, cancelled/unpaid) carry a cancellation with no action at
-    // all and must not be announced.
-    if (!(Number(booking.total_amount) > 0)) return false;
-
-    // Someone refunded it by hand afterwards and recorded the amount.
-    if (Number(cancellation.refundAmount) > 0) return false;
-
-    return true;
+    if (!booking?.booking_details) return false;                        // the rule reads the row's own column only
+    const cancellation = refundNotReturnedOf(booking);
+    return Boolean(cancellation) && !cancellation.alerted_at;           // announced once
   });
 }
 

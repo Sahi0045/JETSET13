@@ -14,6 +14,8 @@
  * Shared: the server shapes admin rows with it, and the panel reads the result.
  */
 
+import { REFUND_REVIEW_ACTIONS, REFUND_STUCK_ACTIONS } from './cancellationOutcome.js';
+
 const detailsOf = (booking) => booking?.booking_details ?? booking?.bookingDetails ?? booking?.details ?? {};
 const statusOf = (booking) => String(booking?.status ?? '').toLowerCase();
 const paymentOf = (booking) => String(booking?.payment_status ?? booking?.paymentStatus ?? '').toLowerCase();
@@ -348,16 +350,87 @@ export function isFailedCancellation(booking) {
 }
 
 /**
+ * Every way a cancellation ends with the customer's money still at the gateway
+ * and a person needed to return it. Taken from the cancel paths' branches
+ * rather than from what has been seen, since only REFUND_FAILED has happened so
+ * far:
+ *  - REFUND_FAILED, VOID_FAILED: ARC Pay refused the refund or the void;
+ *  - VOID_MISSING_TXN_ID: nothing to void against, not even attempted;
+ *  - MANUAL_PROCESS_REQUIRED: the handler threw mid-refund;
+ *  - REFUND_UNDER_REVIEW: not attempted on purpose - the fare or the tickets
+ *    leave the amount to a person (payment/operations.handlers.js
+ *    decideFlightRefund), a fallback cancel that tried no refund - or a
+ *    reversal sent and never answered (reversalOutcomeUnknown), where it may
+ *    not be owed at all.
+ */
+export const REFUND_NOT_RETURNED_ACTIONS = Object.freeze([...REFUND_STUCK_ACTIONS, ...REFUND_REVIEW_ACTIONS]);
+
+/**
+ * The cancellation record of a booking whose money never went back, or null.
+ *
+ * The failed-refund alarm's selection (jobs/paymentFailureAlert.job.js
+ * selectUnrefunded), here so the desk lists exactly what it announces.
+ */
+export function refundNotReturnedOf(booking) {
+  const cancellation = detailsOf(booking)?.cancellation;
+  if (!cancellation || !REFUND_NOT_RETURNED_ACTIONS.includes(cancellation.paymentAction)) return null;
+  // Nothing was ever taken, so there is nothing to give back. Older rows
+  // (HTLMR07MJV4, cancelled/unpaid) carry a cancellation with no action at all.
+  if (!(Number(booking?.total_amount ?? booking?.totalAmount) > 0)) return null;
+  // Someone refunded it by hand afterwards and recorded the amount.
+  if (Number(cancellation.refundAmount) > 0) return null;
+  return cancellation;
+}
+
+/**
+ * A cancellation whose money never went back, as the desk lists it, or null.
+ *
+ * Asked where attentionOf would otherwise call a booking settled: it is
+ * cancelled, or its flag was marked handled. The cancel writes no flag when ARC
+ * Pay refuses the refund - there is no decision to review and no ticket to
+ * claim - and a fallback cancel writes none when it tries no refund at all. So
+ * the alarm announced these once, stamped them, and the desk's list never
+ * showed them. A refund left for review under the cancel's own flag is listed
+ * under that flag, as before, and never reaches here.
+ *
+ * Marked handled by a person at or after the cancel, it is settled. A flag
+ * marked handled before it - a ticket issued by hand, say, and the booking
+ * cancelled later - settled something else.
+ */
+function refundNotReturnedAttentionOf(booking) {
+  const cancellation = refundNotReturnedOf(booking);
+  if (!cancellation) return null;
+  const review = detailsOf(booking)?.needs_review;
+  if (review?.resolved_at && !(Date.parse(review.resolved_at) < Date.parse(cancellation.cancelledAt))) return null;
+
+  const since = cancellation.cancelledAt || null;
+  if (REFUND_STUCK_ACTIONS.includes(cancellation.paymentAction)) {
+    return {
+      kind: 'refund_failed',
+      reason: `the refund did not go through (${cancellation.paymentAction}): nothing has gone back to the customer`,
+      since,
+    };
+  }
+  return {
+    kind: 'refund_not_made',
+    reason: cancellation.reversalOutcomeUnknown
+      ? 'the refund was sent to ARC Pay and never answered: check ARC Pay before refunding anything'
+      : String(cancellation.basis || cancellation.reason || 'no refund was made'),
+    since,
+  };
+}
+
+/**
  * What still needs doing on this booking, or null.
  *
  * @returns {null | { kind: 'not_ticketed'|'review'|'airline_refund'|'unrecorded_cancellation'|'cancel_failed'|'schedule_changed'
- *                    |'held_ticketed',
+ *                    |'held_ticketed'|'refund_failed'|'refund_not_made',
  *                    reason: string, since: string|null, tickets?: string[] }}
  */
 export function attentionOf(booking) {
   const details = detailsOf(booking);
   const review = details?.needs_review || null;
-  if (review?.resolved_at) return null;
+  if (review?.resolved_at) return refundNotReturnedAttentionOf(booking);
 
   // Before anything reads the booking's status or tickets: neither says what
   // happened, which is the point of this flag. Found under a later flag too.
@@ -404,7 +477,7 @@ export function attentionOf(booking) {
     return { kind: 'review', reason: review.reason || 'flagged for review', since: review.at || null };
   }
 
-  if (['cancelled', 'refunded'].includes(statusOf(booking))) return null;
+  if (['cancelled', 'refunded'].includes(statusOf(booking))) return refundNotReturnedAttentionOf(booking);
   if (['refunded', 'partially_refunded', 'reversed'].includes(paymentOf(booking))) return null;
   if (isTicketed(details) && review?.reason !== TICKET_NUMBERS_MISSING) {
     // Ticketed, and still somebody's job: skipped as done, the customer was
@@ -450,5 +523,7 @@ export const attentionLabel = (attention) => {
   if (attention.kind === 'not_ticketed') return 'Paid, seats held, no ticket';
   if (attention.kind === 'schedule_changed') return 'Airline changed the schedule';
   if (attention.kind === 'held_ticketed') return 'Ticketed, customer not sent it';
+  if (attention.kind === 'refund_failed') return 'Refund did not go through';
+  if (attention.kind === 'refund_not_made') return 'Refund not made yet';
   return 'Flagged for review';
 };
