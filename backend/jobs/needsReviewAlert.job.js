@@ -82,7 +82,11 @@ export function selectUnannounced(rows = []) {
     // The ticket turned up later, by retry or by hand. Not the chain's own
     // "issued, but the numbers did not all arrive": that row is ticketed by
     // definition, and skipping it here meant nobody was ever told.
-    const numbersMissing = review?.reason === TICKET_NUMBERS_MISSING;
+    //
+    // Not once it is resolved. Ticket sync reads the numbers from the PNR and
+    // resolves the flag (ticketSync.job.js), often before this job's first
+    // run; announced anyway, staff were sent to find numbers already recorded.
+    const numbersMissing = review?.reason === TICKET_NUMBERS_MISSING && !review.resolved_at;
     if (!numbersMissing && details.gds?.ticketed === true) return false;
     if (!numbersMissing && Array.isArray(details.tickets) && details.tickets.length > 0) return false;
 
