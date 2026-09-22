@@ -24,7 +24,7 @@ import { postToSlack } from './slackAlert.js';
 import { unchangedSince } from '../utils/bookingDetailsGuard.js';
 import { queueEnvironment } from '../utils/queueEnvironment.js';
 import {
-  NO_CONFIRMED_SEAT_REVIEW_REASON, SCHEDULE_CHANGED_REVIEW_REASON, TICKET_NUMBERS_MISSING, flagsInForce,
+  NO_CONFIRMED_SEAT_REVIEW_REASON, SCHEDULE_CHANGED_REVIEW_REASON, TICKET_NUMBERS_MISSING, attentionOf, flagsInForce,
   isFailedCancellation, isTicketed, isUnrecordedCancellation, needsAirlineRefundClaim, openTicketedFlagOf,
   scheduleChangeOf, ticketNumbersMissingOf, ticketsOf, unrecordedCancellationOf,
 } from '../../shared/reviewQueue.js';
@@ -67,6 +67,16 @@ export function selectUnannounced(rows = []) {
     const details = booking.booking_details || {};
     const review = details.needs_review;
     if (review?.alerted_at) return false;         // already announced once
+
+    // Nothing the desk would not show as needing attention (attentionOf, the
+    // desk's own rule). The desk shows a flag the moment it is written and
+    // this runs every fifteen minutes, or not at all while it is down: a flag
+    // a person resolved in between was announced anyway - "Cancel the PNR with
+    // the airline first..." about a PNR already cancelled by phone - since only
+    // the numbers-missing rule below read `resolved_at`. The rules below stay:
+    // the desk also lists what other alarms own (a refund the gateway refused,
+    // paymentFailureAlert.job.js), so Slack announces a part of it, never more.
+    if (!attentionOf(booking)) return false;
 
     // A cancellation with a refund still to claim from the airline. It is
     // cancelled and ticketed, so both checks below would skip it - and did.

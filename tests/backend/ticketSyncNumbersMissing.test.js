@@ -333,11 +333,13 @@ describe('fence: the rows next to it', () => {
     expect(await job.findUnticketed()).toEqual([]);
   });
 
-  it('the alarm still announces an unresolved numbers-missing flag, and a resolved refused cancel once', () => {
+  // Not a refused cancel a person already resolved: the desk no longer shows
+  // it, so Slack does not announce it either (resolvedFlagNotAnnounced.test.js).
+  it('the alarm still announces an unresolved numbers-missing flag, and not a resolved refused cancel', () => {
     const missing = flagged('FLT-NUM', 'NUMS01');
     const cancelFailed = flagged('FLT-CXLFAIL', 'CXLF01', {
       reason: REFUSED, source: 'cancellation', cancelFailed: true, resolved_at: '2026-09-21T09:00:00Z',
     });
-    expect(alarm.selectUnannounced([missing, cancelFailed]).map((b) => b.booking_reference)).toEqual(['FLT-NUM', 'FLT-CXLFAIL']);
+    expect(alarm.selectUnannounced([missing, cancelFailed]).map((b) => b.booking_reference)).toEqual(['FLT-NUM']);
   });
 });
