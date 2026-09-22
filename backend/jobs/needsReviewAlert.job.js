@@ -170,6 +170,19 @@ export function describeAirlineClaim(booking) {
  * Expected against got, so the desk knows how many numbers it is looking for;
  * "unknown" when the chain did not record the count, never a guess.
  */
+/**
+ * The schedule change kept under a numbers-missing flag, as one line, or
+ * nothing. The chain flags both on one booking (createFlightOrder); listed
+ * under the numbers alone, the retiming reached nobody.
+ */
+const alsoRetimed = (booking) => {
+  const review = booking.booking_details?.needs_review;
+  const change = scheduleChangeOf(booking);
+  if (!change || change === review) return [];
+  const statuses = Array.isArray(change.statuses) && change.statuses.length ? change.statuses.join(', ') : 'not recorded';
+  return [`the airline also changed the schedule (segment status: ${statuses}): tell the customer the new times`];
+};
+
 export function describeTicketNumbersMissing(booking) {
   const details = booking.booking_details || {};
   const review = details.needs_review || {};
@@ -179,6 +192,7 @@ export function describeTicketNumbersMissing(booking) {
   return [
     `*${booking.booking_reference}* — ${booking.status}/${booking.payment_status}, ${booking.total_amount} USD`,
     `PNR ${details.pnr || 'none'} · ticket numbers expected ${expected}, got ${got}`,
+    ...alsoRetimed(booking),
     `flagged ${hours}h ago`,
   ].join('\n');
 }
@@ -222,6 +236,7 @@ export function describeTicketNumbersPartial(booking) {
     `PNR ${details.pnr || 'none'} · ticket numbers expected ${review.expected}, got ${got}`,
     `FA lines (ticketed, do not reissue): ${tickets.map((ticket) => `${ticket.number}${passenger(ticket)}`).join(', ') || 'none recorded'}`,
     `no FA line (check, issue for that passenger only): ${missing} traveller${missing > 1 ? 's' : ''}`,
+    ...alsoRetimed(booking),
     `flagged ${hours}h ago`,
   ].join('\n');
 }

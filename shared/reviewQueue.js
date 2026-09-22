@@ -348,7 +348,15 @@ export function attentionOf(booking) {
   }
 
   if (review) {
-    return { kind: 'review', reason: review.reason || 'flagged for review', since: review.at || null };
+    // The numbers flag with the airline's schedule change kept under it
+    // (amadeusSoap/index.js createFlightOrder): both are the desk's to see. A
+    // person resolving the numbers alone would settle the retiming unseen.
+    const retimed = review.reason === TICKET_NUMBERS_MISSING ? scheduleChangeOf(booking) : null;
+    return {
+      kind: 'review',
+      reason: retimed ? `${review.reason}; ${retimed.reason}` : review.reason || 'flagged for review',
+      since: review.at || null,
+    };
   }
   // Not flagged, but the airline holds seats against a payment and no ticket was
   // ever issued: the alarm announces these too.

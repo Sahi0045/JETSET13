@@ -163,6 +163,31 @@ const leastRecentlyAskedFirst = (a, b) => {
  * voided those tickets (liveTicketNumbersMissingOf): there is nothing live to
  * read.
  */
+/**
+ * The resolved numbers flag, with anything still open under it lifted back on
+ * top.
+ *
+ * The chain keeps the airline's schedule change under the numbers flag
+ * (amadeusSoap/index.js createFlightOrder). A resolved flag settles everything
+ * under it (shared/reviewQueue.js flagsInForce), so resolving the numbers in
+ * place settled the retiming too, and no person ever told the customer. This
+ * job settles the numbers only: the open flag goes back on top, where the desk
+ * shows it and a person resolves it, with the resolved numbers flag under it -
+ * still read by every reader of "a ticket was issued" (ticketNumbersMissingOf
+ * reads past a resolved flag). If the alarm already announced the numbers, the
+ * schedule change was in that message, so it keeps the stamp.
+ */
+const settlingNumbersOnly = (resolved) => {
+  const { previous: open, ...numbers } = resolved;
+  if (!open || open.resolved_at) return resolved;
+  const { previous: earlier, ...lifted } = open;
+  return {
+    ...lifted,
+    ...(numbers.alerted_at && !lifted.alerted_at ? { alerted_at: numbers.alerted_at } : {}),
+    previous: { ...numbers, ...(earlier ? { previous: earlier } : {}) },
+  };
+};
+
 const numbersMissingOnTop = (row) => {
   const review = row?.booking_details?.needs_review;
   return review?.reason === TICKET_NUMBERS_MISSING && !review.resolved_at && Boolean(liveTicketNumbersMissingOf(row));
@@ -518,12 +543,12 @@ export async function syncOne(row, { provider = FlightProvider, sendEmail = send
       // resolved the way a person resolves one, and the desk list and the
       // alarm stop showing it.
       ...(numbersMissing ? {
-        needs_review: {
+        needs_review: settlingNumbersOnly({
           ...current.needs_review,
           resolved_at: at,
           resolved_by: 'ticket sync',
           resolution: `Ticket numbers read from the PNR and recorded: ${tickets.map((t) => t.number).join(', ')}`,
-        },
+        }),
       } : {}),
     };
   });
