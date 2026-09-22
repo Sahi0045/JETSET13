@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { CheckCircle, Ship, Plane, Calendar, CreditCard, ArrowLeft, Clock, MapPin, Users, XCircle } from 'lucide-react';
 import Navbar from './Navbar';
 import { attentionMessage, paymentReturned, refundStatus } from '../../utils/bookingStatus';
-import { hasNoConfirmedSeat, isPaid, isVoidedTicket, ticketState, ticketsVoided, voidedTicketDigits } from '../../utils/eTicket';
+import { hasNoConfirmedSeat, isCommitUnknown, isPaid, isVoidedTicket, ticketState, ticketsVoided, voidedTicketDigits } from '../../utils/eTicket';
 import { daysUntilDate, formatCalendarDate } from '../../utils/dateUtils';
 import { cancellationMessage } from '../../../../shared/cancellationOutcome';
 import { bookingItineraries, returnDateOf } from '../../../../shared/bookingItineraries';
@@ -141,8 +141,12 @@ function BookingConfirmation() {
           : returned ? 'payment_returned'
             // The airline commit never answered (FlightCreateOrders
             // 'checking'): no PNR, and nobody knows yet whether the airline
-            // holds anything. It read as held, seats reserved.
-            : isFlight && bookingData.commitUnknown === true && !bookingData.pnr ? 'commit_unknown'
+            // holds anything. It read as held, seats reserved. Opened again
+            // from My Trips, the booking is its stored row, which carries the
+            // review flag rather than the order page's word (isCommitUnknown):
+            // read as any flagged row with no PNR, it said the booking could
+            // not be completed, and nothing against booking it again.
+            : isFlight && !bookingData.pnr && (bookingData.commitUnknown === true || isCommitUnknown(bookingData)) ? 'commit_unknown'
             // Every ticket voided by a cancel the airline refused: not "held",
             // whose "Your ticket is being issued" promised a ticket nobody
             // will issue.
