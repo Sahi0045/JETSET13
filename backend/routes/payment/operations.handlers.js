@@ -28,7 +28,7 @@ import { canReachAmadeus } from '../../utils/amadeusReach.js';
 import { unchangedSince } from '../../utils/bookingDetailsGuard.js';
 import { DEFAULT_PRICE_SETTINGS } from '../../config/priceDefaults.js';
 import { cancellationMessage, refundOutcome } from '../../../shared/cancellationOutcome.js';
-import { ticketNumbersMissingOf } from '../../../shared/reviewQueue.js';
+import { needsAirlineRefundClaim, ticketNumbersMissingOf } from '../../../shared/reviewQueue.js';
 import { reconcileBookingPayment } from './checkout.handlers.js';
 import { errorSummary } from '../../utils/errorSummary.js';
 import { orderVoided, voidsPayment } from '../../utils/arcTransactions.js';
@@ -2199,7 +2199,12 @@ export async function settleManualFlightRefund(booking, { mode = 'sync', amount,
     };
     // Closed only when nothing more is owed and the airline let the booking go.
     const settled = stillHeld === 0 && airlineReleased;
+    // A flag listing tickets to claim from the airline is not closed by the
+    // customer's refund: the tickets' value is still with the airline. Stamped
+    // here, "Refund to claim from the airline" left the desk with nothing
+    // claimed. Whoever makes the claim resolves it.
     const review = currentDetails.needs_review && settled
+        && !needsAirlineRefundClaim({ booking_details: currentDetails })
         ? { ...currentDetails.needs_review, resolved_at: manual.at, resolution: 'refund finished by the desk' }
         : currentDetails.needs_review;
     const paymentStatus = fullyReturned ? 'refunded' : 'partially_refunded';

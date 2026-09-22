@@ -130,7 +130,8 @@ describe('running the check once', () => {
       order: vi.fn().mockReturnThis(),
       update: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockResolvedValue({ data: rows, error: null }),
+      // Read a page at a time (jobs/alarmCandidates.js); fewer rows than a page is the last.
+      range: vi.fn().mockResolvedValue({ data: rows, error: null }),
       // The stamp reads the booking again, and writes onto it only if nothing moved.
       is: vi.fn().mockReturnThis(),
       single: vi.fn().mockResolvedValue({ data: rows[0] ?? null, error: null }),
@@ -230,7 +231,8 @@ describe('a paid PNR that issuance never touched', () => {
       order: vi.fn().mockReturnThis(),
       update: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockResolvedValue({ data: rows, error: null }),
+      // Read a page at a time (jobs/alarmCandidates.js); fewer rows than a page is the last.
+      range: vi.fn().mockResolvedValue({ data: rows, error: null }),
       // The stamp reads the booking again, and writes onto it only if nothing moved.
       is: vi.fn().mockReturnThis(),
       single: vi.fn().mockResolvedValue({ data: rows[0] ?? null, error: null }),

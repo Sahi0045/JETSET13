@@ -21,6 +21,7 @@
  */
 import supabase from '../config/supabase.js';
 import { postToSlack } from './slackAlert.js';
+import { readEveryCandidate } from './alarmCandidates.js';
 import { unchangedSince } from '../utils/bookingDetailsGuard.js';
 import { queueEnvironment } from '../utils/queueEnvironment.js';
 import {
@@ -502,15 +503,19 @@ export async function runOnce({ webhookUrl = process.env.ALERT_SLACK_WEBHOOK_URL
   // flagged, and the ordinary outcome while AUTO_TICKET is off - a paid,
   // committed PNR that issuance never touched. The second is the one that
   // was invisible: it carries no flag, only `gds.ticketed: false` and a PNR.
-  const { data, error } = await supabase
+  //
+  // Every page, not the first: a cancelled PNR never ticketed, or a flag the
+  // desk resolved, is turned down and never stamped, so it stays in this set,
+  // and a first page of 200 of them hid every new row behind it
+  // (alarmCandidates.js).
+  const { data, error } = await readEveryCandidate(() => supabase
     .from('bookings')
     .select('booking_reference, status, payment_status, total_amount, created_at, booking_details')
     .or('booking_details->needs_review.not.is.null,and(booking_details->gds->>ticketed.eq.false,booking_details->>pnr.not.is.null)')
     // Announced rows keep their flag, so without this the 200 oldest were read
     // every run: once 200 flagged rows existed, no new one was ever seen.
     .is('booking_details->needs_review->>alerted_at', null)
-    .order('created_at', { ascending: true })
-    .limit(200);
+    .order('created_at', { ascending: true }), log);
 
   if (error) throw new Error(`could not read bookings: ${error.message}`);
 
