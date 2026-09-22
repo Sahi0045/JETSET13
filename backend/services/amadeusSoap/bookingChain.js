@@ -1256,7 +1256,16 @@ export const cancelBooking = async (recordLocator) => {
           const inspected = inspectReply(voidReply, 'Ticket_CancelDocument');
           const partly = partialVoid(result, voidable);
           if (voidFailedForNow(inspected.error)) {
-            return { retryVoid: true, reason: `${inspected.error?.technicalError ?? 'void failed for now'}${partly.text}` };
+            // With the lists a refused void carries (below), so that when the
+            // second try fails for now too, its error can still say which
+            // tickets this try voided.
+            return {
+              retryVoid: true,
+              reason: `${inspected.error?.technicalError ?? 'void failed for now'}${partly.text}`,
+              voidedTickets: partly.voided,
+              unvoidedTickets: partly.unvoided === null ? null
+                : [...partly.unvoided, ...unvoidable.filter((t) => t.number).map((t) => t.number)],
+            };
           }
           const failure = new BookingChainError({
             step: 'voidTicket',
@@ -1369,7 +1378,7 @@ export const cancelBooking = async (recordLocator) => {
 
   // Still not voided: leave the itinerary alone, exactly as a refused void does.
   log.error({ pnr: recordLocator, reason: second.reason }, 'void failed twice; itinerary left intact');
-  throw new BookingChainError({
+  const failure = new BookingChainError({
     step: 'voidTicket',
     pnr: recordLocator,
     committed: true,
@@ -1378,6 +1387,20 @@ export const cancelBooking = async (recordLocator) => {
     code: 502,
     technicalError: second.reason ?? 'Ticket_CancelDocument did not void the ticket',
   });
+  // Which tickets are void, the way a refused void says it, so the cancel
+  // handler records them on the booking. This error named none, so when the
+  // first try had voided some, nothing recorded them: a cancel on a later day
+  // would list a void ticket as a refund to claim from the airline. Either
+  // try's confirmed voids count - the second answers 6150 for the first's.
+  // What is still live comes from the second try alone, and stays unknown
+  // (null) when its reply did not say which documents failed.
+  const voidedEither = [...(first.voidedTickets ?? []), ...(second.voidedTickets ?? [])]
+    .filter((number, index, all) => all.indexOf(number) === index);
+  failure.voidedTickets = voidedEither;
+  failure.unvoidedTickets = Array.isArray(second.unvoidedTickets)
+    ? second.unvoidedTickets.filter((number) => !voidedEither.includes(number))
+    : null;
+  throw failure;
 };
 
 /** Read a booking back by record locator. Stateless - no session needed. */
