@@ -541,6 +541,18 @@ async function loadOwnedBooking(ref, user, { email } = {}) {
 }
 
 /**
+ * The airline reservation a booking row holds: the record locator the chain
+ * stored, never a reference the caller chose. Checkout saves a row under
+ * whatever reference it is given (booking_reference and order_id), so neither
+ * may be sent to the GDS as if it named this booking's PNR.
+ */
+function pnrOf(booking) {
+  const details = booking?.booking_details || {};
+  const pnr = String(details.pnr || details.amadeus_order_id || '').trim();
+  return pnr || null;
+}
+
+/**
  * Take exclusive ownership of the booking chain for this reference.
  *
  * Checking for an existing PNR is not enough on its own: between two concurrent
@@ -3702,7 +3714,7 @@ router.delete('/order/:orderId', protect, async (req, res) => {
     // Cancelling triggers a real GDS cancel AND an ARC Pay refund. Enforce
     // ownership first — this was callable unauthenticated, so anyone could
     // cancel any booking and move money by guessing its reference.
-    const { notFound } = await loadOwnedBooking(orderId, req.user);
+    const { booking: owned, notFound } = await loadOwnedBooking(orderId, req.user);
     if (notFound) {
       return res.status(404).json({ success: false, error: 'Order not found' });
     }
@@ -3713,7 +3725,9 @@ router.delete('/order/:orderId', protect, async (req, res) => {
     // (no HTTP self-call) so it also works on Vercel serverless.
     let orchestrated = null;
     try {
-      orchestrated = await invokeOrchestratedCancel(orderId, 'Customer cancellation via flight order API', req);
+      // The row whose ownership was just proved, by its own reference - not the
+      // path value, which may also match other rows by locator.
+      orchestrated = await invokeOrchestratedCancel(owned.booking_reference, 'Customer cancellation via flight order API', req);
     } catch (invokeError) {
       console.warn('⚠️ Orchestrated cancel failed:', invokeError.message);
     }
@@ -3768,17 +3782,18 @@ router.delete('/order/:orderId', protect, async (req, res) => {
     // It issues no refund, so it must not claim a cancellation it cannot
     // substantiate.
     let amadeusCancelled = false;
-    let bookingRef = orderId;
+    let bookingRef = owned.booking_reference;
     if (supabase) {
       try {
+        // The owned row, read again for its current state. It used to be looked
+        // up afresh by the path value against three columns with no owner and
+        // no order, so it could be a different customer's row than the one
+        // whose ownership was checked above.
         const { data: bk } = await supabase
           .from('bookings')
           .select('booking_reference, booking_details')
-          .or((r => `booking_reference.eq.${r},booking_details->>order_id.eq.${r},booking_details->>amadeus_order_id.eq.${r}`)(sanitizeRef(orderId)))
-          .limit(1)
+          .eq('id', owned.id)
           .maybeSingle();
-        // `orderId` may be a record locator rather than our own reference, so
-        // keep the row's real reference for the needs_review patch below.
         bookingRef = bk?.booking_reference || bookingRef;
         // This cancels at the airline outside the orchestrator's claim. While
         // the chain, the queue or another cancellation holds the booking, that
@@ -3791,12 +3806,19 @@ router.delete('/order/:orderId', protect, async (req, res) => {
             mode: 'FALLBACK_CANCELLATION'
           });
         }
-        const amaId = bk?.booking_details?.amadeus_order_id || bk?.booking_details?.order_id || orderId;
-        try {
-          const r = await FlightProvider.cancelFlightOrder(amaId);
-          amadeusCancelled = !!r?.success;
-        } catch (e) {
-          console.warn('⚠️ Fallback Amadeus cancel failed:', e.error || e.message);
+        // Only the reservation this booking stored. It fell back to the row's
+        // order_id and then the path value - both the caller's own choice at
+        // checkout - so an owned row saved under a stranger's record locator
+        // cancelled that stranger's PNR here. With none stored, nothing is
+        // cancelled and the booking is flagged below, as for a failed cancel.
+        const amaId = pnrOf(bk);
+        if (amaId) {
+          try {
+            const r = await FlightProvider.cancelFlightOrder(amaId);
+            amadeusCancelled = !!r?.success;
+          } catch (e) {
+            console.warn('⚠️ Fallback Amadeus cancel failed:', e.error || e.message);
+          }
         }
       } catch (lookupErr) {
         console.warn('⚠️ Booking lookup for cancellation failed:', lookupErr.message);
@@ -3921,12 +3943,21 @@ router.get('/order/:orderId', protect, async (req, res) => {
     // Confirm the caller owns this reference before we hand back live GDS data
     // (PNR, traveller names). Without it any authenticated user could retrieve
     // any reservation by reference.
-    const { notFound } = await loadOwnedBooking(orderId, req.user);
+    const { booking, notFound } = await loadOwnedBooking(orderId, req.user);
     if (notFound) {
       return res.status(404).json({ success: false, error: 'Order not found' });
     }
 
-    const orderDetails = await FlightProvider.getFlightOrderDetails(orderId);
+    // The reservation this booking holds, never the path value. Ownership was
+    // proved for a row, and the retrieve used to name whatever the URL named:
+    // a row saved under another customer's record locator (a checkout owns the
+    // reference it is given) retrieved that customer's PNR for its owner.
+    const pnr = pnrOf(booking);
+    if (!pnr) {
+      return res.status(404).json({ success: false, error: 'Order not found' });
+    }
+
+    const orderDetails = await FlightProvider.getFlightOrderDetails(pnr);
     return res.json({
       success: true,
       data: orderDetails.data,
