@@ -19,7 +19,7 @@ function makeInvite() {
 
 /**
  * Resolve the caller from their Bearer token. Travel-admin tokens from /api/auth/login carry
- * only { id, role } (no email), so we load the user to evaluate the super-admin allowlist.
+ * only { id, role } (no email); the role and email are read from `users` on every call.
  * Agent tokens carry role:'agent' and are never admin/super-admin.
  * Returns { id, role, email, isSuper } or null if unauthenticated/invalid.
  */
@@ -47,17 +47,27 @@ export async function getCaller(req) {
     if (!decoded) return null;
     let { role, email } = decoded;
     // A Supabase token identifies the user in `sub` and carries the literal
-    // role "authenticated" - neither is the application role these gates check,
-    // so resolve it from `users` rather than trusting the claim.
+    // role "authenticated" - neither is the application role these gates check.
     const id = decoded.id ?? decoded.sub ?? decoded.user_id ?? null;
-    const roleIsUnresolved = !role || role === 'authenticated';
 
-    if (role !== 'agent' && (roleIsUnresolved || !email) && (id || email)) {
-        const query = supabase.from('users').select('email, role');
-        const { data } = await (id ? query.eq('id', id) : query.eq('email', email)).maybeSingle();
-        if (data) {
-            email = email || data.email;
-            role = roleIsUnresolved ? (data.role || role) : role;
+    // The role comes from `users` on every call, never from the token. An app
+    // token is { id, role } as it was at login and lives JWT_EXPIRE (30 days by
+    // default): trusting its role kept a revoked support account's refunds,
+    // voids and payment reads - and a demoted admin's gates - until it expired.
+    // `protect` re-reads the row for the same reason. No row, no staff role.
+    //
+    // Agent-portal tokens are the exception: handleAgentLogin signs them from
+    // the `agents` table, which has no `users` row, and 'agent' opens no staff
+    // gate here.
+    if (role !== 'agent') {
+        role = null;
+        if (id || email) {
+            const query = supabase.from('users').select('email, role');
+            const { data } = await (id ? query.eq('id', id) : query.eq('email', email)).maybeSingle();
+            if (data) {
+                email = data.email || email;
+                role = data.role || 'user';
+            }
         }
     }
 
