@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { getApiUrl } from '../../utils/apiHelper';
 import { useSupabaseAuth } from '../../contexts/SupabaseAuthContext';
+import { isUsableEmail } from '../../../../shared/email';
 
 const SUPPORT_PHONE = '(877) 538-7380';
 // How often a payment-link payer's payment is asked about while the payment
@@ -126,6 +127,9 @@ export default function PaymentCallback() {
           // Retrieve booking data: DB first, localStorage fallback
           let bookingData = {};
           let sessionData = {};
+          // The address checkout was given, kept beside (not inside) the
+          // booking the server stored.
+          let checkoutEmail = null;
           const pendingBookingKey = `pending${bookingType.charAt(0).toUpperCase() + bookingType.slice(1)}Booking`;
 
           // 1. Try retrieving from database (survives browser clears/device changes)
@@ -139,6 +143,7 @@ export default function PaymentCallback() {
               if (dbResult.success && dbResult.pendingBookingData) {
                 // The DB stores req.body which has bookingData nested inside it
                 bookingData = dbResult.pendingBookingData.bookingData || dbResult.pendingBookingData;
+                checkoutEmail = dbResult.pendingBookingData.customerEmail || null;
                 sessionData = {
                   sessionId: dbResult.booking?.booking_details?.session_id,
                   orderId: orderId,
@@ -242,8 +247,11 @@ export default function PaymentCallback() {
                 bookingDetails: bookingData?.bookingDetails,
                 calculatedFare: bookingData?.calculatedFare,
 
-                // Contact info
-                customerEmail: bookingData?.passengerData?.[0]?.email || ''
+                // The first address that can be delivered to, in the order
+                // orderDataFromCheckoutRow takes them: checkout's, then the lead
+                // traveller's. The lead's was taken whatever it held, and a
+                // typed "jane@gmailcom" hid checkout's good one.
+                customerEmail: [checkoutEmail, bookingData?.passengerData?.[0]?.email].find(isUsableEmail) || ''
               };
 
               console.log('🚀 Navigating with state:', navigationState);
