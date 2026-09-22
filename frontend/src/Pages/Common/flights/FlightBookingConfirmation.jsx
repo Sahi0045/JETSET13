@@ -32,7 +32,7 @@ import apiConfig from '@/config/api';
 // quote a total the server will not accept.
 import { computeFlightCharge, PASSENGER_TYPES, travellerTypesOf } from '../../../../../shared/flightCharge';
 import { describeGroup, groupFromOffer, travellerGroupProblem } from '../../../../../shared/travellerGroup';
-import { needsDateOfBirth, tripDates } from '../../../../../shared/travellerDetails';
+import { lastFlightDepartureDate, needsDateOfBirth, tripDates } from '../../../../../shared/travellerDetails';
 import { CALLING_CODES, COUNTRIES, callingCodeDigits } from '../../../../../shared/countries';
 import { arcItineraries, returnLegOf } from '../../../utils/reviewTrip';
 import { fareIdentity, findSameFare, rebuildTravellers, searchForGroup } from '../../../utils/travellerGroupChange';
@@ -290,6 +290,7 @@ function FlightBookingConfirmation() {
       || bookingDetails?.flight?.segments?.at?.(-1)?.arrival?.at
       || bookingDetails?.flight?.arrivalDate
       || bookingDetails?.flight?.departureDate,
+    lastDepartureDate: lastFlightDepartureDate(reviewState?.flightData?.originalOffer),
     bookingAsGuest,
     contactEmail: bookingDetails?.contact?.email,
   });

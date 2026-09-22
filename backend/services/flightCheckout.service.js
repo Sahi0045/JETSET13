@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { computeFlightCharge, roundMoney, travellerTypesOf } from '../../shared/flightCharge.js';
-import { bookingTravellerProblems, tripDates } from '../../shared/travellerDetails.js';
+import { bookingTravellerProblems, lastFlightDepartureDate, tripDates } from '../../shared/travellerDetails.js';
 import { TRAVELLER_TYPES } from '../../shared/flightOrderBody.js';
 import { describeGroup, groupFromOffer } from '../../shared/travellerGroup.js';
 import { NAME_MISSING, travellerNameProblem } from '../../shared/passengerName.js';
@@ -301,6 +301,7 @@ export async function verifyFlightCharge({
   // document it gave the customer nowhere to enter.
   const international = typeof priced?._ama?.international === 'boolean' ? priced._ama.international : true;
   const { firstDate, lastDate } = tripDates(offer);
+  const lastDepartureDate = lastFlightDepartureDate(offer);
   for (const [index, traveller] of passengers.entries()) {
     const problems = bookingTravellerProblems(traveller, {
       type: TRAVELLER_TYPES.includes(traveller?.type) ? traveller.type : pricedTypes[index],
@@ -309,6 +310,7 @@ export async function verifyFlightCharge({
       passportRequired: priced?._ama?.international === true,
       travelDate: firstDate,
       lastDate,
+      lastDepartureDate,
     });
     if (problems.length > 0) {
       return refuse(400, 'PASSENGERS_INCOMPLETE', `Traveller ${index + 1}: ${problems[0]} Nothing has been charged.`);
