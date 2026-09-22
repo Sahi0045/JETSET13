@@ -12,7 +12,7 @@ import FlightETicket from './FlightETicket';
 import BookingItinerary from './BookingItinerary';
 import { bookingItineraries } from '../../../../../shared/bookingItineraries';
 import { formatUsd } from '../../../utils/bookingCharge';
-import { canDownloadDocument, isPaid, ticketState, ticketsVoided } from '../../../utils/eTicket';
+import { canDownloadDocument, isCommitUnknown, isPaid, ticketState, ticketsVoided } from '../../../utils/eTicket';
 import { attentionMessage, bookingStatusBadge, cancellationMessage, refundStatus } from '../../../utils/bookingStatus';
 import { refundOutcome } from '../../../../../shared/cancellationOutcome';
 import ArcPayService from '../../../Services/ArcPayService';
@@ -630,13 +630,20 @@ function ManageBooking() {
                   <Phone className="w-4 h-4 mr-2" />
                   Call to change this booking
                 </a>
-                <button
-                  onClick={handleCancelBooking}
-                  className="flex items-center bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition"
-                >
-                  <X className="w-4 h-4 mr-2" />
-                  Cancel Booking
-                </button>
+                {/* Not while our team is checking with the airline whether
+                    the booking went through (isCommitUnknown): the server
+                    refuses it, and a cancel would return the money while the
+                    airline may still hold the reservation. The call link above
+                    stays. */}
+                {!isCommitUnknown(bookingData) && (
+                  <button
+                    onClick={handleCancelBooking}
+                    className="flex items-center bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition"
+                  >
+                    <X className="w-4 h-4 mr-2" />
+                    Cancel Booking
+                  </button>
+                )}
               </>
             )}
           </div>

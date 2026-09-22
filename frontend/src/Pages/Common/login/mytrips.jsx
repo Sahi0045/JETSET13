@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { daysUntilDate, formatCalendarDate, formatIsoDuration } from "../../../utils/dateUtils"
 import { bookingStatusBadge, needsAttention, cancellationMessage, refundStatus, attentionMessage, isCompletedTrip } from "../../../utils/bookingStatus"
-import { liveTickets, ticketState, ticketsVoided } from "../../../utils/eTicket"
+import { isCommitUnknown, liveTickets, ticketState, ticketsVoided } from "../../../utils/eTicket"
 import { bookingItineraries } from "../../../../../shared/bookingItineraries"
 import BookingItinerary from "../flights/BookingItinerary"
 import { formatUsd } from "../../../utils/bookingCharge"
@@ -1016,8 +1016,10 @@ export default function TravelDashboard() {
               <FaCog className="w-4 h-4" /> Manage Booking
             </button>
           )}
-          {/* Cancel Booking Button — only for non-cancelled upcoming bookings */}
-          {statusUp !== 'CANCELLED' && statusUp !== 'FAILED' && (daysUntilTrip === null || daysUntilTrip >= 0) && (
+          {/* Cancel Booking Button — only for non-cancelled upcoming bookings,
+              and not while our team is checking with the airline whether the
+              booking went through (isCommitUnknown): the server refuses it. */}
+          {statusUp !== 'CANCELLED' && statusUp !== 'FAILED' && (daysUntilTrip === null || daysUntilTrip >= 0) && !isCommitUnknown(booking) && (
             <>
               {showCancelConfirm === booking.id ? (
                 <div className="flex items-center gap-2 flex-wrap">

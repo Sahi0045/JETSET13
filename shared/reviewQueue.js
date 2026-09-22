@@ -393,6 +393,15 @@ export function attentionOf(booking) {
     return { kind: 'review', reason: review.reason || 'flagged for review', since: review.at || null };
   }
 
+  // A commit the airline never answered (commitUnknownOf) stays until a person
+  // finds out, whatever happened here since. Staff may cancel it, and the
+  // Payments tab may refund it: that settles the money, not whether the
+  // airline holds a reservation for it - and a cancelled or refunded booking
+  // read as settled took it off the desk, the one place anyone would look.
+  if (commitUnknownOf(booking)) {
+    return { kind: 'review', reason: review.reason || 'flagged for review', since: review.at || null };
+  }
+
   if (['cancelled', 'refunded'].includes(statusOf(booking))) return null;
   if (['refunded', 'partially_refunded', 'reversed'].includes(paymentOf(booking))) return null;
   if (isTicketed(details) && review?.reason !== TICKET_NUMBERS_MISSING) {
