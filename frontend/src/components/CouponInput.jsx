@@ -27,9 +27,14 @@ const CouponInput = ({ orderTotal, bookingType = 'all', onApply, onRemove, onRef
     const { user, loading: authLoading } = useSupabaseAuth();
     // An answer that arrives after this box was replaced - the page remounts it
     // when the total changes - is for a total no longer on the page, and is
-    // dropped: applied, it set a discount worked out on the old total.
+    // dropped: applied, it set a discount worked out on the old total. Set back
+    // to true on every mount: in development StrictMode mounts, unmounts and
+    // mounts again, and a ref only ever set to false dropped every answer.
     const mounted = useRef(true);
-    useEffect(() => () => { mounted.current = false; }, []);
+    useEffect(() => {
+        mounted.current = true;
+        return () => { mounted.current = false; };
+    }, []);
 
     const getApiBase = () => {
         if (import.meta.env.PROD && import.meta.env.VITE_API_BASE_URL) {
