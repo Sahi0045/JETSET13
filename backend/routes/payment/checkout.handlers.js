@@ -56,6 +56,20 @@ const urlOrigin = (value) => {
 };
 
 /**
+ * An order reference as this site's clients make them: a letter, then up to 63
+ * letters, digits, "-" or "_" - and never the shape of an airline record
+ * locator (6 letters and digits). A row saved under a locator made its caller
+ * the owner of that PNR wherever bookings are looked up by locator
+ * (flight.routes.js loadOwnedBooking). Clients make FLT + 14 (utils/orderRef.js)
+ * and, in the app, CRZ or FLT + 8.
+ */
+export function isOrderReference(value) {
+    return typeof value === 'string'
+        && /^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(value)
+        && !/^[A-Za-z0-9]{6}$/.test(value);
+}
+
+/**
  * This customer's payment page for exactly this trip, opened within the reuse
  * window and not yet touched, or null.
  *
@@ -468,6 +482,19 @@ export async function handleHostedCheckout(req, res) {
                 success: false,
                 code: 'BOOKING_TYPE_UNKNOWN',
                 error: 'We could not start the payment for this booking. Please go back and try again. Nothing has been charged.'
+            });
+        }
+
+        // The reference is the caller's, and the row below is saved under it and
+        // owned by them. One shaped like a record locator could be another
+        // customer's: bookings are also looked up by locator, so the caller
+        // became the "owner" of a stranger's PNR.
+        if (!isOrderReference(orderId)) {
+            console.warn('⛔ Checkout refused: not an order reference this site makes');
+            return res.status(400).json({
+                success: false,
+                code: 'CHECKOUT_INCOMPLETE',
+                error: 'We could not start the payment for this booking. Please go back to the flight and try again. Nothing has been charged.'
             });
         }
 
