@@ -1281,7 +1281,7 @@ function notSentAgainMessage(bookingReference, paymentState, { commitUnknown = f
  * by the row's payment record (paymentStateOf). Where it is caught first, the
  * gateway has just confirmed the capture and nothing refunds it: 'held'.
  */
-function duplicatePaymentAnswer(bookingReference, paymentState = 'held') {
+function duplicatePaymentAnswer(bookingReference, paymentState = 'held', { firstCommitUnknown = false } = {}) {
   const call = `call (877) 538-7380 with booking reference ${bookingReference}`;
   const money = paymentState === 'returned' ? `This payment has been refunded. If you have any questions, ${call}.`
     : paymentState === 'partly_returned' ? `Part of this payment has been refunded. Please ${call} about the rest.`
@@ -1290,8 +1290,14 @@ function duplicatePaymentAnswer(bookingReference, paymentState = 'held') {
           + `heard from us within 2 business days, ${call}.`
         : 'Our support team will check what happened to this payment and contact you. If you have not heard from us '
           + `within 2 business days, ${call}.`;
-  const message = 'This payment looks like a second payment for a trip you have already booked, for the same travellers '
-    + `on the same flights, so we have not booked it again. Your other booking is not affected. ${money}`;
+  // The first booking's commit never answered (commitUnknownOf): it is paid
+  // for, and nobody knows yet whether it was booked.
+  const message = firstCommitUnknown
+    ? 'This payment looks like a second payment for a trip you have already paid for, for the same travellers '
+      + 'on the same flights, so we have not booked it again. Your first payment is not affected, and our team is still '
+      + `checking with the airline whether that booking went through. ${money}`
+    : 'This payment looks like a second payment for a trip you have already booked, for the same travellers '
+      + `on the same flights, so we have not booked it again. Your other booking is not affected. ${money}`;
   return {
     success: false,
     code: 'DUPLICATE_PAYMENT',
@@ -1317,7 +1323,10 @@ function duplicatePaymentAnswer(bookingReference, paymentState = 'held') {
  * the same flights: a family can book one flight twice for different people,
  * and nothing here refunds anybody.
  *
- * @returns {Promise<{ duplicateOf: string|null } | { unavailable: true }>}
+ * `firstCommitUnknown`: the booking it repeats is a commit the airline never
+ * answered, for the customer's wording (duplicatePaymentAnswer).
+ *
+ * @returns {Promise<{ duplicateOf: string|null, firstCommitUnknown?: boolean } | { unavailable: true }>}
  */
 async function findDuplicateBooking(booking, { travellers, offer, claimedAt, now = Date.now() }) {
   const flights = flightsKey(offer);
@@ -1366,8 +1375,9 @@ async function findDuplicateBooking(booking, { travellers, offer, claimedAt, now
     // counted only for the chain's two-minute claim - after that a second
     // payment for the trip was sent to the airline. It counts until a person
     // finds out.
+    const firstCommitUnknown = Boolean(commitUnknownOf(row));
     const booked = Boolean(other.pnr) || Boolean(other.queued_order) || ['committed', 'queued'].includes(chain.state)
-      || Boolean(commitUnknownOf(row));
+      || firstCommitUnknown;
     const theirClaim = Date.parse(chain.claimedAt || chain.startedAt);
     const bookingFirst = chain.state === 'in_progress'
       && now - Date.parse(chain.startedAt) < CHAIN_CLAIM_TTL_MS
@@ -1380,7 +1390,7 @@ async function findDuplicateBooking(booking, { travellers, offer, claimedAt, now
       || other.pending_booking_data?.bookingData?.passengerData
       || other.queued_order?.travelers;
     if (flightsKey(theirOffer) === flights && travellerNamesKey(theirTravellers) === names) {
-      return { duplicateOf: row.booking_reference };
+      return { duplicateOf: row.booking_reference, firstCommitUnknown };
     }
   }
   return { duplicateOf: null };
@@ -2671,7 +2681,12 @@ router.post('/order', optionalProtect, async (req, res) => {
     // A payment already held as a second payment for one trip stays held: a
     // human decides whether to book or refund it (findDuplicateBooking, below).
     if (existing.booking_details?.needs_review?.duplicate_of) {
-      return res.status(409).json(duplicatePaymentAnswer(existing.booking_reference, paymentStateOf(existing)));
+      // Worded by what the first booking is now: a commit still being checked
+      // with the airline is paid for, not booked.
+      const first = await findExistingBooking(existing.booking_details.needs_review.duplicate_of);
+      return res.status(409).json(duplicatePaymentAnswer(existing.booking_reference, paymentStateOf(existing), {
+        firstCommitUnknown: Boolean(first && commitUnknownOf(first)),
+      }));
     }
 
     // A booking whose fulfilment already failed, or that a human is sorting
@@ -3059,7 +3074,9 @@ router.post('/order', optionalProtect, async (req, res) => {
           retryable: true
         });
       }
-      return res.status(409).json(duplicatePaymentAnswer(existing.booking_reference));
+      return res.status(409).json(duplicatePaymentAnswer(existing.booking_reference, 'held', {
+        firstCommitUnknown: duplicate.firstCommitUnknown,
+      }));
     }
 
     // Prepare flight order data for Amadeus (only if we have valid Amadeus format)

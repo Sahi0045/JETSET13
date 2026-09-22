@@ -287,6 +287,16 @@ describe('the same order sent again', () => {
   });
 });
 
+const PAID_FOR_NOT_BOOKED = (reference) => 'This payment looks like a second payment for a trip you have already paid for, '
+  + 'for the same travellers on the same flights, so we have not booked it again. Your first payment is not affected, and our team '
+  + 'is still checking with the airline whether that booking went through. Our support team will check it and refund this payment. '
+  + 'If you did mean to book this trip twice, or have not heard from us within 2 business days, '
+  + `call (877) 538-7380 with booking reference ${reference}.`;
+const ALREADY_BOOKED = (reference) => 'This payment looks like a second payment for a trip you have already booked, for the same travellers '
+  + 'on the same flights, so we have not booked it again. Your other booking is not affected. Our support team will check it '
+  + 'and refund this payment. If you did mean to book this trip twice, or have not heard from us within 2 business days, '
+  + `call (877) 538-7380 with booking reference ${reference}.`;
+
 // A second payment for the same trip, once the first chain's claim has lapsed.
 describe('a second checkout for the same trip, paid after it', () => {
   // The chain claim is two minutes (CHAIN_CLAIM_TTL_MS). Nothing renews it once
@@ -309,10 +319,9 @@ describe('a second checkout for the same trip, paid after it', () => {
     // What the customer sees: the order page's "We did not book this trip
     // twice", with this answer.
     expect(res.body).toMatchObject({ code: 'DUPLICATE_PAYMENT', duplicatePayment: true, needsReview: true, bookingReference: SECOND });
-    expect(res.body.message).toBe('This payment looks like a second payment for a trip you have already booked, for the same travellers '
-      + 'on the same flights, so we have not booked it again. Your other booking is not affected. Our support team will check it '
-      + 'and refund this payment. If you did mean to book this trip twice, or have not heard from us within 2 business days, '
-      + `call (877) 538-7380 with booking reference ${SECOND}.`);
+    // "Already paid for", not "already booked": nobody knows yet whether the
+    // first went through.
+    expect(res.body.message).toBe(PAID_FOR_NOT_BOOKED(SECOND));
 
     // Held against the first, for the alarm and the desk; its claim let go.
     const held = table.row(SECOND).booking_details;
@@ -323,7 +332,33 @@ describe('a second checkout for the same trip, paid after it', () => {
     expect(selectUnannounced([table.row(SECOND)])).toHaveLength(1);
   });
 
+  it('sent again (a reload of its order page): still "already paid for" while the first is being checked', async () => {
+    const { app, table } = await commitNeverAnswered([checkoutRow(SECOND)]);
+    claimLapsed(table);
+    await request(app).post('/api/flights/order').send(orderFor(SECOND));
+
+    const retry = await request(app).post('/api/flights/order').send(orderFor(SECOND));
+
+    expect(createFlightOrder).toHaveBeenCalledTimes(1);
+    expect(retry.status).toBe(409);
+    expect(retry.body).toMatchObject({ code: 'DUPLICATE_PAYMENT', paymentState: 'held' });
+    expect(retry.body.message).toBe(PAID_FOR_NOT_BOOKED(SECOND));
+  });
+
   // Fences.
+  it('once the first has a record locator (the desk found it held), it is "already booked" again', async () => {
+    const { app, table } = await commitNeverAnswered([checkoutRow(SECOND)]);
+    claimLapsed(table);
+    table.row(REF).booking_details.pnr = 'ABC123';
+
+    const res = await request(app).post('/api/flights/order').send(orderFor(SECOND));
+
+    expect(res.body.code).toBe('DUPLICATE_PAYMENT');
+    expect(res.body.message).toBe(ALREADY_BOOKED(SECOND));
+    const retry = await request(app).post('/api/flights/order').send(orderFor(SECOND));
+    expect(retry.body.message).toBe(ALREADY_BOOKED(SECOND));
+  });
+
   it('while the first claim is still live it is held as before', async () => {
     const { app, table } = await commitNeverAnswered([checkoutRow(SECOND)]);
 
