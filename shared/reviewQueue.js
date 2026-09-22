@@ -193,17 +193,44 @@ export const scheduleChangeOf = (booking) => flagInForce(
 );
 
 /**
+ * The review flags the order route's two 202 "needs review" answers write
+ * (flight.routes.js flagForReview): the airline holds the seats, and a later
+ * step - queueing, ticketing, the final save - failed. The customer is sent
+ * the "held" email, "our team is finishing your ticket" (confirmationEmailKind
+ * 'held'), and not the confirmation. Here so the route that emails it and the
+ * desk and alarm that follow it up share one list.
+ */
+export const HELD_REVIEW_REASON_PREFIXES = ['chain failed after commit at ', 'order route failed after commit'];
+
+/**
+ * Whether a flag is one the order route held the booking with - not the
+ * no-confirmed-seat flag, which shares the prefix and is sent no email.
+ */
+export const isHeldForReview = (review) => {
+  const reason = String(review?.reason || '');
+  return reason !== NO_CONFIRMED_SEAT_REVIEW_REASON && HELD_REVIEW_REASON_PREFIXES.some((prefix) => reason.startsWith(prefix));
+};
+
+/**
  * The flag on a TICKETED booking that still needs a person, or null.
  *
  * "Ticketed, so done" holds for most flags - the ticket turned up later, by
- * retry or by hand - and the desk and the alarm skip those. Not for a schedule
- * change: the ticket is issued, and the customer still has to be told the new
- * times. The desk list and the alarm both read this, so they cannot disagree
- * about it. (The numbers-missing flag has its own rule in each: it is on top
- * and unresolved, or it is nobody's job.)
+ * retry or by hand - and the desk and the alarm skip those. Not for these two:
+ *
+ *  - held after the ticket was issued: the customer was told "our team is
+ *    finishing your ticket" and was never sent the confirmation. Skipped as
+ *    done, nobody sent it;
+ *  - a schedule change: the ticket is issued, and the customer still has to be
+ *    told the new times.
+ *
+ * The desk list and the alarm both read this, so they cannot disagree about
+ * it. (The numbers-missing flag has its own rule in each: it is on top and
+ * unresolved, or it is nobody's job.)
  */
 export function openTicketedFlagOf(booking) {
   if (!isTicketed(detailsOf(booking))) return null;
+  const review = topFlagOf(booking);
+  if (review && !review.resolved_at && isHeldForReview(review)) return review;
   return scheduleChangeOf(booking);
 }
 
@@ -282,7 +309,8 @@ export function isFailedCancellation(booking) {
 /**
  * What still needs doing on this booking, or null.
  *
- * @returns {null | { kind: 'not_ticketed'|'review'|'airline_refund'|'unrecorded_cancellation'|'cancel_failed'|'schedule_changed',
+ * @returns {null | { kind: 'not_ticketed'|'review'|'airline_refund'|'unrecorded_cancellation'|'cancel_failed'|'schedule_changed'
+ *                    |'held_ticketed',
  *                    reason: string, since: string|null, tickets?: string[] }}
  */
 export function attentionOf(booking) {
@@ -339,11 +367,13 @@ export function attentionOf(booking) {
   if (['refunded', 'partially_refunded', 'reversed'].includes(paymentOf(booking))) return null;
   if (isTicketed(details) && review?.reason !== TICKET_NUMBERS_MISSING) {
     // Ticketed, and still somebody's job: skipped as done, the customer was
-    // never told their flight was retimed.
+    // never told their flight was retimed, or never sent the ticket our team
+    // promised to finish.
     const open = openTicketedFlagOf(booking);
     if (open?.reason === SCHEDULE_CHANGED_REVIEW_REASON) {
       return { kind: 'schedule_changed', reason: open.reason, since: open.at || null };
     }
+    if (open) return { kind: 'held_ticketed', reason: open.reason, since: open.at || null };
     return null;
   }
 
@@ -374,5 +404,6 @@ export const attentionLabel = (attention) => {
   if (attention.kind === 'airline_refund') return 'Refund to claim from the airline';
   if (attention.kind === 'not_ticketed') return 'Paid, seats held, no ticket';
   if (attention.kind === 'schedule_changed') return 'Airline changed the schedule';
+  if (attention.kind === 'held_ticketed') return 'Ticketed, customer not sent it';
   return 'Flagged for review';
 };

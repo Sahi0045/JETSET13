@@ -90,7 +90,9 @@ export function selectUnannounced(rows = []) {
     const numbersMissing = review?.reason === TICKET_NUMBERS_MISSING && !review.resolved_at;
     // Nor a ticketed booking whose flag still needs a person
     // (openTicketedFlagOf, the desk's rule too): a schedule change was skipped
-    // here as done, and the customer was never told the new times.
+    // here as done, and the customer was never told the new times; a booking
+    // held after its ticket was issued, and the customer - told our team was
+    // finishing it - was never sent it.
     const stillOpen = numbersMissing || Boolean(openTicketedFlagOf(booking));
     if (!stillOpen && details.gds?.ticketed === true) return false;
     if (!stillOpen && Array.isArray(details.tickets) && details.tickets.length > 0) return false;
@@ -351,6 +353,15 @@ export function describeScheduleChange(booking) {
 // read "no ticket was issued ... ticket it, or refund it" of a live ticket.
 const ticketedScheduleChange = (booking) => openTicketedFlagOf(booking)?.reason === SCHEDULE_CHANGED_REVIEW_REASON;
 
+// A ticketed booking the order route held for a person after issuing: the
+// customer was sent "our team is finishing your ticket". Under "paid but not
+// ticketed" it read "ticket it, or refund it" - a second ticket, or a refund
+// of a live one.
+const heldTicketed = (booking) => {
+  const open = openTicketedFlagOf(booking);
+  return Boolean(open) && open.reason !== SCHEDULE_CHANGED_REVIEW_REASON;
+};
+
 const ticketNumbersMissing = (booking) => !needsAirlineRefundClaim(booking)
   && booking?.booking_details?.needs_review?.reason === TICKET_NUMBERS_MISSING;
 
@@ -390,8 +401,10 @@ export function buildMessage(bookings) {
   const seatless = rest.filter(noConfirmedSeat);
   const retimed = rest.filter((booking) => !needsAirlineRefundClaim(booking) && !ticketNumbersMissing(booking)
     && ticketedScheduleChange(booking));
+  const held = rest.filter((booking) => !needsAirlineRefundClaim(booking) && !ticketNumbersMissing(booking)
+    && heldTicketed(booking));
   const unticketed = rest.filter((booking) => !needsAirlineRefundClaim(booking) && !ticketNumbersMissing(booking)
-    && !noConfirmedSeat(booking) && !ticketedScheduleChange(booking));
+    && !noConfirmedSeat(booking) && !ticketedScheduleChange(booking) && !heldTicketed(booking));
   const sections = [];
   if (unrecorded.length) {
     sections.push(
@@ -446,6 +459,17 @@ export function buildMessage(bookings) {
       'The customer has paid and no ticket was issued. Each one needs a human: ticket it, or refund it.',
       '',
       ...unticketed.map(describeBooking),
+    );
+  }
+  if (held.length) {
+    sections.push(
+      `:envelope: *${held.length} ticketed booking${held.length > 1 ? 's' : ''} held after ${held.length > 1 ? 'their tickets were' : 'its ticket was'} issued*`,
+      'The ticket IS issued, but the order route stopped after it and held the booking for a person. '
+        + 'The customer was told their reservation is held and our team is finishing their ticket, and was NOT sent '
+        + 'their confirmation. Check the booking against the PNR (its FA lines) and record any ticket number missing, '
+        + 'then send the customer their e-ticket and confirmation. Do NOT reissue and do NOT refund: the customer holds a live ticket.',
+      '',
+      ...held.map(describeBooking),
     );
   }
   if (retimed.length) {

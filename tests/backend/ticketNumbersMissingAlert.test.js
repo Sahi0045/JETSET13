@@ -55,9 +55,11 @@ describe('a ticketed booking whose ticket numbers did not all arrive', () => {
     expect(attentionOf({ ...row(), payment_status: 'refunded' })).toBeNull();
   });
 
-  // Every other flag on a ticketed booking still means the ticket turned up.
+  // A flag the ticket settles still means the ticket turned up. (Not a held
+  // flag: a booking held after its ticket was issued still owes the customer
+  // their ticket - heldAfterTicketAlert.test.js.)
   it('changes nothing for a ticketed booking flagged for any other reason', () => {
-    const other = row({ needs_review: { reason: 'chain failed after commit at queue', at } });
+    const other = row({ needs_review: { reason: 'PNR committed, never ticketed', at } });
     expect(selectUnannounced([other])).toHaveLength(0);
     expect(attentionOf(other)).toBeNull();
   });
