@@ -902,6 +902,108 @@ async function cancelFlightBooking(res, booking, { reason, email }) {
 }
 
 /**
+ * A cancelled flight whose cancel found no payment to return, and whose money
+ * nothing has settled since: the one cancellation a later payment can land on.
+ * A row with no travel type is a flight, as the cancel above reads it.
+ */
+export function cancelledWithNothingTaken(booking) {
+    return booking?.status === 'cancelled'
+        && (booking.travel_type == null || booking.travel_type === 'flight')
+        && booking.booking_details?.cancellation?.paymentAction === 'NOTHING_TO_REFUND'
+        && !['refunded', 'partially_refunded', 'reversed'].includes(String(booking.payment_status || '').toLowerCase());
+}
+
+/**
+ * A payment made on a checkout's payment page after the checkout was cancelled.
+ *
+ * Cancel & Refund closes a checkout ARC has no order for as NOTHING_TO_REFUND
+ * (cancelFlightBooking, `neverPaid`). Its payment page is still open - ARC
+ * keeps it for ARC_PAGE_TIMEOUT_SECONDS, and nothing here can close it - so
+ * the customer can still pay. That payment landed on a cancelled row: the
+ * order route refused it before asking the gateway, reconcile answers a
+ * cancelled row without asking, and neither alarm, the desk list nor the
+ * abandoned-checkout job reads a cancellation that took nothing. The money
+ * stayed at ARC and nobody was told.
+ *
+ * This asks the gateway afresh and, when it now holds money, makes the
+ * cancellation say so: REFUND_UNDER_REVIEW, which the payment alarm announces,
+ * the desk lists with its Finish refund button and My Trips explains, and a
+ * `cancellation` flag on top. Nothing is refunded here. A person returns it
+ * with Finish refund, which takes its own claim, so the money moves once.
+ *
+ * Called by the order route when the payer comes back, and by the
+ * abandoned-checkout job when they do not. A second caller finds the
+ * cancellation no longer NOTHING_TO_REFUND and writes nothing.
+ *
+ * @returns {Promise<null | { held: number, currency?: string, recorded?: boolean, alreadyRecorded?: boolean } | { gatewayUnavailable: true }>}
+ *   null for any other booking, without asking the gateway; `held: 0` when
+ *   ARC holds nothing (a 400 or 404 is ARC saying it has no such order).
+ */
+export async function recordPaymentAfterCancel(booking, { reconcile = reconcileBookingPayment } = {}) {
+    if (!cancelledWithNothingTaken(booking)) return null;
+
+    let payment;
+    try {
+        payment = await reconcile(booking, { fresh: true });
+    } catch (error) {
+        payment = { gatewayUnavailable: true, error: error.message };
+    }
+    if (payment.gatewayUnavailable) {
+        return [400, 404].includes(payment.gatewayStatus) ? { held: 0 } : { gatewayUnavailable: true };
+    }
+    const held = roundCents(payment.heldAmount || 0);
+    if (!(held > 0)) return { held: 0 };
+
+    const details = booking.booking_details || {};
+    const currency = payment.capturedCurrency || details.currency || 'USD';
+    const reason = `paid after it was cancelled: ARC Pay holds ${held.toFixed(2)} ${currency} taken on the payment page after `
+        + 'the checkout was cancelled with nothing to refund. No booking was made; return it with Finish refund.';
+
+    // Pinned to the row as read (utils/bookingDetailsGuard.js), and read again
+    // after a lost race: reconcile has just written the capture to it.
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+        const { data: current, error: readError } = await supabase
+            .from('bookings')
+            .select('status, payment_status, travel_type, booking_details')
+            .eq('id', booking.id)
+            .single();
+        if (readError || !current) break;
+        if (!cancelledWithNothingTaken(current)) return { held, currency, recorded: false, alreadyRecorded: true };
+
+        const currentDetails = current.booking_details || {};
+        const now = new Date().toISOString();
+        const { data: wrote, error: writeError } = await unchangedSince(
+            supabase
+                .from('bookings')
+                .update({
+                    payment_status: 'paid',
+                    booking_details: {
+                        ...currentDetails,
+                        cancellation: {
+                            ...currentDetails.cancellation,
+                            paymentAction: 'REFUND_UNDER_REVIEW',
+                            paidAfterCancel: { at: now, amount: held, currency },
+                        },
+                        needs_review: { reason, source: 'cancellation', at: now, ...keepingPrevious(currentDetails) },
+                    },
+                    updated_at: now,
+                })
+                .eq('id', booking.id),
+            { status: current.status, payment_status: current.payment_status, booking_details: currentDetails },
+        ).select('id');
+        if (writeError) break;
+        if (wrote?.length) {
+            console.error('💳 Payment taken on a cancelled checkout, held for the desk to return', {
+                bookingReference: booking.booking_reference, held, currency,
+            });
+            return { held, currency, recorded: true };
+        }
+    }
+    console.error('❌ Payment taken on a cancelled checkout could not be recorded', { bookingReference: booking.booking_reference, held, currency });
+    return { held, currency, recorded: false };
+}
+
+/**
  * Whether ARC holds anything on an order that a refund or a void could return.
  *
  * Read-only. A booking or payment still `pending` has usually never been paid -
