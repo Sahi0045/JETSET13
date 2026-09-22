@@ -66,7 +66,44 @@ export const postEnvelope = async ({ operation, bodyXml, session = null, config 
 
   const durationMs = Date.now() - started;
   const xml = typeof response.data === 'string' ? response.data : String(response.data ?? '');
-  const parsed = parseSoap(xml);
+
+  // Only a whole SOAP envelope is an answer. The permissive `validateStatus`
+  // above lets through whatever else is on the wire too - a gateway's HTML
+  // 502/503/504 page, an empty body, an envelope cut off mid-reply - and each
+  // of those used to parse to an empty body: no Fault, no error container, so
+  // inspectReply answered ok. A PNR_Cancel answered by a 503 page was
+  // "cancelled" and the customer refunded over a live PNR; a PNR_Retrieve
+  // answered by one read as "no tickets", so the void was skipped. Nobody saw
+  // Amadeus's answer to any of them, which is what a timeout means too, so
+  // they are the same error: the outcome is unknown.
+  //
+  // The parser is lenient and closes whatever it was given, so a truncated
+  // envelope parses to a plausible, shorter reply. The closing Envelope tag is
+  // the last thing sent; without it the reply was not received whole.
+  let parsed = null;
+  try {
+    parsed = parseSoap(xml);
+  } catch {
+    parsed = null;
+  }
+  const env = parsed?.Envelope ?? parsed?.envelope;
+  const whole = /<\/(?:[\w.-]+:)?Envelope\s*>\s*$/.test(xml.slice(-256));
+  if (!env || !whole || !env.Body || typeof env.Body !== 'object') {
+    // Shape and size only: a truncated reply can still carry a traveller.
+    log.warn({
+      op: operation.name, ok: false, durationMs, httpStatus: response.status, bytesIn: xml.length, reason: 'not_soap',
+    }, 'flight.ws.call');
+    const error = transportError(
+      new Error(`HTTP ${response.status}: the reply is not a SOAP envelope (${xml.length} bytes${env && !whole ? ', truncated' : ''})`),
+      operation.name,
+    );
+    error.httpStatus = response.status;
+    // A cut-off reply may still have carried the session header; keep it for
+    // sign-out, as a fault does, and as non-enumerable for the same reason.
+    const session = env ? readSession(env.Header ?? {}) : null;
+    if (session?.sessionId) Object.defineProperty(error, 'session', { value: session, enumerable: false });
+    throw error;
+  }
   const { header, body } = unwrapEnvelope(parsed);
 
   const fault = at(body, 'Fault');
