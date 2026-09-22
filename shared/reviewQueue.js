@@ -270,9 +270,20 @@ export const isHeldForReview = (review) => {
  */
 export function openTicketedFlagOf(booking) {
   if (!isTicketed(detailsOf(booking))) return null;
+  return heldAfterIssueOf(booking) ?? scheduleChangeOf(booking);
+}
+
+/**
+ * The order route's hold on a booking whose ticket was already issued
+ * (flagForReview writes `ticketed: true`), on top and unresolved, or null.
+ *
+ * The desk, the alarm and ticket sync read it: ticket sync reads such a
+ * booking's numbers from the PNR, records them and sends the e-ticket, which
+ * is everything the hold asks of a person.
+ */
+export function heldAfterIssueOf(booking) {
   const review = topFlagOf(booking);
-  if (review && !review.resolved_at && review.ticketed === true && isHeldForReview(review)) return review;
-  return scheduleChangeOf(booking);
+  return review && !review.resolved_at && review.ticketed === true && isHeldForReview(review) ? review : null;
 }
 
 /** What a member of staff recorded when they dealt with it, or null. */
