@@ -70,6 +70,17 @@ export const ticketsOf = (details) => (Array.isArray(details?.tickets) ? details
 export const isTicketed = (details) => details?.gds?.ticketed === true || ticketsOf(details).length > 0;
 
 /**
+ * The order route's flag says `issuance: 'unknown'` when DocIssuance was sent
+ * after commit and never answered - a timeout, or a reply that was not a SOAP
+ * envelope (bookingChain.js callStep). A ticket may exist that the booking
+ * does not record. Beside `ticketed: false`, never in place of it: the flag's
+ * `ticketed` says the ticket WAS issued (openTicketedFlagOf). Here so the chain
+ * that finds it, the route that writes it, and the alarm and the cancel that
+ * read it share one value.
+ */
+export const ISSUANCE_UNKNOWN = 'unknown';
+
+/**
  * The booking chain's flag on a booking it DID ticket: issuance answered OK,
  * but not every ticket number surfaced in the PNR (bookingChain.js
  * readTicketNumbers). The row is ticketed by definition, so a "ticketed means

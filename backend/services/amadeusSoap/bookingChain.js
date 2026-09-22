@@ -22,6 +22,7 @@ import { callStateless, withSession } from './session.js';
 import {
   cannotTicket, interlineNotAllowed, interlinePairsOf, ticketingCarrierOf,
 } from './ticketingCarriers.js';
+import { ISSUANCE_UNKNOWN } from '../../../shared/reviewQueue.js';
 
 const log = logger.child({ svc: 'amadeus-ws', flow: 'booking' });
 
@@ -67,8 +68,18 @@ export class BookingChainError extends Error {
     this.operation = cause?.operation ?? null;
     this.amadeusCode = cause?.amadeusCode ?? null;
     this.cause = cause;
+    // ISSUANCE_UNKNOWN when DocIssuance was sent and never answered (callStep).
+    // `ticketed` stays false beside it: nothing says a ticket was issued.
+    this.issuance = null;
   }
 }
+
+/**
+ * A call that got no answer. transport.js throws transportError - code 504 -
+ * for a timeout, a dropped connection and a reply that is not a SOAP envelope
+ * alike; a fault or an error container is Amadeus answering.
+ */
+const unanswered = (cause) => cause instanceof AmadeusSoapError && cause.code === 504;
 
 /** Pull the operation reply out of a parsed SOAP body. */
 const replyOf = (result) => {
@@ -271,7 +282,14 @@ const callStep = async (ctx, { step, operation, bodyXml, pnr, committed, tickete
   try {
     result = await ctx.call(operation, bodyXml);
   } catch (cause) {
-    throw new BookingChainError({ step, pnr, committed, ticketed, cause, code: cause?.code ?? 502 });
+    const failed = new BookingChainError({ step, pnr, committed, ticketed, cause, code: cause?.code ?? 502 });
+    // DocIssuance sent and never answered: Amadeus may have issued the ticket.
+    // Left at `ticketed: false` alone, the route recorded it as not ticketed,
+    // the alarm told staff "no ticket was issued" before ticket sync had read
+    // the PNR, and a cancel whose retrieve did not show the FA line yet
+    // refunded in full. A refusal Amadeus sent (2161) is an answer, not this.
+    if (operation === 'DocIssuance_IssueTicket' && unanswered(cause)) failed.issuance = ISSUANCE_UNKNOWN;
+    throw failed;
   }
 
   const reply = replyOf(result);

@@ -28,7 +28,7 @@ import { canReachAmadeus } from '../../utils/amadeusReach.js';
 import { unchangedSince } from '../../utils/bookingDetailsGuard.js';
 import { DEFAULT_PRICE_SETTINGS } from '../../config/priceDefaults.js';
 import { cancellationMessage, refundOutcome } from '../../../shared/cancellationOutcome.js';
-import { needsAirlineRefundClaim, ticketNumbersMissingOf } from '../../../shared/reviewQueue.js';
+import { ISSUANCE_UNKNOWN, flagInForce, needsAirlineRefundClaim, ticketNumbersMissingOf } from '../../../shared/reviewQueue.js';
 import { reconcileBookingPayment } from './checkout.handlers.js';
 import { errorSummary } from '../../utils/errorSummary.js';
 import { orderVoided, voidsPayment } from '../../utils/arcTransactions.js';
@@ -710,8 +710,15 @@ async function cancelFlightBooking(res, booking, { reason, email }) {
         gds: settled,
         // The numbers-missing flag under a refused cancel's flag too: the
         // ticket was issued whatever flag sits on top now.
+        //
+        // And a DocIssuance nobody saw answered (flight.routes.js flagForReview
+        // `issuance`): a ticket may exist, and a retrieve that shows none may
+        // have been read before its FA line landed. It refunded in full; it
+        // now goes to a person. Not past a flag a person resolved: they read
+        // the PNR.
         rowTicketed: details.gds?.ticketed === true || tickets.length > 0
-            || Boolean(ticketNumbersMissingOf(booking)),
+            || Boolean(ticketNumbersMissingOf(booking))
+            || Boolean(flagInForce(booking, (review) => review.issuance === ISSUANCE_UNKNOWN)),
         refundable: details.refundable,
         fee: await readCancellationFee(),
         rowPaid: booking.payment_status === 'paid',

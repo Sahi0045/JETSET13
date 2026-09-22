@@ -402,8 +402,10 @@ async function persistCommittedPnr({ bookingReference, pnr, tstRefs, priced }) {
  * Used when the chain created a real PNR and then failed: the money and the
  * booking are both real but out of step, and no automatic action is safe.
  */
-export async function flagForReview({ bookingReference, pnr, reason, ticketed, tickets = null, amadeus = null }) {
-  console.error('⚠️ Booking needs review', { bookingReference, pnr, reason, ticketed, amadeus });
+export async function flagForReview({
+  bookingReference, pnr, reason, ticketed, tickets = null, amadeus = null, issuance = null
+}) {
+  console.error('⚠️ Booking needs review', { bookingReference, pnr, reason, ticketed, issuance, amadeus });
 
   const patched = await patchBookingDetails(bookingReference, (details) => ({
     pnr: pnr || undefined,
@@ -424,6 +426,12 @@ export async function flagForReview({ bookingReference, pnr, reason, ticketed, t
     needs_review: {
       reason,
       ticketed: Boolean(ticketed),
+      // DocIssuance sent and never answered (bookingChain.js callStep): a
+      // ticket may exist that nothing here records. Written as `ticketed:
+      // false` alone, the alarm told staff no ticket was issued before ticket
+      // sync had read the PNR, and a cancel whose retrieve did not show the FA
+      // line yet refunded in full. Beside `ticketed`, not in place of it.
+      ...(issuance ? { issuance } : {}),
       at: new Date().toISOString(),
       // What Amadeus actually said. Without it the row read only "chain failed
       // after commit at issueTicket" and the refusal itself - 2161 PROHIBITED
@@ -3278,6 +3286,9 @@ router.post('/order', optionalProtect, async (req, res) => {
           pnr: providerError.pnr,
           reason: `chain failed after commit at ${providerError.step}`,
           ticketed: providerError.ticketed,
+          // What the chain knows beyond "not ticketed": an issuance nobody saw
+          // answered.
+          issuance: providerError.issuance,
           amadeus: (providerError.amadeusCode || providerError.technicalError)
             ? {
               operation: providerError.operation || null,
