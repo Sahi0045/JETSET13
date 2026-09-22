@@ -5348,6 +5348,9 @@ const COMMIT_OUTCOMES = ['not_held', 'held'];
 
 const refuseResolve = (res, status, code, text) => res.status(status).json({ success: false, code, error: text, message: text });
 
+/** What the desk is told when its write lost a race (unchangedSince matched nothing). */
+const BOOKING_CHANGED_TEXT = 'This booking changed while you were recording it. Nothing has been recorded; reload it and try again.';
+
 /**
  * The desk found the airline holds a booking whose commit never answered:
  * write its record locator on the row as the chain records a commit
@@ -5420,9 +5423,7 @@ async function recordHeldAtAirline(booking, { note, at, by, pnr: given }) {
     booking,
   ).select('id');
   if (error) return refused(500, 'WRITE_FAILED', 'Could not record it. Nothing has been recorded; please try again.');
-  if (!written?.length) {
-    return refused(409, 'BOOKING_CHANGED', 'This booking changed while you were recording it. Nothing has been recorded; reload it and try again.');
-  }
+  if (!written?.length) return refused(409, 'BOOKING_CHANGED', BOOKING_CHANGED_TEXT);
   return { pnr };
 }
 
@@ -5489,26 +5490,36 @@ router.post('/admin-bookings/:id/resolve-review', protect, bookingStaff, async (
       });
     }
 
-    const { error } = await supabase
-      .from('bookings')
-      .update({
-        booking_details: {
-          ...details,
-          // Created when it is missing: the alarm names paid-but-not-ticketed
-          // bookings that were never flagged, and those need a record too.
-          needs_review: {
-            ...(details.needs_review || { reason: 'PNR committed, never ticketed', ticketed: false, at }),
-            resolved_at: at,
-            resolved_by: by,
-            resolution: note,
-            ...(commitUnknown ? { outcome: 'not_held' } : {}),
+    // Pinned to the row as read (unchangedSince), as recordHeldAtAirline is.
+    // The whole column is written back from the copy read above, and filtered
+    // by id alone it put back anything written in between: a "held" recorded
+    // by someone else a moment earlier lost its record locator, and the
+    // booking was left pending_ticketing with no PNR; a ticket that ticket
+    // sync had just recorded was lost the same way.
+    const { data: written, error } = await unchangedSince(
+      supabase
+        .from('bookings')
+        .update({
+          booking_details: {
+            ...details,
+            // Created when it is missing: the alarm names paid-but-not-ticketed
+            // bookings that were never flagged, and those need a record too.
+            needs_review: {
+              ...(details.needs_review || { reason: 'PNR committed, never ticketed', ticketed: false, at }),
+              resolved_at: at,
+              resolved_by: by,
+              resolution: note,
+              ...(commitUnknown ? { outcome: 'not_held' } : {}),
+            },
           },
-        },
-        updated_at: at,
-      })
-      .eq('id', booking.id);
+          updated_at: at,
+        })
+        .eq('id', booking.id),
+      booking,
+    ).select('id');
 
     if (error) return res.status(500).json({ success: false, error: 'Could not record it' });
+    if (!written?.length) return refuseResolve(res, 409, 'BOOKING_CHANGED', BOOKING_CHANGED_TEXT);
 
     console.log('✅ Booking marked handled by the desk:', { reference: booking.booking_reference, by });
     return res.json({ success: true, resolvedAt: at, resolvedBy: by, note, message: 'Marked as handled' });
