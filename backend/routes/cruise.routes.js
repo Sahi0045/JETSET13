@@ -1,5 +1,6 @@
 import express from 'express';
 import supabase from '../config/supabase.js';
+import { checkoutSaveRefusal, checkoutOwner, checkoutAmount } from '../utils/checkoutSave.js';
 import { protect, admin } from '../middleware/auth.middleware.js';
 import { cruises } from '../data/catalog.js';
 const router = express.Router();
@@ -25,7 +26,7 @@ router.post('/bookings', async (req, res) => {
       passengerDetails,
       transactionId,
       sessionId,
-      userId
+
     } = req.body;
 
     console.log('🚢 Saving cruise booking to database:', {
@@ -92,17 +93,14 @@ router.post('/bookings', async (req, res) => {
     } catch (_) { /* no pending row — proceed */ }
 
     // Verify payment: ARC Pay resultIndicator must match the stored successIndicator
-    const storedIndicator = existing?.booking_details?.success_indicator;
+    // Only the checkout row this payment belongs to, proven paid by ARC's
+    // indicator (utils/checkoutSave.js). A reference alone rewrote any row -
+    // a customer's flight booking included - and a wrong indicator reset it.
     const providedIndicator = transactionId || sessionId;
-    if (storedIndicator && providedIndicator && storedIndicator !== providedIndicator) {
-      console.warn('⚠️ Payment indicator mismatch for cruise order:', orderId);
-      try {
-        await supabase
-          .from('bookings')
-          .update({ status: 'pending', payment_status: 'unpaid' })
-          .eq('booking_reference', orderId);
-      } catch (_) { /* non-blocking */ }
-      return res.status(400).json({ success: false, verified: false, error: 'Payment could not be verified' });
+    const refusal = checkoutSaveRefusal(existing, { travelType: 'cruise', indicator: providedIndicator });
+    if (refusal) {
+      console.warn('⛔ Cruise save refused', { orderId, status: refusal.status });
+      return res.status(refusal.status).json(refusal.body);
     }
 
     const buildRow = (uid) => ({
@@ -110,7 +108,7 @@ router.post('/bookings', async (req, res) => {
       booking_reference: orderId,
       travel_type: 'cruise',
       status: 'confirmed',
-      total_amount: parseFloat(totalAmount) || 0,
+      total_amount: checkoutAmount(existing, totalAmount),
       payment_status: 'paid',
       booking_details: {
         ...(existing?.booking_details || {}),
@@ -126,10 +124,10 @@ router.post('/bookings', async (req, res) => {
         base_price: parseFloat(basePrice) || 0,
         taxes_and_fees: parseFloat(taxesAndFees) || 0,
         port_charges: parseFloat(portCharges) || 0,
-        amount: parseFloat(totalAmount) || 0,
+        amount: checkoutAmount(existing, totalAmount),
         currency: 'USD',
         paid_at: new Date().toISOString(),
-        original_user_id: userId || null
+        original_user_id: checkoutOwner(existing)
       },
       passenger_details: passengers
     });
@@ -137,20 +135,13 @@ router.post('/bookings', async (req, res) => {
     // Upsert on booking_reference so the pending/unpaid row is upgraded to confirmed/paid
     let { data, error } = await supabase
       .from('bookings')
-      .upsert(buildRow(userId), { onConflict: 'booking_reference' })
+      .upsert(buildRow(checkoutOwner(existing)), { onConflict: 'booking_reference' })
       .select()
       .single();
 
-    // FK (user_id not in auth.users) or RLS violation → retry without user_id
-    if (error && userId && (error.code === '23503' || error.code === '42501' ||
-        error.message?.includes('violates foreign key') || error.message?.includes('row-level security'))) {
-      console.log('🔄 Retrying cruise booking save without user_id (FK/RLS constraint issue)...');
-      ({ data, error } = await supabase
-        .from('bookings')
-        .upsert(buildRow(null), { onConflict: 'booking_reference' })
-        .select()
-        .single());
-    }
+    // No retry without the owner: the owner is the checkout row's own, which
+    // the table already holds. The retry existed for an owner taken from the
+    // body, and it wrote the row with no owner at all.
 
     if (error) {
       console.error('❌ Error saving cruise booking:', error);
