@@ -106,7 +106,7 @@ describe('a numbers-missing booking whose cancel voided every ticket, then PNR_C
     expect(after.booking_details.voided_tickets).toEqual([A, B]);
     expect(after.booking_details.needs_review).toMatchObject({ cancelFailed: true, voided_tickets: [A, B], unvoided_tickets: [], previous: { reason: NUMBERS_MISSING.reason } });
 
-    expect(await projection(after)).toEqual({ reason: REFUSED, no_confirmed_seat: false, ticket_numbers_missing: false, commit_unknown: false });
+    expect(await projection(after)).toEqual({ reason: REFUSED, no_confirmed_seat: false, ticket_numbers_missing: false, commit_unknown: false, unrecorded_cancellation: false });
   });
 
   it('is read the same way once a person resolved the refused cancel', async () => {

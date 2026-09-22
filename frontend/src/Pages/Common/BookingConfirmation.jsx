@@ -3,7 +3,9 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { CheckCircle, Ship, Plane, Calendar, CreditCard, ArrowLeft, Clock, MapPin, Users, XCircle } from 'lucide-react';
 import Navbar from './Navbar';
 import { attentionMessage, paymentReturned, refundStatus } from '../../utils/bookingStatus';
-import { hasNoConfirmedSeat, isCommitUnknown, isPaid, isVoidedTicket, ticketState, ticketsVoided, voidedTicketDigits } from '../../utils/eTicket';
+import {
+  hasNoConfirmedSeat, isCancellationUnrecorded, isCommitUnknown, isPaid, isVoidedTicket, ticketState, ticketsVoided, voidedTicketDigits,
+} from '../../utils/eTicket';
 import { daysUntilDate, formatCalendarDate } from '../../utils/dateUtils';
 import { cancellationMessage } from '../../../../shared/cancellationOutcome';
 import { bookingItineraries, returnDateOf } from '../../../../shared/bookingItineraries';
@@ -135,6 +137,11 @@ function BookingConfirmation() {
   // ticket is money returned on a completed booking, not "Booking Not
   // Completed".
   const outcome = statusUpper === 'CANCELLED' ? 'cancelled'
+    // A cancel that went through and could not be recorded
+    // (isCancellationUnrecorded): the row still reads confirmed and ticketed,
+    // and this called it confirmed and its void ticket issued, to a customer
+    // told not to try again and to call.
+    : isFlight && isCancellationUnrecorded(bookingData) ? 'cancellation_unrecorded'
     : !returned && (bookingData.queued === true || statusUpper === 'PENDING_CONFIRMATION') ? 'queued'
       : (bookingData.ticketed === true || hasTickets) ? 'ticketed'
         : isFlight && ticketState(bookingData) === 'pending' ? 'ticket_pending'
@@ -211,6 +218,18 @@ function BookingConfirmation() {
       badgeText: 'Being checked',
       mail: 'We will email you either way. Please do not book this trip again in the meantime. '
         + 'You can also call (877) 538-7380 with your booking reference.',
+    },
+    // Not cancelled on the record, and not a trip either. What happened to the
+    // money is our team's to confirm: the row still says paid.
+    cancellation_unrecorded: {
+      Icon: Clock,
+      iconWrap: 'bg-gradient-to-br from-amber-400 to-amber-600',
+      badge: 'bg-amber-500',
+      title: 'Cancellation Being Recorded',
+      lead: 'Your cancellation went through, but our record of it is still being updated. This booking is not valid for travel.',
+      badgeText: 'Under review',
+      mail: 'Our team will confirm what happened to your payment - please do not try again. '
+        + 'If you have any questions, call (877) 538-7380 with your booking reference.',
     },
     tickets_voided: {
       Icon: Clock,
@@ -321,6 +340,8 @@ function BookingConfirmation() {
   const attention = attentionMessage(bookingData);
   const paymentNote = outcome === 'cancelled' ? (refund?.label || 'Booking cancelled')
     : outcome === 'awaiting_payment' ? 'Payment not received'
+      // The row says paid; the cancel moved the money (cancellation_unrecorded).
+      : outcome === 'cancellation_unrecorded' ? 'Being confirmed by our team'
       : returned === 'all' ? 'Payment refunded'
         : returned === 'part' ? 'Partly refunded'
           : 'Payment received';
@@ -631,7 +652,7 @@ function BookingConfirmation() {
                   <div>
                     {/* "Total Paid" sat over a booking never paid for, and one refunded since. */}
                     <p className="text-sm text-green-700">
-                      {['cancelled', 'payment_returned'].includes(outcome) ? 'Amount Paid'
+                      {['cancelled', 'payment_returned', 'cancellation_unrecorded'].includes(outcome) ? 'Amount Paid'
                         : outcome === 'awaiting_payment' ? 'Booking Total'
                           : 'Total Paid'}
                     </p>

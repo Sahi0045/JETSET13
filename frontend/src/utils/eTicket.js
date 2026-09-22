@@ -18,7 +18,8 @@
  */
 
 import {
-  NO_CONFIRMED_SEAT_REVIEW_REASON, commitUnknownOf, liveTicketNumbersMissingOf, noConfirmedSeatOf, voidedTicketsOf,
+  NO_CONFIRMED_SEAT_REVIEW_REASON, commitUnknownOf, liveTicketNumbersMissingOf, noConfirmedSeatOf, unrecordedCancellationOf,
+  voidedTicketsOf,
 } from '../../../shared/reviewQueue';
 
 /**
@@ -96,6 +97,21 @@ export function isCommitUnknown(bookingData) {
   return sentByServer(bookingData, 'commit_unknown') ?? Boolean(commitUnknownOf(bookingData));
 }
 
+/**
+ * Whether a cancel went through - its tickets voided, the reservation
+ * released, the money moved - and its record could not be written
+ * (payment/operations.handlers.js flagUnrecordedCancellation): as the server
+ * worked it out, or - for a copy that does not say, such as a raw row - by the
+ * same walk over the flags (unrecordedCancellationOf).
+ *
+ * The row still reads confirmed, paid and ticketed, and the flag names no
+ * voided number. Read from the row, the void ticket was an issued one, offered
+ * as an E-Ticket to a customer told not to try again and to call.
+ */
+export function isCancellationUnrecorded(bookingData) {
+  return sentByServer(bookingData, 'unrecorded_cancellation') ?? Boolean(unrecordedCancellationOf(bookingData));
+}
+
 /** Whether the booking was cancelled, from whichever shape it arrived in. */
 export function isCancelledBooking(bookingData) {
   return [bookingData?.status, bookingData?.bookingDetails?.status, bookingData?.booking_details?.status, bookingData?.data?.status]
@@ -151,12 +167,14 @@ export function liveTickets(bookingData) {
  * And one ahead of all three: `cancelled`. A cancelled booking's tickets were
  * voided or refunded with the airline, but their numbers stay on the record -
  * which is how the document went on printing them, headed "E-Ticket", after the
- * trip was cancelled.
+ * trip was cancelled. So is a booking whose cancel went through and could not
+ * be recorded (isCancellationUnrecorded): the row still says confirmed, and
+ * its tickets are just as void.
  *
  * @returns {'cancelled'|'issued'|'pending'|'none'}
  */
 export function ticketState(bookingData) {
-  if (isCancelledBooking(bookingData)) return 'cancelled';
+  if (isCancelledBooking(bookingData) || isCancellationUnrecorded(bookingData)) return 'cancelled';
   // A ticket a cancel voided is not an issued ticket: nobody can fly on it.
   // With every one voided the booking reads as the numbers-missing booking
   // whose tickets were voided does - not issued, and not pending.
@@ -266,7 +284,8 @@ export function documentState(bookingData) {
  * email your e-ticket once it is issued" - no ticket is issued on it.
  *
  * Nor one whose tickets a cancel voided ('tickets_voided', left out below):
- * it was offered as an "E-Ticket" of the void numbers.
+ * it was offered as an "E-Ticket" of the void numbers. Nor one whose cancel
+ * went through and could not be recorded ('cancelled', isCancellationUnrecorded).
  */
 export function canDownloadDocument(bookingData) {
   const state = documentState(bookingData);

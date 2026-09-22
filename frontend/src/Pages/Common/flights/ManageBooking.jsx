@@ -616,6 +616,10 @@ function ManageBooking() {
             )}
 
             {bookingData?.status?.toUpperCase() !== 'CANCELLED' && 
+             // Nor a cancel that went through and could not be recorded
+             // (ticketState 'cancelled'): the customer was told not to try
+             // again, and its dialog said no ticket had been issued.
+             ticketState(bookingData) !== 'cancelled' &&
              // From the calendar day the booking names. `new Date(departureDate)`
              // was UTC midnight, so in the US Cancel vanished a day early.
              (daysUntilDate(bookingData?.departureDate) ?? 0) >= 0 && (

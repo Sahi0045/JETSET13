@@ -849,6 +849,9 @@ export default function TravelDashboard() {
                           // A cancelled booking's tickets were voided or refunded:
                           // no number is shown as though it could still be used.
                           if (statusUp === 'CANCELLED') return 'Cancelled';
+                          // Nor one whose cancel went through and could not be
+                          // recorded: its row still reads confirmed (ticketState).
+                          if (ticketState(booking) === 'cancelled') return 'Cancelled';
                           // Not a number a cancel voided: printed here, it read as a ticket.
                           const numbers = liveTickets(booking).map((t) => t?.number).filter(Boolean);
                           if (numbers.length) return <span className="tracking-wider">{numbers.join(', ')}</span>;
@@ -1016,8 +1019,10 @@ export default function TravelDashboard() {
               <FaCog className="w-4 h-4" /> Manage Booking
             </button>
           )}
-          {/* Cancel Booking Button — only for non-cancelled upcoming bookings */}
-          {statusUp !== 'CANCELLED' && statusUp !== 'FAILED' && (daysUntilTrip === null || daysUntilTrip >= 0) && (
+          {/* Cancel Booking Button — only for non-cancelled upcoming bookings.
+              Not one whose cancel went through and could not be recorded
+              (ticketState 'cancelled'): the customer was told not to try again. */}
+          {statusUp !== 'CANCELLED' && statusUp !== 'FAILED' && ticketState(booking) !== 'cancelled' && (daysUntilTrip === null || daysUntilTrip >= 0) && (
             <>
               {showCancelConfirm === booking.id ? (
                 <div className="flex items-center gap-2 flex-wrap">

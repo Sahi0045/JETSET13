@@ -200,6 +200,7 @@ describe('the same booking read back from its row', () => {
     });
     expect(client.needs_review).toEqual({
       reason: 'chain failed after commit at commit', no_confirmed_seat: false, ticket_numbers_missing: false, commit_unknown: true,
+      unrecorded_cancellation: false,
     });
     expect(client.pnr).toBeUndefined();
   });

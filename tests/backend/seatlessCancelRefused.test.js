@@ -159,6 +159,7 @@ describe('a PNR with no confirmed seat whose cancel the airline refused', () => 
       no_confirmed_seat: true,
       ticket_numbers_missing: false,
       commit_unknown: false,
+      unrecorded_cancellation: false,
     });
   });
 
@@ -201,6 +202,7 @@ describe('a PNR with no confirmed seat whose cancel the airline refused', () => 
 
     expect(toClientBooking(row).needs_review).toEqual({
       reason: 'chain failed after commit at issueTicket', no_confirmed_seat: false, ticket_numbers_missing: false, commit_unknown: false,
+      unrecorded_cancellation: false,
     });
   });
 });

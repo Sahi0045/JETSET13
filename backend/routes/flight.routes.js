@@ -4356,6 +4356,12 @@ export function toClientBooking(booking, { showPassports = false } = {}) {
         // (commitUnknownOf). Read from the reason alone, it was a booking
         // with no PNR like any failed one, and every page said it had failed.
         commit_unknown: Boolean(commitUnknownOf(booking)),
+        // A cancel that went through - tickets voided, the reservation
+        // released, the money moved - and whose record could not be written
+        // (unrecordedCancellationOf). The row still reads confirmed, paid and
+        // ticketed, and the flag names no voided number, so every page called
+        // the void ticket issued and offered it as an E-Ticket.
+        unrecorded_cancellation: Boolean(unrecordedCancellationOf(booking)),
       }
       : null,
     // Whether the GDS ticketed. The rest is the office id, the GDS session and
