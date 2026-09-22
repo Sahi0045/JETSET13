@@ -1,5 +1,6 @@
 import express from 'express';
 import supabase from '../config/supabase.js';
+import { checkoutSaveRefusal, checkoutOwner, checkoutAmount } from '../utils/checkoutSave.js';
 import { protect, admin } from '../middleware/auth.middleware.js';
 
 /**
@@ -76,7 +77,7 @@ router.post('/bookings', async (req, res) => {
       transactionId,
       resultIndicator,
       sessionId,
-      userId
+
     } = req.body;
 
     console.log('🏨 Saving hotel booking to database:', {
@@ -116,21 +117,14 @@ router.post('/bookings', async (req, res) => {
 
     // Verify payment: ARC Pay returns resultIndicator on success which must match
     // the successIndicator captured when the checkout session was created.
-    const storedIndicator = existing?.booking_details?.success_indicator;
+    // Only the checkout row this payment belongs to, proven paid by ARC's
+    // indicator (utils/checkoutSave.js). A reference alone rewrote any row -
+    // a customer's flight booking included - and a wrong indicator reset it.
     const providedIndicator = resultIndicator || transactionId;
-    if (storedIndicator && providedIndicator && storedIndicator !== providedIndicator) {
-      console.warn('⚠️ Payment indicator mismatch for hotel order:', orderId);
-      try {
-        await supabase
-          .from('bookings')
-          .update({ status: 'pending', payment_status: 'unpaid' })
-          .eq('booking_reference', orderId);
-      } catch (_) { /* non-blocking */ }
-      return res.status(400).json({
-        success: false,
-        verified: false,
-        error: 'Payment could not be verified'
-      });
+    const refusal = checkoutSaveRefusal(existing, { travelType: 'hotel', indicator: providedIndicator });
+    if (refusal) {
+      console.warn('⛔ Hotel save refused', { orderId, status: refusal.status });
+      return res.status(refusal.status).json(refusal.body);
     }
 
     // Build the guest/passenger array from guestInfo
@@ -149,7 +143,7 @@ router.post('/bookings', async (req, res) => {
       booking_reference: orderId,
       travel_type: 'hotel',
       status: 'confirmed',
-      total_amount: parseFloat(totalAmount) || 0,
+      total_amount: checkoutAmount(existing, totalAmount),
       payment_status: 'paid',
       booking_details: {
         // preserve checkout-time fields (session_id, success_indicator, etc.)
@@ -170,11 +164,11 @@ router.post('/bookings', async (req, res) => {
         taxes: parseFloat(taxes) || 0,
         service_fee: parseFloat(serviceFee) || 0,
         fixed_fees: parseFloat(fixedFees) || 0,
-        amount: parseFloat(totalAmount) || 0,
+        amount: checkoutAmount(existing, totalAmount),
         currency,
         guest_info: guest,
         paid_at: new Date().toISOString(),
-        original_user_id: userId || null
+        original_user_id: checkoutOwner(existing)
       },
       passenger_details: passengers
     });
@@ -183,20 +177,13 @@ router.post('/bookings', async (req, res) => {
     // to confirmed/paid (rather than colliding with the unique constraint).
     let { data, error } = await supabase
       .from('bookings')
-      .upsert(buildRow(userId), { onConflict: 'booking_reference' })
+      .upsert(buildRow(checkoutOwner(existing)), { onConflict: 'booking_reference' })
       .select()
       .single();
 
-    // FK (user_id not in auth.users) or RLS violation → retry without user_id
-    if (error && userId && (error.code === '23503' || error.code === '42501' ||
-        error.message?.includes('violates foreign key') || error.message?.includes('row-level security'))) {
-      console.log('🔄 Retrying hotel booking save without user_id (FK/RLS constraint issue)...');
-      ({ data, error } = await supabase
-        .from('bookings')
-        .upsert(buildRow(null), { onConflict: 'booking_reference' })
-        .select()
-        .single());
-    }
+    // No retry without the owner: the owner is the checkout row's own, which
+    // the table already holds. The retry existed for an owner taken from the
+    // body, and it wrote the row with no owner at all.
 
     if (error) {
       console.error('❌ Error saving hotel booking:', error);
