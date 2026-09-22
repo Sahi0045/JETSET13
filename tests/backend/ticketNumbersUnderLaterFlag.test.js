@@ -112,6 +112,7 @@ describe('what the booking reads send the page for it', () => {
       reason: REFUSED_CANCEL.reason,
       no_confirmed_seat: false,
       ticket_numbers_missing: true,
+      commit_unknown: false,
     });
   });
 });

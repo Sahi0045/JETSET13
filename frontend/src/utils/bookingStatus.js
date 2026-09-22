@@ -1,4 +1,4 @@
-import { NO_CONFIRMED_SEAT_REVIEW_REASON, hasNoConfirmedSeat, isPaid, ticketState, ticketsVoided } from './eTicket';
+import { NO_CONFIRMED_SEAT_REVIEW_REASON, hasNoConfirmedSeat, isCommitUnknown, isPaid, ticketState, ticketsVoided } from './eTicket';
 import {
   REFUND_DONE_ACTIONS,
   REFUND_REVIEW_ACTIONS,
@@ -173,6 +173,15 @@ export function attentionMessage(booking) {
   if (returned === 'part') {
     return 'This booking was not completed. Part of your payment for it has been refunded; '
       + 'please call (877) 538-7380 with your booking reference about the rest.';
+  }
+  // The airline commit never answered (isCommitUnknown), and nobody knows yet
+  // whether it holds a reservation. Read as any booking with no PNR, this said
+  // the booking had failed and nothing against booking again - the opposite of
+  // what the order page told the customer when they paid, and a second booking
+  // of the trip is a second charge.
+  if (isCommitUnknown(booking)) {
+    return 'Your payment is safe and our team is checking with the airline whether your booking went through. '
+      + 'We will email you either way - please do not book this trip again in the meantime.';
   }
   // A PNR is not a seat: "your seats are reserved" was false of this one. And
   // a second trip bought meanwhile is not caught as a duplicate. Read through

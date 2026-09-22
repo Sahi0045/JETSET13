@@ -28,7 +28,7 @@ import { buildFlightOrderBody, orderDataFromCheckoutRow } from '../../shared/fli
 import { statusChangeRefusal } from '../../shared/bookingStatusChange.js';
 import {
   attentionOf, reviewResolution, ticketsOf, isTicketed, NO_CONFIRMED_SEAT_REVIEW_REASON, noConfirmedSeatOf,
-  HELD_REVIEW_REASON_PREFIXES, liveTicketNumbersMissingOf, unrecordedCancellationOf, voidedTicketsOf,
+  HELD_REVIEW_REASON_PREFIXES, liveTicketNumbersMissingOf, unrecordedCancellationOf, voidedTicketsOf, commitUnknownOf,
 } from '../../shared/reviewQueue.js';
 import { errorSummary } from '../utils/errorSummary.js';
 import { flightSearchLimiter, guestBookingLimiter } from '../middleware/security.js';
@@ -1245,8 +1245,14 @@ export function paymentStateOf(booking) {
  * payment record says (paymentStateOf). "Our team is reviewing it" and "If you
  * have not heard from us" are for a payment still held, or one whose fate a
  * person is confirming: a refunded booking is on no desk list and no alarm.
+ *
+ * `commitUnknown` (commitUnknownOf): the airline commit never answered, and
+ * nobody knows yet whether the airline holds the booking. A reload of the
+ * order page sends the order again, and the refusal said the booking could
+ * not be completed - with nothing against booking the trip again, which is
+ * what the customer was told moments before.
  */
-function notSentAgainMessage(bookingReference, paymentState) {
+function notSentAgainMessage(bookingReference, paymentState, { commitUnknown = false } = {}) {
   const call = `call (877) 538-7380 with booking reference ${bookingReference}`;
   if (paymentState === 'returned') {
     return 'This booking could not be completed, so it was not sent to the airline again. '
@@ -1255,6 +1261,11 @@ function notSentAgainMessage(bookingReference, paymentState) {
   if (paymentState === 'partly_returned') {
     return 'This booking could not be completed, so it was not sent to the airline again. '
       + `Part of your payment for it has been refunded. Please ${call} about the rest.`;
+  }
+  if (commitUnknown) {
+    return 'Our team is checking with the airline whether this booking went through, so it was not sent to the airline again. '
+      + 'Nothing more has been charged. Please do not book this trip again in the meantime - we will email you either way. '
+      + `If you have not heard from us within 2 business days, ${call}.`;
   }
   return 'This booking could not be completed and our team is reviewing it, so it was not sent to the airline again. '
     + `Nothing more has been charged. If you have not heard from us within 2 business days, ${call}.`;
@@ -1299,11 +1310,12 @@ function duplicatePaymentAnswer(bookingReference, paymentState = 'held') {
  *
  * "This customer" is the account the checkout was made from, or the email it
  * was made with. "Booked or on its way" is a PNR, a committed or queued chain,
- * or a chain in progress that claimed first - the earlier claim, or the lower
- * reference on a tie. Two paid checkouts racing each other both get here after
- * taking their own claim, so they see each other, and only the later one is
- * held. Same names, not just the same flights: a family can book one flight
- * twice for different people, and nothing here refunds anybody.
+ * a commit the airline never answered, or a chain in progress that claimed
+ * first - the earlier claim, or the lower reference on a tie. Two paid
+ * checkouts racing each other both get here after taking their own claim, so
+ * they see each other, and only the later one is held. Same names, not just
+ * the same flights: a family can book one flight twice for different people,
+ * and nothing here refunds anybody.
  *
  * @returns {Promise<{ duplicateOf: string|null } | { unavailable: true }>}
  */
@@ -1349,7 +1361,13 @@ async function findDuplicateBooking(booking, { travellers, offer, claimedAt, now
     if (now - Date.parse(row.created_at) > DUPLICATE_LOOKBACK_MS) continue;
 
     const chain = other.gds_chain || {};
-    const booked = Boolean(other.pnr) || Boolean(other.queued_order) || ['committed', 'queued'].includes(chain.state);
+    // A commit that never answered (commitUnknownOf) may be held at the
+    // airline. Its row has no PNR and its chain stays 'in_progress', so it
+    // counted only for the chain's two-minute claim - after that a second
+    // payment for the trip was sent to the airline. It counts until a person
+    // finds out.
+    const booked = Boolean(other.pnr) || Boolean(other.queued_order) || ['committed', 'queued'].includes(chain.state)
+      || Boolean(commitUnknownOf(row));
     const theirClaim = Date.parse(chain.claimedAt || chain.startedAt);
     const bookingFirst = chain.state === 'in_progress'
       && now - Date.parse(chain.startedAt) < CHAIN_CLAIM_TTL_MS
@@ -2670,7 +2688,9 @@ router.post('/order', optionalProtect, async (req, res) => {
       // Said from the row, not assumed: the order page says "your payment is
       // held ... do not book this trip again" only when this says 'held'.
       const paymentState = paymentStateOf(existing);
-      const message = notSentAgainMessage(existing.booking_reference, paymentState);
+      const message = notSentAgainMessage(existing.booking_reference, paymentState, {
+        commitUnknown: Boolean(commitUnknownOf(existing)),
+      });
       return res.status(409).json({
         success: false,
         code: failedBefore ? 'BOOKING_FAILED' : 'BOOKING_NEEDS_REVIEW',
@@ -4332,6 +4352,10 @@ export function toClientBooking(booking, { showPassports = false } = {}) {
         // Issued, but the numbers have not reached us: "not issued" was false.
         // Not once a cancel voided those tickets: "issued" was false then.
         ticket_numbers_missing: Boolean(liveTicketNumbersMissingOf(booking)),
+        // The airline commit never answered, and nobody has found out since
+        // (commitUnknownOf). Read from the reason alone, it was a booking
+        // with no PNR like any failed one, and every page said it had failed.
+        commit_unknown: Boolean(commitUnknownOf(booking)),
       }
       : null,
     // Whether the GDS ticketed. The rest is the office id, the GDS session and
