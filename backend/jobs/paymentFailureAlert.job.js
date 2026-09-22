@@ -16,7 +16,9 @@
  * So a customer who cancelled and was never paid back appears, in the database
  * and in the admin panel, to have been refunded. Nothing in the product ever
  * says otherwise. That is the gap this closes: `paymentAction` is the only
- * field that still tells the truth, and this reads it.
+ * field that still tells the truth, and this reads it. (The cancel paths have
+ * since stopped: a refused refund now leaves the row `paid`. Rows written
+ * before still read refunded, and the message says so only of those.)
  *
  * Runs inside the API process next to the paid-but-not-ticketed watch, and
  * delivers through the same webhook. Asleep without one.
@@ -50,7 +52,8 @@ export const FAILED_PAYMENT_ACTIONS = [
   // Not attempted, on purpose: a flight whose fare or tickets leave the amount
   // to a person (payment/operations.handlers.js decideFlightRefund). Nothing
   // else pages about it - the needs-review watch skips cancelled bookings - so
-  // without this it is money owed that nobody is told about.
+  // without this it is money owed that nobody is told about. Also a reversal
+  // sent and never answered (reversalOutcomeUnknown), where it may not be owed.
   'REFUND_UNDER_REVIEW',
 ];
 
@@ -82,6 +85,16 @@ export function selectUnrefunded(rows = []) {
   });
 }
 
+/**
+ * A failed refund whose row says the money went back.
+ *
+ * What the header describes, and what used to be every failed refund. Both
+ * cancel paths now leave the charge where it was - `paid` - after a refund
+ * ARC Pay refused, and telling staff that row "is not what happened" had them
+ * distrust the one field that was right.
+ */
+const readsRefunded = (booking) => ['refunded', 'partially_refunded'].includes(String(booking.payment_status || '').toLowerCase());
+
 /** One line per booking. No passenger data: alerts get forwarded around. */
 export function describeFailure(booking) {
   const cancellation = booking.booking_details?.cancellation || {};
@@ -91,9 +104,41 @@ export function describeFailure(booking) {
   const reason = String(cancellation.reason || '').slice(0, 80);
   return [
     `*${booking.booking_reference}* — ${booking.total_amount} USD taken, ${cancellation.refundAmount ?? 0} returned`,
-    `${cancellation.paymentAction} · the row reads ${booking.status}/${booking.payment_status}, which is not what happened`,
+    `${cancellation.paymentAction} · the row reads ${booking.status}/${booking.payment_status}${readsRefunded(booking) ? ', which is not what happened' : ''}`,
     `cancelled ${hours}h ago${reason ? ` · ${reason}` : ''}`,
   ].join('\n');
+}
+
+/** What the failed section says of its rows, as true of each as it is of all. */
+function failedLead(failed) {
+  const storedAsRefunded = failed.filter(readsRefunded).length;
+  if (storedAsRefunded === 0) return 'ARC Pay did not return the money. These need refunding by hand.';
+  if (storedAsRefunded === failed.length) {
+    return 'ARC Pay did not return the money, but the booking is stored as refunded, so nothing else will ever flag it. These need refunding by hand.';
+  }
+  const many = storedAsRefunded > 1;
+  return `ARC Pay did not return the money, and ${storedAsRefunded} of them ${many ? 'are' : 'is'} stored as refunded, `
+    + `so nothing else will ever flag ${many ? 'them' : 'it'}. These need refunding by hand.`;
+}
+
+/**
+ * The review flag the cancel wrote with its cancellation record, if any.
+ *
+ * Not every flag with source 'cancellation' on top is this cancel's. A fallback
+ * cancel the airline carried out (flight.routes.js DELETE /order) writes a
+ * cancellation and no flag, so an earlier cancel the airline REFUSED stayed on
+ * top, and its "refund withheld to avoid paying out against a live booking"
+ * was printed as why this one held the refund. A refused cancel never writes a
+ * cancellation (cancelFailed), and the cancel's own flag is written with its
+ * cancellation, at the same moment - never before it. A flag with no time
+ * recorded is taken as the cancel's, as it always was.
+ */
+function cancelReviewOf(booking) {
+  const details = booking.booking_details || {};
+  const review = details.needs_review;
+  if (review?.source !== 'cancellation' || review.cancelFailed) return null;
+  if (Date.parse(review.at) < Date.parse(details.cancellation?.cancelledAt)) return null;
+  return review;
 }
 
 /**
@@ -106,21 +151,47 @@ export function describeFailure(booking) {
  */
 function heldReasonOf(booking) {
   const details = booking.booking_details || {};
-  const review = details.needs_review?.source === 'cancellation' ? details.needs_review.reason : null;
-  const reason = review || details.cancellation?.basis || details.cancellation?.reason || 'no reason was recorded';
+  const reason = cancelReviewOf(booking)?.reason || details.cancellation?.basis || details.cancellation?.reason || 'no reason was recorded';
   return String(reason).slice(0, 240);
 }
 
+// How returnFlightPayment began its review reason when it had sent a reversal,
+// or was about to, and heard nothing back. Rows cancelled before it recorded
+// `reversalOutcomeUnknown` say so only here.
+const OUTCOME_UNKNOWN_REASONS = ['automatic reversal ended ', 'refund request did not complete: '];
+
+/**
+ * A refund left for review because ARC Pay's answer never came back - the
+ * reversal threw mid-request, or found the order already reversed - rather
+ * than one the cancel held on purpose. The money may already be back.
+ */
+function reversalOutcomeUnknown(booking) {
+  const cancellation = booking.booking_details?.cancellation || {};
+  if (cancellation.paymentAction !== 'REFUND_UNDER_REVIEW') return false;
+  if (cancellation.reversalOutcomeUnknown === true) return true;
+  const reason = String(cancelReviewOf(booking)?.reason || '');
+  return OUTCOME_UNKNOWN_REASONS.some((prefix) => reason.startsWith(prefix));
+}
+
+const hoursSinceCancelled = (booking) => Math.round(
+  (Date.now() - Date.parse(booking.booking_details?.cancellation?.cancelledAt || booking.created_at)) / 36e5,
+);
+
 /** One line per held refund. Nothing failed here, and the row does not lie. */
 export function describeHeld(booking) {
-  const cancellation = booking.booking_details?.cancellation || {};
-  const hours = Math.round(
-    (Date.now() - Date.parse(cancellation.cancelledAt || booking.created_at)) / 36e5,
-  );
   return [
     `*${booking.booking_reference}* — ${booking.total_amount} USD taken, nothing returned yet`,
     `held because: ${heldReasonOf(booking)}`,
-    `cancelled ${hours}h ago · the row reads ${booking.status}/${booking.payment_status}`,
+    `cancelled ${hoursSinceCancelled(booking)}h ago · the row reads ${booking.status}/${booking.payment_status}`,
+  ].join('\n');
+}
+
+/** One line per refund whose outcome is unknown. Not "nothing returned": that is the open question. */
+export function describeOutcomeUnknown(booking) {
+  return [
+    `*${booking.booking_reference}* — ${booking.total_amount} USD taken, whether any went back is not known`,
+    `the cancel recorded: ${heldReasonOf(booking)}`,
+    `cancelled ${hoursSinceCancelled(booking)}h ago · the row reads ${booking.status}/${booking.payment_status}`,
   ].join('\n');
 }
 
@@ -133,15 +204,33 @@ export function buildMessage(bookings) {
   // fare whose rules decide the amount - and the row, cancelled/paid, says so.
   // Told "these need refunding by hand", staff would refund what may be a live
   // ticket. It gets its own section, and the reason it was held.
-  const held = bookings.filter((b) => b.booking_details?.cancellation?.paymentAction === 'REFUND_UNDER_REVIEW');
-  const failed = bookings.filter((b) => !held.includes(b));
+  //
+  // The same code also closes a reversal that was sent and never answered. That
+  // is not a hold: "nothing was refunded, on purpose" is false there, and the
+  // first thing to learn is whether ARC Pay moved the money - refunded again
+  // by hand, the customer would be paid twice. It gets a section of its own.
+  const underReview = bookings.filter((b) => b.booking_details?.cancellation?.paymentAction === 'REFUND_UNDER_REVIEW');
+  const unknown = underReview.filter(reversalOutcomeUnknown);
+  const held = underReview.filter((b) => !unknown.includes(b));
+  const failed = bookings.filter((b) => !underReview.includes(b));
   const sections = [];
   if (failed.length) {
     sections.push(
       `:money_with_wings: *${countOf(failed)} where the refund never went through* — ${totalOf(failed)} USD`,
-      'ARC Pay did not return the money, but the booking is stored as refunded, so nothing else will ever flag it. These need refunding by hand.',
+      failedLead(failed),
       '',
       ...failed.map(describeFailure),
+    );
+  }
+  if (unknown.length) {
+    if (sections.length) sections.push('');
+    sections.push(
+      `:grey_question: *${countOf(unknown)} whose refund may or may not have gone through* — ${totalOf(unknown)} USD taken`,
+      'The cancel asked ARC Pay to return the money and never learned how that ended. '
+        + 'Check the order in ARC Pay before anything else: open Finish refund on the desk and press Check ARC Pay '
+        + '(Sync from ARC in the admin panel), which records what ARC Pay shows. Refund by hand only what it still holds.',
+      '',
+      ...unknown.map(describeOutcomeUnknown),
     );
   }
   if (held.length) {
