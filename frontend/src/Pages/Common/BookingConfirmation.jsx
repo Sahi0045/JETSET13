@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { CheckCircle, Ship, Plane, Calendar, CreditCard, ArrowLeft, Clock, MapPin, Users, XCircle } from 'lucide-react';
 import Navbar from './Navbar';
 import { attentionMessage, paymentReturned, refundStatus } from '../../utils/bookingStatus';
-import { hasNoConfirmedSeat, isPaid, ticketState } from '../../utils/eTicket';
+import { hasNoConfirmedSeat, isPaid, isVoidedTicket, ticketState, ticketsVoided, voidedTicketDigits } from '../../utils/eTicket';
 import { daysUntilDate, formatCalendarDate } from '../../utils/dateUtils';
 import { cancellationMessage } from '../../../../shared/cancellationOutcome';
 import { bookingItineraries, returnDateOf } from '../../../../shared/bookingItineraries';
@@ -110,7 +110,10 @@ function BookingConfirmation() {
   // as `needsReview` and this page read `needs_review`, so it never knew.
   const heldForReview = Boolean(bookingData.needs_review || bookingData.needsReview);
   const statusUpper = String(bookingData.status || '').toUpperCase();
-  const hasTickets = Array.isArray(bookingData.tickets) && bookingData.tickets.length > 0;
+  // Not a ticket a cancel voided: the ticketed outcome told the customer their
+  // ticket had been issued, of void ones.
+  const voidedTickets = voidedTicketDigits(bookingData);
+  const hasTickets = Array.isArray(bookingData.tickets) && bookingData.tickets.some((ticket) => !isVoidedTicket(ticket, voidedTickets));
   // A flight row still `pending` with no PNR never reached the airline. My
   // Trips opens this page for those too ("View Details"), and it called every
   // one of them "Reservation Held - your seats are reserved". What it is
@@ -136,6 +139,10 @@ function BookingConfirmation() {
       : (bookingData.ticketed === true || hasTickets) ? 'ticketed'
         : isFlight && ticketState(bookingData) === 'pending' ? 'ticket_pending'
           : returned ? 'payment_returned'
+            // Every ticket voided by a cancel the airline refused: not "held",
+            // whose "Your ticket is being issued" promised a ticket nobody
+            // will issue.
+            : isFlight && ticketsVoided(bookingData) ? 'tickets_voided'
             : neverBooked ? (bookingData.needs_review ? 'not_completed' : isPaid(bookingData) ? 'not_booked' : 'awaiting_payment')
               : isFlight && hasNoConfirmedSeat(bookingData) ? 'no_confirmed_seat'
                 : isFlight ? 'held'
@@ -184,6 +191,15 @@ function BookingConfirmation() {
       mail: heldForReview
         ? 'Our team is finishing your ticket and will email you as soon as it is issued. Until then, this reference is your proof of booking.'
         : 'We email your e-ticket to the address you booked with once it is issued. Until then, this reference is your proof of booking.',
+    },
+    tickets_voided: {
+      Icon: Clock,
+      iconWrap: 'bg-gradient-to-br from-amber-400 to-amber-600',
+      badge: 'bg-amber-500',
+      title: 'Ticket Voided',
+      lead: 'Your ticket has been voided and is not valid for travel. The cancellation has not been completed with the airline yet.',
+      badgeText: 'Ticket voided',
+      mail: 'Our team has been alerted and will complete it. If it is urgent, call (877) 538-7380 with your booking reference.',
     },
     // Nothing here promises a seat, a ticket or an email: a person contacts
     // them (the order route pages one). Booking again would buy a second trip

@@ -119,6 +119,30 @@ export function liveTicketNumbersMissingOf(booking) {
 }
 
 /**
+ * Every ticket number a cancel recorded as voided, once each: the booking's own
+ * list plus every flag's, down the whole chain.
+ *
+ * A cancel that voids tickets and then has PNR_Cancel refused leaves the
+ * ticket list as it was (payment/operations.handlers.js records the void
+ * beside it), so a reader of the list alone called void tickets issued. Past a
+ * resolved flag too, as liveTicketNumbersMissingOf reads it: a void is a fact
+ * about the airline record, and nobody marking the booking handled un-voids a
+ * ticket.
+ */
+export function voidedTicketsOf(booking) {
+  const listed = (list) => (Array.isArray(list) ? list : []);
+  const seen = new Set();
+  return [detailsOf(booking)?.voided_tickets, ...flagsInForce(booking, { pastResolved: true }).map((flag) => flag.voided_tickets)]
+    .flatMap(listed)
+    .filter((number) => {
+      const digits = String(number ?? '').replace(/\D/g, '');
+      if (!digits || seen.has(digits)) return false;
+      seen.add(digits);
+      return true;
+    });
+}
+
+/**
  * The order route's flag on a PNR the airline confirmed no seat on: a flight
  * came back from commit waitlisted, requested, unable or cancelled (the
  * chain's step 'segmentStatus', bookingChain.js NOT_A_SEAT_AT_COMMIT). The PNR

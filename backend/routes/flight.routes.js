@@ -28,7 +28,7 @@ import { buildFlightOrderBody, orderDataFromCheckoutRow } from '../../shared/fli
 import { statusChangeRefusal } from '../../shared/bookingStatusChange.js';
 import {
   attentionOf, reviewResolution, ticketsOf, isTicketed, NO_CONFIRMED_SEAT_REVIEW_REASON, noConfirmedSeatOf,
-  liveTicketNumbersMissingOf, unrecordedCancellationOf,
+  liveTicketNumbersMissingOf, unrecordedCancellationOf, voidedTicketsOf,
 } from '../../shared/reviewQueue.js';
 import { errorSummary } from '../utils/errorSummary.js';
 import { flightSearchLimiter, guestBookingLimiter } from '../middleware/security.js';
@@ -4230,6 +4230,11 @@ export function toClientBooking(booking, { showPassports = false } = {}) {
     queued: Boolean(booking.booking_details?.queued_order) && !booking.booking_details?.pnr,
     cancellation: booking.booking_details?.cancellation || null,
     tickets: booking.booking_details?.tickets || [],
+    // Which of those a cancel voided. A cancel that voids and then has
+    // PNR_Cancel refused leaves the list as it was, so the pages called every
+    // number on it an issued ticket and printed void numbers on an "E-Ticket".
+    // The booking's own list plus every flag's (voidedTicketsOf).
+    voided_tickets: voidedTicketsOf(booking),
     // The reason is what the e-ticket reads ("ticket_numbers_not_retrieved").
     // The rest of the record is for the support desk: gateway errors, reversal
     // attempts, the GDS detail.

@@ -17,7 +17,9 @@
  *     validatingCarrier: 'AI'|null, issuedOn: '2026-09-04'|null }
  */
 
-import { NO_CONFIRMED_SEAT_REVIEW_REASON, liveTicketNumbersMissingOf, noConfirmedSeatOf } from '../../../shared/reviewQueue';
+import {
+  NO_CONFIRMED_SEAT_REVIEW_REASON, liveTicketNumbersMissingOf, noConfirmedSeatOf, voidedTicketsOf,
+} from '../../../shared/reviewQueue';
 
 /**
  * A booking reaches the UI in two different shapes, and both are live:
@@ -97,6 +99,34 @@ export function resolveTickets(bookingData) {
   return [];
 }
 
+const ticketDigits = (number) => String(number ?? '').replace(/\D/g, '');
+
+/**
+ * The ticket numbers a cancel voided, as digits: what the server sent
+ * (toClientBooking's `voided_tickets`), and - for a copy that does not carry
+ * it, such as a raw row - the same walk over the booking and its flags the
+ * server makes (voidedTicketsOf).
+ *
+ * A cancel that voids and then has PNR_Cancel refused leaves the ticket list
+ * as it was. Read alone, the list made every void ticket an issued one.
+ */
+export function voidedTicketDigits(bookingData) {
+  const sent = Array.isArray(bookingData?.voided_tickets) ? bookingData.voided_tickets : [];
+  return new Set([...sent, ...voidedTicketsOf(bookingData)].map(ticketDigits).filter(Boolean));
+}
+
+/** Whether this ticket is one a cancel voided (voidedTicketDigits). */
+export const isVoidedTicket = (ticket, voided) => Boolean(ticket?.number) && voided.has(ticketDigits(ticket.number));
+
+/**
+ * The booking's tickets less the ones a cancel voided. A booking nobody
+ * cancelled has none voided, and gets its whole list, as before.
+ */
+export function liveTickets(bookingData) {
+  const voided = voidedTicketDigits(bookingData);
+  return resolveTickets(bookingData).filter((ticket) => !isVoidedTicket(ticket, voided));
+}
+
 /**
  * Three states, not two.
  *
@@ -115,7 +145,10 @@ export function resolveTickets(bookingData) {
  */
 export function ticketState(bookingData) {
   if (isCancelledBooking(bookingData)) return 'cancelled';
-  if (resolveTickets(bookingData).length > 0) return 'issued';
+  // A ticket a cancel voided is not an issued ticket: nobody can fly on it.
+  // With every one voided the booking reads as the numbers-missing booking
+  // whose tickets were voided does - not issued, and not pending.
+  if (liveTickets(bookingData).length > 0) return 'issued';
 
   // Under a refused cancel's flag too (sentByServer): the ticket was issued
   // whatever flag sits on top now, and the top reason alone read "none" - but
@@ -124,6 +157,16 @@ export function ticketState(bookingData) {
   if (numbersMissing) return 'pending';
 
   return 'none';
+}
+
+/**
+ * Every ticket the booking held was voided by a cancel, and the booking is not
+ * cancelled: the airline refused to cancel the reservation after the void.
+ * No ticket is valid, none is pending, and none is "being issued" - the
+ * sentences a booking with no ticket gets are false of it.
+ */
+export function ticketsVoided(bookingData) {
+  return ticketState(bookingData) === 'none' && voidedTicketDigits(bookingData).size > 0;
 }
 
 /**
@@ -182,7 +225,10 @@ export function pnrOf(bookingData) {
  * And not every PNR does: one the airline left without a confirmed seat
  * (hasNoConfirmedSeat) printed "Your seat is held under the PNR below" too.
  *
- * @returns {'cancelled'|'ticketed'|'ticket_pending'|'held'|'no_confirmed_seat'|'queued'|'not_booked'}
+ * And not a PNR whose tickets a cancel voided (ticketsVoided): "Your seat is
+ * held ... We will email your e-ticket once it is issued" was false of it.
+ *
+ * @returns {'cancelled'|'ticketed'|'ticket_pending'|'tickets_voided'|'held'|'no_confirmed_seat'|'queued'|'not_booked'}
  */
 export function documentState(bookingData) {
   const tickets = ticketState(bookingData);
@@ -190,6 +236,7 @@ export function documentState(bookingData) {
   if (tickets === 'issued') return 'ticketed';
   if (pnrOf(bookingData)) {
     if (tickets === 'pending') return 'ticket_pending';
+    if (ticketsVoided(bookingData)) return 'tickets_voided';
     return hasNoConfirmedSeat(bookingData) ? 'no_confirmed_seat' : 'held';
   }
   const status = String(bookingData?.status ?? '').toLowerCase();
@@ -205,6 +252,9 @@ export function documentState(bookingData) {
  * Nor a held seat whose payment went back: the Payments tab refunds without
  * cancelling, and the PDF said "Your seat is held under the PNR below. We will
  * email your e-ticket once it is issued" - no ticket is issued on it.
+ *
+ * Nor one whose tickets a cancel voided ('tickets_voided', left out below):
+ * it was offered as an "E-Ticket" of the void numbers.
  */
 export function canDownloadDocument(bookingData) {
   const state = documentState(bookingData);
