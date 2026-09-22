@@ -25,8 +25,8 @@ import { readEveryCandidate } from './alarmCandidates.js';
 import { unchangedSince } from '../utils/bookingDetailsGuard.js';
 import { queueEnvironment } from '../utils/queueEnvironment.js';
 import {
-  NO_CONFIRMED_SEAT_REVIEW_REASON, SCHEDULE_CHANGED_REVIEW_REASON, TICKET_NUMBERS_MISSING, attentionOf, flagsInForce,
-  isFailedCancellation, isTicketed, isUnrecordedCancellation, needsAirlineRefundClaim, openTicketedFlagOf,
+  ISSUANCE_UNKNOWN, NO_CONFIRMED_SEAT_REVIEW_REASON, SCHEDULE_CHANGED_REVIEW_REASON, TICKET_NUMBERS_MISSING, attentionOf,
+  flagsInForce, isFailedCancellation, isTicketed, isUnrecordedCancellation, needsAirlineRefundClaim, openTicketedFlagOf,
   scheduleChangeOf, ticketNumbersMissingOf, ticketsOf, unrecordedCancellationOf,
 } from '../../shared/reviewQueue.js';
 
@@ -129,15 +129,25 @@ export function selectUnannounced(rows = []) {
   });
 }
 
+/**
+ * A booking held after DocIssuance was sent and never answered (the order
+ * route's flag, `issuance`), with no ticket recorded since: whether one was
+ * issued is not known until the PNR's FA lines are read.
+ */
+const issuanceUnanswered = (booking) => !isTicketed(booking?.booking_details)
+  && booking?.booking_details?.needs_review?.issuance === ISSUANCE_UNKNOWN;
+
 /** One line per booking. No passenger data: alerts get forwarded around. */
 export function describeBooking(booking) {
   const details = booking.booking_details || {};
   const review = details.needs_review || {};
   const hours = Math.round((Date.now() - Date.parse(review.at || booking.created_at)) / 36e5);
   const ticketed = (review.ticketed ?? details.gds?.ticketed) === true;
+  // "NO" was said of an issuance nobody saw answered.
+  const verdict = ticketed ? 'yes' : issuanceUnanswered(booking) ? 'unknown' : 'NO';
   return [
     `*${booking.booking_reference}* — ${booking.status}/${booking.payment_status}, ${booking.total_amount} USD`,
-    `PNR ${details.pnr || 'none'} · ticketed: ${ticketed ? 'yes' : 'NO'}`,
+    `PNR ${details.pnr || 'none'} · ticketed: ${verdict}`,
     `reason: ${review.reason || UNTICKETED_REVIEW_REASON} · flagged ${hours}h ago`,
     // The GDS's own words, when the chain recorded them. "failed at
     // issueTicket" alone cannot tell a carrier the office may not ticket from
@@ -145,6 +155,9 @@ export function describeBooking(booking) {
     ...(review.amadeus
       ? [`Amadeus ${review.amadeus.operation || ''}: ${review.amadeus.message || review.amadeus.code || 'no detail'}`.replace(/\s+:/, ':')]
       : []),
+    // A schedule change the chain accepted before the booking was held sits
+    // under the held flag (flight.routes.js flagForReview).
+    ...alsoRetimed(booking),
   ].join('\n');
 }
 
@@ -324,6 +337,12 @@ export function describeFailedCancellation(booking) {
   const numbersMissing = Boolean(ticketNumbersMissingOf(booking));
   const ticketed = isTicketed(details) || numbersMissing || flags.some((flag) => flag.ticketed === true)
     || voided.length > 0 || flags.some((flag) => Array.isArray(flag.unvoided_tickets) && flag.unvoided_tickets.length > 0);
+  // A hold under this cancel whose DocIssuance was never answered: a ticket
+  // may exist though nothing recorded one. The outage that timed issuance out
+  // often times the cancel's retrieve out too, and this line said "ticketed:
+  // NO · no tickets issued" - an invitation to cancel the PNR and refund in
+  // full over a ticket Amadeus may have issued.
+  const issuanceUnknown = !ticketed && flags.some((flag) => flag.issuance === ISSUANCE_UNKNOWN);
   let tickets;
   if (Array.isArray(review.unvoided_tickets)) {
     // This attempt's own report: every ticket on the PNR it did not void.
@@ -332,13 +351,15 @@ export function describeFailedCancellation(booking) {
     const others = notVoided(unionTickets(ticketsOf(details).map((ticket) => ticket.number), ...flags.map((flag) => flag.unvoided_tickets)));
     tickets = voided.length || others.length
       ? `tickets voided: ${voided.join(', ') || 'none recorded'} · not recorded as voided: ${others.join(', ') || 'none'}`
-      : ticketed ? 'ticket numbers not recorded: read the FA lines' : 'no tickets issued';
+      : ticketed ? 'ticket numbers not recorded: read the FA lines'
+        : issuanceUnknown ? 'DocIssuance was never answered: read the FA lines before cancelling or refunding'
+          : 'no tickets issued';
   }
   // Numbers the chain could not read back are missing from every list above.
   const incomplete = numbersMissing && tickets.startsWith('tickets voided') ? ' · not every ticket number is recorded: read the FA lines' : '';
   return [
     `*${booking.booking_reference}* — ${booking.status}/${booking.payment_status}, ${booking.total_amount} USD`,
-    `PNR ${details.pnr || review.pnr || 'none'} · ticketed: ${ticketed ? 'yes' : 'NO'} · ${tickets}${incomplete}`,
+    `PNR ${details.pnr || review.pnr || 'none'} · ticketed: ${ticketed ? 'yes' : issuanceUnknown ? 'unknown' : 'NO'} · ${tickets}${incomplete}`,
     `airline: ${review.detail || 'no detail recorded'}`,
     `flagged ${hours}h ago`,
   ].join('\n');
@@ -414,8 +435,13 @@ export function buildMessage(bookings) {
     && ticketedScheduleChange(booking));
   const held = rest.filter((booking) => !needsAirlineRefundClaim(booking) && !ticketNumbersMissing(booking)
     && heldTicketed(booking));
-  const unticketed = rest.filter((booking) => !needsAirlineRefundClaim(booking) && !ticketNumbersMissing(booking)
+  const notTicketed = rest.filter((booking) => !needsAirlineRefundClaim(booking) && !ticketNumbersMissing(booking)
     && !noConfirmedSeat(booking) && !ticketedScheduleChange(booking) && !heldTicketed(booking));
+  // Nor is an issuance nobody saw answered. Under that heading it read "no
+  // ticket was issued ... ticket it, or refund it" before ticket sync had read
+  // the PNR: a second ticket, or a refund of a live one.
+  const unanswered = notTicketed.filter(issuanceUnanswered);
+  const unticketed = notTicketed.filter((booking) => !issuanceUnanswered(booking));
   const sections = [];
   if (unrecorded.length) {
     sections.push(
@@ -462,6 +488,16 @@ export function buildMessage(bookings) {
         + 'Do not refund while the PNR is live: its confirmed flights would stay held with nothing paid for them.',
       '',
       ...seatless.map(describeBooking),
+    );
+  }
+  if (unanswered.length) {
+    sections.push(
+      `:grey_question: *${unanswered.length} booking${unanswered.length > 1 ? 's' : ''} paid, ticket issuance not answered*`,
+      'DocIssuance did not answer; a ticket may have been issued. Read the PNR\'s FA lines first. '
+        + 'If a ticket is there, do NOT reissue or refund - ticket sync will record it and send the e-ticket. '
+        + 'If none, ticket it, or cancel the PNR and then refund.',
+      '',
+      ...unanswered.map(describeBooking),
     );
   }
   if (unticketed.length) {

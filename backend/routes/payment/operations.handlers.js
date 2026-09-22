@@ -28,7 +28,7 @@ import { canReachAmadeus } from '../../utils/amadeusReach.js';
 import { unchangedSince } from '../../utils/bookingDetailsGuard.js';
 import { DEFAULT_PRICE_SETTINGS } from '../../config/priceDefaults.js';
 import { cancellationMessage, refundOutcome } from '../../../shared/cancellationOutcome.js';
-import { needsAirlineRefundClaim, ticketNumbersMissingOf } from '../../../shared/reviewQueue.js';
+import { ISSUANCE_UNKNOWN, flagInForce, needsAirlineRefundClaim, ticketNumbersMissingOf } from '../../../shared/reviewQueue.js';
 import { reconcileBookingPayment } from './checkout.handlers.js';
 import { errorSummary } from '../../utils/errorSummary.js';
 import { orderVoided, voidsPayment } from '../../utils/arcTransactions.js';
@@ -379,7 +379,7 @@ async function releaseCancellation(booking, claim, patch = {}) {
  * @returns {{ action: 'nothing_held'|'review'|'refund_all'|'refund_less_fee'|'fee_covers',
  *             fee: number, refundAmount: number, reason: string }}
  */
-export function decideFlightRefund({ heldAmount, paidInFull, everCaptured, hasReservation, gds, rowTicketed, refundable, fee, rowPaid = false }) {
+export function decideFlightRefund({ heldAmount, paidInFull, everCaptured, hasReservation, gds, rowTicketed, issuanceUnknownOnly = false, refundable, fee, rowPaid = false }) {
     const heldCents = Math.round((Number(heldAmount) || 0) * 100);
     const review = (reason) => ({ action: 'review', fee: 0, refundAmount: 0, reason });
 
@@ -405,7 +405,14 @@ export function decideFlightRefund({ heldAmount, paidInFull, everCaptured, hasRe
             return review('the airline did not say whether a ticket had been issued');
         }
         ticketed = Boolean(gds.hadTickets);
-        if (!ticketed && rowTicketed) return review('the booking records a ticket, but the airline showed none when it was cancelled');
+        if (!ticketed && rowTicketed) {
+            // Nothing recorded a ticket - only a DocIssuance nobody saw
+            // answered. "The booking records a ticket" was false of it, and
+            // staff reading it would dismiss the hold and refund in full.
+            return review(issuanceUnknownOnly
+                ? 'DocIssuance was never answered and the airline showed no ticket when it was cancelled: check the ticket history before refunding'
+                : 'the booking records a ticket, but the airline showed none when it was cancelled');
+        }
     } else if (rowTicketed) {
         return review('the booking records a ticket but has no airline reservation');
     }
@@ -715,6 +722,9 @@ async function cancelFlightBooking(res, booking, { reason, email }) {
         ? { ...gds, requiresAirlineRefund, voided: true }
         : gds;
     const tickets = Array.isArray(details.tickets) ? details.tickets : [];
+    const recordedTicket = details.gds?.ticketed === true || tickets.length > 0
+        || Boolean(ticketNumbersMissingOf(booking));
+    const issuanceUnknown = Boolean(flagInForce(booking, (review) => review.issuance === ISSUANCE_UNKNOWN));
     const decision = decideFlightRefund({
         heldAmount: payment.heldAmount,
         paidInFull: payment.paid === true,
@@ -723,8 +733,14 @@ async function cancelFlightBooking(res, booking, { reason, email }) {
         gds: settled,
         // The numbers-missing flag under a refused cancel's flag too: the
         // ticket was issued whatever flag sits on top now.
-        rowTicketed: details.gds?.ticketed === true || tickets.length > 0
-            || Boolean(ticketNumbersMissingOf(booking)),
+        //
+        // And a DocIssuance nobody saw answered (flight.routes.js flagForReview
+        // `issuance`): a ticket may exist, and a retrieve that shows none may
+        // have been read before its FA line landed. It refunded in full; it
+        // now goes to a person. Not past a flag a person resolved: they read
+        // the PNR.
+        rowTicketed: recordedTicket || issuanceUnknown,
+        issuanceUnknownOnly: issuanceUnknown && !recordedTicket,
         refundable: details.refundable,
         fee: await readCancellationFee(),
         rowPaid: booking.payment_status === 'paid',
