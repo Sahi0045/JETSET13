@@ -29,6 +29,7 @@ import { statusChangeRefusal } from '../../shared/bookingStatusChange.js';
 import {
   attentionOf, reviewResolution, ticketsOf, isTicketed, NO_CONFIRMED_SEAT_REVIEW_REASON, noConfirmedSeatOf,
   HELD_REVIEW_REASON_PREFIXES, liveTicketNumbersMissingOf, unrecordedCancellationOf, voidedTicketsOf,
+  SCHEDULE_CHANGED_REVIEW_REASON,
 } from '../../shared/reviewQueue.js';
 import { errorSummary } from '../utils/errorSummary.js';
 import { flightSearchLimiter, guestBookingLimiter } from '../middleware/security.js';
@@ -397,13 +398,33 @@ async function persistCommittedPnr({ bookingReference, pnr, tstRefs, priced }) {
 }
 
 /**
+ * The airline's schedule change the chain accepted before it failed, kept under
+ * the held flag as `previous` - the flag the provider writes on a booking it
+ * completes (amadeusSoap/index.js createFlightOrder), with any flag already on
+ * the booking under it in turn, as a later cancel keeps the one before
+ * (payment/operations.handlers.js keepingPrevious). Held with the failure as
+ * its only flag, the retiming reached nobody: the desk and the alarm find it
+ * with scheduleChangeOf, on top or under. Nothing when there was none.
+ */
+const keepingScheduleChange = (statuses, details) => (Array.isArray(statuses) && statuses.length > 0
+  ? {
+    previous: {
+      reason: SCHEDULE_CHANGED_REVIEW_REASON,
+      statuses,
+      at: new Date().toISOString(),
+      ...(details.needs_review ? { previous: details.needs_review } : {})
+    }
+  }
+  : {});
+
+/**
  * Mark a booking as needing a human.
  *
  * Used when the chain created a real PNR and then failed: the money and the
  * booking are both real but out of step, and no automatic action is safe.
  */
 export async function flagForReview({
-  bookingReference, pnr, reason, ticketed, tickets = null, amadeus = null, issuance = null
+  bookingReference, pnr, reason, ticketed, tickets = null, amadeus = null, issuance = null, scheduleChanged = null
 }) {
   console.error('⚠️ Booking needs review', { bookingReference, pnr, reason, ticketed, issuance, amadeus });
 
@@ -438,7 +459,8 @@ export async function flagForReview({
       // TICKETING CARRIER on every Air India booking - existed only in a dev
       // terminal's scrollback, so a carrier the office may not ticket looked
       // like a code regression. Amadeus error text carries no passenger data.
-      ...(amadeus ? { amadeus } : {})
+      ...(amadeus ? { amadeus } : {}),
+      ...keepingScheduleChange(scheduleChanged, details)
     }
   }));
 
@@ -3287,8 +3309,9 @@ router.post('/order', optionalProtect, async (req, res) => {
           reason: `chain failed after commit at ${providerError.step}`,
           ticketed: providerError.ticketed,
           // What the chain knows beyond "not ticketed": an issuance nobody saw
-          // answered.
+          // answered, and a schedule change it accepted before failing.
           issuance: providerError.issuance,
+          scheduleChanged: providerError.scheduleChanged,
           amadeus: (providerError.amadeusCode || providerError.technicalError)
             ? {
               operation: providerError.operation || null,

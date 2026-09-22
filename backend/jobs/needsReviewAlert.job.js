@@ -155,6 +155,9 @@ export function describeBooking(booking) {
     ...(review.amadeus
       ? [`Amadeus ${review.amadeus.operation || ''}: ${review.amadeus.message || review.amadeus.code || 'no detail'}`.replace(/\s+:/, ':')]
       : []),
+    // A schedule change the chain accepted before the booking was held sits
+    // under the held flag (flight.routes.js flagForReview).
+    ...alsoRetimed(booking),
   ].join('\n');
 }
 

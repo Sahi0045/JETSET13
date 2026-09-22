@@ -71,6 +71,9 @@ export class BookingChainError extends Error {
     // ISSUANCE_UNKNOWN when DocIssuance was sent and never answered (callStep).
     // `ticketed` stays false beside it: nothing says a ticket was issued.
     this.issuance = null;
+    // The segment statuses of a schedule change the chain accepted before it
+    // failed (runBookingChain), or null.
+    this.scheduleChanged = null;
   }
 }
 
@@ -605,6 +608,17 @@ export const runBookingChain = async (p) => {
   const validatingCarrier = offer.validatingAirlineCodes?.[0] ?? ama.segments[0]?.marketingCarrier;
   const started = Date.now();
 
+  // The airline's schedule change, once the chain has accepted it (step 6b).
+  // Only the result reported it, so a step after the acceptance that failed -
+  // issuance refused (2161), or a new session that never ticketed - held the
+  // booking with that failure as its only flag, and nobody was told the flight
+  // had been retimed. Every error from then on carries it.
+  let acceptedChange = null;
+  const rethrowWithAcceptedChange = (error) => {
+    if (acceptedChange && error instanceof BookingChainError) error.scheduleChanged = acceptedChange;
+    throw error;
+  };
+
   const booked = await withSession(async (ctx) => {
     let pnr = null;
     let committed = false;
@@ -935,6 +949,7 @@ export const runBookingChain = async (p) => {
         pnr,
         committed,
       });
+      acceptedChange = changed;
     }
 
     // ---- 7. Queue (bookkeeping; never fatal) -------------------------------
@@ -999,13 +1014,13 @@ export const runBookingChain = async (p) => {
       issueInNewSession,
       notReadyRefusals,
     };
-  }, { config });
+  }, { config }).catch(rethrowWithAcceptedChange);
 
   const { issueInNewSession, notReadyRefusals, ...result } = booked;
   if (!issueInNewSession) return result;
   return issueInFreshSessions(result, {
     offer, bookingReference, config, notReadyRefusals, expectedTickets: travelers.length,
-  });
+  }).catch(rethrowWithAcceptedChange);
 };
 
 /**
