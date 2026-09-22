@@ -219,7 +219,10 @@ export const isHeldForReview = (review) => {
  *
  *  - held after the ticket was issued: the customer was told "our team is
  *    finishing your ticket" and was never sent the confirmation. Skipped as
- *    done, nobody sent it;
+ *    done, nobody sent it. Only when the flag itself says the ticket was
+ *    already issued (flagForReview writes `ticketed`): a booking held BEFORE
+ *    issuance and ticketed later - by hand, then ticket sync, which sends the
+ *    e-ticket - is the "ticketed, so done" case;
  *  - a schedule change: the ticket is issued, and the customer still has to be
  *    told the new times.
  *
@@ -230,7 +233,7 @@ export const isHeldForReview = (review) => {
 export function openTicketedFlagOf(booking) {
   if (!isTicketed(detailsOf(booking))) return null;
   const review = topFlagOf(booking);
-  if (review && !review.resolved_at && isHeldForReview(review)) return review;
+  if (review && !review.resolved_at && review.ticketed === true && isHeldForReview(review)) return review;
   return scheduleChangeOf(booking);
 }
 
