@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import { JWT_SECRET } from '../../config/jwt.js';
+import { getCaller } from './agents.handlers.js';
 
 
 // Helper function to parse various date formats and return YYYY-MM-DD
@@ -100,22 +101,48 @@ export function arcFailureSummary(data) {
     };
 }
 
-export function getCallerInfo(req) {
+/**
+ * Who is asking for the payment links: { role, agentId, userId, email }.
+ *
+ * The role is getCaller's, read from `users` on every call. This used to return
+ * the role the token was signed with, and an app token lives 30 days: an admin
+ * demoted to 'user' (DELETE /api/auth/admins/:id) still read every customer's
+ * payment link - name, email, phone, amount, the PNR in travel_details, the
+ * link token - and could create links that email customers as Jetsetters.
+ * getCaller stopped trusting the token's role for the same reason; this is its
+ * answer, not a second copy of the rule.
+ *
+ * getCaller keeps 'agent' from the token without reading `users`, because an
+ * agent-portal token has no `users` row. Here 'agent' also needs the token's
+ * own agentId, the one handleAgentLogin signs and a link is filed under. A visa
+ * agent's token says 'agent' too, with no agentId: it created links filed under
+ * nobody, and went on doing so after the visa agent was disabled.
+ */
+export async function getCallerInfo(req) {
     try {
-        // Prefer the httpOnly session cookie (web); fall back to Bearer (mobile).
-        const authHeader = req.headers.authorization;
-        const bearer = authHeader && authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1] : null;
-        const token = req.cookies?.jt_access || bearer;
-        if (!token) return { role: 'unknown', agentId: null };
-        const decoded = jwt.verify(token, JWT_SECRET);
-        return {
-            role: decoded.role || 'user',
-            agentId: decoded.agentId || null,
-            userId: decoded.id || decoded.sub,
-            email: decoded.email
-        };
+        const caller = await getCaller(req);
+        if (!caller?.role) return { role: 'unknown', agentId: null };
+        let agentId = null;
+        if (caller.role === 'agent') {
+            agentId = agentIdClaimOf(req);
+            if (!agentId) return { role: 'unknown', agentId: null };
+        }
+        return { role: caller.role, agentId, userId: caller.id, email: caller.email };
     } catch (e) {
         return { role: 'unknown', agentId: null };
+    }
+}
+
+/** The agentId an agent-portal app token was signed with, or null. */
+function agentIdClaimOf(req) {
+    // Prefer the httpOnly session cookie (web); fall back to Bearer (mobile).
+    const authHeader = req.headers?.authorization;
+    const bearer = authHeader && authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1] : null;
+    const token = req.cookies?.jt_access || bearer;
+    try {
+        return jwt.verify(token, JWT_SECRET).agentId || null;
+    } catch {
+        return null;
     }
 }
 
