@@ -641,12 +641,25 @@ async function cancelFlightBooking(res, booking, { reason, email }) {
             // already came back with the void.
             const voidedNow = Array.isArray(supplierError?.voidedTickets) ? supplierError.voidedTickets : [];
             const unvoidedNow = Array.isArray(supplierError?.unvoidedTickets) ? supplierError.unvoidedTickets : [];
+            // The desk shows this reason. "Refund withheld" is true of a paid
+            // booking, and false of one the Payments tab had already refunded
+            // (it writes payment_status only): nothing was withheld, the money
+            // had gone back. Read from the same field the Slack alarm splits
+            // these on (needsReviewAlert.job.js refundedBefore), so the two
+            // agree. Flags already stored keep their text.
+            const paymentBefore = String(booking.payment_status || '').toLowerCase();
+            const reason = ['refunded', 'reversed'].includes(paymentBefore)
+                ? 'GDS cancellation failed; the payment had already been refunded before this cancel, so this cancel made no refund'
+                : paymentBefore === 'partially_refunded'
+                    ? 'GDS cancellation failed; part of the payment had already been refunded before this cancel, '
+                        + 'and the rest is withheld to avoid paying out against a live booking'
+                    : 'GDS cancellation failed; refund withheld to avoid paying out against a live booking';
             await releaseCancellation(booking, claim, (current) => {
                 const voidedSoFar = unionTickets(current?.voided_tickets, voidedNow);
                 return {
                     ...(voidedSoFar.length ? { voided_tickets: voidedSoFar } : {}),
                     needs_review: {
-                        reason: 'GDS cancellation failed; refund withheld to avoid paying out against a live booking',
+                        reason,
                         // Said outright, so the alarm and the desk list find it
                         // on a ticketed booking too (isFailedCancellation). With
                         // neither, "ticketed, so done" skipped it, while the
