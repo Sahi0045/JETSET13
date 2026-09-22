@@ -443,6 +443,13 @@ export async function handleAgentStats(req, res) {
         const { data: agent } = await supabase
             .from('agents').select('id, name, email, commission_rate, status').eq('id', caller.id).maybeSingle();
         if (!agent) return res.status(404).json({ success: false, error: 'Agent not found' });
+        // Removing an agent is a soft delete (status 'disabled'), and the token
+        // issued at login outlives it - 30 days. Login refuses anyone who is not
+        // active; so does this, or a removed agent kept their customers' names
+        // and emails for the life of the token.
+        if (agent.status !== 'active') {
+            return res.status(403).json({ success: false, error: 'Agent access only.' });
+        }
 
         const { data: links } = await supabase
             .from('payment_links')
