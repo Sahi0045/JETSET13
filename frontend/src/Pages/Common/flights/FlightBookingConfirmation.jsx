@@ -1373,7 +1373,12 @@ function FlightBookingConfirmation() {
         // total, and every retry was refused again "with the total updated".
         PricingService.clearCache();
         refetchPriceConfig();
-        setFareNotice(`${refusal.error} The total has been updated. Nothing has been charged.`);
+        // With a coupon on, the server's total is after its discount - but the
+        // coupon comes off here, so the page shows the total without it. Quoting
+        // the server's figure over a different one told the customer neither.
+        setFareNotice(appliedCoupon
+          ? `The fare has changed, so your coupon ${appliedCoupon.code} has been removed. Please apply it again to see the new total with the discount. The total has been updated. Nothing has been charged.`
+          : `${refusal.error} The total has been updated. Nothing has been charged.`);
         window.scrollTo({ top: 0, behavior: 'smooth' });
         return;
       }
