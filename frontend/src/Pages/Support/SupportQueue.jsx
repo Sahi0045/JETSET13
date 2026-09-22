@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { adminFetch, readAdminResponse } from '../../utils/adminAuth';
 import { getApiUrl } from '../../utils/apiHelper';
-import { attentionLabel } from '../../../../shared/reviewQueue';
+import { attentionLabel, refundOwedOf } from '../../../../shared/reviewQueue';
 import { canVoidPayment } from '../../utils/adminBookingActions';
 import { needsManualRefund } from '../../utils/bookingStatus';
 import { formatUsd } from '../../utils/bookingCharge';
@@ -65,6 +65,27 @@ const mailtoFor = (booking) => {
 
 /** Digits only: a number with spaces or brackets does not dial. */
 const telFor = (phone) => `tel:${String(phone).replace(/[^\d+]/g, '')}`;
+
+/**
+ * What Finish refund starts from: what the cancel decided goes back.
+ *
+ * The box was filled with the booking's whole total, and Refund now sent it.
+ * The server caps a refund at what ARC holds, not at what is owed, so a
+ * cancel that meant to keep its fee gave the fee back too. With no amount
+ * decided - a refund held for a person - it starts from the total, as it did.
+ */
+const refundStartingAmount = (booking) => String(refundOwedOf(booking)?.owed ?? (booking.totalAmount || ''));
+
+/** The sentence under Finish refund that says where that amount comes from, or null. */
+const owedSentence = (booking) => {
+  const owed = refundOwedOf(booking);
+  if (!owed) return null;
+  if (owed.paid === null) return `${formatUsd(owed.owed)} is still held and owed back: a refund by hand left it.`;
+  if (owed.fee > 0) {
+    return `The cancel decided ${formatUsd(owed.owed)} goes back: ${formatUsd(owed.paid)} paid, less the ${formatUsd(owed.fee)} cancellation fee it keeps.`;
+  }
+  return `The cancel decided the whole ${formatUsd(owed.owed)} goes back.`;
+};
 
 const hoursSince = (iso) => {
   const at = Date.parse(iso ?? '');
@@ -427,7 +448,7 @@ function SupportQueue() {
                   {needsManualRefund(booking) && (
                     <button
                       type="button"
-                      onClick={() => setAction({ type: 'refund', booking, amount: String(booking.totalAmount || '') })}
+                      onClick={() => setAction({ type: 'refund', booking, amount: refundStartingAmount(booking) })}
                       className="px-3 py-2 rounded-lg border border-amber-300 bg-amber-50 text-amber-900 text-sm font-semibold"
                     >
                       Finish refund
@@ -507,6 +528,9 @@ function SupportQueue() {
               {action.type === 'void' && 'This reverses a payment that has not settled yet. It does not release any seats.'}
               {action.type === 'refund' && 'Check what ARC Pay already shows, or send the refund now. The amount is capped by what the gateway holds.'}
             </p>
+            {action.type === 'refund' && owedSentence(action.booking) && (
+              <p className="text-sm font-semibold text-gray-800 mb-3">{owedSentence(action.booking)}</p>
+            )}
             {action.type !== 'refund' && (
               <textarea
                 value={action.reason || ''}

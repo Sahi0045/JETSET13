@@ -137,11 +137,11 @@ describe('rows a refused refund left reading refunded keep saying so', () => {
     ]);
     vi.useRealTimers();
     expect(message).toBe([
-      ':money_with_wings: *2 cancelled bookings where the refund never went through* — 420.50 USD',
+      ':money_with_wings: *2 cancelled bookings where the refund never went through* — 420.50 USD taken, 320.50 USD owed',
       'ARC Pay did not return the money, but the booking is stored as refunded, so nothing else will ever flag it. These need refunding by hand.',
       '',
-      '*FLTA* — 120.5 USD taken, 0 returned\nREFUND_FAILED · the row reads cancelled/partially_refunded, which is not what happened\ncancelled 5h ago · customer request',
-      '*FLTB* — 300 USD taken, 0 returned\nREFUND_FAILED · the row reads cancelled/refunded, which is not what happened\ncancelled 5h ago · customer request',
+      '*FLTA* — 120.5 USD taken, 0 returned\n70.50 USD owed (120.50 paid less the 50.00 cancellation fee the cancel kept)\nREFUND_FAILED · the row reads cancelled/partially_refunded, which is not what happened\ncancelled 5h ago · customer request',
+      '*FLTB* — 300 USD taken, 0 returned\n250.00 USD owed (300.00 paid less the 50.00 cancellation fee the cancel kept)\nREFUND_FAILED · the row reads cancelled/refunded, which is not what happened\ncancelled 5h ago · customer request',
     ].join('\n\n'));
   });
 

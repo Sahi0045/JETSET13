@@ -29,7 +29,9 @@ import { postToSlack } from './slackAlert.js';
 import { readEveryCandidate } from './alarmCandidates.js';
 import { alarmsMayRun } from './needsReviewAlert.job.js';
 import { queueEnvironment } from '../utils/queueEnvironment.js';
-import { REFUND_NOT_RETURNED_ACTIONS, refundNotReturnedOf } from '../../shared/reviewQueue.js';
+import {
+  REFUND_NOT_RETURNED_ACTIONS, describeRefundOwed, refundNotReturnedOf, refundOwedOf,
+} from '../../shared/reviewQueue.js';
 
 const DEFAULT_INTERVAL_MS = 15 * 60 * 1000;
 // Staggered behind the needs-review job so two alarms waking at once cannot
@@ -76,15 +78,22 @@ export function selectUnrefunded(rows = []) {
  */
 const readsRefunded = (booking) => ['refunded', 'partially_refunded'].includes(String(booking.payment_status || '').toLowerCase());
 
-/** One line per booking. No passenger data: alerts get forwarded around. */
+/**
+ * One line per booking. No passenger data: alerts get forwarded around.
+ *
+ * With what is owed: the whole payment was the only figure here, and a cancel
+ * that meant to keep its fee had the fee refunded by hand too.
+ */
 export function describeFailure(booking) {
   const cancellation = booking.booking_details?.cancellation || {};
   const hours = Math.round(
     (Date.now() - Date.parse(cancellation.cancelledAt || booking.created_at)) / 36e5,
   );
   const reason = String(cancellation.reason || '').slice(0, 80);
+  const owed = describeRefundOwed(refundOwedOf(booking));
   return [
     `*${booking.booking_reference}* — ${booking.total_amount} USD taken, ${cancellation.refundAmount ?? 0} returned`,
+    ...(owed ? [owed] : []),
     `${cancellation.paymentAction} · the row reads ${booking.status}/${booking.payment_status}${readsRefunded(booking) ? ', which is not what happened' : ''}`,
     `cancelled ${hours}h ago${reason ? ` · ${reason}` : ''}`,
   ].join('\n');
@@ -178,6 +187,9 @@ export function describeOutcomeUnknown(booking) {
 
 const countOf = (bookings) => `${bookings.length} cancelled booking${bookings.length > 1 ? 's' : ''}`;
 const totalOf = (bookings) => bookings.reduce((sum, b) => sum + (Number(b.total_amount) || 0), 0).toFixed(2);
+/** What the failed rows owe back, the fees their cancels kept left out. */
+const owedTotalOf = (bookings) => bookings
+  .reduce((sum, b) => sum + (refundOwedOf(b)?.owed ?? (Number(b.total_amount) || 0)), 0).toFixed(2);
 
 export function buildMessage(bookings) {
   // REFUND_UNDER_REVIEW is not a refund that failed: the cancel refused to move
@@ -197,7 +209,7 @@ export function buildMessage(bookings) {
   const sections = [];
   if (failed.length) {
     sections.push(
-      `:money_with_wings: *${countOf(failed)} where the refund never went through* — ${totalOf(failed)} USD`,
+      `:money_with_wings: *${countOf(failed)} where the refund never went through* — ${totalOf(failed)} USD taken, ${owedTotalOf(failed)} USD owed`,
       failedLead(failed),
       '',
       ...failed.map(describeFailure),

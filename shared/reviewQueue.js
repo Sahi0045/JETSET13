@@ -382,6 +382,51 @@ export function refundNotReturnedOf(booking) {
   return cancellation;
 }
 
+const roundCents = (value) => Math.round(Number(value) * 100) / 100;
+
+/**
+ * What the customer is owed back on a cancellation, as the cancel decided it,
+ * or null when nothing decided an amount.
+ *
+ *  - a refund or void that did not go through (REFUND_STUCK_ACTIONS): what
+ *    ARC held when the cancel ran, less the fee the cancel meant to keep and
+ *    anything recorded as refunded since - the refund it tried to make. Slack
+ *    named only the whole payment and the desk filled that in, so finishing a
+ *    refund "less the fee" by hand sent the fee back too;
+ *  - a partial refund by hand that left money the cancel did not keep as a
+ *    fee (`stillHeld`, payment/operations.handlers.js settleManualFlightRefund).
+ *
+ * A refund held for a person to decide has no amount here: nothing decided it.
+ *
+ * @returns {null | { owed: number, paid: number|null, fee: number, currency: string }}
+ */
+export function refundOwedOf(booking) {
+  const details = detailsOf(booking);
+  const cancellation = details?.cancellation;
+  if (!cancellation) return null;
+  const currency = cancellation.currency || details.arc_captured_currency || details.currency || 'USD';
+  if (Number(cancellation.stillHeld) > 0) return { owed: roundCents(cancellation.stillHeld), paid: null, fee: 0, currency };
+  if (!REFUND_STUCK_ACTIONS.includes(cancellation.paymentAction)) return null;
+  // The cancel reconciles with ARC first and writes what it holds; a row from
+  // before that has the checkout amount only.
+  const captured = Number(details.arc_captured_amount);
+  const paid = captured > 0 ? captured : Number(booking?.total_amount ?? booking?.totalAmount);
+  if (!(paid > 0)) return null;
+  const fee = Math.max(0, Number(cancellation.cancellationFee) || 0);
+  const owed = Math.max(0, roundCents(paid - fee - (Number(cancellation.refundAmount) || 0)));
+  return { owed, paid: roundCents(paid), fee: roundCents(fee), currency };
+}
+
+/** The owed amount in words, for the desk and the alarm: "241.00 USD owed (291.00 paid less the 50.00 cancellation fee the cancel kept)". */
+export function describeRefundOwed(owed) {
+  if (!owed) return null;
+  const amount = (value) => Number(value).toFixed(2);
+  const basis = owed.fee > 0 && owed.paid !== null
+    ? ` (${amount(owed.paid)} paid less the ${amount(owed.fee)} cancellation fee the cancel kept)`
+    : '';
+  return `${amount(owed.owed)} ${owed.currency} owed${basis}`;
+}
+
 /**
  * A cancellation whose money never went back, as the desk lists it, or null.
  *
@@ -405,9 +450,10 @@ function refundNotReturnedAttentionOf(booking) {
 
   const since = cancellation.cancelledAt || null;
   if (REFUND_STUCK_ACTIONS.includes(cancellation.paymentAction)) {
+    const owed = describeRefundOwed(refundOwedOf(booking));
     return {
       kind: 'refund_failed',
-      reason: `the refund did not go through (${cancellation.paymentAction}): nothing has gone back to the customer`,
+      reason: `the refund did not go through (${cancellation.paymentAction}): nothing has gone back to the customer${owed ? `; ${owed}` : ''}`,
       since,
     };
   }
