@@ -392,15 +392,19 @@ export function attentionOf(booking) {
   }
 
   if (review) {
-    // The numbers flag with the airline's schedule change kept under it
-    // (amadeusSoap/index.js createFlightOrder): both are the desk's to see. A
-    // person resolving the numbers alone would settle the retiming unseen.
-    const retimed = review.reason === TICKET_NUMBERS_MISSING ? scheduleChangeOf(booking) : null;
-    return {
-      kind: 'review',
-      reason: retimed ? `${review.reason}; ${retimed.reason}` : review.reason || 'flagged for review',
-      since: review.at || null,
-    };
+    // The airline's schedule change kept under the flag on top - under the
+    // numbers flag (amadeusSoap/index.js createFlightOrder), or under a hold
+    // the order route wrote after the chain accepted it (flagForReview): both
+    // are the desk's to see. A person resolving the flag on top alone would
+    // settle the retiming unseen.
+    const retimed = review.reason === TICKET_NUMBERS_MISSING || isHeldForReview(review)
+      ? scheduleChangeOf(booking)
+      : null;
+    // A hold whose DocIssuance was never answered: a ticket may exist. The
+    // desk is the lasting list, and it read like any refused issuance.
+    const unanswered = review.issuance === ISSUANCE_UNKNOWN ? 'issuance not answered - read the FA lines before ticketing or refunding' : null;
+    const reason = [review.reason || 'flagged for review', retimed?.reason, unanswered].filter(Boolean).join('; ');
+    return { kind: 'review', reason, since: review.at || null };
   }
   // Not flagged, but the airline holds seats against a payment and no ticket was
   // ever issued: the alarm announces these too.

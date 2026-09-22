@@ -337,6 +337,12 @@ export function describeFailedCancellation(booking) {
   const numbersMissing = Boolean(ticketNumbersMissingOf(booking));
   const ticketed = isTicketed(details) || numbersMissing || flags.some((flag) => flag.ticketed === true)
     || voided.length > 0 || flags.some((flag) => Array.isArray(flag.unvoided_tickets) && flag.unvoided_tickets.length > 0);
+  // A hold under this cancel whose DocIssuance was never answered: a ticket
+  // may exist though nothing recorded one. The outage that timed issuance out
+  // often times the cancel's retrieve out too, and this line said "ticketed:
+  // NO · no tickets issued" - an invitation to cancel the PNR and refund in
+  // full over a ticket Amadeus may have issued.
+  const issuanceUnknown = !ticketed && flags.some((flag) => flag.issuance === ISSUANCE_UNKNOWN);
   let tickets;
   if (Array.isArray(review.unvoided_tickets)) {
     // This attempt's own report: every ticket on the PNR it did not void.
@@ -345,13 +351,15 @@ export function describeFailedCancellation(booking) {
     const others = notVoided(unionTickets(ticketsOf(details).map((ticket) => ticket.number), ...flags.map((flag) => flag.unvoided_tickets)));
     tickets = voided.length || others.length
       ? `tickets voided: ${voided.join(', ') || 'none recorded'} · not recorded as voided: ${others.join(', ') || 'none'}`
-      : ticketed ? 'ticket numbers not recorded: read the FA lines' : 'no tickets issued';
+      : ticketed ? 'ticket numbers not recorded: read the FA lines'
+        : issuanceUnknown ? 'DocIssuance was never answered: read the FA lines before cancelling or refunding'
+          : 'no tickets issued';
   }
   // Numbers the chain could not read back are missing from every list above.
   const incomplete = numbersMissing && tickets.startsWith('tickets voided') ? ' · not every ticket number is recorded: read the FA lines' : '';
   return [
     `*${booking.booking_reference}* — ${booking.status}/${booking.payment_status}, ${booking.total_amount} USD`,
-    `PNR ${details.pnr || review.pnr || 'none'} · ticketed: ${ticketed ? 'yes' : 'NO'} · ${tickets}${incomplete}`,
+    `PNR ${details.pnr || review.pnr || 'none'} · ticketed: ${ticketed ? 'yes' : issuanceUnknown ? 'unknown' : 'NO'} · ${tickets}${incomplete}`,
     `airline: ${review.detail || 'no detail recorded'}`,
     `flagged ${hours}h ago`,
   ].join('\n');

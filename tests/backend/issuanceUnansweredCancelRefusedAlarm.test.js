@@ -158,93 +158,52 @@ beforeEach(() => {
   axios.put.mockResolvedValue({ status: 200, data: { result: 'SUCCESS', transaction: { id: '2' } } });
 });
 
-describe('a retrieve showing no ticket, on a booking whose issuance went unanswered', () => {
-  it('is held for a person, not refunded in full', async () => {
-    airlineShowsNoTicket();
 
-    const { res, cancellation, review } = await runCancel(heldRow());
+/**
+ * Verifier probe (audit r3, item 1): the same row, after a cancel the airline
+ * did not carry out - here PNR_Retrieve at the cancel got no answer, so the
+ * cancel knows nothing about tickets. The refused-cancel flag goes on top with
+ * the held flag (issuance: 'unknown') kept under it (keepingPrevious).
+ *
+ * The Slack alarm then lists the booking under "cancellations the airline did
+ * not carry out" (describeFailedCancellation). That line is the only Slack
+ * message about this booking when the cancel came before the alarm's first
+ * post, and the only one staff read when they go to cancel the PNR by hand.
+ */
+const timeout = () => Object.assign(new Error('timeout of 25000ms exceeded'), { code: 'ECONNABORTED' });
 
-    expect(res.statusCode).toBe(200);
-    // The PNR is still released: that is safe whatever was issued.
-    expect(indexOfAction('PNRXCL')).toBeGreaterThan(indexOfAction('PNRRET'));
-    expect(cancellation.paymentAction).toBe('REFUND_UNDER_REVIEW');
-    expect(cancellation.refundAmount).toBe(0);
-    expect(cancellation.basis).not.toBe('reservation released before any ticket was issued');
-    // Its own reason: nothing recorded a ticket, so "the booking records a
-    // ticket" would be false, and staff reading it would refund in full.
-    expect(review.reason).toMatch(/DocIssuance was never answered and the airline showed no ticket/);
-    expect(review.reason).toMatch(/check the ticket history before refunding/);
-    expect(review.reason).not.toMatch(/the booking records a ticket/);
-    // No money moved.
+describe('verifier: a refused cancel over an issuance nobody saw answered', () => {
+  it('the Slack line does not say "ticketed: NO" / "no tickets issued" of it', async () => {
+    axios.post.mockImplementation(async (_url, _body, cfg) => {
+      const action = String(cfg?.headers?.SOAPAction ?? '');
+      if (action.includes('PNRRET')) throw timeout();
+      return soap(signOutOk);
+    });
+
+    const row = heldRow();
+    supabaseDouble = supabaseFor(row);
+    const { handleCancelBookingAction } = await import('../../backend/routes/payment/operations.handlers.js');
+    const { createRequest: mkReq, createResponse: mkRes } = await import('./helpers/express.helpers.js');
+    const req = mkReq({ method: 'POST', body: { bookingReference: REF, reason: 'test', email: 'jane@example.com' } });
+    const res = mkRes();
+    await handleCancelBookingAction(req, res);
+
+    expect(res.statusCode).toBe(502);
     expect(axios.put).not.toHaveBeenCalled();
-  });
+    const written = supabaseDouble.updates.map((u) => u.booking_details?.needs_review).filter((r) => r?.cancelFailed === true).pop();
+    expect(written).toBeTruthy();
+    // The held flag, with its unknown issuance, is kept under the refused cancel.
+    expect(written.previous).toMatchObject({ reason: 'chain failed after commit at issueTicket', issuance: 'unknown' });
 
-  it('under a later flag too: a refused cancel kept it as `previous`', async () => {
-    airlineShowsNoTicket();
-    const refusedCancel = {
-      reason: 'GDS cancellation failed; refund withheld to avoid paying out against a live booking',
-      source: 'cancellation',
-      cancelFailed: true,
-      pnr: 'HELD42',
-      at: '2026-09-23T10:00:00.000Z',
-      previous: flag(),
-    };
-
-    const { cancellation } = await runCancel(heldRow(refusedCancel));
-
-    expect(cancellation.paymentAction).toBe('REFUND_UNDER_REVIEW');
-    expect(axios.put).not.toHaveBeenCalled();
-  });
-});
-
-describe('the cancels around it, as before', () => {
-  it('the ticket on the PNR: voided before PNR_Cancel, and refunded as a voided ticket', async () => {
-    axios.post
-      .mockResolvedValueOnce(soap(retrievedWithTicketToday())) // PNR_Retrieve
-      .mockResolvedValueOnce(soap(voided)) // Ticket_CancelDocument
-      .mockResolvedValueOnce(soap(cancelledOk)) // PNR_Cancel
-      .mockResolvedValue(soap(signOutOk));
-
-    const { res, cancellation } = await runCancel(heldRow());
-
-    expect(res.statusCode).toBe(200);
-    expect(indexOfAction('TRCANQ')).toBeGreaterThan(indexOfAction('PNRRET'));
-    expect(indexOfAction('PNRXCL')).toBeGreaterThan(indexOfAction('TRCANQ'));
-    expect(cancellation.ticketsVoided).toBe(true);
-    expect(cancellation.basis).toMatch(/tickets voided the day they were issued/);
-  });
-
-  it('held with a refusal Amadeus answered (no issuance on the flag): refunded in full', async () => {
-    airlineShowsNoTicket();
-    const refused = flag({ amadeus: { operation: 'DocIssuance_IssueTicket', code: '2161', message: 'PROHIBITED TICKETING CARRIER' } });
-    delete refused.issuance;
-
-    const { res, cancellation } = await runCancel(heldRow(refused));
-
-    expect(res.statusCode).toBe(200);
-    expect(cancellation.basis).toBe('reservation released before any ticket was issued');
-    expect(['VOID', 'FULL_REFUND']).toContain(cancellation.paymentAction);
-    expect(cancellation.refundAmount).toBe(291);
-  });
-
-  it('a flag a person resolved: they read the PNR, so a retrieve with no ticket is refunded in full', async () => {
-    airlineShowsNoTicket();
-
-    const { cancellation } = await runCancel(heldRow(flag({
-      resolved_at: '2026-09-23T11:00:00.000Z', resolved_by: 'desk', resolution: 'no FA line on the PNR',
-    })));
-
-    expect(cancellation.basis).toBe('reservation released before any ticket was issued');
-    expect(cancellation.refundAmount).toBe(291);
-  });
-
-  it('a booking that records its ticket: held for a person, as before', async () => {
-    airlineShowsNoTicket();
-
-    const { cancellation, review } = await runCancel(heldRow(flag({ ticketed: true, issuance: undefined }), true));
-
-    expect(cancellation.paymentAction).toBe('REFUND_UNDER_REVIEW');
-    expect(review.reason).toMatch(/the booking records a ticket, but the airline showed none/);
-    expect(axios.put).not.toHaveBeenCalled();
+    const after = { ...row, booking_details: { ...row.booking_details, needs_review: written } };
+    const { buildMessage, selectUnannounced } = await import('../../backend/jobs/needsReviewAlert.job.js');
+    const picked = selectUnannounced([after]);
+    expect(picked).toHaveLength(1);
+    const text = buildMessage(picked);
+    expect(text).toMatch(/cancellation the airline did not carry out/);
+    // The claim of item (1): nothing tells staff, as fact, that no ticket was
+    // issued while DocIssuance's answer was never seen.
+    expect(text).not.toMatch(/ticketed: NO/);
+    expect(text).not.toMatch(/no tickets issued/);
   });
 });

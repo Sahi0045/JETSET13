@@ -403,11 +403,14 @@ describe('what staff are told in Slack before ticket sync reads the PNR', () => 
 });
 
 describe('the other readers, as before', () => {
-  it('the desk lists it as flagged for review', async () => {
+  // Flagged for review, and the desk - the lasting list - says the issuance
+  // was never answered: it read like any refused issuance.
+  it('the desk lists it as flagged for review, saying the issuance was not answered', async () => {
     const { row } = await heldBy(issuedInSession(timedOut()));
     const { attentionOf, attentionLabel } = await import('../../shared/reviewQueue.js');
     const attention = attentionOf(row);
-    expect(attention).toMatchObject({ kind: 'review', reason: 'chain failed after commit at issueTicket' });
+    expect(attention.kind).toBe('review');
+    expect(attention.reason).toMatch(/^chain failed after commit at issueTicket; issuance not answered - read the FA lines/);
     expect(attentionLabel(attention)).toBe('Flagged for review');
   });
 
