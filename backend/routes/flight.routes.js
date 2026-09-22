@@ -28,7 +28,7 @@ import { buildFlightOrderBody, orderDataFromCheckoutRow } from '../../shared/fli
 import { statusChangeRefusal } from '../../shared/bookingStatusChange.js';
 import {
   attentionOf, reviewResolution, ticketsOf, isTicketed, NO_CONFIRMED_SEAT_REVIEW_REASON, noConfirmedSeatOf,
-  liveTicketNumbersMissingOf, unrecordedCancellationOf, voidedTicketsOf,
+  HELD_REVIEW_REASON_PREFIXES, liveTicketNumbersMissingOf, unrecordedCancellationOf, voidedTicketsOf,
 } from '../../shared/reviewQueue.js';
 import { errorSummary } from '../utils/errorSummary.js';
 import { flightSearchLimiter, guestBookingLimiter } from '../middleware/security.js';
@@ -1010,9 +1010,9 @@ export function confirmationEmailOwed(booking) {
  * The review flags the order route's two 202 "needs review" answers write: the
  * airline holds the seats, and a later step - queueing, ticketing, the final
  * save - failed. Those answers sent no email at all, while the page said one
- * had been sent.
+ * had been sent. Defined in shared/reviewQueue.js (HELD_REVIEW_REASON_PREFIXES),
+ * which the desk and the alarm read to follow the held email up.
  */
-const HELD_REVIEW_REASON_PREFIXES = ['chain failed after commit at ', 'order route failed after commit'];
 
 /**
  * The flag the committed branch writes when the airline left a segment

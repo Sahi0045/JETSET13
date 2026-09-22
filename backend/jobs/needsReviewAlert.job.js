@@ -25,8 +25,9 @@ import { readEveryCandidate } from './alarmCandidates.js';
 import { unchangedSince } from '../utils/bookingDetailsGuard.js';
 import { queueEnvironment } from '../utils/queueEnvironment.js';
 import {
-  NO_CONFIRMED_SEAT_REVIEW_REASON, TICKET_NUMBERS_MISSING, flagsInForce, isFailedCancellation, isTicketed,
-  isUnrecordedCancellation, needsAirlineRefundClaim, ticketNumbersMissingOf, ticketsOf, unrecordedCancellationOf,
+  NO_CONFIRMED_SEAT_REVIEW_REASON, SCHEDULE_CHANGED_REVIEW_REASON, TICKET_NUMBERS_MISSING, attentionOf, flagsInForce,
+  isFailedCancellation, isTicketed, isUnrecordedCancellation, needsAirlineRefundClaim, openTicketedFlagOf,
+  scheduleChangeOf, ticketNumbersMissingOf, ticketsOf, unrecordedCancellationOf,
 } from '../../shared/reviewQueue.js';
 
 /**
@@ -68,6 +69,16 @@ export function selectUnannounced(rows = []) {
     const review = details.needs_review;
     if (review?.alerted_at) return false;         // already announced once
 
+    // Nothing the desk would not show as needing attention (attentionOf, the
+    // desk's own rule). The desk shows a flag the moment it is written and
+    // this runs every fifteen minutes, or not at all while it is down: a flag
+    // a person resolved in between was announced anyway - "Cancel the PNR with
+    // the airline first..." about a PNR already cancelled by phone - since only
+    // the numbers-missing rule below read `resolved_at`. The rules below stay:
+    // the desk also lists what other alarms own (a refund the gateway refused,
+    // paymentFailureAlert.job.js), so Slack announces a part of it, never more.
+    if (!attentionOf(booking)) return false;
+
     // A cancellation with a refund still to claim from the airline. It is
     // cancelled and ticketed, so both checks below would skip it - and did.
     if (needsAirlineRefundClaim(booking)) return true;
@@ -88,8 +99,14 @@ export function selectUnannounced(rows = []) {
     // resolves the flag (ticketSync.job.js), often before this job's first
     // run; announced anyway, staff were sent to find numbers already recorded.
     const numbersMissing = review?.reason === TICKET_NUMBERS_MISSING && !review.resolved_at;
-    if (!numbersMissing && details.gds?.ticketed === true) return false;
-    if (!numbersMissing && Array.isArray(details.tickets) && details.tickets.length > 0) return false;
+    // Nor a ticketed booking whose flag still needs a person
+    // (openTicketedFlagOf, the desk's rule too): a schedule change was skipped
+    // here as done, and the customer was never told the new times; a booking
+    // held after its ticket was issued, and the customer - told our team was
+    // finishing it - was never sent it.
+    const stillOpen = numbersMissing || Boolean(openTicketedFlagOf(booking));
+    if (!stillOpen && details.gds?.ticketed === true) return false;
+    if (!stillOpen && Array.isArray(details.tickets) && details.tickets.length > 0) return false;
 
     // Already dealt with: a cancelled or refunded booking has been resolved and
     // nobody needs paging about it. The first dry run flagged FLTMTPRZA5T -
@@ -166,6 +183,19 @@ export function describeAirlineClaim(booking) {
  * Expected against got, so the desk knows how many numbers it is looking for;
  * "unknown" when the chain did not record the count, never a guess.
  */
+/**
+ * The schedule change kept under a numbers-missing flag, as one line, or
+ * nothing. The chain flags both on one booking (createFlightOrder); listed
+ * under the numbers alone, the retiming reached nobody.
+ */
+const alsoRetimed = (booking) => {
+  const review = booking.booking_details?.needs_review;
+  const change = scheduleChangeOf(booking);
+  if (!change || change === review) return [];
+  const statuses = Array.isArray(change.statuses) && change.statuses.length ? change.statuses.join(', ') : 'not recorded';
+  return [`the airline also changed the schedule (segment status: ${statuses}): tell the customer the new times`];
+};
+
 export function describeTicketNumbersMissing(booking) {
   const details = booking.booking_details || {};
   const review = details.needs_review || {};
@@ -175,6 +205,7 @@ export function describeTicketNumbersMissing(booking) {
   return [
     `*${booking.booking_reference}* — ${booking.status}/${booking.payment_status}, ${booking.total_amount} USD`,
     `PNR ${details.pnr || 'none'} · ticket numbers expected ${expected}, got ${got}`,
+    ...alsoRetimed(booking),
     `flagged ${hours}h ago`,
   ].join('\n');
 }
@@ -218,6 +249,7 @@ export function describeTicketNumbersPartial(booking) {
     `PNR ${details.pnr || 'none'} · ticket numbers expected ${review.expected}, got ${got}`,
     `FA lines (ticketed, do not reissue): ${tickets.map((ticket) => `${ticket.number}${passenger(ticket)}`).join(', ') || 'none recorded'}`,
     `no FA line (check, issue for that passenger only): ${missing} traveller${missing > 1 ? 's' : ''}`,
+    ...alsoRetimed(booking),
     `flagged ${hours}h ago`,
   ].join('\n');
 }
@@ -312,6 +344,35 @@ export function describeFailedCancellation(booking) {
   ].join('\n');
 }
 
+/**
+ * One line per ticketed booking the airline retimed: the segment statuses the
+ * chain accepted the change on. The new times themselves are on the PNR.
+ */
+export function describeScheduleChange(booking) {
+  const details = booking.booking_details || {};
+  const change = scheduleChangeOf(booking) || details.needs_review || {};
+  const hours = Math.round((Date.now() - Date.parse(change.at || booking.created_at)) / 36e5);
+  const statuses = Array.isArray(change.statuses) && change.statuses.length ? change.statuses.join(', ') : 'not recorded';
+  return [
+    `*${booking.booking_reference}* — ${booking.status}/${booking.payment_status}, ${booking.total_amount} USD`,
+    `PNR ${details.pnr || 'none'} · segment status: ${statuses}`,
+    `flagged ${hours}h ago`,
+  ].join('\n');
+}
+
+// A ticketed booking the airline retimed. Under "paid but not ticketed" it
+// read "no ticket was issued ... ticket it, or refund it" of a live ticket.
+const ticketedScheduleChange = (booking) => openTicketedFlagOf(booking)?.reason === SCHEDULE_CHANGED_REVIEW_REASON;
+
+// A ticketed booking the order route held for a person after issuing: the
+// customer was sent "our team is finishing your ticket". Under "paid but not
+// ticketed" it read "ticket it, or refund it" - a second ticket, or a refund
+// of a live one.
+const heldTicketed = (booking) => {
+  const open = openTicketedFlagOf(booking);
+  return Boolean(open) && open.reason !== SCHEDULE_CHANGED_REVIEW_REASON;
+};
+
 const ticketNumbersMissing = (booking) => !needsAirlineRefundClaim(booking)
   && booking?.booking_details?.needs_review?.reason === TICKET_NUMBERS_MISSING;
 
@@ -349,8 +410,12 @@ export function buildMessage(bookings) {
   // given, and a refund with the PNR still live leaves its confirmed flights
   // held with nothing paid for them.
   const seatless = rest.filter(noConfirmedSeat);
+  const retimed = rest.filter((booking) => !needsAirlineRefundClaim(booking) && !ticketNumbersMissing(booking)
+    && ticketedScheduleChange(booking));
+  const held = rest.filter((booking) => !needsAirlineRefundClaim(booking) && !ticketNumbersMissing(booking)
+    && heldTicketed(booking));
   const unticketed = rest.filter((booking) => !needsAirlineRefundClaim(booking) && !ticketNumbersMissing(booking)
-    && !noConfirmedSeat(booking));
+    && !noConfirmedSeat(booking) && !ticketedScheduleChange(booking) && !heldTicketed(booking));
   const sections = [];
   if (unrecorded.length) {
     sections.push(
@@ -405,6 +470,28 @@ export function buildMessage(bookings) {
       'The customer has paid and no ticket was issued. Each one needs a human: ticket it, or refund it.',
       '',
       ...unticketed.map(describeBooking),
+    );
+  }
+  if (held.length) {
+    sections.push(
+      `:envelope: *${held.length} ticketed booking${held.length > 1 ? 's' : ''} held after ${held.length > 1 ? 'their tickets were' : 'its ticket was'} issued*`,
+      'The ticket IS issued, but the order route stopped after it and held the booking for a person. '
+        + 'The customer was told their reservation is held and our team is finishing their ticket, and was NOT sent '
+        + 'their confirmation. Check the booking against the PNR (its FA lines) and record any ticket number missing, '
+        + 'then send the customer their e-ticket and confirmation. Do NOT reissue and do NOT refund: the customer holds a live ticket.',
+      '',
+      ...held.map(describeBooking),
+    );
+  }
+  if (retimed.length) {
+    sections.push(
+      `:clock3: *${retimed.length} ticketed booking${retimed.length > 1 ? 's' : ''} whose schedule the airline changed*`,
+      'The airline changed the times of a flight and the change was accepted, and the ticket IS issued. '
+        + 'The customer was sent their confirmation, which may still show the times they searched. '
+        + 'Check the new times in the PNR and tell the customer. Do NOT reissue and do NOT refund for this: the booking and its ticket stand. '
+        + 'If the new times do not suit the customer, handle it as a change or a cancellation.',
+      '',
+      ...retimed.map(describeScheduleChange),
     );
   }
   if (numbersMissing.length) {

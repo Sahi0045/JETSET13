@@ -17,6 +17,7 @@ import {
   cannotTicket, interlineNotAllowed, interlinePairsOf, ticketingCarrierOf,
 } from './ticketingCarriers.js';
 import { travellerGroupProblem } from '../../../shared/travellerGroup.js';
+import { SCHEDULE_CHANGED_REVIEW_REASON } from '../../../shared/reviewQueue.js';
 
 const log = logger.child({ svc: 'amadeus-ws' });
 
@@ -686,6 +687,22 @@ const createFlightOrder = async (orderData, options = {}) => {
     secureFlight: options.secureFlight === true,
   });
 
+  // A segment the airline changed was accepted with change advice (TK). It
+  // was only a log line: the customer kept the searched times on the
+  // booking, the email and the e-ticket, and could miss a retimed flight.
+  const scheduleChange = result.scheduleChanged
+    ? { reason: SCHEDULE_CHANGED_REVIEW_REASON, statuses: result.scheduleChanged, at: new Date().toISOString() }
+    : null;
+  // The chain's own flag - the ticket numbers it could not read back - stays
+  // on top, where ticket sync looks for it, with the schedule change kept
+  // under it (`previous`). Picking one dropped the schedule change, and once
+  // ticket sync resolved the numbers nobody ever learnt the flight was
+  // retimed. The desk and the alarm find it under the numbers flag
+  // (shared/reviewQueue.js scheduleChangeOf), and ticket sync lifts it back on
+  // top when it settles the numbers.
+  const chainFlag = result.order?.needsReview ?? null;
+  const needsReview = chainFlag && scheduleChange ? { ...chainFlag, previous: scheduleChange } : chainFlag ?? scheduleChange;
+
   return {
     success: true,
     data: result.order,
@@ -695,13 +712,7 @@ const createFlightOrder = async (orderData, options = {}) => {
     // These two values are the only modes this provider can ever return.
     mode: result.ticketed ? 'LIVE_GDS_BOOKING' : 'LIVE_GDS_BOOKING_UNTICKETED',
     ticketed: result.ticketed,
-    // A segment the airline changed was accepted with change advice (TK). It
-    // was only a log line: the customer kept the searched times on the
-    // booking, the email and the e-ticket, and could miss a retimed flight.
-    needsReview: result.order?.needsReview
-      ?? (result.scheduleChanged
-        ? { reason: 'schedule_changed_by_airline', statuses: result.scheduleChanged, at: new Date().toISOString() }
-        : null),
+    needsReview,
     // Against the travellers the booking stores, by their own ids. A ticket
     // names a PNR tattoo, not a traveller - and an infant's names its adult's -
     // so it is matched through the PNR's own passenger list (attributeTickets).
