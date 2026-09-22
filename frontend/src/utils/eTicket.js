@@ -18,7 +18,7 @@
  */
 
 import {
-  NO_CONFIRMED_SEAT_REVIEW_REASON, commitUnknownOf, liveTicketNumbersMissingOf, noConfirmedSeatOf, unrecordedCancellationOf,
+  NO_CONFIRMED_SEAT_REVIEW_REASON, commitUnknownOf, liveTicketNumbersMissingOf, noConfirmedSeatOf, unrecordedCancellationForCustomerOf,
   voidedTicketsOf,
 } from '../../../shared/reviewQueue';
 
@@ -102,14 +102,15 @@ export function isCommitUnknown(bookingData) {
  * released, the money moved - and its record could not be written
  * (payment/operations.handlers.js flagUnrecordedCancellation): as the server
  * worked it out, or - for a copy that does not say, such as a raw row - by the
- * same walk over the flags (unrecordedCancellationOf).
+ * same walk over the flags (unrecordedCancellationForCustomerOf: past a flag a
+ * person resolved, until the booking is recorded cancelled).
  *
  * The row still reads confirmed, paid and ticketed, and the flag names no
  * voided number. Read from the row, the void ticket was an issued one, offered
  * as an E-Ticket to a customer told not to try again and to call.
  */
 export function isCancellationUnrecorded(bookingData) {
-  return sentByServer(bookingData, 'unrecorded_cancellation') ?? Boolean(unrecordedCancellationOf(bookingData));
+  return sentByServer(bookingData, 'unrecorded_cancellation') ?? Boolean(unrecordedCancellationForCustomerOf(bookingData));
 }
 
 /** Whether the booking was cancelled, from whichever shape it arrived in. */

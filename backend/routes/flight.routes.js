@@ -28,7 +28,7 @@ import { buildFlightOrderBody, orderDataFromCheckoutRow } from '../../shared/fli
 import { statusChangeRefusal } from '../../shared/bookingStatusChange.js';
 import {
   attentionOf, reviewResolution, ticketsOf, isTicketed, NO_CONFIRMED_SEAT_REVIEW_REASON, noConfirmedSeatOf,
-  HELD_REVIEW_REASON_PREFIXES, liveTicketNumbersMissingOf, unrecordedCancellationOf, voidedTicketsOf, commitUnknownOf,
+  HELD_REVIEW_REASON_PREFIXES, liveTicketNumbersMissingOf, unrecordedCancellationForCustomerOf, voidedTicketsOf, commitUnknownOf,
 } from '../../shared/reviewQueue.js';
 import { errorSummary } from '../utils/errorSummary.js';
 import { flightSearchLimiter, guestBookingLimiter } from '../middleware/security.js';
@@ -1228,7 +1228,9 @@ const DUPLICATE_LOOKBACK_MS = 30 * DAY_MS;
  *
  * A cancellation that moved the money and could not record it leaves the row
  * reading paid (flagUnrecordedCancellation), and the customer was told "we will
- * confirm what happened to your payment": neither held nor returned is known.
+ * confirm what happened to your payment": neither held nor returned is known -
+ * still, once a person marks the flag handled with the booking left as it was
+ * (unrecordedCancellationForCustomerOf).
  *
  * @returns {'held'|'returned'|'partly_returned'|'unconfirmed'}
  */
@@ -1236,7 +1238,7 @@ export function paymentStateOf(booking) {
   const payment = String(booking?.payment_status ?? '').toLowerCase();
   if (['refunded', 'reversed'].includes(payment)) return 'returned';
   if (payment === 'partially_refunded') return 'partly_returned';
-  if (unrecordedCancellationOf(booking)) return 'unconfirmed';
+  if (unrecordedCancellationForCustomerOf(booking)) return 'unconfirmed';
   return ['paid', 'completed'].includes(payment) ? 'held' : 'unconfirmed';
 }
 
@@ -2590,8 +2592,10 @@ router.post('/order', optionalProtect, async (req, res) => {
     // and its flag names no voided ticket, so it was answered "Booking
     // Confirmed!" with the void number as its ticket - to a customer told not
     // to try again and to call. Answered as the review below answers it, as it
-    // already was with no PNR.
-    const unrecordedCancel = Boolean(unrecordedCancellationOf(existing));
+    // already was with no PNR. Still once a person marks the flag handled with
+    // the booking left confirmed (unrecordedCancellationForCustomerOf): that
+    // un-voids nothing, and the answer was "Booking Confirmed!" again.
+    const unrecordedCancel = Boolean(unrecordedCancellationForCustomerOf(existing));
     if (existing.booking_details?.pnr && !awaitingSeat && !unrecordedCancel) {
       const details = existing.booking_details;
       // Committed and still working: the request that holds this booking is
@@ -4358,10 +4362,11 @@ export function toClientBooking(booking, { showPassports = false } = {}) {
         commit_unknown: Boolean(commitUnknownOf(booking)),
         // A cancel that went through - tickets voided, the reservation
         // released, the money moved - and whose record could not be written
-        // (unrecordedCancellationOf). The row still reads confirmed, paid and
-        // ticketed, and the flag names no voided number, so every page called
-        // the void ticket issued and offered it as an E-Ticket.
-        unrecorded_cancellation: Boolean(unrecordedCancellationOf(booking)),
+        // (unrecordedCancellationForCustomerOf). The row still reads confirmed,
+        // paid and ticketed, and the flag names no voided number, so every page
+        // called the void ticket issued and offered it as an E-Ticket. Past a
+        // flag a person resolved, until the booking is recorded cancelled.
+        unrecorded_cancellation: Boolean(unrecordedCancellationForCustomerOf(booking)),
       }
       : null,
     // Whether the GDS ticketed. The rest is the office id, the GDS session and
