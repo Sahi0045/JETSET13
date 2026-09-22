@@ -91,11 +91,15 @@ const UNAVAILABLE_RETRY_MS = 15000;
  *              answered (timed out, or no record locator came back), so nobody
  *              knows whether the airline holds anything. It read as held, and
  *              told the customer their seats were reserved.
+ *   voided   - no live ticket, and the answer names tickets a cancel voided
+ *              (ALREADY_BOOKED after a cancel whose PNR_Cancel was refused).
+ *              Neither issued nor held: nobody can fly on it.
  */
 function outcomeOf(body) {
   if (body?.queued === true) return 'queued';
   if (body?.ticketed === true) return 'ticketed';
   if (['returned', 'partly_returned'].includes(body?.paymentState)) return body.paymentState;
+  if (Array.isArray(body?.voided_tickets) && body.voided_tickets.length > 0) return 'voided';
   if ((body?.needsReview || body?.data?.needsReview) && !pnrOfAnswer(body)) return 'checking';
   return 'held';
 }
@@ -416,6 +420,9 @@ function FlightCreateOrders() {
           queued: result === 'queued',
           ticketed: result === 'ticketed',
           tickets: Array.isArray(body.tickets) ? body.tickets : [],
+          // The tickets a cancel voided (ALREADY_BOOKED), for the confirmation
+          // page's voided wording: without them it read the booking as issued.
+          voided_tickets: Array.isArray(body.voided_tickets) ? body.voided_tickets : [],
           needsReview,
           // The name the confirmation page and bookingStatus read. Saving only
           // `needsReview` meant the "our team is finishing your ticket" line
@@ -768,6 +775,17 @@ function FlightCreateOrders() {
                         <h2 className="text-xl font-semibold text-gray-800">Booking Received</h2>
                         <p className="text-gray-600">
                           Your payment is complete and your booking is in the queue. We are confirming your seats with the airline now; this can take a few minutes.
+                        </p>
+                      </>
+                    ) : outcome === 'voided' ? (
+                      // As the confirmation page says it (tickets_voided).
+                      <>
+                        <div className="mx-auto w-16 h-16 rounded-full bg-amber-50 flex items-center justify-center">
+                          <Clock className="w-8 h-8 text-amber-600" />
+                        </div>
+                        <h2 className="text-xl font-semibold text-gray-800">Ticket Voided</h2>
+                        <p className="text-gray-600">
+                          Your ticket has been voided and is not valid for travel. The cancellation has not been completed with the airline yet.
                         </p>
                       </>
                     ) : outcome === 'checking' ? (
