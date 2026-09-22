@@ -2563,7 +2563,14 @@ router.post('/order', optionalProtect, async (req, res) => {
     // exists", which the order page renders as "Your seats are reserved".
     // Found under a later flag too: a refused cancel writes its own on top.
     const awaitingSeat = Boolean(noConfirmedSeatOf(existing));
-    if (existing.booking_details?.pnr && !awaitingSeat) {
+    // Nor a booking a cancel released and could not record
+    // (flagUnrecordedCancellation): the row still reads confirmed and ticketed,
+    // and its flag names no voided ticket, so it was answered "Booking
+    // Confirmed!" with the void number as its ticket - to a customer told not
+    // to try again and to call. Answered as the review below answers it, as it
+    // already was with no PNR.
+    const unrecordedCancel = Boolean(unrecordedCancellationOf(existing));
+    if (existing.booking_details?.pnr && !awaitingSeat && !unrecordedCancel) {
       const details = existing.booking_details;
       // Committed and still working: the request that holds this booking is
       // queueing it and issuing the ticket. Answered as it was before the
@@ -2655,7 +2662,7 @@ router.post('/order', optionalProtect, async (req, res) => {
     // Refused before the gateway is asked, and nothing is refunded here.
     const failedBefore = existing.booking_details?.fulfillment_failed;
     const review = existing.booking_details?.needs_review;
-    if (failedBefore || (review && !EMAILED_REVIEW_REASONS.has(review.reason))) {
+    if (failedBefore || unrecordedCancel || (review && !EMAILED_REVIEW_REASONS.has(review.reason))) {
       // Said from the row, not assumed: the order page says "your payment is
       // held ... do not book this trip again" only when this says 'held'.
       const paymentState = paymentStateOf(existing);
