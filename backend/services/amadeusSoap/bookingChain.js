@@ -1406,7 +1406,36 @@ export const cancelBooking = async (recordLocator) => {
   log.warn({ pnr: recordLocator, reason: first.reason, retryInMs: config.voidRetryDelayMs }, 'void failed for now; trying once more in a new session');
   await sleep(config.voidRetryDelayMs);
 
-  const second = await cancelOnce();
+  // Either try's confirmed voids count - the second answers 6150 for the
+  // first's. What is still live comes from the later try alone, and stays
+  // unknown (null) when it did not say which documents failed.
+  const withFirstVoids = (later) => {
+    const voidedTickets = [...(first.voidedTickets ?? []), ...(later?.voidedTickets ?? [])]
+      .filter((number, index, all) => all.indexOf(number) === index);
+    const unvoidedTickets = Array.isArray(later?.unvoidedTickets)
+      ? later.unvoidedTickets.filter((number) => !voidedTickets.includes(number))
+      : null;
+    return { voidedTickets, unvoidedTickets };
+  };
+
+  let second;
+  try {
+    second = await cancelOnce();
+  } catch (error) {
+    // The retry failed outright - its retrieve timed out, a gateway page
+    // answered its retrieve or its void, the session broke - and its error
+    // named none of the first try's voids: the cancel handler recorded no
+    // voided ticket, and a cancel on a later day listed the void one as a
+    // refund to claim from the airline. A retrieve that failed did not look,
+    // so what is still live is left unknown.
+    const unnamed = (first.voidedTickets ?? []).filter((number) => !(error?.voidedTickets ?? []).includes(number));
+    if (error && typeof error === 'object' && unnamed.length > 0) {
+      Object.assign(error, withFirstVoids(error));
+      error.technicalError = `${error.technicalError ?? error.message ?? 'the second void try failed'}`
+        + `; the first try voided ${unnamed.join(', ')}`;
+    }
+    throw error;
+  }
   if (!second.retryVoid) return second;
 
   // Still not voided: leave the itinerary alone, exactly as a refused void does.
@@ -1423,16 +1452,8 @@ export const cancelBooking = async (recordLocator) => {
   // Which tickets are void, the way a refused void says it, so the cancel
   // handler records them on the booking. This error named none, so when the
   // first try had voided some, nothing recorded them: a cancel on a later day
-  // would list a void ticket as a refund to claim from the airline. Either
-  // try's confirmed voids count - the second answers 6150 for the first's.
-  // What is still live comes from the second try alone, and stays unknown
-  // (null) when its reply did not say which documents failed.
-  const voidedEither = [...(first.voidedTickets ?? []), ...(second.voidedTickets ?? [])]
-    .filter((number, index, all) => all.indexOf(number) === index);
-  failure.voidedTickets = voidedEither;
-  failure.unvoidedTickets = Array.isArray(second.unvoidedTickets)
-    ? second.unvoidedTickets.filter((number) => !voidedEither.includes(number))
-    : null;
+  // would list a void ticket as a refund to claim from the airline.
+  Object.assign(failure, withFirstVoids(second));
   throw failure;
 };
 
