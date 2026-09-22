@@ -140,6 +140,39 @@ describe('a cancel whose void failed for now twice, after the first try voided o
     expect(axios.put).not.toHaveBeenCalled();
   });
 
+  // The second try's reply named no document at all (5795 for the whole
+  // request, or a timeout), so which tickets are still live is UNKNOWN. The
+  // handler used to record that unknown as an empty list, and the Slack line
+  // then read "still live: none" - over the infant's live ticket.
+  it('never tells staff nothing is still live when the second reply named no tickets', async () => {
+    table = fakeBookingsTable([flight()], { tables: { price_settings: [], payments: [] } });
+    const wholeTooSoon = envelope('Ticket_CancelDocumentReply',
+      `<errorGroup><errorOrWarningCodeDetails><errorDetails><errorCode>${TOO_SOON[0]}</errorCode></errorDetails></errorOrWarningCodeDetails><errorWarningDescription><freeText>${TOO_SOON[1]}</freeText></errorWarningDescription></errorGroup>`);
+    axios.post
+      .mockResolvedValueOnce(reply(retrieved()))
+      .mockResolvedValueOnce(reply(envelope('Ticket_CancelDocumentReply', doc(ADULT, 'X', 'O') + doc(INFANT, 'X', 'N', TOO_SOON))))
+      .mockResolvedValueOnce(reply(ok('Security_SignOutReply')))
+      .mockResolvedValueOnce(reply(retrieved()))
+      .mockResolvedValueOnce(reply(wholeTooSoon))
+      .mockResolvedValue(reply(ok('Security_SignOutReply')));
+
+    const res = await cancel();
+
+    expect(res.statusCode).toBe(502);
+    const row = table.row(REF);
+    // What IS known is still recorded: the adult's ticket was voided.
+    expect(row.booking_details.voided_tickets).toEqual([ADULT]);
+    expect(row.booking_details.needs_review.voided_tickets).toEqual([ADULT]);
+    // What is not known is not written as "nothing".
+    expect(row.booking_details.needs_review.unvoided_tickets).toBeUndefined();
+
+    const { selectUnannounced, buildMessage } = await import('../../backend/jobs/needsReviewAlert.job.js');
+    const line = buildMessage(selectUnannounced([row])).split('\n').find((l) => l.startsWith('PNR ABC123'));
+    expect(line).not.toMatch(/still live: none/);
+    expect(line).toMatch(new RegExp(`not recorded as voided: ${INFANT}`));
+    expect(axios.put).not.toHaveBeenCalled();
+  });
+
   // Fence: nothing voided by either try - no voided list, as on main.
   it('records no voided ticket when neither try voided one', async () => {
     table = fakeBookingsTable([flight()], { tables: { price_settings: [], payments: [] } });
