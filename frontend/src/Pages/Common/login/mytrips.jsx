@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { daysUntilDate, formatCalendarDate, formatIsoDuration } from "../../../utils/dateUtils"
 import { bookingStatusBadge, needsAttention, cancellationMessage, refundStatus, attentionMessage, isCompletedTrip } from "../../../utils/bookingStatus"
-import { isCommitUnknown, liveTickets, ticketState, ticketsVoided } from "../../../utils/eTicket"
+import { hasNoConfirmedSeat, isCommitUnknown, liveTickets, ticketState, ticketsVoided } from "../../../utils/eTicket"
 import { bookingItineraries } from "../../../../../shared/bookingItineraries"
 import BookingItinerary from "../flights/BookingItinerary"
 import { formatUsd } from "../../../utils/bookingCharge"
@@ -604,7 +604,16 @@ export default function TravelDashboard() {
     // Bookings someone has to act on: a reservation flagged for review, a
     // refund that did not go through. This matched a 'failed' status that
     // nothing ever writes, so the tab could never show anything.
-    if (activeTab === "Failed") return list.filter((b) => needsAttention(b));
+    //
+    // Not a booking whose outcome is still open, which has not failed: a
+    // commit our team is checking with the airline (isCommitUnknown), or a
+    // PNR the airline has not confirmed a seat on yet (hasNoConfirmedSeat).
+    // Each tells the customer not to book the trip again, and under "Failed"
+    // invited exactly that. They stay under Upcoming with their sentences.
+    // A cancelled one whose refund did not go through (refundStatus) is still
+    // listed: that has failed.
+    const stillOpen = (b) => !refundStatus(b) && (isCommitUnknown(b) || hasNoConfirmedSeat(b));
+    if (activeTab === "Failed") return list.filter((b) => needsAttention(b)).filter((b) => !stillOpen(b));
     return list;
   };
 
