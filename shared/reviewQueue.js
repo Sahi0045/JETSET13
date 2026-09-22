@@ -172,6 +172,33 @@ export const noConfirmedSeatOf = (booking) => (isTicketed(detailsOf(booking)) ? 
   : flagInForce(booking, (review) => review.reason === NO_CONFIRMED_SEAT_REVIEW_REASON, { pastResolved: true }));
 
 /**
+ * The order route's flag on a booking whose airline commit never answered:
+ * PNR_AddMultiElements timed out, sent back something that is not SOAP, or
+ * answered with no record locator (bookingChain.js step 6, `committed:
+ * 'unknown'`). The chain throws before a record locator is read, so the row
+ * has no PNR, and nobody knows yet whether the airline holds a reservation.
+ * The customer was told our team is checking with the airline, and not to
+ * book again (flight.routes.js, the 202 for a committed chain error).
+ */
+export const COMMIT_UNKNOWN_REVIEW_REASON = 'chain failed after commit at commit';
+
+/**
+ * The commit-unknown flag still open on a booking with no PNR, on top or under
+ * a later one, or null.
+ *
+ * The order page knows the state from the answer to the order. Every later
+ * read comes from the row, which has no PNR and this reason alone - the shape
+ * of a booking that failed - so it was read as one: "failed", with nothing
+ * against booking the trip again, while the first booking may be held at the
+ * airline.
+ *
+ * A PNR on the row, or a person resolving the flag (flagInForce stops there),
+ * means somebody found out: every reader then goes back to what the row says.
+ */
+export const commitUnknownOf = (booking) => (booking?.pnr || detailsOf(booking)?.pnr ? null
+  : flagInForce(booking, (review) => review.reason === COMMIT_UNKNOWN_REVIEW_REASON));
+
+/**
  * The provider's flag on a booking whose flight the airline retimed: a segment
  * came back TK and the chain accepted the change (amadeusSoap/index.js
  * createFlightOrder). The booking and its ticket are real, and the customer is

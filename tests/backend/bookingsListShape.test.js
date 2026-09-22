@@ -46,7 +46,7 @@ describe('toClientBooking', () => {
 
   it('exposes the ticketing verdict fields the e-ticket helper reads', () => {
     expect(out.tickets).toEqual([]);
-    expect(out.needs_review).toEqual({ reason: 'ticket_numbers_not_retrieved', no_confirmed_seat: false, ticket_numbers_missing: true });
+    expect(out.needs_review).toEqual({ reason: 'ticket_numbers_not_retrieved', no_confirmed_seat: false, ticket_numbers_missing: true, commit_unknown: false });
     expect(out.gds).toEqual({ ticketed: false });
   });
 
@@ -111,7 +111,7 @@ describe('toClientBooking', () => {
       },
     });
     // The reason, and the states worked out from the whole chain of flags - never the chain itself.
-    expect(listed.needs_review).toEqual({ reason: 'charge not reversed after the booking failed', no_confirmed_seat: false, ticket_numbers_missing: false });
+    expect(listed.needs_review).toEqual({ reason: 'charge not reversed after the booking failed', no_confirmed_seat: false, ticket_numbers_missing: false, commit_unknown: false });
     expect(listed.gds).toEqual({ ticketed: true });
   });
 

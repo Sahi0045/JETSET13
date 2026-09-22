@@ -28,7 +28,7 @@ import { buildFlightOrderBody, orderDataFromCheckoutRow } from '../../shared/fli
 import { statusChangeRefusal } from '../../shared/bookingStatusChange.js';
 import {
   attentionOf, reviewResolution, ticketsOf, isTicketed, NO_CONFIRMED_SEAT_REVIEW_REASON, noConfirmedSeatOf,
-  HELD_REVIEW_REASON_PREFIXES, liveTicketNumbersMissingOf, unrecordedCancellationOf, voidedTicketsOf,
+  HELD_REVIEW_REASON_PREFIXES, liveTicketNumbersMissingOf, unrecordedCancellationOf, voidedTicketsOf, commitUnknownOf,
 } from '../../shared/reviewQueue.js';
 import { errorSummary } from '../utils/errorSummary.js';
 import { flightSearchLimiter, guestBookingLimiter } from '../middleware/security.js';
@@ -4304,6 +4304,10 @@ export function toClientBooking(booking, { showPassports = false } = {}) {
         // Issued, but the numbers have not reached us: "not issued" was false.
         // Not once a cancel voided those tickets: "issued" was false then.
         ticket_numbers_missing: Boolean(liveTicketNumbersMissingOf(booking)),
+        // The airline commit never answered, and nobody has found out since
+        // (commitUnknownOf). Read from the reason alone, it was a booking
+        // with no PNR like any failed one, and every page said it had failed.
+        commit_unknown: Boolean(commitUnknownOf(booking)),
       }
       : null,
     // Whether the GDS ticketed. The rest is the office id, the GDS session and

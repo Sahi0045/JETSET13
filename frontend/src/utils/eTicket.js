@@ -18,7 +18,7 @@
  */
 
 import {
-  NO_CONFIRMED_SEAT_REVIEW_REASON, liveTicketNumbersMissingOf, noConfirmedSeatOf, voidedTicketsOf,
+  NO_CONFIRMED_SEAT_REVIEW_REASON, commitUnknownOf, liveTicketNumbersMissingOf, noConfirmedSeatOf, voidedTicketsOf,
 } from '../../../shared/reviewQueue';
 
 /**
@@ -82,6 +82,18 @@ const sentByServer = (bookingData, name) => {
  */
 export function hasNoConfirmedSeat(bookingData) {
   return sentByServer(bookingData, 'no_confirmed_seat') ?? Boolean(noConfirmedSeatOf(bookingData));
+}
+
+/**
+ * Whether the airline commit on this booking never answered, and nobody has
+ * found out since: as the server worked it out, or - for a copy that does not
+ * say, such as a raw row - by the same walk over the flags (commitUnknownOf).
+ *
+ * The order page knows it from the answer to the order. Every page after it
+ * reads the stored row, which has no PNR, and called it a failed booking.
+ */
+export function isCommitUnknown(bookingData) {
+  return sentByServer(bookingData, 'commit_unknown') ?? Boolean(commitUnknownOf(bookingData));
 }
 
 /** Whether the booking was cancelled, from whichever shape it arrived in. */
