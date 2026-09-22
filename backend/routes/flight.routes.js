@@ -1245,8 +1245,14 @@ export function paymentStateOf(booking) {
  * payment record says (paymentStateOf). "Our team is reviewing it" and "If you
  * have not heard from us" are for a payment still held, or one whose fate a
  * person is confirming: a refunded booking is on no desk list and no alarm.
+ *
+ * `commitUnknown` (commitUnknownOf): the airline commit never answered, and
+ * nobody knows yet whether the airline holds the booking. A reload of the
+ * order page sends the order again, and the refusal said the booking could
+ * not be completed - with nothing against booking the trip again, which is
+ * what the customer was told moments before.
  */
-function notSentAgainMessage(bookingReference, paymentState) {
+function notSentAgainMessage(bookingReference, paymentState, { commitUnknown = false } = {}) {
   const call = `call (877) 538-7380 with booking reference ${bookingReference}`;
   if (paymentState === 'returned') {
     return 'This booking could not be completed, so it was not sent to the airline again. '
@@ -1255,6 +1261,11 @@ function notSentAgainMessage(bookingReference, paymentState) {
   if (paymentState === 'partly_returned') {
     return 'This booking could not be completed, so it was not sent to the airline again. '
       + `Part of your payment for it has been refunded. Please ${call} about the rest.`;
+  }
+  if (commitUnknown) {
+    return 'Our team is checking with the airline whether this booking went through, so it was not sent to the airline again. '
+      + 'Nothing more has been charged. Please do not book this trip again in the meantime - we will email you either way. '
+      + `If you have not heard from us within 2 business days, ${call}.`;
   }
   return 'This booking could not be completed and our team is reviewing it, so it was not sent to the airline again. '
     + `Nothing more has been charged. If you have not heard from us within 2 business days, ${call}.`;
@@ -2653,7 +2664,9 @@ router.post('/order', optionalProtect, async (req, res) => {
       // Said from the row, not assumed: the order page says "your payment is
       // held ... do not book this trip again" only when this says 'held'.
       const paymentState = paymentStateOf(existing);
-      const message = notSentAgainMessage(existing.booking_reference, paymentState);
+      const message = notSentAgainMessage(existing.booking_reference, paymentState, {
+        commitUnknown: Boolean(commitUnknownOf(existing)),
+      });
       return res.status(409).json({
         success: false,
         code: failedBefore ? 'BOOKING_FAILED' : 'BOOKING_NEEDS_REVIEW',

@@ -27,9 +27,11 @@ vi.mock('../../backend/routes/payment/arcpay.config.js', async () => {
  *
  * Every later read of the booking comes from the row, which has no PNR and
  * carried nothing but the review reason. My Trips and Manage Booking called it
- * a booking that had failed, with no word against booking again. These drive
- * the real route to the real row, then the real projection (toClientBooking)
- * and the real customer-facing helpers.
+ * a booking that had failed, with no word against booking again, and so did a
+ * reload of the order page: its retry of POST /order was refused, rightly, in
+ * the words for a booking that could not be completed. These drive the real
+ * route to the real row, then the real projection (toClientBooking) and the
+ * real customer-facing helpers.
  */
 
 const REF = 'FLTUNK1';
@@ -230,6 +232,51 @@ describe('the same booking read back from its row', () => {
     row.booking_details.pnr = 'LATE01';
 
     expect(toClientBooking(row).needs_review.commit_unknown).toBe(false);
+  });
+});
+
+// The order page reloaded, or reached again with Back: it sends the order again.
+describe('the same order sent again', () => {
+  const CHECKING_NOT_SENT = 'Our team is checking with the airline whether this booking went through, so it was not sent to the airline again. '
+    + 'Nothing more has been charged. Please do not book this trip again in the meantime - we will email you either way. '
+    + `If you have not heard from us within 2 business days, call (877) 538-7380 with booking reference ${REF}.`;
+
+  it('is not sent again, and says we are checking - not that the booking could not be completed', async () => {
+    const { app } = await commitNeverAnswered();
+
+    const retry = await request(app).post('/api/flights/order').send(order);
+
+    expect(createFlightOrder).toHaveBeenCalledTimes(1);
+    expect(retry.status).toBe(409);
+    expect(retry.body).toMatchObject({ code: 'BOOKING_NEEDS_REVIEW', needsReview: true, bookingReference: REF, paymentState: 'held' });
+    expect(retry.body.message).toBe(CHECKING_NOT_SENT);
+    expect(retry.body.error).toBe(CHECKING_NOT_SENT);
+  });
+
+  // Fences: once somebody knows, the answer is what it was.
+  it('once a person resolved the flag: refused in the words it had before', async () => {
+    const { app, table } = await commitNeverAnswered();
+    const row = table.row(REF);
+    row.booking_details.needs_review = { ...row.booking_details.needs_review, resolved_at: new Date().toISOString() };
+
+    const retry = await request(app).post('/api/flights/order').send(order);
+
+    expect(createFlightOrder).toHaveBeenCalledTimes(1);
+    expect(retry.status).toBe(409);
+    expect(retry.body.message).toBe('This booking could not be completed and our team is reviewing it, so it was not sent to the airline again. '
+      + `Nothing more has been charged. If you have not heard from us within 2 business days, call (877) 538-7380 with booking reference ${REF}.`);
+  });
+
+  it('refunded since: the refunded answer, as for any booking under review', async () => {
+    const { app, table } = await commitNeverAnswered();
+    table.row(REF).payment_status = 'refunded';
+
+    const retry = await request(app).post('/api/flights/order').send(order);
+
+    expect(createFlightOrder).toHaveBeenCalledTimes(1);
+    expect(retry.body.paymentState).toBe('returned');
+    expect(retry.body.message).toBe('This booking could not be completed, so it was not sent to the airline again. '
+      + `Your payment for it has been refunded. If you have any questions, call (877) 538-7380 with booking reference ${REF}.`);
   });
 });
 
