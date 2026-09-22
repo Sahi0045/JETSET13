@@ -1,7 +1,7 @@
 import React, { forwardRef } from 'react';
 import { Plane, User } from 'lucide-react';
 import { formatUsd } from '../../../utils/bookingCharge';
-import { bookingStatusBadge } from '../../../utils/bookingStatus';
+import { bookingStatusBadge, paymentReturned } from '../../../utils/bookingStatus';
 import {
     resolveTickets,
     ticketState,
@@ -87,10 +87,19 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
     // below" was printed whenever no ticket existed, over "PNR: N/A" for a
     // booking still queued, never sent to the airline, or never paid for.
     const NOTICES = {
-        ticket_pending: {
-            title: 'Your ticket has been issued. The ticket number is still being confirmed.',
-            body: 'We will email your ticket number shortly. Your booking reference and PNR below are valid.',
-        },
+        // Refunded since, in full or in part (the Payments tab refunds without
+        // cancelling): nobody is getting that number - ticket sync reads it
+        // for paid bookings only, and the alarm drops refunded ones - so no
+        // email is promised, as on the confirmation page.
+        ticket_pending: paymentReturned(bookingData)
+            ? {
+                title: 'Your ticket has been issued. Its ticket number has not reached us.',
+                body: 'If you need your ticket number, call (877) 538-7380 with your booking reference. Your booking reference and PNR below are valid.',
+            }
+            : {
+                title: 'Your ticket has been issued. The ticket number is still being confirmed.',
+                body: 'We will email your ticket number shortly. Your booking reference and PNR below are valid.',
+            },
         // Every ticket voided by a cancel the airline then refused. Manage
         // Booking does not offer this one either (canDownloadDocument).
         tickets_voided: {
