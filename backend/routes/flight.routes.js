@@ -1310,11 +1310,12 @@ function duplicatePaymentAnswer(bookingReference, paymentState = 'held') {
  *
  * "This customer" is the account the checkout was made from, or the email it
  * was made with. "Booked or on its way" is a PNR, a committed or queued chain,
- * or a chain in progress that claimed first - the earlier claim, or the lower
- * reference on a tie. Two paid checkouts racing each other both get here after
- * taking their own claim, so they see each other, and only the later one is
- * held. Same names, not just the same flights: a family can book one flight
- * twice for different people, and nothing here refunds anybody.
+ * a commit the airline never answered, or a chain in progress that claimed
+ * first - the earlier claim, or the lower reference on a tie. Two paid
+ * checkouts racing each other both get here after taking their own claim, so
+ * they see each other, and only the later one is held. Same names, not just
+ * the same flights: a family can book one flight twice for different people,
+ * and nothing here refunds anybody.
  *
  * @returns {Promise<{ duplicateOf: string|null } | { unavailable: true }>}
  */
@@ -1360,7 +1361,13 @@ async function findDuplicateBooking(booking, { travellers, offer, claimedAt, now
     if (now - Date.parse(row.created_at) > DUPLICATE_LOOKBACK_MS) continue;
 
     const chain = other.gds_chain || {};
-    const booked = Boolean(other.pnr) || Boolean(other.queued_order) || ['committed', 'queued'].includes(chain.state);
+    // A commit that never answered (commitUnknownOf) may be held at the
+    // airline. Its row has no PNR and its chain stays 'in_progress', so it
+    // counted only for the chain's two-minute claim - after that a second
+    // payment for the trip was sent to the airline. It counts until a person
+    // finds out.
+    const booked = Boolean(other.pnr) || Boolean(other.queued_order) || ['committed', 'queued'].includes(chain.state)
+      || Boolean(commitUnknownOf(row));
     const theirClaim = Date.parse(chain.claimedAt || chain.startedAt);
     const bookingFirst = chain.state === 'in_progress'
       && now - Date.parse(chain.startedAt) < CHAIN_CLAIM_TTL_MS

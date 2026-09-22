@@ -29,13 +29,18 @@ vi.mock('../../backend/routes/payment/arcpay.config.js', async () => {
  * carried nothing but the review reason. My Trips and Manage Booking called it
  * a booking that had failed, with no word against booking again, and so did a
  * reload of the order page: its retry of POST /order was refused, rightly, in
- * the words for a booking that could not be completed. These drive the real
- * route to the real row, then the real projection (toClientBooking) and the
- * real customer-facing helpers.
+ * the words for a booking that could not be completed. And once the chain's
+ * two-minute claim lapsed, the duplicate check stopped counting the row as
+ * booked: a second payment for the same trip was sent to the airline, while
+ * the first may be held there. These drive the real route to the real row,
+ * then the real projection (toClientBooking) and the real customer-facing
+ * helpers.
  */
 
 const REF = 'FLTUNK1';
-const INDICATOR = 'SI-UNK-1';
+const SECOND = 'FLTUNK2';
+const JANE = [{ id: '1', firstName: 'Jane', lastName: 'Doe', dateOfBirth: '1990-01-01', gender: 'FEMALE' }];
+const JOHN = [{ id: '1', firstName: 'John', lastName: 'Doe', dateOfBirth: '1988-02-02', gender: 'MALE' }];
 
 const offer = {
   type: 'flight-offer',
@@ -59,9 +64,10 @@ const offer = {
   _ama: { wsap: '1ASIWTEST', searchedAt: new Date().toISOString(), segments: [] },
 };
 
-const checkoutRow = () => ({
-  id: 1,
-  booking_reference: REF,
+/** A checkout ARC captured, verified for the offer, not yet booked. */
+const checkoutRow = (ref = REF, travellers = JANE) => ({
+  id: ref === REF ? 1 : 2,
+  booking_reference: ref,
   travel_type: 'flight',
   status: 'pending',
   payment_status: 'paid',
@@ -69,23 +75,24 @@ const checkoutRow = () => ({
   user_id: null,
   created_at: new Date().toISOString(),
   booking_details: {
-    order_id: REF,
-    success_indicator: INDICATOR,
+    order_id: ref,
+    success_indicator: `SI-${ref}`,
     customer_email: 'jane@example.com',
     arc_captured_amount: 291,
     arc_captured_currency: 'USD',
-    pending_booking_data: { bookingData: { originalOffer: offer, passengerData: [{ firstName: 'Jane', lastName: 'Doe', gender: 'FEMALE', dateOfBirth: '1990-01-01' }] } },
+    pending_booking_data: { bookingData: { originalOffer: offer, passengerData: travellers } },
     verified_charge: { total: 291, pricedFare: { total: 291, currency: 'USD' }, verifiedAt: new Date().toISOString() },
   },
 });
 
-const order = {
-  bookingReference: REF,
-  orderId: REF,
-  transactionId: INDICATOR,
+const orderFor = (ref, travelers = JANE) => ({
+  bookingReference: ref,
+  orderId: ref,
+  transactionId: `SI-${ref}`,
   contactInfo: { email: 'jane@example.com', countryCode: '1', phoneNumber: '5551234567' },
-  travelers: [{ id: '1', firstName: 'Jane', lastName: 'Doe', dateOfBirth: '1990-01-01', gender: 'FEMALE' }],
-};
+  travelers,
+});
+const order = orderFor(REF);
 
 const send = vi.fn();
 const createFlightOrder = vi.fn();
@@ -147,8 +154,8 @@ afterEach(() => {
   vi.doUnmock('../../backend/services/flightProvider.js');
 });
 
-const commitNeverAnswered = async () => {
-  const { app, table } = await appWith([checkoutRow()]);
+const commitNeverAnswered = async (otherRows = []) => {
+  const { app, table } = await appWith([checkoutRow(), ...otherRows]);
   const res = await request(app).post('/api/flights/order').send(order);
   // Let anything started on `finish` run.
   await new Promise((resolve) => setTimeout(resolve, 30));
@@ -277,6 +284,94 @@ describe('the same order sent again', () => {
     expect(retry.body.paymentState).toBe('returned');
     expect(retry.body.message).toBe('This booking could not be completed, so it was not sent to the airline again. '
       + `Your payment for it has been refunded. If you have any questions, call (877) 538-7380 with booking reference ${REF}.`);
+  });
+});
+
+// A second payment for the same trip, once the first chain's claim has lapsed.
+describe('a second checkout for the same trip, paid after it', () => {
+  // The chain claim is two minutes (CHAIN_CLAIM_TTL_MS). Nothing renews it once
+  // the commit has thrown, so a second payment made later finds it lapsed.
+  const claimLapsed = (table) => {
+    const chain = table.row(REF).booking_details.gds_chain;
+    const tenMinutesAgo = new Date(Date.now() - 10 * 60_000).toISOString();
+    Object.assign(chain, { startedAt: tenMinutesAgo, claimedAt: tenMinutesAgo });
+  };
+
+  it('is held for a person, not sent to the airline: no second reservation, and the payment is not booked', async () => {
+    const { app, table } = await commitNeverAnswered([checkoutRow(SECOND)]);
+    claimLapsed(table);
+
+    const res = await request(app).post('/api/flights/order').send(orderFor(SECOND));
+
+    // Only the first order ever reached the airline.
+    expect(createFlightOrder).toHaveBeenCalledTimes(1);
+    expect(res.status).toBe(409);
+    // What the customer sees: the order page's "We did not book this trip
+    // twice", with this answer.
+    expect(res.body).toMatchObject({ code: 'DUPLICATE_PAYMENT', duplicatePayment: true, needsReview: true, bookingReference: SECOND });
+    expect(res.body.message).toBe('This payment looks like a second payment for a trip you have already booked, for the same travellers '
+      + 'on the same flights, so we have not booked it again. Your other booking is not affected. Our support team will check it '
+      + 'and refund this payment. If you did mean to book this trip twice, or have not heard from us within 2 business days, '
+      + `call (877) 538-7380 with booking reference ${SECOND}.`);
+
+    // Held against the first, for the alarm and the desk; its claim let go.
+    const held = table.row(SECOND).booking_details;
+    expect(held.needs_review).toMatchObject({ duplicate_of: REF, source: 'duplicate-payment', ticketed: false });
+    expect(held.gds_chain.state).toBe('failed');
+    expect(held.pnr).toBeUndefined();
+    const { selectUnannounced } = await import('../../backend/jobs/needsReviewAlert.job.js');
+    expect(selectUnannounced([table.row(SECOND)])).toHaveLength(1);
+  });
+
+  // Fences.
+  it('while the first claim is still live it is held as before', async () => {
+    const { app, table } = await commitNeverAnswered([checkoutRow(SECOND)]);
+
+    const res = await request(app).post('/api/flights/order').send(orderFor(SECOND));
+
+    expect(createFlightOrder).toHaveBeenCalledTimes(1);
+    expect(res.body.code).toBe('DUPLICATE_PAYMENT');
+    expect(table.row(SECOND).booking_details.needs_review.duplicate_of).toBe(REF);
+  });
+
+  it('the same flights for other travellers are booked: a family can book one flight twice', async () => {
+    const { app, table } = await commitNeverAnswered([checkoutRow(SECOND, JOHN)]);
+    claimLapsed(table);
+
+    const res = await request(app).post('/api/flights/order').send(orderFor(SECOND, JOHN));
+
+    expect(res.body.code).not.toBe('DUPLICATE_PAYMENT');
+    expect(createFlightOrder).toHaveBeenCalledTimes(2);
+  });
+
+  it('once a person resolved the flag, the first no longer counts as booked', async () => {
+    const { app, table } = await commitNeverAnswered([checkoutRow(SECOND)]);
+    claimLapsed(table);
+    const first = table.row(REF).booking_details;
+    first.needs_review = { ...first.needs_review, resolved_at: new Date().toISOString(), resolution: 'not held at the airline' };
+
+    const res = await request(app).post('/api/flights/order').send(orderFor(SECOND));
+
+    expect(res.body.code).not.toBe('DUPLICATE_PAYMENT');
+    expect(createFlightOrder).toHaveBeenCalledTimes(2);
+  });
+
+  it('a first booking that really failed does not count as booked', async () => {
+    const failedFirst = {
+      ...checkoutRow(),
+      booking_details: {
+        ...checkoutRow().booking_details,
+        fulfillment_failed: { at: '2026-09-15T08:00:00Z', error: 'step=sell', reversal: { reversed: false, action: 'FAILED' } },
+        needs_review: { reason: 'charge not reversed after the booking failed', ticketed: false, at: '2026-09-15T08:00:00Z' },
+        gds_chain: { state: 'failed', failedStep: 'sell', finishedAt: '2026-09-15T08:00:00Z' },
+      },
+    };
+    const { app } = await appWith([failedFirst, checkoutRow(SECOND)]);
+
+    const res = await request(app).post('/api/flights/order').send(orderFor(SECOND));
+
+    expect(res.body.code).not.toBe('DUPLICATE_PAYMENT');
+    expect(createFlightOrder).toHaveBeenCalledTimes(1);
   });
 });
 
