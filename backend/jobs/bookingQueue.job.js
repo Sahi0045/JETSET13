@@ -25,6 +25,8 @@ import {
 } from '../utils/bookingChainClaim.js';
 import { queueEnvironment } from '../utils/queueEnvironment.js';
 import { unchangedSince } from '../utils/bookingDetailsGuard.js';
+import { isUsableEmail } from '../../shared/email.js';
+import { orderDataFromCheckoutRow } from '../../shared/flightOrderBody.js';
 const MAX_PER_TICK = 5;
 
 /**
@@ -173,7 +175,7 @@ async function handOver(row) {
     return 'retry';
   }
   log('stale failed booking handed to a person, not replayed', { bookingReference: ref });
-  await notifyFailure(row.booking_details?.queued_order, ref, {}, { alerted });
+  await notifyFailure(row, {}, { alerted });
   await clearQueuedOrder(ref);
   return 'handed-over';
 }
@@ -286,8 +288,18 @@ export function failureCopy(result, { alerted = true } = {}) {
       : 'Please call (877) 538-7380 with your booking reference so we can sort it out.');
 }
 
-async function notifyFailure(order, bookingReference, result, { alerted } = {}) {
-  const to = order?.contactInfo?.email;
+async function notifyFailure(row, result, { alerted } = {}) {
+  const bookingReference = row.booking_reference;
+  const order = row.booking_details?.queued_order;
+  // The first address that can be delivered to, in the order route's order:
+  // the order's contact email, its customerEmail, the lead traveller's (the
+  // one checkout verified, as the route books), then the one checkout
+  // recorded. The contact email was taken whatever it held, and a typed
+  // "jane@gmailcom" was the only place this - the one word a customer who left
+  // on the 202 gets - was sent.
+  const lead = orderDataFromCheckoutRow(row).passengerData?.[0] ?? order?.travelers?.[0];
+  const to = [order?.contactInfo?.email, order?.customerEmail, lead?.email, row.booking_details?.customer_email]
+    .find(isUsableEmail);
   if (!to) return;
   try {
     await sendEmail({
@@ -522,7 +534,7 @@ export async function replay(row, { baseUrl, fetchImpl = fetch } = {}) {
   // A real failure. Whether money went back is in the body, not assumed.
   log('queued booking failed', { bookingReference: ref, status, refunded: body?.refunded === true, code: body?.code || null });
   const alerted = await flagFinalFailure(ref, status, body);
-  await notifyFailure(order, ref, body, { alerted });
+  await notifyFailure(row, body, { alerted });
   await clearQueuedOrder(ref);
   return 'failed';
 }

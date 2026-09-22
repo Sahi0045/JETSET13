@@ -1415,7 +1415,11 @@ function confirmationEmailFromRow(booking, body = {}) {
   const name = `${lead.firstName || lead.name?.firstName || ''} ${lead.lastName || lead.name?.lastName || ''}`.trim();
 
   return {
-    customerEmail: body?.contactInfo?.email || body?.customerEmail || lead.email || details.customer_email || '',
+    // The first address that can be delivered to, as the success path picks
+    // it. The first one given was taken whatever it held: a typed
+    // "jane@gmailcom" was sent the held-for-review email and a retry's owed
+    // confirmation, and the address checkout recorded never got them.
+    customerEmail: [body?.contactInfo?.email, body?.customerEmail, lead.email, details.customer_email].find(isUsableEmail) || '',
     customerName: name || 'Valued Customer',
     bookingReference: booking.booking_reference,
     bookingType: 'flight',
@@ -2563,7 +2567,14 @@ router.post('/order', optionalProtect, async (req, res) => {
     // exists", which the order page renders as "Your seats are reserved".
     // Found under a later flag too: a refused cancel writes its own on top.
     const awaitingSeat = Boolean(noConfirmedSeatOf(existing));
-    if (existing.booking_details?.pnr && !awaitingSeat) {
+    // Nor a booking a cancel released and could not record
+    // (flagUnrecordedCancellation): the row still reads confirmed and ticketed,
+    // and its flag names no voided ticket, so it was answered "Booking
+    // Confirmed!" with the void number as its ticket - to a customer told not
+    // to try again and to call. Answered as the review below answers it, as it
+    // already was with no PNR.
+    const unrecordedCancel = Boolean(unrecordedCancellationOf(existing));
+    if (existing.booking_details?.pnr && !awaitingSeat && !unrecordedCancel) {
       const details = existing.booking_details;
       // Committed and still working: the request that holds this booking is
       // queueing it and issuing the ticket. Answered as it was before the
@@ -2585,11 +2596,17 @@ router.post('/order', optionalProtect, async (req, res) => {
       // ticket had been issued. Ticketed only on a live ticket once any was
       // voided; with none voided, as before (a ticket whose number was not
       // read back is still issued).
+      // Or on a ticket whose number was never read back and that the voids do
+      // not cover (liveTicketNumbersMissingOf, as the booking reads count it).
+      // Two travellers, one number read back and voided, the other's void
+      // refused: that was answered "its ticket has been voided", and both pages
+      // said "not valid for travel" of a booking with a live ticket.
       const voidedTickets = voidedTicketsOf(existing);
       const voidedDigits = new Set(voidedTickets.map((number) => String(number).replace(/\D/g, '')));
       const tickets = (Array.isArray(details.tickets) ? details.tickets : [])
         .filter((ticket) => !voidedDigits.has(String(ticket?.number ?? '').replace(/\D/g, '')));
-      const ticketed = tickets.length > 0 || (details.gds?.ticketed === true && voidedTickets.length === 0);
+      const ticketed = tickets.length > 0 || (details.gds?.ticketed === true
+        && (voidedTickets.length === 0 || Boolean(liveTicketNumbersMissingOf(existing))));
       const allVoided = !ticketed && voidedTickets.length > 0;
       console.log('↩️ Already booked, returning the stored order', details.pnr);
       // A retry can be the first chance to send a confirmation this booking
@@ -2649,7 +2666,7 @@ router.post('/order', optionalProtect, async (req, res) => {
     // Refused before the gateway is asked, and nothing is refunded here.
     const failedBefore = existing.booking_details?.fulfillment_failed;
     const review = existing.booking_details?.needs_review;
-    if (failedBefore || (review && !EMAILED_REVIEW_REASONS.has(review.reason))) {
+    if (failedBefore || unrecordedCancel || (review && !EMAILED_REVIEW_REASONS.has(review.reason))) {
       // Said from the row, not assumed: the order page says "your payment is
       // held ... do not book this trip again" only when this says 'held'.
       const paymentState = paymentStateOf(existing);
@@ -3037,6 +3054,19 @@ router.post('/order', optionalProtect, async (req, res) => {
       // as typed.
       ? [{ deviceType: 'MOBILE', ...(contactInfo.countryCode ? { countryCallingCode: String(contactInfo.countryCode).replace(/\D/g, '') } : {}), number: String(contactInfo.phoneNumber) }]
       : [];
+    // The PNR's contact email (SSR CTCE): the first address that can be
+    // delivered to, in the success path's order. The first one given was taken
+    // whatever it held, and the CTCE builder drops an address it cannot write,
+    // so a typed "jane@gmailcom" left the PNR with no email contact at all -
+    // which some airlines refuse to ticket - while checkout had recorded a good
+    // one. The address checkout recorded is the fallback, not a made-up one
+    // (the old placeholder was not even this company's domain).
+    const contactEmail = [
+      contactInfo?.email,
+      req.body.customerEmail,
+      travelersList[0]?.email,
+      existing.booking_details?.customer_email,
+    ].find(isUsableEmail);
 
     const amadeusTravelers = travelersList.map((traveler, idx) => {
       const travelerObj = {
@@ -3052,7 +3082,7 @@ router.post('/order', optionalProtect, async (req, res) => {
           lastName: String(traveler.lastName).trim()
         },
         contact: contactInfo ? {
-          emailAddress: contactInfo.email || travelersList[0]?.email,
+          emailAddress: contactEmail,
           phones: contactPhones
         } : undefined
       };
@@ -3141,9 +3171,7 @@ router.post('/order', optionalProtect, async (req, res) => {
           },
           purpose: 'STANDARD',
           phones: contactPhones,
-          // The address checkout recorded is the fallback, not a made-up one
-          // (the old placeholder was not even this company's domain).
-          emailAddress: contactInfo?.email || travelersList[0]?.email || existing.booking_details?.customer_email || undefined
+          emailAddress: contactEmail
         }]
       }
     };
