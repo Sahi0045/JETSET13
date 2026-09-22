@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
 import { JWT_SECRET } from '../../config/jwt.js';
 import { getCaller } from './agents.handlers.js';
+import { supabase } from './arcpay.config.js';
 
 
 // Helper function to parse various date formats and return YYYY-MM-DD
@@ -117,6 +118,11 @@ export function arcFailureSummary(data) {
  * own agentId, the one handleAgentLogin signs and a link is filed under. A visa
  * agent's token says 'agent' too, with no agentId: it created links filed under
  * nobody, and went on doing so after the visa agent was disabled.
+ *
+ * With no `users` row to read, the `agents` row is what says an agent is still
+ * one. handleAgentLogin lets an agent in only while it is active, and removing
+ * an agent (handleDeleteAgent) sets it 'disabled' - but the token signed before
+ * that kept creating links and reading the agent's customers until it expired.
  */
 export async function getCallerInfo(req) {
     try {
@@ -125,12 +131,18 @@ export async function getCallerInfo(req) {
         let agentId = null;
         if (caller.role === 'agent') {
             agentId = agentIdClaimOf(req);
-            if (!agentId) return { role: 'unknown', agentId: null };
+            if (!agentId || !(await isActiveAgent(agentId))) return { role: 'unknown', agentId: null };
         }
         return { role: caller.role, agentId, userId: caller.id, email: caller.email };
     } catch (e) {
         return { role: 'unknown', agentId: null };
     }
+}
+
+/** The same test handleAgentLogin makes. No row, or no answer, is not active. */
+async function isActiveAgent(agentId) {
+    const { data } = await supabase.from('agents').select('status').eq('id', agentId).maybeSingle();
+    return data?.status === 'active';
 }
 
 /** The agentId an agent-portal app token was signed with, or null. */
