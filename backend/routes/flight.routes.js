@@ -2585,11 +2585,17 @@ router.post('/order', optionalProtect, async (req, res) => {
       // ticket had been issued. Ticketed only on a live ticket once any was
       // voided; with none voided, as before (a ticket whose number was not
       // read back is still issued).
+      // Or on a ticket whose number was never read back and that the voids do
+      // not cover (liveTicketNumbersMissingOf, as the booking reads count it).
+      // Two travellers, one number read back and voided, the other's void
+      // refused: that was answered "its ticket has been voided", and both pages
+      // said "not valid for travel" of a booking with a live ticket.
       const voidedTickets = voidedTicketsOf(existing);
       const voidedDigits = new Set(voidedTickets.map((number) => String(number).replace(/\D/g, '')));
       const tickets = (Array.isArray(details.tickets) ? details.tickets : [])
         .filter((ticket) => !voidedDigits.has(String(ticket?.number ?? '').replace(/\D/g, '')));
-      const ticketed = tickets.length > 0 || (details.gds?.ticketed === true && voidedTickets.length === 0);
+      const ticketed = tickets.length > 0 || (details.gds?.ticketed === true
+        && (voidedTickets.length === 0 || Boolean(liveTicketNumbersMissingOf(existing))));
       const allVoided = !ticketed && voidedTickets.length > 0;
       console.log('↩️ Already booked, returning the stored order', details.pnr);
       // A retry can be the first chance to send a confirmation this booking
