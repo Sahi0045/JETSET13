@@ -171,6 +171,42 @@ export const NO_CONFIRMED_SEAT_REVIEW_REASON = 'chain failed after commit at seg
 export const noConfirmedSeatOf = (booking) => (isTicketed(detailsOf(booking)) ? null
   : flagInForce(booking, (review) => review.reason === NO_CONFIRMED_SEAT_REVIEW_REASON, { pastResolved: true }));
 
+/**
+ * The provider's flag on a booking whose flight the airline retimed: a segment
+ * came back TK and the chain accepted the change (amadeusSoap/index.js
+ * createFlightOrder). The booking and its ticket are real, and the customer is
+ * sent the ordinary confirmation (flight.routes.js EMAILED_REVIEW_REASONS) on
+ * the understanding that the team tells them the new times.
+ */
+export const SCHEDULE_CHANGED_REVIEW_REASON = 'schedule_changed_by_airline';
+
+/**
+ * The schedule-change flag still open on a booking, on top or under a later
+ * one, or null.
+ *
+ * Under a later flag too: the chain can also flag the ticket numbers it could
+ * not read back, and the retiming is still news to the customer whatever else
+ * happened. A flag a person resolved settles it (flagInForce).
+ */
+export const scheduleChangeOf = (booking) => flagInForce(
+  booking, (review) => review.reason === SCHEDULE_CHANGED_REVIEW_REASON,
+);
+
+/**
+ * The flag on a TICKETED booking that still needs a person, or null.
+ *
+ * "Ticketed, so done" holds for most flags - the ticket turned up later, by
+ * retry or by hand - and the desk and the alarm skip those. Not for a schedule
+ * change: the ticket is issued, and the customer still has to be told the new
+ * times. The desk list and the alarm both read this, so they cannot disagree
+ * about it. (The numbers-missing flag has its own rule in each: it is on top
+ * and unresolved, or it is nobody's job.)
+ */
+export function openTicketedFlagOf(booking) {
+  if (!isTicketed(detailsOf(booking))) return null;
+  return scheduleChangeOf(booking);
+}
+
 /** What a member of staff recorded when they dealt with it, or null. */
 export const reviewResolution = (booking) => {
   const review = detailsOf(booking)?.needs_review;
@@ -246,7 +282,7 @@ export function isFailedCancellation(booking) {
 /**
  * What still needs doing on this booking, or null.
  *
- * @returns {null | { kind: 'not_ticketed'|'review'|'airline_refund'|'unrecorded_cancellation'|'cancel_failed',
+ * @returns {null | { kind: 'not_ticketed'|'review'|'airline_refund'|'unrecorded_cancellation'|'cancel_failed'|'schedule_changed',
  *                    reason: string, since: string|null, tickets?: string[] }}
  */
 export function attentionOf(booking) {
@@ -301,7 +337,15 @@ export function attentionOf(booking) {
 
   if (['cancelled', 'refunded'].includes(statusOf(booking))) return null;
   if (['refunded', 'partially_refunded', 'reversed'].includes(paymentOf(booking))) return null;
-  if (isTicketed(details) && review?.reason !== TICKET_NUMBERS_MISSING) return null;
+  if (isTicketed(details) && review?.reason !== TICKET_NUMBERS_MISSING) {
+    // Ticketed, and still somebody's job: skipped as done, the customer was
+    // never told their flight was retimed.
+    const open = openTicketedFlagOf(booking);
+    if (open?.reason === SCHEDULE_CHANGED_REVIEW_REASON) {
+      return { kind: 'schedule_changed', reason: open.reason, since: open.at || null };
+    }
+    return null;
+  }
 
   if (review) {
     return { kind: 'review', reason: review.reason || 'flagged for review', since: review.at || null };
@@ -321,5 +365,6 @@ export const attentionLabel = (attention) => {
   if (attention.kind === 'cancel_failed') return 'Cancel failed at the airline';
   if (attention.kind === 'airline_refund') return 'Refund to claim from the airline';
   if (attention.kind === 'not_ticketed') return 'Paid, seats held, no ticket';
+  if (attention.kind === 'schedule_changed') return 'Airline changed the schedule';
   return 'Flagged for review';
 };
