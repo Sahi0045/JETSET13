@@ -139,6 +139,10 @@ function BookingConfirmation() {
       : (bookingData.ticketed === true || hasTickets) ? 'ticketed'
         : isFlight && ticketState(bookingData) === 'pending' ? 'ticket_pending'
           : returned ? 'payment_returned'
+            // The airline commit never answered (FlightCreateOrders
+            // 'checking'): no PNR, and nobody knows yet whether the airline
+            // holds anything. It read as held, seats reserved.
+            : isFlight && bookingData.commitUnknown === true && !bookingData.pnr ? 'commit_unknown'
             // Every ticket voided by a cancel the airline refused: not "held",
             // whose "Your ticket is being issued" promised a ticket nobody
             // will issue.
@@ -191,6 +195,18 @@ function BookingConfirmation() {
       mail: heldForReview
         ? 'Our team is finishing your ticket and will email you as soon as it is issued. Until then, this reference is your proof of booking.'
         : 'We email your e-ticket to the address you booked with once it is issued. Until then, this reference is your proof of booking.',
+    },
+    // Not a seat, a ticket or a failure: an answer we are still waiting for.
+    // Booking again meanwhile could buy the trip twice.
+    commit_unknown: {
+      Icon: Clock,
+      iconWrap: 'bg-gradient-to-br from-amber-400 to-amber-600',
+      badge: 'bg-amber-500',
+      title: 'Checking With the Airline',
+      lead: 'Your payment is safe and our team is checking with the airline whether your booking went through.',
+      badgeText: 'Being checked',
+      mail: 'We will email you either way. Please do not book this trip again in the meantime. '
+        + 'You can also call (877) 538-7380 with your booking reference.',
     },
     tickets_voided: {
       Icon: Clock,
