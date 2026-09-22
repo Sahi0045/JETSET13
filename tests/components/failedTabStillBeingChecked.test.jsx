@@ -144,12 +144,18 @@ describe('the Failed tab', () => {
   });
 
   // Fences: what the tab listed before, it still lists.
-  it('still lists a booking that failed, a stuck refund on a cancelled one, and a held booking flagged for staff', async () => {
+  //
+  // This fence also listed the held booking flagged for staff (FLTHELD1), and
+  // pinned exactly the false listing failedTabHeldReservation.test.jsx fixes:
+  // a live PNR waiting only on its ticket, "Your seats are reserved" beside
+  // "Failed". It is under Upcoming now.
+  it('still lists a booking that failed and a stuck refund on a cancelled one', async () => {
     const { container } = renderMyTrips(ALL);
     await screen.findByText('#FLTUNK1');
 
     fireEvent.click(screen.getByRole('button', { name: 'Failed' }));
 
-    expect(listed(container)).toEqual(expect.arrayContaining(['FLTFAIL1', 'FLTUNKCX', 'FLTHELD1']));
+    expect(listed(container)).toEqual(expect.arrayContaining(['FLTFAIL1', 'FLTUNKCX']));
+    expect(listed(container)).not.toContain('FLTHELD1');
   });
 });

@@ -4,8 +4,9 @@ import React, { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { daysUntilDate, formatCalendarDate, formatIsoDuration } from "../../../utils/dateUtils"
 import { bookingStatusBadge, needsAttention, cancellationMessage, refundStatus, attentionMessage, isCompletedTrip } from "../../../utils/bookingStatus"
-import { hasNoConfirmedSeat, isCommitUnknown, liveTickets, ticketState, ticketsVoided } from "../../../utils/eTicket"
+import { documentState, hasNoConfirmedSeat, isCommitUnknown, liveTickets, ticketState, ticketsVoided } from "../../../utils/eTicket"
 import { bookingItineraries } from "../../../../../shared/bookingItineraries"
+import { isAwaitingTicketOnly } from "../../../../../shared/reviewQueue"
 import BookingItinerary from "../flights/BookingItinerary"
 import { formatUsd } from "../../../utils/bookingCharge"
 import { authHeaders } from "../../../utils/authHeaders"
@@ -612,7 +613,16 @@ export default function TravelDashboard() {
     // invited exactly that. They stay under Upcoming with their sentences.
     // A cancelled one whose refund did not go through (refundStatus) is still
     // listed: that has failed.
-    const stillOpen = (b) => !refundStatus(b) && (isCommitUnknown(b) || hasNoConfirmedSeat(b));
+    //
+    // Nor a reservation the airline holds that is only waiting on its ticket:
+    // a live PNR with a confirmed seat, no ticket, not cancelled (documentState
+    // 'held'), flagged for the ticket alone (isAwaitingTicketOnly) - held for
+    // staff after ticketing failed, or a commit the desk found held. Its
+    // sentence is "Your seats are reserved, but your ticket has not been issued
+    // yet", and "Failed" beside it said otherwise. A PNR whose cancellation the
+    // airline refused carries its own flag, and stays.
+    const waitingOnTicket = (b) => documentState(b) === 'held' && isAwaitingTicketOnly(b);
+    const stillOpen = (b) => !refundStatus(b) && (isCommitUnknown(b) || hasNoConfirmedSeat(b) || waitingOnTicket(b));
     if (activeTab === "Failed") return list.filter((b) => needsAttention(b)).filter((b) => !stillOpen(b));
     return list;
   };

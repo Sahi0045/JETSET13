@@ -1227,12 +1227,23 @@ export async function sendConfirmationOnce(bookingReference, emailData, { failOp
  * path's first send. Never throws.
  */
 async function sendHeldForReviewEmail(bookingReference, body) {
+  return sendOwedConfirmation(bookingReference, body, { only: 'held' });
+}
+
+/**
+ * Send the email a booking owes its customer (confirmationEmailKind), read
+ * back from the row and through the confirmation's own claim, so nothing else
+ * sends it a second time. For its first chance to email: it fails open like
+ * the success path's first send. `only` limits it to one kind. Never throws.
+ */
+async function sendOwedConfirmation(bookingReference, body = {}, { only = null } = {}) {
   try {
     const row = await findExistingBooking(bookingReference);
-    if (confirmationEmailKind(row) !== 'held') return { sent: false, reason: 'not-owed' };
+    const kind = confirmationEmailKind(row);
+    if (kind === null || (only && kind !== only)) return { sent: false, reason: 'not-owed' };
     return await sendConfirmationOnce(row.booking_reference, confirmationEmailFromRow(row, body), { failOpen: true });
   } catch (error) {
-    console.error('❌ Held-booking email step failed:', error.message);
+    console.error('❌ Owed booking email step failed:', error.message);
     return { sent: false, reason: 'error' };
   }
 }
@@ -5484,8 +5495,16 @@ router.post('/admin-bookings/:id/resolve-review', protect, bookingStaff, async (
       const held = await recordHeldAtAirline(booking, { note, at, by, pnr: req.body?.pnr });
       if (held.refused) return refuseResolve(res, held.status, held.code, held.text);
       console.log('✅ Commit that never answered recorded as held by the desk:', { reference: booking.booking_reference, pnr: held.pnr, by });
+      // The customer was told "we will email you either way", and nothing
+      // did: the booking now owes the email any paid reservation gets
+      // (confirmationEmailOwed), which only a reload of the order page or the
+      // e-ticket much later would have sent. Sent here, read back from the row
+      // as written, through the confirmation's own claim, so a reload cannot
+      // send it again. Its first chance to email, so it fails open like the
+      // success path's first send. Never throws.
+      const email = await sendOwedConfirmation(booking.booking_reference);
       return res.json({
-        success: true, resolvedAt: at, resolvedBy: by, note, outcome: 'held', pnr: held.pnr,
+        success: true, resolvedAt: at, resolvedBy: by, note, outcome: 'held', pnr: held.pnr, emailed: email.sent === true,
         message: `Recorded as held at the airline under ${held.pnr}. It now waits to be ticketed.`,
       });
     }

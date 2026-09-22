@@ -250,6 +250,28 @@ export const isHeldForReview = (review) => {
 };
 
 /**
+ * The flag on a paid reservation the airline holds and nobody has ticketed:
+ * the one the paid-not-ticketed alarm writes on a booking it announces, and
+ * the desk on a commit it found held (flight.routes.js recordHeldAtAirline).
+ * The alarm's own constant (needsReviewAlert.job.js UNTICKETED_REVIEW_REASON);
+ * here so the customer's pages can read it too, and a test keeps the two equal.
+ */
+export const UNTICKETED_REVIEW_REASON = 'PNR committed, never ticketed';
+
+/**
+ * Whether the flag on top of a booking says it is waiting on its ticket and
+ * nothing else: held for staff after a later step failed (isHeldForReview), or
+ * a paid reservation never ticketed (UNTICKETED_REVIEW_REASON). A later flag on
+ * top - a cancel the airline refused, say - is something else for a person to
+ * do. Whether the airline holds a seat for it is the reader's to check: a
+ * commit that never answered carries a held flag and has no PNR.
+ */
+export const isAwaitingTicketOnly = (booking) => {
+  const review = topFlagOf(booking);
+  return Boolean(review) && (review.reason === UNTICKETED_REVIEW_REASON || isHeldForReview(review));
+};
+
+/**
  * The flag on a TICKETED booking that still needs a person, or null.
  *
  * "Ticketed, so done" holds for most flags - the ticket turned up later, by
@@ -445,7 +467,7 @@ export function attentionOf(booking) {
   // Not flagged, but the airline holds seats against a payment and no ticket was
   // ever issued: the alarm announces these too.
   if (paymentOf(booking) === 'paid' && details?.pnr && details?.gds?.ticketed === false) {
-    return { kind: 'not_ticketed', reason: 'PNR committed, never ticketed', since: null };
+    return { kind: 'not_ticketed', reason: UNTICKETED_REVIEW_REASON, since: null };
   }
   return null;
 }
