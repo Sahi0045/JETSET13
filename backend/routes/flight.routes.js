@@ -1428,9 +1428,15 @@ function confirmationEmailFromRow(booking, body = {}) {
   const segments = offer?.itineraries?.[0]?.segments || [];
   const firstSegment = segments[0] || {};
   const lastSegment = segments[segments.length - 1] || firstSegment;
-  const travellers = Array.isArray(body?.travelers) && body.travelers.length > 0
-    ? body.travelers
-    : (checkout?.bookingData?.passengerData || []);
+  // The travellers checkout verified, as the success path, the PNR's contact
+  // and the queue's failure email take them; the request body's only for a row
+  // that kept none. The body was read first, and the one the order page sends
+  // carries no traveller's email (shared/flightOrderBody.js): a lead
+  // traveller's address, when it was the only usable one, was never sent this
+  // email, and a body naming someone else put their name on it.
+  const verified = orderDataFromCheckoutRow(booking).passengerData;
+  const travellers = Array.isArray(verified) && verified.length > 0 ? verified
+    : (Array.isArray(body?.travelers) ? body.travelers : []);
   const lead = travellers[0] || {};
   const name = `${lead.firstName || lead.name?.firstName || ''} ${lead.lastName || lead.name?.lastName || ''}`.trim();
 
