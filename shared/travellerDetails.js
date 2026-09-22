@@ -15,7 +15,11 @@
  */
 
 import { passengerAgeProblem } from './flightCharge.js';
-import { travellerNameProblem } from './passengerName.js';
+import { NAME_NOT_LATIN, travellerNameProblem } from './passengerName.js';
+// The SSR DOCS builder itself, not a copy of its rules: checkout refuses what
+// it would drop, so the two cannot disagree. Dependency-free (shared/ only),
+// so the review page loads it as well.
+import { buildDocsFreetext } from '../backend/services/amadeusSoap/operations/travelDocs.js';
 
 /**
  * @param {object} p
@@ -51,6 +55,57 @@ export function tripDates(offer) {
   const last = segments[segments.length - 1];
   const lastDate = dayOf(last?.arrival?.at) || dayOf(last?.departure?.at) || firstDate;
   return { firstDate, lastDate };
+}
+
+/**
+ * What the customer is told for each field the DOCS builder reports it could
+ * not use (buildDocsFreetext's onUnusable). Worded for the review page's own
+ * fields: the country that issued the passport is the nationality there.
+ */
+const DOCS_FIELD_PROBLEMS = Object.freeze({
+  nationality: 'Select the nationality from the list, so the airline can read it.',
+  issuanceCountry: 'Select the nationality from the list, so the airline can read it.',
+  expiryDate: 'Enter the passport expiry date again as a full date (day, month and year).',
+  dateOfBirth: 'Enter the date of birth again as a full date (day, month and year).',
+  firstName: NAME_NOT_LATIN,
+  lastName: NAME_NOT_LATIN,
+  length: 'The names and passport number are too long together for the airline\'s passport record. '
+    + 'Enter the names exactly as printed on the passport, without titles. If they already are, call (877) 538-7380 to book.',
+});
+
+/**
+ * The fields of this traveller's passport the SSR DOCS builder would drop.
+ *
+ * Presence was all checkout asked for, and the builder then left out a
+ * nationality with no three-letter code, an expiry not written YYYY-MM-DD, or
+ * a DOCS longer than the element holds - and the booking went ahead with no
+ * passport record, which the airline will not ticket (27791 SSR DOCS
+ * MISSING), after the charge.
+ *
+ * The traveller goes to the builder as the order route hands them to the
+ * chain (flight.routes.js amadeusTravelers, from the checkout row that
+ * shared/flightOrderBody.js writes): the passport as the document, the
+ * nationality as the issuing country too, the holder mark, and the gender and
+ * fare type the DOCS gender is written from.
+ */
+function unusableDocsFields(t, fareType) {
+  const fields = new Set();
+  buildDocsFreetext({
+    firstName: t.firstName,
+    lastName: t.lastName,
+    dateOfBirth: t.dateOfBirth,
+    gender: String(t.gender ?? '').trim().toUpperCase().startsWith('F') ? 'FEMALE' : 'MALE',
+    ptc: fareType,
+    documents: [{
+      documentType: t.documentType || 'PASSPORT',
+      number: t.passportNumber || '',
+      expiryDate: t.passportExpiry || '',
+      issuanceCountry: t.nationality || '',
+      nationality: t.nationality || '',
+      holder: true,
+    }],
+  }, { onUnusable: (unusable) => unusable.forEach((field) => fields.add(field)) });
+  return [...fields];
 }
 
 /**
@@ -112,6 +167,13 @@ export function bookingTravellerProblems(traveller, {
       add('Enter the passport expiry date.');
     } else if (lastDate && new Date(t.passportExpiry) <= new Date(String(lastDate).slice(0, 10))) {
       add('The passport expires before the trip ends.');
+    }
+    // Present is not usable: what the DOCS builder would drop is refused here,
+    // before payment - and nothing else, since it is the builder that decides.
+    // Only once nothing else is wrong, so a field already asked for is not
+    // asked for twice.
+    if (problems.length === 0) {
+      new Set(unusableDocsFields(t, fareType).map((field) => DOCS_FIELD_PROBLEMS[field]).filter(Boolean)).forEach(add);
     }
   }
   return problems;
