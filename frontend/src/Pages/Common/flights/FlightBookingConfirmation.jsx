@@ -139,6 +139,16 @@ function FlightBookingConfirmation() {
   const [couponToRestore, setCouponToRestore] = useState(() => cancelledCheckout?.couponCode ?? null);
   // The total a coupon's discount was computed on, so a changed total drops it.
   const couponBase = React.useRef(null);
+  // The page taking the coupon off by itself: checkout refused it, the fare or
+  // the total changed, or another flight or group of travellers was chosen.
+  // The coupon box keeps its own applied display until it is remounted, and it
+  // was remounted only for a changed total - with the same total it went on
+  // showing the discount over a Pay button for the full amount.
+  const dropCoupon = () => {
+    setAppliedCoupon(null);
+    couponBase.current = null;
+    setCouponInputRound((round) => round + 1);
+  };
   // The airline's price for this offer, checked on arrival and again by the
   // server at checkout. Null until the check answers; the search price stands.
   const [pricedFare, setPricedFare] = useState(null);
@@ -378,8 +388,7 @@ function FlightBookingConfirmation() {
       // The old group's airline price must not stand in for the new group's
       // while the arrival check runs again for this offer.
       setPricedFare(null);
-      setAppliedCoupon(null);
-      couponBase.current = null;
+      dropCoupon();
       swapNotice.current = `Updated for ${describeGroup(group)} on the same flight and fare. Please check the new total.`;
       setFareNotice(swapNotice.current);
       setGroupChange({ busy: false, problem: null, unavailable: null });
@@ -501,8 +510,7 @@ function FlightBookingConfirmation() {
     // The dead fare's figures must not stand in for this one while the arrival
     // check runs again.
     setPricedFare(null);
-    setAppliedCoupon(null);
-    couponBase.current = null;
+    dropCoupon();
     setFareGone(false);
     setAlternatives(null);
     setNotice(null);
@@ -898,8 +906,7 @@ function FlightBookingConfirmation() {
   // go on charging the old, frozen figure.
   useEffect(() => {
     if (appliedCoupon && couponBase.current !== null && couponBase.current !== calculatedFare.totalAmount) {
-      setAppliedCoupon(null);
-      couponBase.current = null;
+      dropCoupon();
       setFareNotice((notice) => notice || 'The total changed, so your coupon was removed. Please apply it again.');
     }
   }, [calculatedFare.totalAmount]);
@@ -1366,8 +1373,7 @@ function FlightBookingConfirmation() {
       const refusal = checkoutResponse.error || {};
       if (refusal.code === 'PRICE_CHANGED' && refusal.pricedFare?.total) {
         setPricedFare(refusal.pricedFare);
-        setAppliedCoupon(null);
-        couponBase.current = null;
+        dropCoupon();
         // The fee settings may have changed as well as the fare, and the page's
         // copy is cached for minutes: without a fresh read it recomputed the old
         // total, and every retry was refused again "with the total updated".
@@ -1386,8 +1392,7 @@ function FlightBookingConfirmation() {
       // customer. Take it off and say why: a generic error left it applied, and
       // every retry was refused the same way.
       if (refusal.code === 'COUPON_INVALID') {
-        setAppliedCoupon(null);
-        couponBase.current = null;
+        dropCoupon();
         setFareNotice(`${refusal.error} The coupon has been removed, so please check the total. Nothing has been charged.`);
         window.scrollTo({ top: 0, behavior: 'smooth' });
         return;
