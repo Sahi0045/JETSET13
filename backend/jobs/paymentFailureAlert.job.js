@@ -16,7 +16,9 @@
  * So a customer who cancelled and was never paid back appears, in the database
  * and in the admin panel, to have been refunded. Nothing in the product ever
  * says otherwise. That is the gap this closes: `paymentAction` is the only
- * field that still tells the truth, and this reads it.
+ * field that still tells the truth, and this reads it. (The cancel paths have
+ * since stopped: a refused refund now leaves the row `paid`. Rows written
+ * before still read refunded, and the message says so only of those.)
  *
  * Runs inside the API process next to the paid-but-not-ticketed watch, and
  * delivers through the same webhook. Asleep without one.
@@ -83,6 +85,16 @@ export function selectUnrefunded(rows = []) {
   });
 }
 
+/**
+ * A failed refund whose row says the money went back.
+ *
+ * What the header describes, and what used to be every failed refund. Both
+ * cancel paths now leave the charge where it was - `paid` - after a refund
+ * ARC Pay refused, and telling staff that row "is not what happened" had them
+ * distrust the one field that was right.
+ */
+const readsRefunded = (booking) => ['refunded', 'partially_refunded'].includes(String(booking.payment_status || '').toLowerCase());
+
 /** One line per booking. No passenger data: alerts get forwarded around. */
 export function describeFailure(booking) {
   const cancellation = booking.booking_details?.cancellation || {};
@@ -92,9 +104,21 @@ export function describeFailure(booking) {
   const reason = String(cancellation.reason || '').slice(0, 80);
   return [
     `*${booking.booking_reference}* — ${booking.total_amount} USD taken, ${cancellation.refundAmount ?? 0} returned`,
-    `${cancellation.paymentAction} · the row reads ${booking.status}/${booking.payment_status}, which is not what happened`,
+    `${cancellation.paymentAction} · the row reads ${booking.status}/${booking.payment_status}${readsRefunded(booking) ? ', which is not what happened' : ''}`,
     `cancelled ${hours}h ago${reason ? ` · ${reason}` : ''}`,
   ].join('\n');
+}
+
+/** What the failed section says of its rows, as true of each as it is of all. */
+function failedLead(failed) {
+  const storedAsRefunded = failed.filter(readsRefunded).length;
+  if (storedAsRefunded === 0) return 'ARC Pay did not return the money. These need refunding by hand.';
+  if (storedAsRefunded === failed.length) {
+    return 'ARC Pay did not return the money, but the booking is stored as refunded, so nothing else will ever flag it. These need refunding by hand.';
+  }
+  const many = storedAsRefunded > 1;
+  return `ARC Pay did not return the money, and ${storedAsRefunded} of them ${many ? 'are' : 'is'} stored as refunded, `
+    + `so nothing else will ever flag ${many ? 'them' : 'it'}. These need refunding by hand.`;
 }
 
 /** The review flag the cancel wrote with its cancellation record, if any. */
@@ -179,7 +203,7 @@ export function buildMessage(bookings) {
   if (failed.length) {
     sections.push(
       `:money_with_wings: *${countOf(failed)} where the refund never went through* — ${totalOf(failed)} USD`,
-      'ARC Pay did not return the money, but the booking is stored as refunded, so nothing else will ever flag it. These need refunding by hand.',
+      failedLead(failed),
       '',
       ...failed.map(describeFailure),
     );
