@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { daysUntilDate, formatCalendarDate, formatIsoDuration } from "../../../utils/dateUtils"
 import { bookingStatusBadge, needsAttention, cancellationMessage, refundStatus, attentionMessage, isCompletedTrip } from "../../../utils/bookingStatus"
-import { resolveTickets, ticketState } from "../../../utils/eTicket"
+import { liveTickets, ticketState, ticketsVoided } from "../../../utils/eTicket"
 import { bookingItineraries } from "../../../../../shared/bookingItineraries"
 import BookingItinerary from "../flights/BookingItinerary"
 import { formatUsd } from "../../../utils/bookingCharge"
@@ -849,8 +849,10 @@ export default function TravelDashboard() {
                           // A cancelled booking's tickets were voided or refunded:
                           // no number is shown as though it could still be used.
                           if (statusUp === 'CANCELLED') return 'Cancelled';
-                          const numbers = resolveTickets(booking).map((t) => t?.number).filter(Boolean);
+                          // Not a number a cancel voided: printed here, it read as a ticket.
+                          const numbers = liveTickets(booking).map((t) => t?.number).filter(Boolean);
                           if (numbers.length) return <span className="tracking-wider">{numbers.join(', ')}</span>;
+                          if (ticketsVoided(booking)) return 'Voided';
                           return ticketState(booking) === 'pending' ? 'Issued, number pending' : 'Not yet issued';
                         })()}
                       </DetailCell>

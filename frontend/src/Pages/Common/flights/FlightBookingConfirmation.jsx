@@ -131,6 +131,12 @@ function FlightBookingConfirmation() {
   // box so it stops showing a coupon this page refused as applied.
   const [couponProblem, setCouponProblem] = useState(null);
   const [couponInputRound, setCouponInputRound] = useState(0);
+  // Back from a cancelled payment: the coupon the customer had applied, given
+  // to the coupon box to check again the way Apply does - it may have expired
+  // or been used up meanwhile, so it is never applied without that check. Let
+  // go once the box has an answer, so a box remounted for a changed total or
+  // a refusal does not ask again on its own.
+  const [couponToRestore, setCouponToRestore] = useState(() => cancelledCheckout?.couponCode ?? null);
   // The total a coupon's discount was computed on, so a changed total drops it.
   const couponBase = React.useRef(null);
   // The airline's price for this offer, checked on arrival and again by the
@@ -2397,7 +2403,10 @@ function FlightBookingConfirmation() {
                     orderTotal={calculatedFare.totalAmount}
                     bookingType="flights"
                     formatAmount={formatUsd}
+                    initialCode={couponToRestore || undefined}
+                    onRefused={() => setCouponToRestore(null)}
                     onApply={(coupon) => {
+                      setCouponToRestore(null);
                       // A coupon worth the whole booking leaves nothing to pay,
                       // and no payment page opens for $0.00: Pay then ended in
                       // "Missing required fields: amount and orderId are
@@ -2411,7 +2420,7 @@ function FlightBookingConfirmation() {
                       couponBase.current = calculatedFare.totalAmount;
                       setAppliedCoupon(coupon);
                     }}
-                    onRemove={() => { couponBase.current = null; setAppliedCoupon(null); }}
+                    onRemove={() => { couponBase.current = null; setAppliedCoupon(null); setCouponToRestore(null); }}
                   />
                   {couponProblem && (
                     <p className="mt-1.5 text-xs text-red-600" role="alert">{couponProblem}</p>

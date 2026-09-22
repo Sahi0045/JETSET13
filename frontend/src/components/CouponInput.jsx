@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
 import Price from '../Components/Price';
@@ -13,14 +13,28 @@ import Price from '../Components/Price';
  *   formatAmount (fn, optional) - renders an amount. Defaults to <Price>, the
  *     visitor's display currency; the flight review page passes US dollars,
  *     the currency its card is charged in.
+ *   initialCode (string, optional) - a code to apply on mount, exactly as if it
+ *     had been typed and Apply pressed. The flight review page passes the one
+ *     the customer had applied before cancelling on the payment page.
+ *   onRefused (fn, optional) - callback(message) when a code is not accepted.
  */
-const CouponInput = ({ orderTotal, bookingType = 'all', onApply, onRemove, formatAmount }) => {
+const CouponInput = ({ orderTotal, bookingType = 'all', onApply, onRemove, onRefused, formatAmount, initialCode = '' }) => {
     const showAmount = (amount) => (formatAmount ? formatAmount(amount) : <Price amount={amount} />);
-    const [code, setCode] = useState('');
+    const [code, setCode] = useState(() => String(initialCode || '').toUpperCase());
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const [applied, setApplied] = useState(null);
-    const { user } = useSupabaseAuth();
+    const { user, loading: authLoading } = useSupabaseAuth();
+    // An answer that arrives after this box was replaced - the page remounts it
+    // when the total changes - is for a total no longer on the page, and is
+    // dropped: applied, it set a discount worked out on the old total. Set back
+    // to true on every mount: in development StrictMode mounts, unmounts and
+    // mounts again, and a ref only ever set to false dropped every answer.
+    const mounted = useRef(true);
+    useEffect(() => {
+        mounted.current = true;
+        return () => { mounted.current = false; };
+    }, []);
 
     const getApiBase = () => {
         if (import.meta.env.PROD && import.meta.env.VITE_API_BASE_URL) {
@@ -43,6 +57,7 @@ const CouponInput = ({ orderTotal, bookingType = 'all', onApply, onRemove, forma
                 bookingType,
                 userId: user?.id
             });
+            if (!mounted.current) return;
 
             if (resp.data.success) {
                 const result = resp.data;
@@ -55,13 +70,26 @@ const CouponInput = ({ orderTotal, bookingType = 'all', onApply, onRemove, forma
                 });
             } else {
                 setError(resp.data.message || 'Invalid coupon.');
+                onRefused && onRefused(resp.data.message || 'Invalid coupon.');
             }
         } catch (err) {
+            if (!mounted.current) return;
             setError(err.response?.data?.message || 'Failed to validate coupon.');
+            onRefused && onRefused(err.response?.data?.message || 'Failed to validate coupon.');
         } finally {
-            setLoading(false);
+            if (mounted.current) setLoading(false);
         }
     };
+
+    // The code given to start with is checked the way Apply checks it - it may
+    // have expired or been used up since - once, as soon as the signed-in
+    // account is known (the check counts that account's own uses).
+    const restoring = useRef(Boolean(initialCode));
+    useEffect(() => {
+        if (!restoring.current || authLoading) return;
+        restoring.current = false;
+        handleApply();
+    }, [authLoading]);
 
     const handleRemove = () => {
         setApplied(null);

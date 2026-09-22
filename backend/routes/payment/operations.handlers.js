@@ -640,13 +640,31 @@ async function cancelFlightBooking(res, booking, { reason, email }) {
             // the voided one as a refund to claim from the airline - money that
             // already came back with the void.
             const voidedNow = Array.isArray(supplierError?.voidedTickets) ? supplierError.voidedTickets : [];
-            const unvoidedNow = Array.isArray(supplierError?.unvoidedTickets) ? supplierError.unvoidedTickets : [];
+            // null when the chain could not tell which tickets are still live -
+            // a void whose last reply named no document. That is unknown, not
+            // "none": written as [] it made the Slack line read "still live:
+            // none" over a live ticket. Left off the flag, the alarm lists the
+            // booking's tickets that are not recorded as voided instead.
+            const unvoidedNow = Array.isArray(supplierError?.unvoidedTickets) ? supplierError.unvoidedTickets : null;
+            // The desk shows this reason. "Refund withheld" is true of a paid
+            // booking, and false of one the Payments tab had already refunded
+            // (it writes payment_status only): nothing was withheld, the money
+            // had gone back. Read from the same field the Slack alarm splits
+            // these on (needsReviewAlert.job.js refundedBefore), so the two
+            // agree. Flags already stored keep their text.
+            const paymentBefore = String(booking.payment_status || '').toLowerCase();
+            const reason = ['refunded', 'reversed'].includes(paymentBefore)
+                ? 'GDS cancellation failed; the payment had already been refunded before this cancel, so this cancel made no refund'
+                : paymentBefore === 'partially_refunded'
+                    ? 'GDS cancellation failed; part of the payment had already been refunded before this cancel, '
+                        + 'and the rest is withheld to avoid paying out against a live booking'
+                    : 'GDS cancellation failed; refund withheld to avoid paying out against a live booking';
             await releaseCancellation(booking, claim, (current) => {
                 const voidedSoFar = unionTickets(current?.voided_tickets, voidedNow);
                 return {
                     ...(voidedSoFar.length ? { voided_tickets: voidedSoFar } : {}),
                     needs_review: {
-                        reason: 'GDS cancellation failed; refund withheld to avoid paying out against a live booking',
+                        reason,
                         // Said outright, so the alarm and the desk list find it
                         // on a ticketed booking too (isFailedCancellation). With
                         // neither, "ticketed, so done" skipped it, while the
@@ -655,8 +673,8 @@ async function cancelFlightBooking(res, booking, { reason, email }) {
                         cancelFailed: true,
                         pnr,
                         detail: supplierError?.technicalError || supplierError?.message || null,
-                        ...(voidedNow.length || unvoidedNow.length
-                            ? { voided_tickets: voidedNow, unvoided_tickets: unvoidedNow }
+                        ...(voidedNow.length || unvoidedNow?.length
+                            ? { voided_tickets: voidedNow, ...(unvoidedNow ? { unvoided_tickets: unvoidedNow } : {}) }
                             : {}),
                         at: new Date().toISOString(),
                         ...keepingPrevious(current),

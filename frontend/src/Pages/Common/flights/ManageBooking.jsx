@@ -12,7 +12,7 @@ import FlightETicket from './FlightETicket';
 import BookingItinerary from './BookingItinerary';
 import { bookingItineraries } from '../../../../../shared/bookingItineraries';
 import { formatUsd } from '../../../utils/bookingCharge';
-import { canDownloadDocument, isPaid, ticketState } from '../../../utils/eTicket';
+import { canDownloadDocument, isPaid, ticketState, ticketsVoided } from '../../../utils/eTicket';
 import { attentionMessage, bookingStatusBadge, cancellationMessage, refundStatus } from '../../../utils/bookingStatus';
 import { refundOutcome } from '../../../../../shared/cancellationOutcome';
 import ArcPayService from '../../../Services/ArcPayService';
@@ -966,6 +966,15 @@ function ManageBooking() {
                     <>
                       <p>• Your ticket has been issued, so a cancellation fee may apply.</p>
                       <p>• What is refunded depends on your fare's rules; some fares need our team to review the refund first.</p>
+                    </>
+                  ) : ticketsVoided(bookingData) ? (
+                    // Voided by an earlier cancel the airline refused. "No
+                    // ticket has been issued yet, so no cancellation fee
+                    // applies" was false: a voided ticket is refunded less the
+                    // fee (decideFlightRefund), or reviewed by our team.
+                    <>
+                      <p>• Your ticket has been voided, so a cancellation fee may apply.</p>
+                      <p>• Some refunds need our team to review them first.</p>
                     </>
                   ) : (
                     <p>• No ticket has been issued yet, so no cancellation fee applies and what you paid is returned.</p>

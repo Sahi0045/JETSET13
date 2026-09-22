@@ -1,7 +1,7 @@
 import React, { forwardRef } from 'react';
 import { Plane, User } from 'lucide-react';
 import { formatUsd } from '../../../utils/bookingCharge';
-import { bookingStatusBadge } from '../../../utils/bookingStatus';
+import { bookingStatusBadge, paymentReturned } from '../../../utils/bookingStatus';
 import {
     resolveTickets,
     ticketState,
@@ -10,6 +10,9 @@ import {
     isPaid,
     documentState,
     pnrOf,
+    liveTickets,
+    voidedTicketDigits,
+    isVoidedTicket,
 } from '../../../utils/eTicket';
 import { formatCalendarDate } from '../../../utils/dateUtils';
 import { bookingItineraries } from '../../../../../shared/bookingItineraries';
@@ -55,7 +58,13 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
     // and a connection drawn as a non-stop.
     const legs = bookingItineraries(bookingData);
     const state = ticketState(bookingData);
-    const issuedOn = issueDate(tickets);
+    // The tickets a cancel voided (the cancel does not prune the list). The
+    // whole list is still what each traveller is matched against, so that a
+    // match by position cannot hand one traveller another's ticket; a match
+    // that is void is then said to be void. The date of issue is a live
+    // ticket's: a void one printed "Date of Issue" over no valid ticket.
+    const voided = voidedTicketDigits(bookingData);
+    const issuedOn = issueDate(liveTickets(bookingData));
     const paid = isPaid(bookingData) || isPaid(bookingDetails);
 
     const isTicketed = state === 'issued';
@@ -67,18 +76,35 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
     // "E-Ticket" is a claim, and so is "Booking Confirmation": the first needs a
     // ticket, the second a PNR with a seat on it. Neither is made for a booking
     // that holds none - including a PNR the airline confirmed no seat on.
+    // Nor for one whose tickets a cancel voided: it holds no valid ticket, and
+    // it is being cancelled.
     const documentTitle = isCancelled ? 'Cancelled Booking'
         : isTicketed ? 'E-Ticket'
-            : hasPnr && docState !== 'no_confirmed_seat' ? 'Booking Confirmation'
+            : hasPnr && docState !== 'no_confirmed_seat' && docState !== 'tickets_voided' ? 'Booking Confirmation'
                 : 'Booking Summary';
 
     // Worded from what is true of the booking. "Your seat is held under the PNR
     // below" was printed whenever no ticket existed, over "PNR: N/A" for a
     // booking still queued, never sent to the airline, or never paid for.
     const NOTICES = {
-        ticket_pending: {
-            title: 'Your ticket has been issued. The ticket number is still being confirmed.',
-            body: 'We will email your ticket number shortly. Your booking reference and PNR below are valid.',
+        // Refunded since, in full or in part (the Payments tab refunds without
+        // cancelling): nobody is getting that number - ticket sync reads it
+        // for paid bookings only, and the alarm drops refunded ones - so no
+        // email is promised, as on the confirmation page.
+        ticket_pending: paymentReturned(bookingData)
+            ? {
+                title: 'Your ticket has been issued. Its ticket number has not reached us.',
+                body: 'If you need your ticket number, call (877) 538-7380 with your booking reference. Your booking reference and PNR below are valid.',
+            }
+            : {
+                title: 'Your ticket has been issued. The ticket number is still being confirmed.',
+                body: 'We will email your ticket number shortly. Your booking reference and PNR below are valid.',
+            },
+        // Every ticket voided by a cancel the airline then refused. Manage
+        // Booking does not offer this one either (canDownloadDocument).
+        tickets_voided: {
+            title: 'The ticket on this booking has been voided. It is not valid for travel.',
+            body: 'The cancellation has not been completed with the airline yet. Our team has been alerted and will complete it. Please do not travel on this document.',
         },
         held: {
             title: 'This is a confirmed reservation, not a ticket.',
@@ -148,11 +174,14 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
     const ticketLabel = (traveler, index) => {
         if (isCancelled) return 'Cancelled — not valid for travel';
         const match = ticketForTraveler(tickets, traveler, index);
+        // A void number printed as "Ticket #" reads as a ticket to fly on.
+        if (match?.number && isVoidedTicket(match, voided)) return 'Ticket voided — not valid for travel';
         if (match?.number) return `Ticket #: ${match.number}`;
         // Tickets exist, but none can be tied to this traveller for certain
         // (see ticketForTraveler). Another traveller's number would be worse
         // than none, and "not yet issued" would be untrue.
         if (state === 'pending' || state === 'issued') return 'Ticket issued — number pending';
+        if (docState === 'tickets_voided') return 'Ticket voided — not valid for travel';
         return 'Ticket not yet issued';
     };
 
@@ -186,7 +215,8 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
                             ? 'Cancelled — not valid for travel'
                             : issuedOn
                                 ? `Date of Issue: ${formatCalendarDate(issuedOn, { month: 'short', day: 'numeric', year: 'numeric' }, issuedOn)}`
-                                : hasPnr ? 'Ticket not yet issued' : 'Not yet confirmed with the airline'}
+                                : docState === 'tickets_voided' ? 'Ticket voided — not valid for travel'
+                                    : hasPnr ? 'Ticket not yet issued' : 'Not yet confirmed with the airline'}
                     </span>
                     <span className={`font-bold uppercase px-3 py-1 rounded text-xs ${isCancelled ? 'bg-red-600' : isTicketed ? 'bg-green-500' : 'bg-amber-500'}`}>
                         {/* The status in words. The raw database value
