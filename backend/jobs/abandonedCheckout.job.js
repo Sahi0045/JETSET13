@@ -254,6 +254,13 @@ export async function settle(row, { now = Date.now(), reconcile = reconcileBooki
     case 'in-progress':
       // The booking queue, or the customer's own browser, has it now.
       return { outcome: result, final: true };
+    case 'needs-review':
+      // The route found it flagged for a person (409 BOOKING_NEEDS_REVIEW) -
+      // a commit our team is checking with the airline, say - and sent
+      // nothing to the airline. `replay` kept the flag; that person owns it
+      // now. It fell to the default below and was logged 'retry', not final:
+      // a booking a person owns, reported as one still to be settled.
+      return { outcome: 'needs-review', final: true };
     case 'failed': {
       // The route reversed the charge or recorded why it could not, and emailed
       // the customer. Only a refusal that left the row exactly as checkout wrote
