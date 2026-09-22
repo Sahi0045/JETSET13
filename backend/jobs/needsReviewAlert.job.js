@@ -572,14 +572,27 @@ export function buildMessage(bookings) {
  * record - was undone by an alarm. Each booking is read again, and the stamp
  * written only if nothing that matters has moved since
  * (utils/bookingDetailsGuard.js); a race it loses is read and tried again.
+ *
+ * And only on the flag that was announced. The fresh read pins the write to
+ * itself, not to what was announced, so a flag written in between - a cancel
+ * the airline refused while the message was being posted - was stamped as
+ * though it had been announced, and never was: Slack had said "ticket it, or
+ * refund it" of a PNR the customer had since asked to cancel. A different
+ * flag on top is left for the next run to announce.
  */
 const MARK_TRIES = 3;
+
+/** Whether `fresh` is the flag `announced` (both absent for an unflagged booking). */
+const sameFlag = (announced, fresh) => (!announced || !fresh
+  ? !announced && !fresh
+  : announced.reason === fresh.reason && (announced.at ?? null) === (fresh.at ?? null));
 
 async function markAlerted(bookings) {
   for (const booking of bookings) {
     let marked = false;
+    let superseded = false;
     let lastError = null;
-    for (let tries = 0; tries < MARK_TRIES && !marked; tries += 1) {
+    for (let tries = 0; tries < MARK_TRIES && !marked && !superseded; tries += 1) {
       const { data: fresh, error: readError } = await supabase
         .from('bookings')
         .select('status, payment_status, booking_details')
@@ -592,6 +605,10 @@ async function markAlerted(bookings) {
       const details = fresh.booking_details || {};
       if (details.needs_review?.alerted_at) {
         marked = true;
+        break;
+      }
+      if (!sameFlag(booking.booking_details?.needs_review, details.needs_review)) {
+        superseded = true;
         break;
       }
       const now = new Date().toISOString();
@@ -612,7 +629,8 @@ async function markAlerted(bookings) {
       }
       marked = Boolean(data?.length);
     }
-    if (!marked) log('announced but could not mark', { booking: booking.booking_reference, error: lastError?.message || 'the booking kept changing' });
+    if (superseded) log('flagged again since it was announced; left for the next run', { booking: booking.booking_reference });
+    else if (!marked) log('announced but could not mark', { booking: booking.booking_reference, error: lastError?.message || 'the booking kept changing' });
   }
 }
 
