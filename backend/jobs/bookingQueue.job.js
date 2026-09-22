@@ -531,6 +531,21 @@ export async function replay(row, { baseUrl, fetchImpl = fetch } = {}) {
     log('queued booking ran out of retries', { bookingReference: ref, status, code: body?.code || null });
   }
 
+  // A booking a person already has (409 BOOKING_NEEDS_REVIEW): the route
+  // found it flagged - a commit our team is checking with the airline, a PNR
+  // the airline confirmed no seat on - and sent nothing to the airline. No
+  // failure email: "We could not confirm your flight booking" said it had
+  // failed while the airline may hold it, and the route sends none for these
+  // on purpose - the person working the flag tells the customer what the
+  // airline said. The flag is kept (flagFinalFailure writes over none) and the
+  // stored order dropped, as for any outcome.
+  if (body?.code === 'BOOKING_NEEDS_REVIEW') {
+    log('queued booking is with a person; no failure email', { bookingReference: ref, status });
+    await flagFinalFailure(ref, status, body);
+    await clearQueuedOrder(ref);
+    return 'needs-review';
+  }
+
   // A real failure. Whether money went back is in the body, not assumed.
   log('queued booking failed', { bookingReference: ref, status, refunded: body?.refunded === true, code: body?.code || null });
   const alerted = await flagFinalFailure(ref, status, body);

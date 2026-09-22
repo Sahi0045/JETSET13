@@ -28,7 +28,7 @@ import { canReachAmadeus } from '../../utils/amadeusReach.js';
 import { unchangedSince } from '../../utils/bookingDetailsGuard.js';
 import { DEFAULT_PRICE_SETTINGS } from '../../config/priceDefaults.js';
 import { cancellationMessage, refundOutcome } from '../../../shared/cancellationOutcome.js';
-import { ISSUANCE_UNKNOWN, flagInForce, needsAirlineRefundClaim, ticketNumbersMissingOf } from '../../../shared/reviewQueue.js';
+import { ISSUANCE_UNKNOWN, commitUnknownOf, flagInForce, needsAirlineRefundClaim, ticketNumbersMissingOf } from '../../../shared/reviewQueue.js';
 import { reconcileBookingPayment } from './checkout.handlers.js';
 import { errorSummary } from '../../utils/errorSummary.js';
 import { orderVoided, voidsPayment } from '../../utils/arcTransactions.js';
@@ -160,6 +160,20 @@ export async function handleCancelBookingAction(req, res) {
         // always treated one as a flight.
         const type = booking.travel_type;
         if (type === 'flight' || type == null) {
+            // The airline commit never answered (commitUnknownOf): there is no
+            // PNR, and nobody knows yet whether the airline holds a
+            // reservation. The cancel below would call no airline, reverse the
+            // whole payment and mark the booking cancelled - and a cancelled
+            // booking leaves the duplicate check, while the airline may still
+            // hold it. Every customer cancel comes here (Manage Booking, My
+            // Trips, DELETE /flights/order, the payments router); staff go on
+            // as before, and the desk keeps the booking (attentionOf).
+            if (!isStaff && commitUnknownOf(booking)) {
+                const text = 'Our team is checking with the airline whether this booking went through, so it cannot be cancelled online yet. '
+                    + 'Nothing has been cancelled or refunded. '
+                    + `To cancel it, please call (877) 538-7380 with booking reference ${booking.booking_reference}.`;
+                return refuse(res, 409, 'BOOKING_BEING_CHECKED', text, { bookingReference: booking.booking_reference });
+            }
             // A reservation is released at the airline, and only Lightsail can
             // reach Amadeus. Manage Booking's cancel came here through the
             // payments router, which runs on Vercel: every cancel of a booking

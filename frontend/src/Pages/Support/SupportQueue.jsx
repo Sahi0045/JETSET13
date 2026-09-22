@@ -66,6 +66,31 @@ const mailtoFor = (booking) => {
 /** Digits only: a number with spaces or brackets does not dial. */
 const telFor = (phone) => `tel:${String(phone).replace(/[^\d+]/g, '')}`;
 
+/**
+ * A commit the airline never answered is marked with what the airline said
+ * (resolve-review): it does not hold the booking, or it does, under a record
+ * locator that goes on the booking. Every other flag takes the note alone.
+ */
+const RECORD_LOCATOR = /^[A-Z0-9]{6}$/;
+
+/** A booking cancelled or refunded here cannot be recorded as held (the server refuses it). */
+const settledHere = (booking) => String(booking?.status || '').toLowerCase() === 'cancelled'
+  || ['refunded', 'partially_refunded', 'reversed'].includes(String(booking?.paymentStatus || '').toLowerCase());
+
+const commitAnswer = (handling) => {
+  if (!handling?.booking?.commitUnknown) return {};
+  return handling.outcome === 'held'
+    ? { outcome: 'held', pnr: String(handling.pnr || '').trim().toUpperCase() }
+    : { outcome: handling.outcome };
+};
+
+const canMarkHandled = (handling) => {
+  if (!handling?.note?.trim()) return false;
+  if (!handling.booking?.commitUnknown) return true;
+  if (handling.outcome === 'not_held') return true;
+  return handling.outcome === 'held' && RECORD_LOCATOR.test(String(handling.pnr || '').trim().toUpperCase());
+};
+
 const hoursSince = (iso) => {
   const at = Date.parse(iso ?? '');
   if (!Number.isFinite(at)) return null;
@@ -189,12 +214,12 @@ function SupportQueue() {
   };
 
   const markHandled = async () => {
-    if (!handling?.note?.trim()) return;
+    if (!canMarkHandled(handling)) return;
     setSaving(true);
     try {
       const response = await adminFetch(getApiUrl(`flights/admin-bookings/${handling.booking.id}/resolve-review`), {
         method: 'POST',
-        body: JSON.stringify({ note: handling.note.trim() }),
+        body: JSON.stringify({ note: handling.note.trim(), ...commitAnswer(handling) }),
       });
       const result = await response.json().catch(() => ({}));
       if (response.ok && result.success) {
@@ -558,6 +583,45 @@ function SupportQueue() {
           <div className="bg-white rounded-xl p-5 w-full max-w-lg">
             <h3 className="text-lg font-bold text-gray-900 mb-1">Mark {handling.booking.bookingReference} as handled</h3>
             <p className="text-sm text-gray-600 mb-3">Say what you did, so the next person knows. This does not move any money.</p>
+            {handling.booking.commitUnknown && (
+              <fieldset className="mb-3 border border-[#D1E9F0] rounded-lg p-3">
+                <legend className="px-1 text-sm font-semibold text-gray-800">
+                  The airline never answered this booking. What did it tell you?
+                </legend>
+                <label className="flex items-center gap-2 text-sm text-gray-800 mt-1">
+                  <input
+                    type="radio"
+                    name="commit-outcome"
+                    value="not_held"
+                    checked={handling.outcome === 'not_held'}
+                    onChange={() => setHandling({ ...handling, outcome: 'not_held' })}
+                  />
+                  The airline does not hold this booking
+                </label>
+                {!settledHere(handling.booking) && (
+                  <label className="flex items-center gap-2 text-sm text-gray-800 mt-1">
+                    <input
+                      type="radio"
+                      name="commit-outcome"
+                      value="held"
+                      checked={handling.outcome === 'held'}
+                      onChange={() => setHandling({ ...handling, outcome: 'held' })}
+                    />
+                    The airline holds this booking - it goes on the booking and waits to be ticketed
+                  </label>
+                )}
+                {handling.outcome === 'held' && (
+                  <input
+                    value={handling.pnr || ''}
+                    onChange={(event) => setHandling({ ...handling, pnr: event.target.value.toUpperCase() })}
+                    aria-label="Record locator"
+                    placeholder="Record locator, e.g. ABC123"
+                    maxLength={6}
+                    className="mt-2 w-40 border border-[#B9D0DC] rounded-lg p-2 text-sm font-mono uppercase"
+                  />
+                )}
+              </fieldset>
+            )}
             <textarea
               value={handling.note}
               onChange={(event) => setHandling({ ...handling, note: event.target.value })}
@@ -571,7 +635,7 @@ function SupportQueue() {
               <button
                 type="button"
                 onClick={markHandled}
-                disabled={saving || !handling.note.trim()}
+                disabled={saving || !canMarkHandled(handling)}
                 className="px-3 py-2 rounded-lg bg-[#055B75] text-white text-sm font-semibold disabled:opacity-50"
               >
                 {saving ? 'Saving…' : 'Mark as handled'}

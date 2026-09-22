@@ -1311,7 +1311,7 @@ function notSentAgainMessage(bookingReference, paymentState, { commitUnknown = f
  * by the row's payment record (paymentStateOf). Where it is caught first, the
  * gateway has just confirmed the capture and nothing refunds it: 'held'.
  */
-function duplicatePaymentAnswer(bookingReference, paymentState = 'held') {
+function duplicatePaymentAnswer(bookingReference, paymentState = 'held', { firstCommitUnknown = false } = {}) {
   const call = `call (877) 538-7380 with booking reference ${bookingReference}`;
   const money = paymentState === 'returned' ? `This payment has been refunded. If you have any questions, ${call}.`
     : paymentState === 'partly_returned' ? `Part of this payment has been refunded. Please ${call} about the rest.`
@@ -1320,8 +1320,14 @@ function duplicatePaymentAnswer(bookingReference, paymentState = 'held') {
           + `heard from us within 2 business days, ${call}.`
         : 'Our support team will check what happened to this payment and contact you. If you have not heard from us '
           + `within 2 business days, ${call}.`;
-  const message = 'This payment looks like a second payment for a trip you have already booked, for the same travellers '
-    + `on the same flights, so we have not booked it again. Your other booking is not affected. ${money}`;
+  // The first booking's commit never answered (commitUnknownOf): it is paid
+  // for, and nobody knows yet whether it was booked.
+  const message = firstCommitUnknown
+    ? 'This payment looks like a second payment for a trip you have already paid for, for the same travellers '
+      + 'on the same flights, so we have not booked it again. Your first payment is not affected, and our team is still '
+      + `checking with the airline whether that booking went through. ${money}`
+    : 'This payment looks like a second payment for a trip you have already booked, for the same travellers '
+      + `on the same flights, so we have not booked it again. Your other booking is not affected. ${money}`;
   return {
     success: false,
     code: 'DUPLICATE_PAYMENT',
@@ -1347,7 +1353,10 @@ function duplicatePaymentAnswer(bookingReference, paymentState = 'held') {
  * the same flights: a family can book one flight twice for different people,
  * and nothing here refunds anybody.
  *
- * @returns {Promise<{ duplicateOf: string|null } | { unavailable: true }>}
+ * `firstCommitUnknown`: the booking it repeats is a commit the airline never
+ * answered, for the customer's wording (duplicatePaymentAnswer).
+ *
+ * @returns {Promise<{ duplicateOf: string|null, firstCommitUnknown?: boolean } | { unavailable: true }>}
  */
 async function findDuplicateBooking(booking, { travellers, offer, claimedAt, now = Date.now() }) {
   const flights = flightsKey(offer);
@@ -1396,8 +1405,9 @@ async function findDuplicateBooking(booking, { travellers, offer, claimedAt, now
     // counted only for the chain's two-minute claim - after that a second
     // payment for the trip was sent to the airline. It counts until a person
     // finds out.
+    const firstCommitUnknown = Boolean(commitUnknownOf(row));
     const booked = Boolean(other.pnr) || Boolean(other.queued_order) || ['committed', 'queued'].includes(chain.state)
-      || Boolean(commitUnknownOf(row));
+      || firstCommitUnknown;
     const theirClaim = Date.parse(chain.claimedAt || chain.startedAt);
     const bookingFirst = chain.state === 'in_progress'
       && now - Date.parse(chain.startedAt) < CHAIN_CLAIM_TTL_MS
@@ -1410,7 +1420,7 @@ async function findDuplicateBooking(booking, { travellers, offer, claimedAt, now
       || other.pending_booking_data?.bookingData?.passengerData
       || other.queued_order?.travelers;
     if (flightsKey(theirOffer) === flights && travellerNamesKey(theirTravellers) === names) {
-      return { duplicateOf: row.booking_reference };
+      return { duplicateOf: row.booking_reference, firstCommitUnknown };
     }
   }
   return { duplicateOf: null };
@@ -2701,7 +2711,12 @@ router.post('/order', optionalProtect, async (req, res) => {
     // A payment already held as a second payment for one trip stays held: a
     // human decides whether to book or refund it (findDuplicateBooking, below).
     if (existing.booking_details?.needs_review?.duplicate_of) {
-      return res.status(409).json(duplicatePaymentAnswer(existing.booking_reference, paymentStateOf(existing)));
+      // Worded by what the first booking is now: a commit still being checked
+      // with the airline is paid for, not booked.
+      const first = await findExistingBooking(existing.booking_details.needs_review.duplicate_of);
+      return res.status(409).json(duplicatePaymentAnswer(existing.booking_reference, paymentStateOf(existing), {
+        firstCommitUnknown: Boolean(first && commitUnknownOf(first)),
+      }));
     }
 
     // A booking whose fulfilment already failed, or that a human is sorting
@@ -3089,7 +3104,9 @@ router.post('/order', optionalProtect, async (req, res) => {
           retryable: true
         });
       }
-      return res.status(409).json(duplicatePaymentAnswer(existing.booking_reference));
+      return res.status(409).json(duplicatePaymentAnswer(existing.booking_reference, 'held', {
+        firstCommitUnknown: duplicate.firstCommitUnknown,
+      }));
     }
 
     // Prepare flight order data for Amadeus (only if we have valid Amadeus format)
@@ -4984,6 +5001,10 @@ function normalizeBookingRow(b) {
     ticketNumbers: ticketsOf(d).map((ticket) => ticket.number),
     attention: attentionOf(b),
     reviewResolution: reviewResolution(b),
+    // The airline commit never answered (commitUnknownOf): the desk resolves
+    // it with what the airline said, and a record locator if it holds it
+    // (resolve-review).
+    commitUnknown: Boolean(commitUnknownOf(b)),
     // Being booked, waiting in the queue, or being cancelled right now
     // (utils/bookingChainClaim.js). The panel hides Void for such a booking, as
     // the server refuses it; worked out here, where the claim's lifetime is known.
@@ -5322,6 +5343,89 @@ router.post('/admin-bookings/:id/refund', protect, bookingStaff, async (req, res
   }
 });
 
+/** What the desk found out about a commit the airline never answered. */
+const COMMIT_OUTCOMES = ['not_held', 'held'];
+
+const refuseResolve = (res, status, code, text) => res.status(status).json({ success: false, code, error: text, message: text });
+
+/**
+ * The desk found the airline holds a booking whose commit never answered:
+ * write its record locator on the row as the chain records a commit
+ * (persistCommittedPnr, then flagForReview on a stopped chain) - the locator,
+ * not ticketed, the chain finished, pending ticketing - so it reads as held,
+ * counts as booked for the duplicate check, and is followed up like any paid
+ * reservation that was never ticketed: the desk list and the alarm show it
+ * under the flag they give such a booking (UNTICKETED_REVIEW_REASON), and
+ * ticket sync reads its ticket once it is issued by hand. What the desk found
+ * is kept under that flag, resolved.
+ *
+ * Written only onto the row as read (unchangedSince), in one update with the
+ * status: a cancel or anything else that landed in between makes it match
+ * nothing, and nothing is written.
+ *
+ * @returns {Promise<{ pnr: string } | { refused: true, status: number, code: string, text: string }>}
+ */
+async function recordHeldAtAirline(booking, { note, at, by, pnr: given }) {
+  const refused = (status, code, text) => ({ refused: true, status, code, text });
+  const details = booking.booking_details || {};
+  if (details.pnr) {
+    return refused(409, 'HELD_NOT_ALLOWED', `This booking already has a record locator (${details.pnr}), so there is nothing to record as held.`);
+  }
+  if (!commitUnknownOf(booking)) {
+    return refused(409, 'HELD_NOT_ALLOWED', 'Only a booking whose airline commit never answered can be recorded as held here.');
+  }
+  if (['cancelled', 'refunded'].includes(String(booking.status || '').toLowerCase())
+    || ['refunded', 'partially_refunded', 'reversed'].includes(String(booking.payment_status || '').toLowerCase())) {
+    return refused(409, 'HELD_NOT_ALLOWED', 'This booking has been cancelled or refunded, so it cannot be recorded as held. '
+      + 'If the airline holds a reservation for it, cancel that reservation with the airline, then record it as not held with what you did.');
+  }
+  const pnr = String(given ?? '').trim().toUpperCase();
+  if (!/^[A-Z0-9]{6}$/.test(pnr)) {
+    return refused(400, 'PNR_INVALID', 'A record locator is 6 letters and digits, like ABC123.');
+  }
+  if (liveChainState(details.gds_chain)) {
+    return refused(409, 'BOOKING_BUSY', 'This booking is being booked or cancelled right now. Nothing has been recorded; please try again in a few minutes.');
+  }
+  // Another booking's locator, typed by mistake, would have ticket sync read
+  // that customer's tickets onto this booking and email them to this customer.
+  const { data: others, error: lookupError } = await supabase
+    .from('bookings').select('booking_reference').eq('booking_details->>pnr', pnr).limit(1);
+  if (lookupError) return refused(500, 'LOOKUP_FAILED', 'Could not check the record locator. Nothing has been recorded; please try again.');
+  if (others?.length) {
+    return refused(409, 'PNR_IN_USE', `Record locator ${pnr} is already on booking ${others[0].booking_reference}, so it was not recorded on this one. `
+      + 'Check the locator with the airline.');
+  }
+
+  const { data: written, error } = await unchangedSince(
+    supabase
+      .from('bookings')
+      .update({
+        status: 'pending_ticketing',
+        booking_details: {
+          ...details,
+          pnr,
+          amadeus_order_id: pnr,
+          gds: { ...(details.gds || {}), ticketed: false },
+          gds_chain: { ...(details.gds_chain || {}), state: 'finished', finishedAt: at },
+          needs_review: {
+            reason: UNTICKETED_REVIEW_REASON,
+            ticketed: false,
+            at,
+            previous: { ...details.needs_review, resolved_at: at, resolved_by: by, resolution: note, outcome: 'held', pnr },
+          },
+        },
+        updated_at: at,
+      })
+      .eq('id', booking.id),
+    booking,
+  ).select('id');
+  if (error) return refused(500, 'WRITE_FAILED', 'Could not record it. Nothing has been recorded; please try again.');
+  if (!written?.length) {
+    return refused(409, 'BOOKING_CHANGED', 'This booking changed while you were recording it. Nothing has been recorded; reload it and try again.');
+  }
+  return { pnr };
+}
+
 /**
  * POST /api/flights/admin-bookings/:id/resolve-review — "I have dealt with this".
  *
@@ -5363,6 +5467,28 @@ router.post('/admin-bookings/:id/resolve-review', protect, bookingStaff, async (
 
     const at = new Date().toISOString();
     const by = req.user?.email || req.user?.id || 'staff';
+
+    // A commit the airline never answered (commitUnknownOf) is resolved with
+    // what the airline said. "Handled" alone read as "did not go through" on
+    // every page and to the duplicate check - false whenever the airline did
+    // hold it, and the record locator the desk had just been given was
+    // written nowhere, so nothing could ticket it.
+    const commitUnknown = Boolean(commitUnknownOf(booking));
+    const outcome = req.body?.outcome ?? null;
+    if (commitUnknown && !COMMIT_OUTCOMES.includes(outcome)) {
+      return refuseResolve(res, 400, 'OUTCOME_REQUIRED',
+        'Say what the airline told you: that it does not hold this booking, or that it does, with its record locator.');
+    }
+    if (outcome === 'held') {
+      const held = await recordHeldAtAirline(booking, { note, at, by, pnr: req.body?.pnr });
+      if (held.refused) return refuseResolve(res, held.status, held.code, held.text);
+      console.log('✅ Commit that never answered recorded as held by the desk:', { reference: booking.booking_reference, pnr: held.pnr, by });
+      return res.json({
+        success: true, resolvedAt: at, resolvedBy: by, note, outcome: 'held', pnr: held.pnr,
+        message: `Recorded as held at the airline under ${held.pnr}. It now waits to be ticketed.`,
+      });
+    }
+
     const { error } = await supabase
       .from('bookings')
       .update({
@@ -5375,6 +5501,7 @@ router.post('/admin-bookings/:id/resolve-review', protect, bookingStaff, async (
             resolved_at: at,
             resolved_by: by,
             resolution: note,
+            ...(commitUnknown ? { outcome: 'not_held' } : {}),
           },
         },
         updated_at: at,
