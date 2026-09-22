@@ -24,7 +24,7 @@ const STOP_OPTIONS = [
   { value: 'any', label: 'Any number of stops' },
   { value: '0', label: 'Non-stop only' },
   { value: '1', label: 'Up to 1 stop' },
-  { value: '2', label: 'Up to 2 stops' },
+  { value: '2', label: '2+ stops' },
 ];
 
 const BAGGAGE_OPTIONS = [
