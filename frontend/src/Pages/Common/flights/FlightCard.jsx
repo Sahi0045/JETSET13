@@ -166,6 +166,11 @@ function Leg({ leg, label, operators = [], cityMap = {} }) {
 
 // Per-segment detail rows for one leg (used in the expanded view)
 function SegmentList({ segments = [], stopDetails = [], cityMap = {} }) {
+  // The wait after flight idx is the idx-th connection. stopDetails also holds
+  // each flight's technical stops (the plane lands on the way), ahead of the
+  // connection that follows it, so reading it by position put Indore's 35
+  // minutes on the ground under "Layover at Mumbai".
+  const connections = (stopDetails || []).filter((stop) => !stop?.technical);
   return (
     <div className="space-y-4">
       {segments.map((seg, idx) => (
@@ -221,8 +226,8 @@ function SegmentList({ segments = [], stopDetails = [], cityMap = {} }) {
           {idx < segments.length - 1 && (
             <div className="ml-11 py-2 px-3 bg-amber-50 border border-amber-100 rounded-md text-[11px] text-amber-700 font-medium">
               Layover at {cityMap[seg.arrival?.airport] || seg.arrival?.airport}
-              {stopDetails?.[idx]?.duration && (
-                <span className="ml-1 text-amber-600">· {stopDetails[idx].duration}</span>
+              {connections[idx]?.duration && (
+                <span className="ml-1 text-amber-600">· {connections[idx].duration}</span>
               )}
             </div>
           )}

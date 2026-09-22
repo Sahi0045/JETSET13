@@ -28,11 +28,12 @@ import { buildFlightOrderBody, orderDataFromCheckoutRow } from '../../shared/fli
 import { statusChangeRefusal } from '../../shared/bookingStatusChange.js';
 import {
   attentionOf, reviewResolution, ticketsOf, isTicketed, NO_CONFIRMED_SEAT_REVIEW_REASON, noConfirmedSeatOf,
-  liveTicketNumbersMissingOf, unrecordedCancellationOf, voidedTicketsOf,
+  HELD_REVIEW_REASON_PREFIXES, liveTicketNumbersMissingOf, unrecordedCancellationOf, voidedTicketsOf,
 } from '../../shared/reviewQueue.js';
 import { errorSummary } from '../utils/errorSummary.js';
 import { flightSearchLimiter, guestBookingLimiter } from '../middleware/security.js';
 import { liveChainState } from '../utils/bookingChainClaim.js';
+import { isUsableEmail } from '../services/guestBooking.service.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -1009,9 +1010,9 @@ export function confirmationEmailOwed(booking) {
  * The review flags the order route's two 202 "needs review" answers write: the
  * airline holds the seats, and a later step - queueing, ticketing, the final
  * save - failed. Those answers sent no email at all, while the page said one
- * had been sent.
+ * had been sent. Defined in shared/reviewQueue.js (HELD_REVIEW_REASON_PREFIXES),
+ * which the desk and the alarm read to follow the held email up.
  */
-const HELD_REVIEW_REASON_PREFIXES = ['chain failed after commit at ', 'order route failed after commit'];
 
 /**
  * The flag the committed branch writes when the airline left a segment
@@ -2577,8 +2578,19 @@ router.post('/order', optionalProtect, async (req, res) => {
           code: 'BOOKING_IN_PROGRESS'
         });
       }
-      const tickets = Array.isArray(details.tickets) ? details.tickets : [];
-      const ticketed = details.gds?.ticketed === true || tickets.length > 0;
+      // Less the tickets a cancel voided. A same-day cancel voids every ticket
+      // and then can have PNR_Cancel refused, which leaves the row confirmed
+      // with gds.ticketed and its ticket list as they were: read alone, they
+      // answered ticketed with the void numbers, and the order page said the
+      // ticket had been issued. Ticketed only on a live ticket once any was
+      // voided; with none voided, as before (a ticket whose number was not
+      // read back is still issued).
+      const voidedTickets = voidedTicketsOf(existing);
+      const voidedDigits = new Set(voidedTickets.map((number) => String(number).replace(/\D/g, '')));
+      const tickets = (Array.isArray(details.tickets) ? details.tickets : [])
+        .filter((ticket) => !voidedDigits.has(String(ticket?.number ?? '').replace(/\D/g, '')));
+      const ticketed = tickets.length > 0 || (details.gds?.ticketed === true && voidedTickets.length === 0);
+      const allVoided = !ticketed && voidedTickets.length > 0;
       console.log('↩️ Already booked, returning the stored order', details.pnr);
       // A retry can be the first chance to send a confirmation this booking
       // never got: its first send was skipped for want of an address, or failed.
@@ -2605,6 +2617,9 @@ router.post('/order', optionalProtect, async (req, res) => {
         mode: 'ALREADY_BOOKED',
         ticketed,
         tickets,
+        // The numbers a cancel voided, as the booking reads send them
+        // (toClientBooking), for the pages' voided wording.
+        voided_tickets: voidedTickets,
         needsReview: Boolean(details.needs_review),
         // What the payment record says, as the 409 retry answers carry it. A
         // held PNR refunded from the Payments tab (payment_status alone) was
@@ -2612,7 +2627,9 @@ router.post('/order', optionalProtect, async (req, res) => {
         // held and its payment received.
         paymentState: paymentStateOf(existing),
         savedToDatabase: true,
-        message: ticketed ? 'This booking already exists' : 'This booking already exists; its ticket has not been issued yet'
+        message: ticketed ? 'This booking already exists'
+          : allVoided ? 'This booking already exists; its ticket has been voided'
+            : 'This booking already exists; its ticket has not been issued yet'
       });
     }
 
@@ -3560,10 +3577,16 @@ router.post('/order', optionalProtect, async (req, res) => {
         // No placeholder recipient: a confirmation sent to an address we made
         // up was reported as sent while the customer received nothing. The
         // address checkout recorded is the last resort; with none, the
-        // customer send is skipped and says so.
-        let finalEmail = contactInfo?.email || req.body.customerEmail || '';
-        if (!finalEmail && fallbackTraveler?.email) finalEmail = fallbackTraveler.email;
-        if (!finalEmail) finalEmail = dbBooking.booking_details?.customer_email || '';
+        // customer send is skipped and says so. An address that cannot be
+        // delivered to is passed over: a signed-in customer's mistyped
+        // "jane@gmailcom" was sent the email, and the account's address
+        // checkout recorded never got it.
+        const finalEmail = [
+          contactInfo?.email,
+          req.body.customerEmail,
+          fallbackTraveler?.email,
+          dbBooking.booking_details?.customer_email,
+        ].find(isUsableEmail) || '';
 
         const bookingEmailData = {
           customerEmail: finalEmail,

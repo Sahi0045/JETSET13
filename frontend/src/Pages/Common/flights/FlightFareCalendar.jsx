@@ -23,7 +23,9 @@ const extractCode = (str) => {
 };
 
 function FlightFareCalendar({ searchParams = {}, initialDate, selectedDate, onSelectDate, onClose }) {
-  const start = initialDate ? new Date(initialDate) : new Date();
+  // A local date: new Date('YYYY-MM-DD') is UTC midnight, the day before west
+  // of UTC, so a search on the 1st opened on the month before.
+  const start = initialDate ? getSafeDate(initialDate) : new Date();
   const [viewYear, setViewYear] = useState(start.getFullYear());
   const [viewMonth, setViewMonth] = useState(start.getMonth());
   const [prices, setPrices] = useState({});

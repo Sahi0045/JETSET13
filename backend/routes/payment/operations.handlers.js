@@ -28,7 +28,7 @@ import { canReachAmadeus } from '../../utils/amadeusReach.js';
 import { unchangedSince } from '../../utils/bookingDetailsGuard.js';
 import { DEFAULT_PRICE_SETTINGS } from '../../config/priceDefaults.js';
 import { cancellationMessage, refundOutcome } from '../../../shared/cancellationOutcome.js';
-import { ticketNumbersMissingOf } from '../../../shared/reviewQueue.js';
+import { needsAirlineRefundClaim, ticketNumbersMissingOf } from '../../../shared/reviewQueue.js';
 import { reconcileBookingPayment } from './checkout.handlers.js';
 import { errorSummary } from '../../utils/errorSummary.js';
 import { orderVoided, voidsPayment } from '../../utils/arcTransactions.js';
@@ -463,11 +463,17 @@ async function returnFlightPayment(decision, { arcOrderId, currency, reason }) {
             // The order could not be read, it had been reversed by something else
             // in the last few seconds, or the request broke mid-flight. Whether
             // money moved is not known here, so nobody is told either way.
+            //
+            // Said outright: REFUND_UNDER_REVIEW is also the code for a refund
+            // held on purpose, and the alarm told this one "nothing was
+            // refunded, on purpose - check the tickets with the airline", when
+            // the question is whether ARC Pay moved the money.
             return {
                 paymentAction: 'REFUND_UNDER_REVIEW',
                 refundAmount: 0,
                 cancellationFee: 0,
                 reviewReason: `automatic reversal ended ${reversal.action}: ${reversal.error || 'no detail'}`,
+                reversalOutcomeUnknown: true,
             };
         }
         case 'refund_less_fee': {
@@ -496,7 +502,14 @@ async function returnFlightPayment(decision, { arcOrderId, currency, reason }) {
                 return { paymentAction: 'REFUND_FAILED', refundAmount: 0, cancellationFee: decision.fee, errorDetails: arcFailureSummary(refundResponse?.data) };
             } catch (error) {
                 console.error('❌ ARC Pay REFUND did not complete:', error.message);
-                return { paymentAction: 'REFUND_UNDER_REVIEW', refundAmount: 0, cancellationFee: decision.fee, reviewReason: `refund request did not complete: ${error.message}` };
+                // Sent, or about to be, and no answer: ARC Pay may have refunded.
+                return {
+                    paymentAction: 'REFUND_UNDER_REVIEW',
+                    refundAmount: 0,
+                    cancellationFee: decision.fee,
+                    reviewReason: `refund request did not complete: ${error.message}`,
+                    reversalOutcomeUnknown: true,
+                };
             }
         }
         default:
@@ -746,6 +759,7 @@ async function cancelFlightBooking(res, booking, { reason, email }) {
         cancellationFee: returned.cancellationFee,
         currency,
         needsReview: reviewReasons.length > 0,
+        ...(returned.reversalOutcomeUnknown ? { reversalOutcomeUnknown: true } : {}),
         ...(returned.refundTransactionId ? { refundTransactionId: returned.refundTransactionId } : {}),
         ...(returned.errorDetails !== undefined ? { errorDetails: returned.errorDetails } : {}),
     };
@@ -784,6 +798,9 @@ async function cancelFlightBooking(res, booking, { reason, email }) {
                     ticketsVoided: cancellationResult.ticketsVoided,
                     // Why this amount, for the support desk.
                     basis: decision.reason,
+                    // A reversal sent with no answer back, not a hold: whoever
+                    // picks this up checks ARC Pay before refunding anything.
+                    ...(cancellationResult.reversalOutcomeUnknown ? { reversalOutcomeUnknown: true } : {}),
                 },
                 ...(reviewReasons.length
                     ? {
@@ -2199,7 +2216,12 @@ export async function settleManualFlightRefund(booking, { mode = 'sync', amount,
     };
     // Closed only when nothing more is owed and the airline let the booking go.
     const settled = stillHeld === 0 && airlineReleased;
+    // A flag listing tickets to claim from the airline is not closed by the
+    // customer's refund: the tickets' value is still with the airline. Stamped
+    // here, "Refund to claim from the airline" left the desk with nothing
+    // claimed. Whoever makes the claim resolves it.
     const review = currentDetails.needs_review && settled
+        && !needsAirlineRefundClaim({ booking_details: currentDetails })
         ? { ...currentDetails.needs_review, resolved_at: manual.at, resolution: 'refund finished by the desk' }
         : currentDetails.needs_review;
     const paymentStatus = fullyReturned ? 'refunded' : 'partially_refunded';

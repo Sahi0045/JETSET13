@@ -119,7 +119,8 @@ describe('running the check once', () => {
       update: vi.fn().mockReturnThis(),
       is: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockResolvedValue({ data: rows, error: null }),
+      // Read a page at a time (jobs/alarmCandidates.js); fewer rows than a page is the last.
+      range: vi.fn().mockResolvedValue({ data: rows, error: null }),
     };
     supabaseMock.from.mockReturnValue(chain);
     return chain;

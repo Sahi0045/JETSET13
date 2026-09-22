@@ -43,7 +43,7 @@ export async function handleCreatePaymentLink(req, res) {
         } = req.body;
 
         // Get caller info (admin or agent) — only staff may create payment links.
-        const caller = getCallerInfo(req);
+        const caller = await getCallerInfo(req);
         if (!['admin', 'superadmin', 'agent'].includes(caller.role)) {
             return res.status(403).json({ success: false, error: 'Not authorized to create payment links.' });
         }
@@ -579,7 +579,7 @@ export async function handleCompletePaymentLink(req, res) {
  */
 export async function handleListPaymentLinks(req, res) {
     try {
-        const caller = getCallerInfo(req);
+        const caller = await getCallerInfo(req);
         // Auth required — these contain customer payment data. Staff only.
         if (!['admin', 'superadmin', 'agent'].includes(caller.role)) {
             return res.status(403).json({ success: false, error: 'Not authorized' });

@@ -68,7 +68,10 @@ const SECRETS = [
   'margin 22%', '+1 555 0100', 'LINKTOKEN123', 'agent-1', 'PNR123', 'jane.doe@example.com',
 ];
 
-let stored = { payments: paymentRow(), inquiries: { user_id: OWNER }, payment_links: linkRow };
+// The admin token's `users` row: getCaller reads the caller's role from it.
+const staffRow = { email: 'ops@jetsetterss.com', role: 'admin' };
+
+let stored = { payments: paymentRow(), inquiries: { user_id: OWNER }, payment_links: linkRow, users: staffRow };
 
 const chainFor = (table) => {
   const c = {};
@@ -123,7 +126,7 @@ const expectFullRow = (res) => {
 
 beforeEach(() => {
   vi.resetModules();
-  stored = { payments: paymentRow(), inquiries: { user_id: OWNER }, payment_links: linkRow };
+  stored = { payments: paymentRow(), inquiries: { user_id: OWNER }, payment_links: linkRow, users: staffRow };
   gatewayFetch.mockReset();
 });
 

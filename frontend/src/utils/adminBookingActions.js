@@ -101,6 +101,21 @@ export function adminCancelOutcome(cancellation = {}, { bookingReference = 'This
         reason: null,
       };
     case 'review':
+      // The same code closes a refund sent to ARC Pay that never answered - it
+      // threw mid-request, or found the order already reversed - and the cancel
+      // says so. "No refund was made ... refund it by hand" there could pay the
+      // customer twice: ARC Pay is checked first.
+      if (cancellation.reversalOutcomeUnknown) {
+        return {
+          tone: 'warning',
+          title: 'Cancelled: the refund result is unknown',
+          summary: `${ref} is cancelled. The refund was sent to ARC Pay but no answer came back, so it may or may not have gone through.`,
+          detail: 'Check ARC Pay before anything else: open Finish refund (💵) on this booking and press Sync from ARC. '
+            + 'Refund by hand only what ARC Pay still holds.',
+          figure: paidFigure,
+          reason: cancellation.reviewReason || null,
+        };
+      }
       return {
         tone: 'warning',
         title: 'Cancelled: the refund needs your decision',

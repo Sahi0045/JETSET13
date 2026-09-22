@@ -87,13 +87,31 @@ const UNAVAILABLE_RETRY_MS = 15000;
  *              booking's record says went back (the server's paymentState): a
  *              reload for a held PNR refunded without being cancelled. It
  *              read "Reservation Held - your seats are reserved".
+ *   checking - flagged for review with no PNR: the airline commit never
+ *              answered (timed out, or no record locator came back), so nobody
+ *              knows whether the airline holds anything. It read as held, and
+ *              told the customer their seats were reserved.
+ *   voided   - no live ticket, and the answer names tickets a cancel voided
+ *              (ALREADY_BOOKED after a cancel whose PNR_Cancel was refused).
+ *              Neither issued nor held: nobody can fly on it.
  */
 function outcomeOf(body) {
   if (body?.queued === true) return 'queued';
   if (body?.ticketed === true) return 'ticketed';
   if (['returned', 'partly_returned'].includes(body?.paymentState)) return body.paymentState;
+  if (Array.isArray(body?.voided_tickets) && body.voided_tickets.length > 0) return 'voided';
+  if ((body?.needsReview || body?.data?.needsReview) && !pnrOfAnswer(body)) return 'checking';
   return 'held';
 }
+
+/** The record locator the order answer carries, if any. */
+function pnrOfAnswer(body) {
+  return body?.pnr || body?.data?.pnr || body?.data?.associatedRecords?.[0]?.reference || null;
+}
+
+/** What the order page and the confirmation page say of the 'checking' outcome. */
+const CHECKING_FALLBACK = 'Your payment is safe and our team is checking with the airline whether your booking went '
+  + 'through. We will email you either way - please do not book again in the meantime.';
 
 /** The payment reference checkout left in this browser, if any. */
 function storedPaymentReference() {
@@ -153,6 +171,9 @@ function FlightCreateOrders() {
   const [pnr, setPnr] = useState('');
   // Held for staff: the airline took the booking, then a later step failed.
   const [heldForReview, setHeldForReview] = useState(false);
+  // The server's own sentence for the answer, shown where the outcome has no
+  // fixed wording of its own ('checking').
+  const [orderMessage, setOrderMessage] = useState('');
   const [pageLoaded, setPageLoaded] = useState(false);
 
   // Ref guard to prevent duplicate order processing (React StrictMode can cause double renders)
@@ -328,7 +349,7 @@ function FlightCreateOrders() {
         const result = outcomeOf(body);
         const needsReview = Boolean(body.needsReview || body.data?.needsReview);
         const reference = body.bookingReference || body.data?.bookingReference || body.data?.id || orderData.orderId || '';
-        const pnrValue = body.pnr || body.data?.pnr || body.data?.associatedRecords?.[0]?.reference || null;
+        const pnrValue = pnrOfAnswer(body);
         const status = result === 'queued' ? 'PENDING_CONFIRMATION'
           : result === 'ticketed' ? 'CONFIRMED'
             : 'PENDING_TICKETING';
@@ -338,6 +359,7 @@ function FlightCreateOrders() {
         setBookingReference(reference);
         setPnr(pnrValue);
         setHeldForReview(needsReview);
+        setOrderMessage(typeof body.message === 'string' ? body.message : '');
         setStillConfirming(null);
         inProgressAttempts.current = 0;
         setPaymentProblem(null);
@@ -398,11 +420,17 @@ function FlightCreateOrders() {
           queued: result === 'queued',
           ticketed: result === 'ticketed',
           tickets: Array.isArray(body.tickets) ? body.tickets : [],
+          // The tickets a cancel voided (ALREADY_BOOKED), for the confirmation
+          // page's voided wording: without them it read the booking as issued.
+          voided_tickets: Array.isArray(body.voided_tickets) ? body.voided_tickets : [],
           needsReview,
           // The name the confirmation page and bookingStatus read. Saving only
           // `needsReview` meant the "our team is finishing your ticket" line
           // never showed there.
           needs_review: needsReview ? { reason: null } : null,
+          // The airline commit never answered: the confirmation page's own
+          // outcome for it, as nothing there can tell it from a held PNR.
+          ...(result === 'checking' ? { commitUnknown: true } : {}),
           // A payment the booking's record says went back, for the
           // confirmation page (paymentReturned): it said "Total Paid ...
           // Payment received" of a refunded booking.
@@ -748,6 +776,28 @@ function FlightCreateOrders() {
                         <p className="text-gray-600">
                           Your payment is complete and your booking is in the queue. We are confirming your seats with the airline now; this can take a few minutes.
                         </p>
+                      </>
+                    ) : outcome === 'voided' ? (
+                      // As the confirmation page says it (tickets_voided).
+                      <>
+                        <div className="mx-auto w-16 h-16 rounded-full bg-amber-50 flex items-center justify-center">
+                          <Clock className="w-8 h-8 text-amber-600" />
+                        </div>
+                        <h2 className="text-xl font-semibold text-gray-800">Ticket Voided</h2>
+                        <p className="text-gray-600">
+                          Your ticket has been voided and is not valid for travel. The cancellation has not been completed with the airline yet.
+                        </p>
+                      </>
+                    ) : outcome === 'checking' ? (
+                      // No record locator came back, so no seat is promised:
+                      // the server's own words, which ask them not to book again.
+                      <>
+                        <div className="mx-auto w-16 h-16 rounded-full bg-amber-50 flex items-center justify-center">
+                          <Clock className="w-8 h-8 text-amber-600" />
+                        </div>
+                        <h2 className="text-xl font-semibold text-gray-800">Checking Your Booking With the Airline</h2>
+                        <p className="text-gray-600">{orderMessage || CHECKING_FALLBACK}</p>
+                        <p className="text-sm text-gray-500">Questions? Call (877) 538-7380 with your booking reference.</p>
                       </>
                     ) : ['returned', 'partly_returned'].includes(outcome) ? (
                       // Refunded without being cancelled: no held seat and no
