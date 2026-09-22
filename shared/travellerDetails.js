@@ -47,8 +47,13 @@ const dayOf = (value) => (/^\d{4}-\d{2}-\d{2}/.test(String(value ?? '')) ? Strin
  * before the flight home, or a passport that runs out before it, passed every
  * check and was found at the airport.
  *
+ * `lastDate` is the day the last flight lands, which a passport has to last
+ * until. `lastDepartureDate` is the day it leaves: an infant's age goes by the
+ * start of each flight, and read on the landing day a baby whose second
+ * birthday falls during an overnight last flight was refused.
+ *
  * @param {object} offer an offer with `itineraries[].segments[]`
- * @returns {{ firstDate: string|null, lastDate: string|null }} YYYY-MM-DD
+ * @returns {{ firstDate: string|null, lastDate: string|null, lastDepartureDate: string|null }} YYYY-MM-DD
  */
 export function tripDates(offer) {
   const segments = (Array.isArray(offer?.itineraries) ? offer.itineraries : [])
@@ -56,7 +61,8 @@ export function tripDates(offer) {
   const firstDate = dayOf(segments[0]?.departure?.at);
   const last = segments[segments.length - 1];
   const lastDate = dayOf(last?.arrival?.at) || dayOf(last?.departure?.at) || firstDate;
-  return { firstDate, lastDate };
+  const lastDepartureDate = dayOf(last?.departure?.at) || lastDate;
+  return { firstDate, lastDate, lastDepartureDate };
 }
 
 /**
@@ -129,11 +135,14 @@ function unusableDocsFields(t, fareType) {
  * @param {boolean} [ctx.secureFlight]     whether a flight touches the United States (needsDateOfBirth)
  * @param {boolean} [ctx.passportRequired] whether to ask for the passport; defaults to `international`
  * @param {string}  [ctx.travelDate]       YYYY-MM-DD of the first flight, for the age a fare depends on
- * @param {string}  [ctx.lastDate]         YYYY-MM-DD of the last flight, for later ages and passport expiry
+ * @param {string}  [ctx.lastDate]         YYYY-MM-DD the last flight lands, for passport expiry
+ * @param {string}  [ctx.lastDepartureDate] YYYY-MM-DD the last flight leaves, for an infant's
+ *   age on every flight; `lastDate` when not given
  * @returns {string[]}
  */
 export function bookingTravellerProblems(traveller, {
   type, international = true, secureFlight = false, passportRequired = international, travelDate, lastDate,
+  lastDepartureDate,
 } = {}) {
   const t = traveller || {};
   const fareType = type || t.type;
@@ -150,14 +159,15 @@ export function bookingTravellerProblems(traveller, {
     const ageProblem = passengerAgeProblem(fareType, t.dateOfBirth, travelDate);
     if (ageProblem) {
       add(ageProblem);
-    } else if (INFANT_TYPES.has(fareType) && lastDate) {
+    } else if (INFANT_TYPES.has(fareType) && (lastDepartureDate || lastDate)) {
       // An infant who turns 2 before the last flight needs a paid seat on the
       // later flights, which no one fare type here sells - so every type
-      // refuses them, and the customer is told how to book it. A child is not
+      // refuses them, and the customer is told how to book it. The age is the
+      // one on the day that flight leaves, not the day it lands. A child is not
       // checked again: a child's fare is set by their age when the trip begins
       // (IATA), and asking them to be under 12 on the way home as well left a
       // child who turns 12 on the trip with no fare at all.
-      const laterProblem = passengerAgeProblem(fareType, t.dateOfBirth, String(lastDate).slice(0, 10));
+      const laterProblem = passengerAgeProblem(fareType, t.dateOfBirth, String(lastDepartureDate || lastDate).slice(0, 10));
       if (laterProblem) {
         add(`${laterProblem.replace('on the day of travel', 'on every flight of the trip')} `
           + 'To book an infant who turns 2 during the trip, call (877) 538-7380.');

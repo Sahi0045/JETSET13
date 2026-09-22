@@ -290,6 +290,7 @@ function FlightBookingConfirmation() {
       || bookingDetails?.flight?.segments?.at?.(-1)?.arrival?.at
       || bookingDetails?.flight?.arrivalDate
       || bookingDetails?.flight?.departureDate,
+    lastDepartureDate: trip.lastDepartureDate,
     bookingAsGuest,
     contactEmail: bookingDetails?.contact?.email,
   });

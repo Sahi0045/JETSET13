@@ -300,7 +300,7 @@ export async function verifyFlightCharge({
   // shows passport fields from its own list, and must not be refused for a
   // document it gave the customer nowhere to enter.
   const international = typeof priced?._ama?.international === 'boolean' ? priced._ama.international : true;
-  const { firstDate, lastDate } = tripDates(offer);
+  const { firstDate, lastDate, lastDepartureDate } = tripDates(offer);
   for (const [index, traveller] of passengers.entries()) {
     const problems = bookingTravellerProblems(traveller, {
       type: TRAVELLER_TYPES.includes(traveller?.type) ? traveller.type : pricedTypes[index],
@@ -309,6 +309,7 @@ export async function verifyFlightCharge({
       passportRequired: priced?._ama?.international === true,
       travelDate: firstDate,
       lastDate,
+      lastDepartureDate,
     });
     if (problems.length > 0) {
       return refuse(400, 'PASSENGERS_INCOMPLETE', `Traveller ${index + 1}: ${problems[0]} Nothing has been charged.`);
