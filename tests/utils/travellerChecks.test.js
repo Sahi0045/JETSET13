@@ -62,7 +62,8 @@ describe('travellerProblems', () => {
       const infant = { ...complete, ...passport, passportExpiry: '2030-01-01', type: 'HELD_INFANT', dateOfBirth: '2024-10-20' };
 
       expect(travellerProblems(infant, checksFor(outboundOnly))).toEqual([]);
-      expect(travellerProblems(infant, checksFor(roundTrip))).toContain('Infant fares are for travellers under 2 on every flight of the trip.');
+      expect(travellerProblems(infant, checksFor(roundTrip))).toContain('Infant fares are for travellers under 2 on every flight of the trip. '
+        + 'To book an infant who turns 2 during the trip, call (877) 538-7380.');
     });
 
     it('refuses a passport that expires before the return', () => {

@@ -35,6 +35,8 @@ export function needsDateOfBirth({ type, international, secureFlight } = {}) {
   return secureFlight === true || international !== false || type !== 'ADULT';
 }
 
+const INFANT_TYPES = new Set(['HELD_INFANT', 'SEATED_INFANT']);
+
 const dayOf = (value) => (/^\d{4}-\d{2}-\d{2}/.test(String(value ?? '')) ? String(value).slice(0, 10) : null);
 
 /**
@@ -148,12 +150,18 @@ export function bookingTravellerProblems(traveller, {
     const ageProblem = passengerAgeProblem(fareType, t.dateOfBirth, travelDate);
     if (ageProblem) {
       add(ageProblem);
-    } else if (fareType !== 'ADULT' && lastDate) {
-      // An infant who turns 2, or a child who turns 12, before the last flight
-      // is on the wrong fare for the rest of the trip - many airlines then
-      // require a paid seat on the way back.
+    } else if (INFANT_TYPES.has(fareType) && lastDate) {
+      // An infant who turns 2 before the last flight needs a paid seat on the
+      // later flights, which no one fare type here sells - so every type
+      // refuses them, and the customer is told how to book it. A child is not
+      // checked again: a child's fare is set by their age when the trip begins
+      // (IATA), and asking them to be under 12 on the way home as well left a
+      // child who turns 12 on the trip with no fare at all.
       const laterProblem = passengerAgeProblem(fareType, t.dateOfBirth, String(lastDate).slice(0, 10));
-      if (laterProblem) add(laterProblem.replace('on the day of travel', 'on every flight of the trip'));
+      if (laterProblem) {
+        add(`${laterProblem.replace('on the day of travel', 'on every flight of the trip')} `
+          + 'To book an infant who turns 2 during the trip, call (877) 538-7380.');
+      }
     }
   }
 

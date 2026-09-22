@@ -286,7 +286,7 @@ export async function verifyFlightCharge({
   // Every traveller as the airline needs them before the card is charged, by
   // the rule the review page checks (shared/travellerDetails.js): a printable
   // name, a gender, a date of birth where one is needed and an age that fits
-  // the fare on every flight of the trip, and a passport valid to the last
+  // the fare (an infant on every flight of the trip), and a passport valid to the last
   // flight on a trip abroad. This checked only that names, a gender and a date
   // of birth were there. The order route refuses an incomplete traveller too -
   // but only after payment - and the airline will not ticket a trip abroad
