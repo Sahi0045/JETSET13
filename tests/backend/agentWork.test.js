@@ -40,7 +40,12 @@ const chainFor = (table) => {
     data: table === 'payment_links' ? state.links[0] : table === 'bookings' ? { id: 'b-new' } : state.agent,
     error: null,
   }));
-  c.maybeSingle = vi.fn(async () => ({ data: table === 'agents' ? state.agent : null, error: null }));
+  // getCaller reads the caller's role from `users`; the admin token's row lives here.
+  const usersRow = () => (filters.some(([, col, val]) => col === 'id' && val === ADMIN.id) ? ADMIN : null);
+  c.maybeSingle = vi.fn(async () => ({
+    data: table === 'agents' ? state.agent : table === 'users' ? usersRow() : null,
+    error: null,
+  }));
   c.then = (resolve, reject) => Promise.resolve({ data: rows(), error: null }).then(resolve, reject);
   return c;
 };
