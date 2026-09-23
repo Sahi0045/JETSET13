@@ -4,6 +4,7 @@ import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRequest, createResponse } from './helpers/express.helpers.js';
 import { fakeBookingsTable } from './helpers/fakeBookings.js';
+import { shownQueryOf } from './helpers/deskShown.js';
 import { allowedStatuses } from '../../shared/bookingStatusChange.js';
 import { COMMIT_UNKNOWN_REVIEW_REASON, UNTICKETED_REVIEW_REASON } from '../../shared/reviewQueue.js';
 
@@ -203,7 +204,7 @@ describe('a reservation the unrecorded cancel did not release, given Cancelled b
     await cancelUnrecorded();
     const server = await app();
 
-    const held = await request(server).post('/api/flights/admin-bookings/bk-1/resolve-review')
+    const held = await request(server).post(`/api/flights/admin-bookings/bk-1/resolve-review${shownQueryOf(table.row(REF))}`)
       .send({ note: 'The airline holds it', outcome: 'held', pnr: 'NEWPNR' });
     expect(held.status).toBe(200);
     const booking = table.row(REF);

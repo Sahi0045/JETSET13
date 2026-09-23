@@ -4,6 +4,7 @@ import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRequest, createResponse } from './helpers/express.helpers.js';
 import { fakeBookingsTable } from './helpers/fakeBookings.js';
+import { shownQueryFor } from './helpers/deskShown.js';
 import { attentionLabel, attentionOf } from '../../shared/reviewQueue.js';
 
 /**
@@ -103,7 +104,9 @@ const deskOver = async (rows) => {
   app.use(express.json());
   app.use('/api/flights', routes);
   const open = async () => (await request(app).get('/api/flights/admin-bookings-all?attention=open')).body.data;
-  const handle = (note) => request(app).post('/api/flights/admin-bookings/b-claim/resolve-review').send({ note });
+  // With the entry the desk page showed, as the page sends it.
+  const handle = async (note, extra = {}) => request(app)
+    .post(`/api/flights/admin-bookings/b-claim/resolve-review${await shownQueryFor('b-claim')}`).send({ note, ...extra });
   return { table, open, handle };
 };
 
@@ -129,7 +132,8 @@ describe('a refused refund under an airline-claim flag', () => {
     const { row } = await cancelled();
     const desk = await deskOver([row]);
 
-    expect((await desk.handle('Claimed 108-2412345671 from the airline.')).status).toBe(200);
+    // Two jobs on one entry (attention.jobs): the press names the claim.
+    expect((await desk.handle('Claimed 108-2412345671 from the airline.', { job: 'claim' })).status).toBe(200);
     const listed = await desk.open();
     expect(listed.map((b) => b.bookingReference), 'the refused 241 leaves Needs attention with nothing returned').toEqual(['FLT123']);
     expect(listed[0].attention).toMatchObject({ kind: 'refund_failed' });

@@ -3,6 +3,7 @@ import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { errorHandler } from '../../backend/middleware/errorHandler.js';
 import { fakeBookingsTable } from './helpers/fakeBookings.js';
+import { shownQueryOf } from './helpers/deskShown.js';
 import { attentionOf, reviewResolution } from '../../shared/reviewQueue.js';
 import { isBookingStaff, isFullAdmin } from '../../shared/staffRoles.js';
 
@@ -177,7 +178,7 @@ describe('POST /admin-bookings/:id/resolve-review', () => {
     const { app, table } = await appWith([flagged()]);
 
     const res = await request(app)
-      .post('/api/flights/admin-bookings/b-flagged/resolve-review')
+      .post(`/api/flights/admin-bookings/b-flagged/resolve-review${shownQueryOf(table.row('FLTHELD9'))}`)
       .send({ note: 'Ticket issued by hand in Amadeus, 220-7491175310.' });
 
     expect(res.status).toBe(200);
@@ -198,7 +199,7 @@ describe('POST /admin-bookings/:id/resolve-review', () => {
     const { app, table } = await appWith([unflagged]);
 
     const res = await request(app)
-      .post('/api/flights/admin-bookings/b-raw/resolve-review')
+      .post(`/api/flights/admin-bookings/b-raw/resolve-review${shownQueryOf(table.row('FLTRAW1'))}`)
       .send({ note: 'Refunded, the customer rebooked.' });
 
     expect(res.status).toBe(200);

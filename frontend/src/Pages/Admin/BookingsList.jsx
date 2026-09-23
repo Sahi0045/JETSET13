@@ -7,7 +7,7 @@ import './AdminPanel.css';
 import { adminFetch, readAdminResponse } from '../../utils/adminAuth';
 import { needsManualRefund } from '../../utils/bookingStatus';
 import { adminCancelOutcome, canVoidPayment, statusOptionsFor } from '../../utils/adminBookingActions';
-import { attentionLabel, refundOwedOf } from '../../../../shared/reviewQueue';
+import { attentionLabel, refundOwedOf, refundPrefillOf } from '../../../../shared/reviewQueue';
 
 /** How a message looks, by what it is telling the admin. */
 const TONE = {
@@ -269,6 +269,13 @@ const BookingsList = () => {
                 fetchBookings();
             } else {
                 setActionMessage({ type: 'error', text: result.error || 'Could not finish the refund.' });
+                // Synced, and ARC shows nothing returned: the amount the cancel
+                // decided is offered now, not before (refundPrefillOf). Never
+                // over what someone typed.
+                if (mode === 'sync' && result.code === 'NO_REFUND_FOUND') {
+                    const decided = refundPrefillOf(refundModal, { arcChecked: true });
+                    setRefundAmount((typed) => typed || decided);
+                }
             }
         } catch (error) {
             if (error?.sessionExpired) {
@@ -652,7 +659,7 @@ const BookingsList = () => {
                                                     )}
                                                     {!booking.isPackage && needsManualRefund(booking) && (
                                                         <button
-                                                            onClick={() => { setRefundModal(booking); setRefundAmount(String(refundOwedOf(booking)?.owed ?? '')); }}
+                                                            onClick={() => { setRefundModal(booking); setRefundAmount(refundPrefillOf(booking)); }}
                                                             title="Finish refund (failed or under review)"
                                                             style={actionBtnStyle('#059669')}
                                                         >💵</button>

@@ -19,7 +19,9 @@ import { fakeBookingsTable } from './helpers/fakeBookings.js';
  *
  * The desk now says which entry it showed (kind, and the time it gives); a
  * press on an entry the booking no longer shows is refused, BOOKING_CHANGED,
- * and nothing is written. A press that says nothing of it is taken as before.
+ * and nothing is written. So is a press that says nothing of it: the desk page
+ * always says, and one that does not is a tab from before this check
+ * (tests/backend/resolveReviewShownRequired.test.js).
  *
  * The cancel is the real one; the desk list and "Mark as handled" are the real
  * routes over the row it wrote.
@@ -125,12 +127,14 @@ describe('a second member on a page loaded before the first press', () => {
     const [shown] = await desk.open();
     expect(shown.attention).toMatchObject({ kind: 'airline_refund' });
 
-    // X claims the tickets from the airline.
-    expect((await desk.handle('b-claim', 'Claimed 108-2412345671 from the airline.', shown.attention)).status).toBe(200);
+    // X claims the tickets from the airline. The entry is two jobs, the
+    // refused refund and the claim (attention.jobs), so the press names the one
+    // X handled.
+    expect((await desk.handle('b-claim', 'Claimed 108-2412345671 from the airline.', shown.attention, { job: 'claim' })).status).toBe(200);
     const flagAfterX = desk.table.row('FLT123').booking_details.needs_review;
 
     // Y, on the page as it was, records the same claim.
-    const second = await desk.handle('b-claim', 'Claimed the ticket from the airline (Y).', shown.attention);
+    const second = await desk.handle('b-claim', 'Claimed the ticket from the airline (Y).', shown.attention, { job: 'claim' });
     expect(second.status, 'Y\'s claim note was written as the refused refund\'s resolution').toBe(409);
     expect(second.body.code).toBe('BOOKING_CHANGED');
     expect(second.body.error).toMatch(/changed/);
@@ -208,9 +212,12 @@ describe('beside it', () => {
     });
   });
 
-  it('a press that says nothing of what it showed is taken as before', async () => {
+  it('a press that says nothing of what it showed is refused: reload the page', async () => {
     const desk = await deskOver([flagged('2026-09-22T09:05:00Z')]);
-    expect((await desk.handle('b-held', 'Issued the ticket by hand.', null)).status).toBe(200);
+    const response = await desk.handle('b-held', 'Issued the ticket by hand.', null);
+    expect(response.status).toBe(409);
+    expect(response.body.code).toBe('BOOKING_CHANGED');
+    expect(desk.table.row('FLTHELD1').booking_details.needs_review.resolved_at).toBeUndefined();
   });
 
   it('a commit that never answered is still answered with what the airline said', async () => {

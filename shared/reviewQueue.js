@@ -582,6 +582,22 @@ export function refundOwedOf(booking) {
   return { owed, paid: roundCents(paid), fee, ...(refunded > 0 ? { refunded } : {}), ...(unanswered ? { unanswered } : {}), currency };
 }
 
+/**
+ * What a Finish refund box starts from: what the cancel decided goes back
+ * (refundOwedOf), or nothing.
+ *
+ * Nothing while the cancel's own refund is unanswered and ARC Pay has not been
+ * asked since (`arcChecked`: the page's own Check ARC Pay, or Sync from ARC,
+ * found nothing returned). That refund may have landed: on a fare under twice
+ * the fee, the decided amount still fits under what ARC holds after it did, so
+ * a box filled in before anyone looked invited one press to send it again.
+ */
+export function refundPrefillOf(booking, { arcChecked = false } = {}) {
+  const owed = refundOwedOf(booking);
+  if (!owed || (owed.unanswered && !arcChecked)) return '';
+  return String(owed.owed);
+}
+
 /** The owed amount in words, for the desk and the alarm: "241.00 USD owed (291.00 paid less the 50.00 cancellation fee the cancel kept)". */
 export function describeRefundOwed(owed) {
   if (!owed) return null;
@@ -601,17 +617,44 @@ function refusedRefundReason(booking, cancellation) {
 }
 
 /**
+ * The two jobs of one desk entry: a customer refund ARC Pay refused, under an
+ * airline claim flag (attentionOf `jobs`). "Mark as handled" says which one a
+ * press handled (resolve-review `job`).
+ *
+ * One press resolved the claim flag whatever the note said: the entry's kind
+ * and time cannot tell the jobs apart - a Finish refund leaves the claim flag
+ * open, so they do not change - and a refund note closed an airline claim
+ * nobody had made.
+ */
+export const ATTENTION_JOBS = Object.freeze(['refund', 'claim']);
+
+/**
+ * "Customer refund handled" on that entry (resolve-review `job: 'refund'`),
+ * recorded on the claim flag it leaves open, at or after the cancel - or null.
+ */
+function refusedRefundHandledOn(review, cancellation) {
+  const handled = review?.refundHandled;
+  if (!handled?.at) return null;
+  return Date.parse(handled.at) < Date.parse(cancellation?.cancelledAt) ? null : handled;
+}
+
+/** A customer refund ARC Pay refused that nobody has handled, or null. */
+function openRefusedRefundOf(booking) {
+  const notReturned = refundNotReturnedOf(booking);
+  if (!notReturned || !REFUND_STUCK_ACTIONS.includes(notReturned.paymentAction)) return null;
+  return refusedRefundHandledOn(detailsOf(booking)?.needs_review, notReturned) ? null : notReturned;
+}
+
+/**
  * A flag's words with a customer refund ARC Pay refused said first, for an
  * entry whose flag is about something else - an airline claim, a commit that
  * never answered. A refused refund adds no reason to any flag, so the flag's
  * words were all the desk read, and nobody was told the customer had nothing
- * back.
+ * back. Not once the desk recorded the refund handled.
  */
 function withRefusedRefundFirst(booking, reason) {
-  const notReturned = refundNotReturnedOf(booking);
-  return notReturned && REFUND_STUCK_ACTIONS.includes(notReturned.paymentAction)
-    ? `${refusedRefundReason(booking, notReturned)}; ${reason}`
-    : reason;
+  const notReturned = openRefusedRefundOf(booking);
+  return notReturned ? `${refusedRefundReason(booking, notReturned)}; ${reason}` : reason;
 }
 
 /**
@@ -633,9 +676,10 @@ function withRefusedRefundFirst(booking, reason) {
  * the refund: handling it claims the tickets' value from the airline, and the
  * flag never named the refusal (a refused refund adds no reason). Marking the
  * claim handled took the customer's unreturned refund off the list. It stays
- * until the refund is recorded, or marked handled on its own entry (the route
- * writes that over the claim). A refund held for review is named by the claim
- * flag's own reason, so resolving that flag still settles it.
+ * until the refund is recorded, or marked handled - on its own entry (the
+ * route writes that over the claim), or as "Customer refund handled" while
+ * the claim was open (refusedRefundHandledOn). A refund held for review is
+ * named by the claim flag's own reason, so resolving that flag still settles it.
  *
  * So does a commit that never answered, resolved with what the airline said:
  * staff may cancel it before anyone knows, a refused refund on that cancel
@@ -647,6 +691,7 @@ function refundNotReturnedAttentionOf(booking) {
   if (!cancellation) return null;
   const review = detailsOf(booking)?.needs_review;
   const refused = REFUND_STUCK_ACTIONS.includes(cancellation.paymentAction);
+  if (refused && refusedRefundHandledOn(review, cancellation)) return null;
   const handledSince = review?.resolved_at && !(Date.parse(review.resolved_at) < Date.parse(cancellation.cancelledAt));
   const settledSomethingElse = needsAirlineRefundClaim(booking) || review?.reason === COMMIT_UNKNOWN_REVIEW_REASON;
   if (handledSince && !(refused && settledSomethingElse)) return null;
@@ -668,7 +713,7 @@ function refundNotReturnedAttentionOf(booking) {
  *
  * @returns {null | { kind: 'not_ticketed'|'review'|'airline_refund'|'unrecorded_cancellation'|'cancel_failed'|'schedule_changed'
  *                    |'held_ticketed'|'refund_failed'|'refund_not_made',
- *                    reason: string, since: string|null, tickets?: string[] }}
+ *                    reason: string, since: string|null, tickets?: string[], jobs?: string[] }}
  */
 export function attentionOf(booking) {
   const details = detailsOf(booking);
@@ -707,11 +752,15 @@ export function attentionOf(booking) {
     // no reason to the cancel's flag, so the claim's words were all the desk
     // read, and nobody was told the customer had nothing back. Said first, and
     // kept on the list after the claim is handled (refundNotReturnedAttentionOf).
+    //
+    // Two jobs then, and the entry names them (ATTENTION_JOBS): a press says
+    // which one it handled, so a refund note cannot close the claim.
     return {
       kind: 'airline_refund',
       reason: withRefusedRefundFirst(booking, review.reason || 'the refund has to be claimed from the airline'),
       since: review.at || null,
       tickets: review.tickets.map((ticket) => ticket?.number ?? ticket),
+      ...(openRefusedRefundOf(booking) ? { jobs: [...ATTENTION_JOBS] } : {}),
     };
   }
   // Any other cancellation that asked for a person - a refund the gateway

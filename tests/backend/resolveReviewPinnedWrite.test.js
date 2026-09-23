@@ -3,6 +3,7 @@ import request from 'supertest';
 import { describe, expect, it, vi } from 'vitest';
 import { errorHandler } from '../../backend/middleware/errorHandler.js';
 import { fakeBookingsTable } from './helpers/fakeBookings.js';
+import { shownQueryOf } from './helpers/deskShown.js';
 
 // See commitUnknownDeskResolution.test.js: the payment handlers take their
 // Supabase client from arcpay.config.js.
@@ -125,7 +126,11 @@ const appWith = async (rows, landsAfterRead = null) => {
   return app;
 };
 
-const resolve = (app, id, body) => request(app).post(`/api/flights/admin-bookings/${id}/resolve-review`).set(desk).send(body);
+// With the entry the desk page showed: the row before the route reads it (its
+// read is what lands the write in between).
+const resolve = (app, id, body) => request(app)
+  .post(`/api/flights/admin-bookings/${id}/resolve-review${shownQueryOf(table.table.find((row) => String(row.id) === String(id)))}`)
+  .set(desk).send(body);
 
 /** What recordHeldAtAirline writes when another member of the desk records it held. */
 const recordedHeldMeanwhile = (row) => {
@@ -188,6 +193,7 @@ describe('any other flag, marked handled while something else writes the booking
 
     expect(res.status).toBe(409);
     expect(res.body.code).toBe('BOOKING_CHANGED');
+    expect(res.body.error).toMatch(/changed while you were recording it/);
     const row = table.row(HELD);
     expect(row.booking_details.gds.ticketed).toBe(true);
     expect(row.booking_details.tickets).toEqual([{ number: '220-7491175310', travelerId: '1' }]);

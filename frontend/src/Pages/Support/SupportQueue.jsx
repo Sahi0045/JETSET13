@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { adminFetch, readAdminResponse } from '../../utils/adminAuth';
 import { getApiUrl } from '../../utils/apiHelper';
-import { attentionLabel, refundOwedOf } from '../../../../shared/reviewQueue';
+import { attentionLabel, refundOwedOf, refundPrefillOf } from '../../../../shared/reviewQueue';
 import { canVoidPayment } from '../../utils/adminBookingActions';
 import { needsManualRefund } from '../../utils/bookingStatus';
 import { formatUsd } from '../../utils/bookingCharge';
@@ -84,6 +84,25 @@ const commitAnswer = (handling) => {
     : { outcome: handling.outcome };
 };
 
+/**
+ * The two jobs of one entry (attention.jobs, shared/reviewQueue.js
+ * ATTENTION_JOBS): a customer refund ARC Pay refused, under a claim from the
+ * airline. One "Mark as handled" closed the claim whatever the note said, so
+ * each job is handled on its own and the press says which (resolve-review
+ * `job`).
+ */
+const JOB_LABELS = {
+  refund: 'Customer refund handled',
+  claim: 'Airline claim handled',
+};
+
+const JOB_HINTS = {
+  refund: 'Say what you did about the customer\'s refund. The claim from the airline stays open for whoever makes it.',
+  claim: 'Say how the tickets were claimed from the airline. The customer\'s refund stays on the list until it is handled.',
+};
+
+const jobAnswer = (handling) => (handling?.job ? { job: handling.job } : {});
+
 const canMarkHandled = (handling) => {
   if (!handling?.note?.trim()) return false;
   if (!handling.booking?.commitUnknown) return true;
@@ -110,9 +129,10 @@ const shownQuery = (booking) => new URLSearchParams({
  * cancel that meant to keep its fee gave the fee back too. With no amount
  * decided - a refund held for a person, or the rest of one after a refund by
  * hand - it starts empty, as the admin panel's does: nothing is filled in
- * that nobody decided.
+ * that nobody decided. Empty too while the cancel's own refund is unanswered,
+ * until Check ARC Pay shows nothing returned (refundPrefillOf).
  */
-const refundStartingAmount = (booking) => String(refundOwedOf(booking)?.owed ?? '');
+const refundStartingAmount = (booking) => refundPrefillOf(booking);
 
 /** The sentence under Finish refund that says where that amount comes from, or null. */
 const owedSentence = (booking) => {
@@ -258,11 +278,16 @@ function SupportQueue() {
     try {
       const response = await adminFetch(getApiUrl(`flights/admin-bookings/${handling.booking.id}/resolve-review?${shownQuery(handling.booking)}`), {
         method: 'POST',
-        body: JSON.stringify({ note: handling.note.trim(), ...commitAnswer(handling) }),
+        body: JSON.stringify({ note: handling.note.trim(), ...commitAnswer(handling), ...jobAnswer(handling) }),
       });
       const result = await response.json().catch(() => ({}));
       if (response.ok && result.success) {
-        setMessage({ tone: 'success', text: `${handling.booking.bookingReference} marked as handled.` });
+        setMessage({
+          tone: 'success',
+          text: handling.job
+            ? `${handling.booking.bookingReference}: ${result.message || JOB_LABELS[handling.job]}`
+            : `${handling.booking.bookingReference} marked as handled.`,
+        });
         setHandling(null);
         load();
       } else {
@@ -322,6 +347,12 @@ function SupportQueue() {
         load();
       } else {
         setMessage({ tone: 'error', text: result.error || result.message || 'The server refused that.' });
+        // Check ARC Pay asked, and ARC shows nothing returned: the amount the
+        // cancel decided is offered now, not before (refundPrefillOf). Never
+        // over what someone typed.
+        if (type === 'refund' && current.mode === 'sync' && result.code === 'NO_REFUND_FOUND') {
+          setAction((open) => (open && !open.amount ? { ...open, amount: refundPrefillOf(booking, { arcChecked: true }) } : open));
+        }
       }
     } catch {
       setMessage({ tone: 'error', text: 'That did not go through. Please try again.' });
@@ -461,7 +492,7 @@ function SupportQueue() {
                       Email customer
                     </a>
                   )}
-                  {attention && (
+                  {attention && !attention.jobs?.length && (
                     <button
                       type="button"
                       onClick={() => setHandling({ booking, note: '' })}
@@ -470,6 +501,16 @@ function SupportQueue() {
                       Mark as handled
                     </button>
                   )}
+                  {attention?.jobs?.filter((job) => JOB_LABELS[job]).map((job) => (
+                    <button
+                      key={job}
+                      type="button"
+                      onClick={() => setHandling({ booking, note: '', job })}
+                      className="px-3 py-2 rounded-lg bg-[#055B75] text-white text-sm font-semibold"
+                    >
+                      {JOB_LABELS[job]}
+                    </button>
+                  ))}
                   {String(booking.status || '').toLowerCase() !== 'cancelled' && !booking.isPackage && (
                     <button
                       type="button"
@@ -623,8 +664,14 @@ function SupportQueue() {
       {handling && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50" role="dialog" aria-modal="true" aria-label="Mark as handled">
           <div className="bg-white rounded-xl p-5 w-full max-w-lg">
-            <h3 className="text-lg font-bold text-gray-900 mb-1">Mark {handling.booking.bookingReference} as handled</h3>
-            <p className="text-sm text-gray-600 mb-3">Say what you did, so the next person knows. This does not move any money.</p>
+            <h3 className="text-lg font-bold text-gray-900 mb-1">
+              {handling.job
+                ? `${JOB_LABELS[handling.job]}: ${handling.booking.bookingReference}`
+                : `Mark ${handling.booking.bookingReference} as handled`}
+            </h3>
+            <p className="text-sm text-gray-600 mb-3">
+              {handling.job ? JOB_HINTS[handling.job] : 'Say what you did, so the next person knows.'} This does not move any money.
+            </p>
             {handling.booking.commitUnknown && (
               <fieldset className="mb-3 border border-[#D1E9F0] rounded-lg p-3">
                 <legend className="px-1 text-sm font-semibold text-gray-800">
@@ -680,7 +727,7 @@ function SupportQueue() {
                 disabled={saving || !canMarkHandled(handling)}
                 className="px-3 py-2 rounded-lg bg-[#055B75] text-white text-sm font-semibold disabled:opacity-50"
               >
-                {saving ? 'Saving…' : 'Mark as handled'}
+                {saving ? 'Saving…' : (JOB_LABELS[handling.job] || 'Mark as handled')}
               </button>
             </div>
           </div>
