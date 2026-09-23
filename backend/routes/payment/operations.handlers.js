@@ -28,7 +28,10 @@ import { canReachAmadeus } from '../../utils/amadeusReach.js';
 import { unchangedSince } from '../../utils/bookingDetailsGuard.js';
 import { DEFAULT_PRICE_SETTINGS } from '../../config/priceDefaults.js';
 import { cancellationMessage, refundOutcome } from '../../../shared/cancellationOutcome.js';
-import { needsAirlineRefundClaim, ticketNumbersMissingOf } from '../../../shared/reviewQueue.js';
+import {
+    COMMIT_UNKNOWN_REVIEW_REASON, ISSUANCE_UNKNOWN, commitUnknownOf, decidedFeeOf, flagInForce, needsAirlineRefundClaim, notHeldAnswerOf,
+    refundOwedOf, ticketNumbersMissingOf,
+} from '../../../shared/reviewQueue.js';
 import { reconcileBookingPayment } from './checkout.handlers.js';
 import { errorSummary } from '../../utils/errorSummary.js';
 import { orderVoided, voidsPayment } from '../../utils/arcTransactions.js';
@@ -160,6 +163,20 @@ export async function handleCancelBookingAction(req, res) {
         // always treated one as a flight.
         const type = booking.travel_type;
         if (type === 'flight' || type == null) {
+            // The airline commit never answered (commitUnknownOf): there is no
+            // PNR, and nobody knows yet whether the airline holds a
+            // reservation. The cancel below would call no airline, reverse the
+            // whole payment and mark the booking cancelled - and a cancelled
+            // booking leaves the duplicate check, while the airline may still
+            // hold it. Every customer cancel comes here (Manage Booking, My
+            // Trips, DELETE /flights/order, the payments router); staff go on
+            // as before, and the desk keeps the booking (attentionOf).
+            if (!isStaff && commitUnknownOf(booking)) {
+                const text = 'Our team is checking with the airline whether this booking went through, so it cannot be cancelled online yet. '
+                    + 'Nothing has been cancelled or refunded. '
+                    + `To cancel it, please call (877) 538-7380 with booking reference ${booking.booking_reference}.`;
+                return refuse(res, 409, 'BOOKING_BEING_CHECKED', text, { bookingReference: booking.booking_reference });
+            }
             // A reservation is released at the airline, and only Lightsail can
             // reach Amadeus. Manage Booking's cancel came here through the
             // payments router, which runs on Vercel: every cancel of a booking
@@ -379,7 +396,7 @@ async function releaseCancellation(booking, claim, patch = {}) {
  * @returns {{ action: 'nothing_held'|'review'|'refund_all'|'refund_less_fee'|'fee_covers',
  *             fee: number, refundAmount: number, reason: string }}
  */
-export function decideFlightRefund({ heldAmount, paidInFull, everCaptured, hasReservation, gds, rowTicketed, refundable, fee, rowPaid = false }) {
+export function decideFlightRefund({ heldAmount, paidInFull, everCaptured, hasReservation, gds, rowTicketed, issuanceUnknownOnly = false, refundable, fee, rowPaid = false }) {
     const heldCents = Math.round((Number(heldAmount) || 0) * 100);
     const review = (reason) => ({ action: 'review', fee: 0, refundAmount: 0, reason });
 
@@ -405,7 +422,14 @@ export function decideFlightRefund({ heldAmount, paidInFull, everCaptured, hasRe
             return review('the airline did not say whether a ticket had been issued');
         }
         ticketed = Boolean(gds.hadTickets);
-        if (!ticketed && rowTicketed) return review('the booking records a ticket, but the airline showed none when it was cancelled');
+        if (!ticketed && rowTicketed) {
+            // Nothing recorded a ticket - only a DocIssuance nobody saw
+            // answered. "The booking records a ticket" was false of it, and
+            // staff reading it would dismiss the hold and refund in full.
+            return review(issuanceUnknownOnly
+                ? 'DocIssuance was never answered and the airline showed no ticket when it was cancelled: check the ticket history before refunding'
+                : 'the booking records a ticket, but the airline showed none when it was cancelled');
+        }
     } else if (rowTicketed) {
         return review('the booking records a ticket but has no airline reservation');
     }
@@ -457,12 +481,17 @@ async function returnFlightPayment(decision, { arcOrderId, currency, reason }) {
             if (reversal.action === 'REFUND') {
                 return { paymentAction: 'FULL_REFUND', refundAmount: reversal.amount, cancellationFee: 0, paymentProcessed: true, refundTransactionId: reversal.transactionId };
             }
-            if (reversal.action === 'FAILED' && reversal.details) {
+            // Refused only when ARC Pay said no (arcRefused). A VOID or REFUND
+            // answered by a 5xx or a PENDING, UNKNOWN or missing result came
+            // back FAILED with details too, and read "nothing has gone back"
+            // over money that may have.
+            if (reversal.action === 'FAILED' && reversal.refused) {
                 return { paymentAction: 'REFUND_FAILED', refundAmount: 0, cancellationFee: 0, errorDetails: reversal.details };
             }
             // The order could not be read, it had been reversed by something else
-            // in the last few seconds, or the request broke mid-flight. Whether
-            // money moved is not known here, so nobody is told either way.
+            // in the last few seconds, the request broke mid-flight, or ARC's
+            // reply was not a verdict. Whether money moved is not known here, so
+            // nobody is told either way.
             //
             // Said outright: REFUND_UNDER_REVIEW is also the code for a refund
             // held on purpose, and the alarm told this one "nothing was
@@ -483,6 +512,14 @@ async function returnFlightPayment(decision, { arcOrderId, currency, reason }) {
             const refundTxnId = `refund-cancel-${Date.now()}`;
             const refundUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${arcOrderId}/transaction/${refundTxnId}`;
             console.log('💸 Issuing cancellation REFUND:', decision.refundAmount.toFixed(2), '(fee:', decision.fee, ')');
+            // Sent, or about to be, and no answer: ARC Pay may have refunded.
+            const unanswered = (detail) => ({
+                paymentAction: 'REFUND_UNDER_REVIEW',
+                refundAmount: 0,
+                cancellationFee: decision.fee,
+                reviewReason: `refund request did not complete: ${detail}`,
+                reversalOutcomeUnknown: true,
+            });
             try {
                 const refundResponse = await axios.put(refundUrl, {
                     apiOperation: 'REFUND',
@@ -498,18 +535,21 @@ async function returnFlightPayment(decision, { arcOrderId, currency, reason }) {
                 if (arcSucceeded(refundResponse)) {
                     return { paymentAction: 'PARTIAL_REFUND', refundAmount: decision.refundAmount, cancellationFee: decision.fee, paymentProcessed: true, refundTransactionId: refundTxnId };
                 }
+                // Nor is anything short of SUCCESS a refusal. A proxy's 504 page,
+                // a 502, or a 200 whose result is PENDING, UNKNOWN or missing was
+                // recorded REFUND_FAILED - "nothing has gone back" - over a refund
+                // that had landed; the desk filled in the decided amount, and on a
+                // fare under twice the fee one press sent it again. Read as the
+                // desk's own refund reads it (arcRefused).
+                if (!arcRefused(refundResponse)) {
+                    console.error('❌ ARC Pay REFUND not answered:', refundResponse?.status, arcFailureSummary(refundResponse?.data));
+                    return unanswered(arcReplyWithoutVerdict(refundResponse));
+                }
                 console.error('❌ ARC Pay REFUND failed:', refundResponse?.status, arcFailureSummary(refundResponse?.data));
                 return { paymentAction: 'REFUND_FAILED', refundAmount: 0, cancellationFee: decision.fee, errorDetails: arcFailureSummary(refundResponse?.data) };
             } catch (error) {
                 console.error('❌ ARC Pay REFUND did not complete:', error.message);
-                // Sent, or about to be, and no answer: ARC Pay may have refunded.
-                return {
-                    paymentAction: 'REFUND_UNDER_REVIEW',
-                    refundAmount: 0,
-                    cancellationFee: decision.fee,
-                    reviewReason: `refund request did not complete: ${error.message}`,
-                    reversalOutcomeUnknown: true,
-                };
+                return unanswered(error.message);
             }
         }
         default:
@@ -715,6 +755,9 @@ async function cancelFlightBooking(res, booking, { reason, email }) {
         ? { ...gds, requiresAirlineRefund, voided: true }
         : gds;
     const tickets = Array.isArray(details.tickets) ? details.tickets : [];
+    const recordedTicket = details.gds?.ticketed === true || tickets.length > 0
+        || Boolean(ticketNumbersMissingOf(booking));
+    const issuanceUnknown = Boolean(flagInForce(booking, (review) => review.issuance === ISSUANCE_UNKNOWN));
     const decision = decideFlightRefund({
         heldAmount: payment.heldAmount,
         paidInFull: payment.paid === true,
@@ -723,8 +766,14 @@ async function cancelFlightBooking(res, booking, { reason, email }) {
         gds: settled,
         // The numbers-missing flag under a refused cancel's flag too: the
         // ticket was issued whatever flag sits on top now.
-        rowTicketed: details.gds?.ticketed === true || tickets.length > 0
-            || Boolean(ticketNumbersMissingOf(booking)),
+        //
+        // And a DocIssuance nobody saw answered (flight.routes.js flagForReview
+        // `issuance`): a ticket may exist, and a retrieve that shows none may
+        // have been read before its FA line landed. It refunded in full; it
+        // now goes to a person. Not past a flag a person resolved: they read
+        // the PNR.
+        rowTicketed: recordedTicket || issuanceUnknown,
+        issuanceUnknownOnly: issuanceUnknown && !recordedTicket,
         refundable: details.refundable,
         fee: await readCancellationFee(),
         rowPaid: booking.payment_status === 'paid',
@@ -800,7 +849,27 @@ async function cancelFlightBooking(res, booking, { reason, email }) {
                     basis: decision.reason,
                     // A reversal sent with no answer back, not a hold: whoever
                     // picks this up checks ARC Pay before refunding anything.
-                    ...(cancellationResult.reversalOutcomeUnknown ? { reversalOutcomeUnknown: true } : {}),
+                    //
+                    // Written down as Finish refund writes its own unanswered
+                    // refund (noteUnansweredRefund): how much, when, and what
+                    // ARC showed refunded before it. settleManualFlightRefund's
+                    // guard reads that and nothing else, so with the flag alone
+                    // a press of the decided amount - which fits under what ARC
+                    // still holds whenever the fare is under twice the fee -
+                    // sent the cancel's refund a second time after it had
+                    // landed. Now ARC's ledger decides it first: money returned
+                    // since is recorded, not sent again.
+                    ...(cancellationResult.reversalOutcomeUnknown
+                        ? {
+                            reversalOutcomeUnknown: true,
+                            unansweredRefund: {
+                                amount: decision.refundAmount,
+                                currency,
+                                at: now,
+                                refundedBefore: roundCents(payment.refundedTotal ?? 0),
+                            },
+                        }
+                        : {}),
                 },
                 ...(reviewReasons.length
                     ? {
@@ -853,6 +922,12 @@ async function cancelFlightBooking(res, booking, { reason, email }) {
             // booking. A retry that voided the tickets leaves none to claim,
             // and "ticketed, so done" kept exactly that booking from anyone.
             unrecorded: true,
+            // Whether this cancel released a reservation, and which. Staff may
+            // record the booking cancelled by hand only for that one
+            // (shared/reviewQueue.js unrecordedCancellationReleasing): a PNR
+            // the desk records after a cancel that found none is live.
+            amadeusCancelled: cancellationResult.amadeusCancelled,
+            ...(cancellationResult.amadeusCancelled ? { pnr } : {}),
             ticketsVoided: cancellationResult.ticketsVoided,
             at: now,
             paymentAction: cancellationResult.paymentAction,
@@ -865,7 +940,9 @@ async function cancelFlightBooking(res, booking, { reason, email }) {
         return res.status(500).json({ success: false, error: text, message: text, cancellation: cancellationResult });
     }
 
-    await sendCancellationEmail(booking, email, cancellationResult);
+    // With the details read back after reconcile, so what the office is told
+    // was decided is worked out from what ARC captured, as the desk's is.
+    await sendCancellationEmail({ ...booking, booking_details: current }, email, cancellationResult);
     console.log('✅ Booking cancelled:', booking.id, cancellationResult.paymentAction);
 
     return res.status(200).json({
@@ -883,6 +960,108 @@ async function cancelFlightBooking(res, booking, { reason, email }) {
             paymentAction: cancellationResult.paymentAction
         }
     });
+}
+
+/**
+ * A cancelled flight whose cancel found no payment to return, and whose money
+ * nothing has settled since: the one cancellation a later payment can land on.
+ * A row with no travel type is a flight, as the cancel above reads it.
+ */
+export function cancelledWithNothingTaken(booking) {
+    return booking?.status === 'cancelled'
+        && (booking.travel_type == null || booking.travel_type === 'flight')
+        && booking.booking_details?.cancellation?.paymentAction === 'NOTHING_TO_REFUND'
+        && !['refunded', 'partially_refunded', 'reversed'].includes(String(booking.payment_status || '').toLowerCase());
+}
+
+/**
+ * A payment made on a checkout's payment page after the checkout was cancelled.
+ *
+ * Cancel & Refund closes a checkout ARC has no order for as NOTHING_TO_REFUND
+ * (cancelFlightBooking, `neverPaid`). Its payment page is still open - ARC
+ * keeps it for ARC_PAGE_TIMEOUT_SECONDS, and nothing here can close it - so
+ * the customer can still pay. That payment landed on a cancelled row: the
+ * order route refused it before asking the gateway, reconcile answers a
+ * cancelled row without asking, and neither alarm, the desk list nor the
+ * abandoned-checkout job reads a cancellation that took nothing. The money
+ * stayed at ARC and nobody was told.
+ *
+ * This asks the gateway afresh and, when it now holds money, makes the
+ * cancellation say so: REFUND_UNDER_REVIEW, which the payment alarm announces,
+ * the desk lists with its Finish refund button and My Trips explains, and a
+ * `cancellation` flag on top. Nothing is refunded here. A person returns it
+ * with Finish refund, which takes its own claim, so the money moves once.
+ *
+ * Called by the order route when the payer comes back, and by the
+ * abandoned-checkout job when they do not. A second caller finds the
+ * cancellation no longer NOTHING_TO_REFUND and writes nothing.
+ *
+ * @returns {Promise<null | { held: number, currency?: string, recorded?: boolean, alreadyRecorded?: boolean } | { gatewayUnavailable: true }>}
+ *   null for any other booking, without asking the gateway; `held: 0` when
+ *   ARC holds nothing (a 400 or 404 is ARC saying it has no such order).
+ */
+export async function recordPaymentAfterCancel(booking, { reconcile = reconcileBookingPayment } = {}) {
+    if (!cancelledWithNothingTaken(booking)) return null;
+
+    let payment;
+    try {
+        payment = await reconcile(booking, { fresh: true });
+    } catch (error) {
+        payment = { gatewayUnavailable: true, error: error.message };
+    }
+    if (payment.gatewayUnavailable) {
+        return [400, 404].includes(payment.gatewayStatus) ? { held: 0 } : { gatewayUnavailable: true };
+    }
+    const held = roundCents(payment.heldAmount || 0);
+    if (!(held > 0)) return { held: 0 };
+
+    const details = booking.booking_details || {};
+    const currency = payment.capturedCurrency || details.currency || 'USD';
+    const reason = `paid after it was cancelled: ARC Pay holds ${held.toFixed(2)} ${currency} taken on the payment page after `
+        + 'the checkout was cancelled with nothing to refund. No booking was made; return it with Finish refund.';
+
+    // Pinned to the row as read (utils/bookingDetailsGuard.js), and read again
+    // after a lost race: reconcile has just written the capture to it.
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+        const { data: current, error: readError } = await supabase
+            .from('bookings')
+            .select('status, payment_status, travel_type, booking_details')
+            .eq('id', booking.id)
+            .single();
+        if (readError || !current) break;
+        if (!cancelledWithNothingTaken(current)) return { held, currency, recorded: false, alreadyRecorded: true };
+
+        const currentDetails = current.booking_details || {};
+        const now = new Date().toISOString();
+        const { data: wrote, error: writeError } = await unchangedSince(
+            supabase
+                .from('bookings')
+                .update({
+                    payment_status: 'paid',
+                    booking_details: {
+                        ...currentDetails,
+                        cancellation: {
+                            ...currentDetails.cancellation,
+                            paymentAction: 'REFUND_UNDER_REVIEW',
+                            paidAfterCancel: { at: now, amount: held, currency },
+                        },
+                        needs_review: { reason, source: 'cancellation', at: now, ...keepingPrevious(currentDetails) },
+                    },
+                    updated_at: now,
+                })
+                .eq('id', booking.id),
+            { status: current.status, payment_status: current.payment_status, booking_details: currentDetails },
+        ).select('id');
+        if (writeError) break;
+        if (wrote?.length) {
+            console.error('💳 Payment taken on a cancelled checkout, held for the desk to return', {
+                bookingReference: booking.booking_reference, held, currency,
+            });
+            return { held, currency, recorded: true };
+        }
+    }
+    console.error('❌ Payment taken on a cancelled checkout could not be recorded', { bookingReference: booking.booking_reference, held, currency });
+    return { held, currency, recorded: false };
 }
 
 /**
@@ -1262,6 +1441,9 @@ async function sendCancellationEmail(booking, email, cancellationResult) {
             return;
         }
 
+        const decided = cancellationResult.reversalOutcomeUnknown
+            ? refundOwedOf({ ...booking, booking_details: { ...(booking.booking_details || {}), cancellation: cancellationResult } })
+            : null;
         const cancelEmailData = {
             customerEmail,
             customerName: booking.customer_name || (Array.isArray(booking.passenger_details) && booking.passenger_details[0]?.firstName ? `${booking.passenger_details[0].firstName} ${booking.passenger_details[0].lastName || ''}`.trim() : 'Valued Customer'),
@@ -1273,6 +1455,13 @@ async function sendCancellationEmail(booking, email, cancellationResult) {
             // promised "refund due ... 5-10 business days" on every
             // cancellation, including the ones where the gateway refused.
             paymentAction: cancellationResult.paymentAction,
+            // A refund sent and never answered is not one that was not made:
+            // the office email must not tell the desk to refund it by hand.
+            ...(cancellationResult.reversalOutcomeUnknown ? { reversalOutcomeUnknown: true } : {}),
+            // ...and if ARC Pay shows it never landed, what goes back is what
+            // the cancel decided - the figure the desk fills in - not what ARC
+            // holds, which includes the fee the cancel keeps.
+            ...(decided ? { decidedRefund: decided.owed } : {}),
             currency: cancellationResult.currency || 'USD'
         };
 
@@ -1285,6 +1474,40 @@ async function sendCancellationEmail(booking, email, cancellationResult) {
     } catch (emailError) {
         console.error('❌ Failed to send cancellation email:', emailError.message);
     }
+}
+
+/**
+ * Whether the desk action about to return this booking's money owes its
+ * customer the email saying so - read from the booking as it was BEFORE the
+ * action ran.
+ *
+ * The desk's "not held" answer emails the customer "Our team is refunding
+ * your payment, and we will email you when the refund is made"
+ * (flight.routes.js NOT_HELD_EMAIL). Cancel & refund keeps that with its
+ * cancellation email. Void payment - offered on the same desk card - the
+ * Payments tab and Finish refund returned the money and emailed no one, so the
+ * customer never heard the refund was made.
+ *
+ * Owed by whichever of them first records money returned: while the booking
+ * still reads paid. Once it reads refunded or partially refunded, that email
+ * (or Cancel & refund's) has been sent, so nothing sends it a second time.
+ */
+function refundMadeEmailOwedOf(booking) {
+    return Boolean(booking) && String(booking.payment_status || '').toLowerCase() === 'paid'
+        && Boolean(notHeldAnswerOf(booking));
+}
+
+/**
+ * Keep that promise with the email Cancel & refund sends (sendCancellationEmail),
+ * saying what went back. Only after the action's record landed. Never throws.
+ */
+async function sendRefundMadeEmail(booking, { paymentAction, refundAmount, cancellationFee = 0, currency }) {
+    await sendCancellationEmail(booking, null, {
+        paymentAction,
+        refundAmount,
+        cancellationFee,
+        currency: currency || booking?.booking_details?.arc_captured_currency || 'USD',
+    });
 }
 
 // ============================================
@@ -1479,6 +1702,17 @@ export async function handlePaymentRefund(req, res) {
         // rows below read `refunded` or `partially_refunded`.
         const returnsEverything = refundAmount + 0.01 >= refundCeiling;
 
+        // The booking as it is before any money moves, for the email its
+        // customer may be owed once it does (refundMadeEmailOwedOf). A read
+        // that fails only costs that email, never the refund. Whether this
+        // refund is the one that owes it is the booking write's to decide.
+        let bookingBefore = null;
+        if (payment.arc_order_id) {
+            const { data } = await supabase.from('bookings').select('*')
+                .eq('booking_reference', payment.arc_order_id).maybeSingle();
+            bookingBefore = data || null;
+        }
+
         const refundTxnId = `refund-admin-${Date.now()}`;
         const refundUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${arcOrderId}/transaction/${refundTxnId}`;
 
@@ -1558,17 +1792,31 @@ export async function handlePaymentRefund(req, res) {
         // `bookings` has no quote_id, payment_id or inquiry_id column; the ARC
         // order id is the booking reference.
         let bookingWriteError = null;
+        // Whether this refund is the first money the booking records returned
+        // (refundMadeEmailOwedOf): decided by the write itself, pinned to
+        // `paid`, so of two refunds that both read the booking paid only one
+        // is. Any other booking is written as before.
+        let firstReturned = false;
         if (payment.arc_order_id) {
-            const { error } = await supabase.from('bookings')
-                // `bookings.payment_status` DOES allow partially_refunded
-                // (migrations/add_partially_refunded_status.sql), so the row can
-                // say what actually happened.
-                .update({
-                    payment_status: returnsEverything ? 'refunded' : 'partially_refunded',
-                    updated_at: refundedAt,
-                })
-                .eq('booking_reference', payment.arc_order_id);
-            bookingWriteError = error || null;
+            // `bookings.payment_status` DOES allow partially_refunded
+            // (migrations/add_partially_refunded_status.sql), so the row can
+            // say what actually happened.
+            const statusUpdate = {
+                payment_status: returnsEverything ? 'refunded' : 'partially_refunded',
+                updated_at: refundedAt,
+            };
+            const { data: fromPaid, error: firstError } = await supabase.from('bookings')
+                .update(statusUpdate)
+                .eq('booking_reference', payment.arc_order_id)
+                .eq('payment_status', 'paid')
+                .select('id');
+            firstReturned = !firstError && (fromPaid?.length ?? 0) > 0;
+            if (!firstReturned) {
+                const { error } = await supabase.from('bookings')
+                    .update(statusUpdate)
+                    .eq('booking_reference', payment.arc_order_id);
+                bookingWriteError = error || null;
+            }
         }
 
         if (paymentWriteError || bookingWriteError) {
@@ -1583,6 +1831,18 @@ export async function handlePaymentRefund(req, res) {
         }
 
         console.log('✅ Refund processed successfully:', paymentId);
+        // The first money returned on a booking the desk found the airline
+        // does not hold: its customer was told they would be emailed when the
+        // refund is made. Only the refund whose write took the booking from
+        // paid sends it.
+        if (firstReturned && refundMadeEmailOwedOf(bookingBefore)) {
+            const cancellation = {
+                paymentAction: returnsEverything ? 'FULL_REFUND' : 'PARTIAL_REFUND',
+                refundAmount,
+                currency: payment.currency || 'USD',
+            };
+            await sendRefundMadeEmail(bookingBefore, cancellation);
+        }
         return res.json({
             success: true,
             message: 'Refund processed successfully',
@@ -1803,11 +2063,23 @@ export async function handlePaymentVoid(req, res) {
         // as a live payment. It is answered the way a refund that could not be
         // recorded is (handlePaymentRefund, RECORD_FAILED).
         let recordError = null;
+        let recorded = null;
         if (booking) {
             // Read back rather than spread the row this request started with:
             // reconcile, a chain or a cancellation may have written since, and
             // writing the old copy of the whole column undid them.
             const current = (await readBookingDetails(booking.id)) || claim?.details || booking.booking_details || {};
+            recorded = {
+                ...current,
+                cancellation: {
+                    ...(current.cancellation || {}),
+                    cancelledAt: voidedAt,
+                    reason,
+                    paymentAction: 'VOID',
+                    refundAmount: voidedAmount ?? (parseFloat(booking.total_amount) || 0),
+                    cancellationFee: 0
+                }
+            };
             let update = supabase.from('bookings').update({
                 status: 'cancelled',
                 payment_status: 'refunded',
@@ -1822,14 +2094,7 @@ export async function handlePaymentVoid(req, res) {
                         reason,
                         voidedAt
                     },
-                    cancellation: {
-                        ...(current.cancellation || {}),
-                        cancelledAt: voidedAt,
-                        reason,
-                        paymentAction: 'VOID',
-                        refundAmount: voidedAmount ?? (parseFloat(booking.total_amount) || 0),
-                        cancellationFee: 0
-                    }
+                    cancellation: recorded.cancellation
                 },
                 updated_at: voidedAt
             }).eq('id', booking.id);
@@ -1872,6 +2137,14 @@ export async function handlePaymentVoid(req, res) {
                 reason: recordError,
                 void: { bookingReference: booking?.booking_reference || ref, orderId: arcOrderId, voidTransactionId: voidTxnId, targetTransactionId: targetTxnId }
             });
+        }
+
+        // A booking the desk found the airline does not hold: its customer was
+        // told they would be emailed when the refund is made, and this is it.
+        // Only the void whose record landed (pinned to its claim) gets here,
+        // and a voided booking is never voided again.
+        if (booking && refundMadeEmailOwedOf(booking)) {
+            await sendRefundMadeEmail({ ...booking, booking_details: recorded }, recorded.cancellation);
         }
 
         return res.json({
@@ -1998,7 +2271,29 @@ export async function handlePaymentRetrieve(req, res) {
 
 const roundCents = (value) => Math.round(Number(value) * 100) / 100;
 
-/** REFUND exactly `amount` on an ARC order. Never throws. */
+/**
+ * ARC Pay answered, and the answer is no: a reply it wrote itself - not a
+ * gateway or proxy error - whose result is FAILURE or ERROR. Money is known not
+ * to have moved. Anything else short of SUCCESS (no reply at all, a 5xx, a
+ * PENDING or UNKNOWN result, a reply with no result) says nothing about whether
+ * the refund was made.
+ */
+const arcRefused = (response) => Number(response?.status) < 500
+    && ['FAILURE', 'ERROR'].includes(response?.data?.result);
+
+/** What came back instead of a verdict, for the review reason: "ARC Pay answered HTTP 504 with no result". */
+const arcReplyWithoutVerdict = (response) => {
+    const result = response?.data && typeof response.data === 'object' ? response.data.result : null;
+    return `ARC Pay answered HTTP ${response?.status ?? 'none'} with ${result ? `result ${result}` : 'no result'}`;
+};
+
+/**
+ * REFUND exactly `amount` on an ARC order. Never throws.
+ *
+ * `refused` only when ARC Pay said no. A request that broke after it was sent,
+ * or an answer that is not one, is `ok: false` and not `refused`: the money
+ * may have gone back.
+ */
 async function refundArcAmount(orderId, { amount, currency = 'USD', reason = 'Admin refund' }) {
     const transactionId = `refund-admin-${Date.now()}`;
     try {
@@ -2007,10 +2302,12 @@ async function refundArcAmount(orderId, { amount, currency = 'USD', reason = 'Ad
             apiOperation: 'REFUND',
             transaction: { amount: amount.toFixed(2), currency, reference: String(reason).substring(0, 40) },
         }, { headers: getArcPayAuthConfig().headers, validateStatus: () => true });
-        return { ok: arcSucceeded(resp), transactionId, httpStatus: resp?.status ?? null };
+        const ok = arcSucceeded(resp);
+        if (!ok) console.error('❌ Admin ARC refund not accepted:', resp?.status, arcFailureSummary(resp?.data));
+        return { ok, refused: !ok && arcRefused(resp), transactionId, httpStatus: resp?.status ?? null };
     } catch (error) {
         console.error('❌ Admin ARC refund error:', error.message);
-        return { ok: false, transactionId, httpStatus: null };
+        return { ok: false, refused: false, transactionId, httpStatus: null };
     }
 }
 
@@ -2070,7 +2367,9 @@ async function claimManualRefund(booking, adminId) {
     const { data, error } = await update.select('id');
     if (error) return { claimed: false, error };
     if (!data?.length) return { claimed: false };
-    return { claimed: true, stamp, details: claimedDetails };
+    // The payment as the claim was pinned to it (unchangedSince), for what
+    // the press that records a refund owes the customer (refundMadeEmailOwedOf).
+    return { claimed: true, stamp, details: claimedDetails, paymentStatus: row.payment_status };
 }
 
 /** Let go of a refund claim that recorded nothing. Conditioned on its own stamp. */
@@ -2087,11 +2386,52 @@ async function releaseManualRefund(booking, claim) {
 }
 
 /**
+ * A refund sent from here that ARC Pay never answered, kept on the booking in
+ * place of the claim.
+ *
+ * The claim alone cannot guard it: it lapses in minutes, and after that a
+ * press read "ARC holds 171", saw room for another 120 and sent it. So the
+ * refund is written down - how much, and what ARC showed as refunded before it
+ * - and every later press compares ARC's ledger with that before sending
+ * anything. The claim goes in the same write, so Check ARC Pay can run at once.
+ * Conditioned on our own claim stamp, as the release is.
+ */
+async function noteUnansweredRefund(booking, claim, unanswered) {
+    const details = await readBookingDetails(booking.id);
+    if (!details?.cancellation) return false;
+    const { manual_refund_claim: _mine, ...cancellation } = details.cancellation;
+    const { data, error } = await supabase
+        .from('bookings')
+        .update({ booking_details: { ...details, cancellation: { ...cancellation, unansweredRefund: unanswered } } })
+        .eq('id', booking.id)
+        .eq(MANUAL_REFUND_CLAIM, claim.stamp)
+        .select('id');
+    if (error || !data?.length) {
+        console.error('❌ Could not record the unanswered refund; the claim is left to expire:', error?.message || 'the claim was lost', {
+            bookingReference: booking.booking_reference, ...unanswered,
+        });
+        return false;
+    }
+    return true;
+}
+
+/**
  * ARC could not be asked. A 400 or a 404 is ARC saying it has no such order -
  * an answer. Anything else, a 5xx included, is an outage, and used to read as
  * "ARC Pay shows no payment for this booking".
  */
 const gatewayDown = (result) => Boolean(result?.gatewayUnavailable) && ![400, 404].includes(result.gatewayStatus);
+
+/** Whether ARC's reading shows money returned since the unanswered refund was sent. */
+const returnedSinceUnanswered = (unanswered, reading) => reading?.voided === true
+    || roundCents(reading?.refundedTotal ?? 0) > roundCents(unanswered?.refundedBefore ?? 0) + 0.009;
+
+/**
+ * Too soon for ARC's silence about an unanswered refund to mean it never
+ * happened: the claim's own lifetime, far longer than a refund takes to appear.
+ * A time that cannot be read counts as recent.
+ */
+const unansweredRecently = (unanswered) => !(Date.now() - Date.parse(unanswered?.at) >= MANUAL_REFUND_CLAIM_TTL_MS);
 
 export async function settleManualFlightRefund(booking, { mode = 'sync', amount, reason = 'Admin refund', adminId = null } = {}) {
     const answer = (status, body) => ({ status, body });
@@ -2151,7 +2491,30 @@ export async function settleManualFlightRefund(booking, { mode = 'sync', amount,
     const currency = initialDetails.arc_captured_currency || initialDetails.currency || 'USD';
     let manual = { mode, reason, by: adminId, at: new Date().toISOString() };
 
-    if (mode === 'refund') {
+    // A refund an earlier press sent and never heard back about (below). ARC's
+    // ledger decides it before anything else is sent: money returned since then
+    // means it went through - or someone refunded in the portal - and either
+    // way nothing more goes out; what ARC shows is recorded, as Check ARC Pay
+    // would. Nothing returned, and too soon for that to mean anything: nothing
+    // is sent. Nothing returned long after: it never happened.
+    const unanswered = claim.details.cancellation?.unansweredRefund || null;
+    let sending = mode === 'refund';
+    if (sending && unanswered) {
+        if (returnedSinceUnanswered(unanswered, before)) {
+            sending = false;
+            manual = { ...manual, mode: 'sync', earlierUnanswered: unanswered };
+        } else if (unansweredRecently(unanswered)) {
+            return giveUp(409, {
+                success: false,
+                code: 'REFUND_UNANSWERED',
+                error: `A refund of ${roundCents(unanswered.amount).toFixed(2)} ${unanswered.currency || currency} was sent to ARC Pay `
+                    + `at ${unanswered.at} and never answered, and ARC Pay does not show it yet. Nothing was sent now. `
+                    + 'Press Check ARC Pay in a few minutes to see whether it went through before sending anything.',
+            });
+        }
+    }
+
+    if (sending) {
         const wanted = roundCents(amount);
         const held = roundCents(before.heldAmount ?? 0);
         if (!Number.isFinite(wanted) || wanted <= 0) {
@@ -2166,8 +2529,26 @@ export async function settleManualFlightRefund(booking, { mode = 'sync', amount,
         }
         const orderId = initialDetails.order_id || booking.booking_reference;
         const refund = await refundArcAmount(orderId, { amount: wanted, currency, reason });
-        if (!refund.ok) {
+        if (refund.refused) {
             return giveUp(502, { success: false, code: 'REFUND_REFUSED', error: 'ARC Pay did not accept the refund. Nothing was recorded; try again or refund in the ARC portal and then sync.' });
+        }
+        if (!refund.ok) {
+            // Sent, and no answer: ARC Pay may have refunded. Not handed back as
+            // "not accepted" - that is what sent the same refund twice.
+            await noteUnansweredRefund(booking, claim, {
+                amount: wanted,
+                currency,
+                transactionId: refund.transactionId,
+                at: new Date().toISOString(),
+                by: adminId,
+                refundedBefore: roundCents(before.refundedTotal ?? 0),
+            });
+            return answer(502, {
+                success: false,
+                code: 'REFUND_UNANSWERED',
+                error: `The refund of ${wanted.toFixed(2)} ${currency} was sent to ARC Pay and no answer came back, so it may have gone through. `
+                    + 'Do not send it again: press Check ARC Pay first (Sync from ARC in the admin panel), which records what ARC Pay shows.',
+            });
         }
         manual = { ...manual, amount: wanted, transactionId: refund.transactionId };
     }
@@ -2185,24 +2566,43 @@ export async function settleManualFlightRefund(booking, { mode = 'sync', amount,
     const held = roundCents(voided ? 0 : confirmed ? (after.heldAmount ?? 0) : Math.max(0, (before.heldAmount ?? 0) - (manual.amount ?? 0)));
     if (!confirmed) manual = { ...manual, unconfirmed: 'ARC Pay could not be asked again after the refund; recorded from the refund it accepted' };
 
+    // An unanswered refund stays on the booking while it may still land: ARC
+    // shows nothing returned since it was sent, and it is too soon to say it
+    // never went through. Anything else settles it - this press sent a refund
+    // ARC accepted, or ARC's ledger now answers for it.
+    const stillUnanswered = Boolean(unanswered) && !manual.transactionId
+        && unansweredRecently(unanswered) && !returnedSinceUnanswered(unanswered, source);
+
     if (!(returnedTotal > 0)) {
         return giveUp(409, {
             success: false,
             code: 'NO_REFUND_FOUND',
-            error: 'ARC Pay shows no refund for this booking yet. Refund it first, here or in the ARC portal.',
+            error: stillUnanswered
+                ? `ARC Pay does not show the refund of ${roundCents(unanswered.amount).toFixed(2)} ${unanswered.currency || currency} `
+                    + `sent at ${unanswered.at} yet. Nothing was recorded; check again in a few minutes before sending anything.`
+                : 'ARC Pay shows no refund for this booking yet. Refund it first, here or in the ARC portal.',
         });
     }
 
     // Re-read: reconcile writes the row too, and this must not undo that.
     const currentDetails = (await readBookingDetails(booking.id)) || claim.details;
-    const { manual_refund_claim: _claim, stillHeld: _before, ...previous } = currentDetails.cancellation || {};
+    const {
+        manual_refund_claim: _claim, stillHeld: _before, unansweredRefund: _unanswered, ...previous
+    } = currentDetails.cancellation || {};
     const fullyReturned = held <= 0.009;
     // What ARC still holds is a fee only when the cancel decided to keep one and
     // what is held is no more than that fee. Everything held was recorded as
     // "a cancellation fee was kept" - and the Finish refund button went away
     // with money still owed. Now the rest is recorded as still held, and the
     // desk is offered the refund again until it is returned.
-    const intendedFee = roundCents(Number(previous.cancellationFee) || 0);
+    //
+    // The fee the cancel DECIDED, carried across every refund by hand
+    // (`decidedFee`, shared/reviewQueue.js decidedFeeOf): `cancellationFee`
+    // below is what was kept so far, 0 while more than the fee is held, and
+    // read back from there the next press lost the fee - it was "owed", and
+    // finishing the refund sent it back to the card.
+    const decidedFee = decidedFeeOf(previous);
+    const intendedFee = decidedFee ?? roundCents(Number(previous.cancellationFee) || 0);
     const feeKept = !fullyReturned && intendedFee > 0 && held <= intendedFee + 0.009;
     const stillHeld = fullyReturned || feeKept ? 0 : held;
     const cancellation = {
@@ -2210,7 +2610,9 @@ export async function settleManualFlightRefund(booking, { mode = 'sync', amount,
         paymentAction: voided ? 'VOID' : fullyReturned ? 'FULL_REFUND' : 'PARTIAL_REFUND',
         refundAmount: returnedTotal,
         cancellationFee: feeKept ? held : 0,
+        ...(decidedFee !== null ? { decidedFee } : {}),
         ...(stillHeld > 0 ? { stillHeld } : {}),
+        ...(stillUnanswered ? { unansweredRefund: unanswered } : {}),
         currency,
         manualRefund: { ...manual, previousPaymentAction: previous.paymentAction ?? null },
     };
@@ -2220,7 +2622,17 @@ export async function settleManualFlightRefund(booking, { mode = 'sync', amount,
     // customer's refund: the tickets' value is still with the airline. Stamped
     // here, "Refund to claim from the airline" left the desk with nothing
     // claimed. Whoever makes the claim resolves it.
-    const review = currentDetails.needs_review && settled
+    //
+    // Nor is a commit that never answered: the refund settles the money, not
+    // whether the airline holds a reservation. Stamped here, it read answered
+    // with no held or not-held (commitUnknownOf), and the airline question
+    // left the desk unasked; on one the desk had answered, this wrote over
+    // its note. Nor the flag on top of one still open, whose resolving
+    // settles it too (flagInForce stops there). The desk answers it with its
+    // outcome (resolve-review).
+    const commitQuestion = currentDetails.needs_review?.reason === COMMIT_UNKNOWN_REVIEW_REASON
+        || Boolean(commitUnknownOf({ ...booking, booking_details: currentDetails }));
+    const review = currentDetails.needs_review && settled && !commitQuestion
         && !needsAirlineRefundClaim({ booking_details: currentDetails })
         ? { ...currentDetails.needs_review, resolved_at: manual.at, resolution: 'refund finished by the desk' }
         : currentDetails.needs_review;
@@ -2243,9 +2655,19 @@ export async function settleManualFlightRefund(booking, { mode = 'sync', amount,
     }
 
     console.log('💵 Manual refund recorded', { bookingReference: booking.booking_reference, mode, returnedTotal, held, stillHeld });
+    // The first money recorded returned on a booking the desk found the
+    // airline does not hold: its customer was told they would be emailed
+    // when the refund is made (refundMadeEmailOwedOf). Read as the claim
+    // found it, not as the route read it earlier: the claim lets one press
+    // record at a time, and the next one finds it no longer paid.
+    if (refundMadeEmailOwedOf({ ...booking, payment_status: claim.paymentStatus, booking_details: claim.details })) {
+        await sendRefundMadeEmail({ ...booking, booking_details: { ...currentDetails, cancellation } }, cancellation);
+    }
     return answer(200, {
         success: true,
-        message: cancellationMessage({ cancellation }),
+        message: manual.earlierUnanswered
+            ? `ARC Pay shows the refund sent at ${manual.earlierUnanswered.at} went through, so nothing more was sent. ${cancellationMessage({ cancellation })}`
+            : cancellationMessage({ cancellation }),
         paymentStatus,
         cancellation,
     });
@@ -2256,6 +2678,9 @@ export async function settleManualFlightRefund(booking, { mode = 'sync', amount,
 // not yet settled, otherwise a full REFUND. Safe to call even if there is nothing to
 // reverse (reports reversed:false rather than throwing). Returns:
 //   { reversed: boolean, action: 'VOID'|'REFUND'|'ALREADY_REVERSED'|'NONE'|'FAILED', ... }
+// A FAILED is `refused` only when ARC Pay said no (arcRefused), and
+// `outcomeUnknown` when a VOID or REFUND was sent and its reply was not a
+// verdict: the money may have moved.
 export async function reverseArcPaymentForOrder(orderId, { amount, currency = 'USD', reason = 'Booking could not be completed' } = {}) {
     if (!orderId) return { reversed: false, action: 'NONE', error: 'no orderId' };
     const authConfig = getArcPayAuthConfig();
@@ -2315,6 +2740,18 @@ export async function reverseArcPaymentForOrder(orderId, { amount, currency = 'U
             if (arcSucceeded(voidResp)) {
                 return { reversed: true, action: 'VOID', transactionId: voidTxnId, targetTransactionId: targetTxnId };
             }
+            // Nor is it a refusal (arcRefused): a 5xx, or a PENDING, UNKNOWN or
+            // missing result, may be a VOID that went through. The REFUND sent
+            // after one was refused by ARC - there was nothing left to refund -
+            // and that refusal read "nothing has gone back" over money returned.
+            if (!arcRefused(voidResp)) {
+                return {
+                    reversed: false,
+                    action: 'FAILED',
+                    outcomeUnknown: true,
+                    error: `VOID sent and not answered: ${arcReplyWithoutVerdict(voidResp)}; no REFUND was sent after it`,
+                };
+            }
         }
 
         // 2) VOID rejected (likely already settled) → REFUND what is left.
@@ -2340,9 +2777,19 @@ export async function reverseArcPaymentForOrder(orderId, { amount, currency = 'U
             if (arcSucceeded(refundResp)) {
                 return { reversed: true, action: 'REFUND', amount: refundAmt, transactionId: refundTxnId };
             }
-            return { reversed: false, action: 'FAILED', error: 'VOID and REFUND both failed', details: arcFailureSummary(refundResp.data) };
+            if (!arcRefused(refundResp)) {
+                return { reversed: false, action: 'FAILED', outcomeUnknown: true, error: `REFUND sent and not answered: ${arcReplyWithoutVerdict(refundResp)}` };
+            }
+            return { reversed: false, action: 'FAILED', refused: true, error: 'VOID and REFUND both failed', details: arcFailureSummary(refundResp.data) };
         }
-        return { reversed: false, action: 'FAILED', error: 'VOID failed and no amount available to refund', details: arcFailureSummary(voidResp?.data) };
+        // Reached with a VOID ARC refused, or none sent.
+        return {
+            reversed: false,
+            action: 'FAILED',
+            ...(voidResp ? { refused: true } : {}),
+            error: 'VOID failed and no amount available to refund',
+            details: arcFailureSummary(voidResp?.data),
+        };
     } catch (err) {
         return { reversed: false, action: 'FAILED', error: err.message };
     }

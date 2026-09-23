@@ -10,7 +10,9 @@ import withPageElements from '../PageWrapper';
 import { endpoints } from '@/config/api';
 import { useSupabaseAuth } from '../../../contexts/SupabaseAuthContext';
 import { buildFlightOrderBody } from '../../../../../shared/flightOrderBody';
-import { itinerariesFromOffer, returnDateOf } from '../../../../../shared/bookingItineraries';
+import { isUsableEmail } from '../../../../../shared/email';
+import { clockTime, itinerariesFromOffer, returnDateOf } from '../../../../../shared/bookingItineraries';
+import { airportClockLabel } from './searchResults';
 import { clearStoredBookings } from '../../../utils/bookingStorage';
 import { clearTravellerDraft } from '../../../utils/flightTravellerDraft';
 
@@ -21,7 +23,7 @@ import { clearTravellerDraft } from '../../../utils/flightTravellerDraft';
  * to a payment that cannot be used.
  */
 const TERMINAL_ERROR_CODES = new Set([
-  'BOOKING_CANCELLED',    // row already cancelled and refunded
+  'BOOKING_CANCELLED',    // row already cancelled; a payment made after it is answered bookingFailed
   'BOOKING_DISABLED',     // booking switched off; the charge was reversed
   'OFFER_NOT_BOOKABLE',   // offer expired or failed the shape gate
   'OFFER_MISSING',        // this session lost the offer; nothing to resend
@@ -94,12 +96,17 @@ const UNAVAILABLE_RETRY_MS = 15000;
  *   voided   - no live ticket, and the answer names tickets a cancel voided
  *              (ALREADY_BOOKED after a cancel whose PNR_Cancel was refused).
  *              Neither issued nor held: nobody can fly on it.
+ *   cancel_pending - a held PNR the customer asked to cancel, whose cancel the
+ *              airline refused (ALREADY_BOOKED `cancelFailed`). Our team is
+ *              completing it. It read "your ticket could not be issued
+ *              automatically. Our team is finishing it".
  */
 function outcomeOf(body) {
   if (body?.queued === true) return 'queued';
   if (body?.ticketed === true) return 'ticketed';
   if (['returned', 'partly_returned'].includes(body?.paymentState)) return body.paymentState;
   if (Array.isArray(body?.voided_tickets) && body.voided_tickets.length > 0) return 'voided';
+  if (body?.cancelFailed === true) return 'cancel_pending';
   if ((body?.needsReview || body?.data?.needsReview) && !pnrOfAnswer(body)) return 'checking';
   return 'held';
 }
@@ -237,8 +244,12 @@ function FlightCreateOrders() {
             bookingDetails: bookingData?.bookingDetails,
             calculatedFare: bookingData?.calculatedFare,
 
-            // Contact info
-            customerEmail: bookingData?.passengerData?.[0]?.email || orderData?.customerEmail || ''
+            // The first address that can be delivered to, in the order
+            // orderDataFromCheckoutRow takes them: the one the payment
+            // callback handed over (checkout's), then the lead traveller's.
+            // The lead's was put first whatever it held, and a typed
+            // "jane@gmailcom" hid the callback's good one.
+            customerEmail: [orderData?.customerEmail, bookingData?.passengerData?.[0]?.email].find(isUsableEmail) || ''
           };
 
         }
@@ -431,6 +442,10 @@ function FlightCreateOrders() {
           // The airline commit never answered: the confirmation page's own
           // outcome for it, as nothing there can tell it from a held PNR.
           ...(result === 'checking' ? { commitUnknown: true } : {}),
+          // A cancel the airline refused, as the booking reads send it
+          // (toClientBooking `cancel_failed`): the confirmation page read this
+          // copy as a reservation whose ticket our team was finishing.
+          cancel_failed: result === 'cancel_pending',
           // A payment the booking's record says went back, for the
           // confirmation page (paymentReturned): it said "Total Paid ...
           // Payment received" of a refunded booking.
@@ -445,10 +460,15 @@ function FlightCreateOrders() {
           destination: lastSegment.arrival?.iataCode || flightData.destination || flightData.arrival || '',
           originCity: flightData.originCity || flightData.departureCity || '',
           destinationCity: flightData.destinationCity || flightData.arrivalCity || '',
-          // Flight times and dates
+          // Flight times and dates. A time is the airport's own clock, as the
+          // airline sends it ("2027-03-14T02:40:00", no offset), read by the
+          // results page's helper and printed as the itinerary below prints
+          // it ("2:40 AM"). Through `new Date(at).toLocaleTimeString()` it was
+          // the viewer's clock: in New York on its spring-forward day a 02:40
+          // departure read 03:40 at the top of the confirmation page.
           departureDate: firstSegment.departure?.at?.split('T')[0] || flightData.departureDate || '',
-          departureTime: firstSegment.departure?.at ? new Date(firstSegment.departure.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : flightData.departureTime || '',
-          arrivalTime: lastSegment.arrival?.at ? new Date(lastSegment.arrival.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : flightData.arrivalTime || '',
+          departureTime: clockTime(airportClockLabel(firstSegment.departure?.at)) || flightData.departureTime || '',
+          arrivalTime: clockTime(airportClockLabel(lastSegment.arrival?.at)) || flightData.arrivalTime || '',
           duration: itinerary.duration || flightData.duration || '',
           // Airline info
           airline: firstSegment.carrierCode || flightData.airline || flightData.carrierCode || '',
@@ -610,7 +630,12 @@ function FlightCreateOrders() {
 
       setErrorCode(error.response?.data?.code || error.code || null);
       const failure = error.response?.data;
-      setRefundAttempt(failure?.bookingFailed === true ? { refunded: failure.refunded === true } : null);
+      // `partly`: a payment made after the checkout was cancelled, part of which
+      // has gone back since (the order route's paymentState). Read as not
+      // refunded, it was told nothing had been reversed.
+      setRefundAttempt(failure?.bookingFailed === true
+        ? { refunded: failure.refunded === true, partly: failure.paymentState === 'partly_returned' }
+        : null);
 
       if (error.response?.data) {
         // Backend returned structured error
@@ -786,6 +811,17 @@ function FlightCreateOrders() {
                         <h2 className="text-xl font-semibold text-gray-800">Ticket Voided</h2>
                         <p className="text-gray-600">
                           Your ticket has been voided and is not valid for travel. The cancellation has not been completed with the airline yet.
+                        </p>
+                      </>
+                    ) : outcome === 'cancel_pending' ? (
+                      // As the confirmation page says it (cancel_pending).
+                      <>
+                        <div className="mx-auto w-16 h-16 rounded-full bg-amber-50 flex items-center justify-center">
+                          <Clock className="w-8 h-8 text-amber-600" />
+                        </div>
+                        <h2 className="text-xl font-semibold text-gray-800">Cancellation Pending</h2>
+                        <p className="text-gray-600">
+                          Your cancellation has not been completed with the airline yet, and no ticket will be issued on this booking. Our team has been alerted and will complete it.
                         </p>
                       </>
                     ) : outcome === 'checking' ? (
@@ -1091,7 +1127,9 @@ function FlightCreateOrders() {
                       <p className={`text-sm font-medium ${refundAttempt.refunded ? 'text-green-700' : 'text-amber-800'}`}>
                         {refundAttempt.refunded
                           ? 'Your payment has been reversed. You do not need to do anything.'
-                          : 'Your payment has not been reversed yet. Our team has been alerted and will refund you.'}
+                          : refundAttempt.partly
+                            ? 'Part of your payment has been refunded. Please call (877) 538-7380 with your booking reference about the rest.'
+                            : 'Your payment has not been reversed yet. Our team has been alerted and will refund you.'}
                         {orderReference ? ` Booking reference: ${orderReference}.` : ''}
                       </p>
                     )}

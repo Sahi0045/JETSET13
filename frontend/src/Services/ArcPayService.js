@@ -45,7 +45,12 @@ function cancelFailure(error) {
         needsReview: data.needsReview === true,
         error: data.error || data.message
             || 'We could not reach our servers to cancel this booking. Please check your connection and try again, or call (877) 538-7380.',
-        details: data.details
+        details: data.details,
+        // A cancel that went through and could not be recorded answers 500 with
+        // what it did (flagUnrecordedCancellation). Dropped here, the pages
+        // could not tell it from a refusal, and kept the booking as they had
+        // loaded it: Ticketed, E-Ticket, Cancel.
+        ...(data.cancellation ? { cancellation: data.cancellation } : {})
     };
 }
 

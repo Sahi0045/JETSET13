@@ -4,8 +4,9 @@ import React, { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { daysUntilDate, formatCalendarDate, formatIsoDuration } from "../../../utils/dateUtils"
 import { bookingStatusBadge, needsAttention, cancellationMessage, refundStatus, attentionMessage, isCompletedTrip } from "../../../utils/bookingStatus"
-import { liveTickets, ticketState, ticketsVoided } from "../../../utils/eTicket"
+import { documentState, hasNoConfirmedSeat, isCommitUnknown, liveTickets, ticketState, ticketsVoided } from "../../../utils/eTicket"
 import { bookingItineraries } from "../../../../../shared/bookingItineraries"
+import { isAwaitingTicketOnly } from "../../../../../shared/reviewQueue"
 import BookingItinerary from "../flights/BookingItinerary"
 import { formatUsd } from "../../../utils/bookingCharge"
 import { authHeaders } from "../../../utils/authHeaders"
@@ -604,7 +605,25 @@ export default function TravelDashboard() {
     // Bookings someone has to act on: a reservation flagged for review, a
     // refund that did not go through. This matched a 'failed' status that
     // nothing ever writes, so the tab could never show anything.
-    if (activeTab === "Failed") return list.filter((b) => needsAttention(b));
+    //
+    // Not a booking whose outcome is still open, which has not failed: a
+    // commit our team is checking with the airline (isCommitUnknown), or a
+    // PNR the airline has not confirmed a seat on yet (hasNoConfirmedSeat).
+    // Each tells the customer not to book the trip again, and under "Failed"
+    // invited exactly that. They stay under Upcoming with their sentences.
+    // A cancelled one whose refund did not go through (refundStatus) is still
+    // listed: that has failed.
+    //
+    // Nor a reservation the airline holds that is only waiting on its ticket:
+    // a live PNR with a confirmed seat, no ticket, not cancelled (documentState
+    // 'held'), flagged for the ticket alone (isAwaitingTicketOnly) - held for
+    // staff after ticketing failed, or a commit the desk found held. Its
+    // sentence is "Your seats are reserved, but your ticket has not been issued
+    // yet", and "Failed" beside it said otherwise. A PNR whose cancellation the
+    // airline refused carries its own flag, and stays.
+    const waitingOnTicket = (b) => documentState(b) === 'held' && isAwaitingTicketOnly(b);
+    const stillOpen = (b) => !refundStatus(b) && (isCommitUnknown(b) || hasNoConfirmedSeat(b) || waitingOnTicket(b));
+    if (activeTab === "Failed") return list.filter((b) => needsAttention(b)).filter((b) => !stillOpen(b));
     return list;
   };
 
@@ -849,10 +868,15 @@ export default function TravelDashboard() {
                           // A cancelled booking's tickets were voided or refunded:
                           // no number is shown as though it could still be used.
                           if (statusUp === 'CANCELLED') return 'Cancelled';
+                          // Nor one whose cancel went through and could not be
+                          // recorded: its row still reads confirmed (ticketState).
+                          if (ticketState(booking) === 'cancelled') return 'Cancelled';
                           // Not a number a cancel voided: printed here, it read as a ticket.
                           const numbers = liveTickets(booking).map((t) => t?.number).filter(Boolean);
                           if (numbers.length) return <span className="tracking-wider">{numbers.join(', ')}</span>;
                           if (ticketsVoided(booking)) return 'Voided';
+                          // Being cancelled: "Not yet issued" promised a ticket nobody will issue.
+                          if (documentState(booking) === 'cancel_pending') return 'None, cancellation pending';
                           return ticketState(booking) === 'pending' ? 'Issued, number pending' : 'Not yet issued';
                         })()}
                       </DetailCell>
@@ -1016,8 +1040,12 @@ export default function TravelDashboard() {
               <FaCog className="w-4 h-4" /> Manage Booking
             </button>
           )}
-          {/* Cancel Booking Button — only for non-cancelled upcoming bookings */}
-          {statusUp !== 'CANCELLED' && statusUp !== 'FAILED' && (daysUntilTrip === null || daysUntilTrip >= 0) && (
+          {/* Cancel Booking Button — only for non-cancelled upcoming bookings.
+              Not one whose cancel went through and could not be recorded
+              (ticketState 'cancelled'): the customer was told not to try again.
+              Nor while our team is checking with the airline whether the
+              booking went through (isCommitUnknown): the server refuses it. */}
+          {statusUp !== 'CANCELLED' && statusUp !== 'FAILED' && ticketState(booking) !== 'cancelled' && (daysUntilTrip === null || daysUntilTrip >= 0) && !isCommitUnknown(booking) && (
             <>
               {showCancelConfirm === booking.id ? (
                 <div className="flex items-center gap-2 flex-wrap">
@@ -1059,9 +1087,16 @@ export default function TravelDashboard() {
                           loadBookings()
                         } else {
                           setCancelOutcome({ tone: 'error', text: result.error || result.message || 'Failed to cancel booking. Please try again.' })
-                          // No answer in time: the cancel may have gone through.
-                          // The list shows what the booking says now.
-                          if (result.timedOut) loadBookings()
+                          // Whatever the refusal, the list is read again: a
+                          // refusal can come after the cancel changed the
+                          // booking. No answer in time: it may have gone
+                          // through. It went through and could not be recorded,
+                          // or the airline refused it after the ticket was
+                          // voided (502, needsReview): the card still said
+                          // Ticketed, printed the void number and offered a
+                          // second cancel. The list shows what the booking
+                          // says now.
+                          loadBookings()
                         }
                       } catch (err) {
                         console.error('Cancel error:', err)

@@ -15,6 +15,7 @@
 
 import { needsDateOfBirth } from './travellerDetails.js';
 import { callingCodeDigits } from './countries.js';
+import { isUsableEmail } from './email.js';
 
 export const TRAVELLER_TYPES = ['ADULT', 'CHILD', 'HELD_INFANT', 'SEATED_INFANT'];
 
@@ -97,8 +98,12 @@ export function buildFlightOrderBody(orderData, { userId = null } = {}) {
     // code: the review page never sent one and this defaulted to '1', so every
     // phone was booked as a US number. The lead traveller's own code stands in
     // for a booking saved before the page sent it.
+    //
+    // The first address that can be delivered to, as the order route picks it.
+    // The first one given was taken whatever it held, and a typed
+    // "jane@gmailcom" went onto the order as its contact.
     contactInfo: {
-      email: orderData.bookingDetails?.contact?.email || orderData.customerEmail || passengerDetails[0]?.email || '',
+      email: [orderData.bookingDetails?.contact?.email, orderData.customerEmail, passengerDetails[0]?.email].find(isUsableEmail) || '',
       countryCode: callingCodeDigits(orderData.bookingDetails?.contact?.countryCode)
         || callingCodeDigits(orderData.passengerData?.[0]?.countryCode),
       phoneNumber: orderData.bookingDetails?.contact?.phone || passengerDetails[0]?.mobile || '',
@@ -130,6 +135,10 @@ export function orderDataFromCheckoutRow(row) {
     passengerData: bookingData.passengerData,
     bookingDetails: bookingData.bookingDetails,
     calculatedFare: bookingData.calculatedFare,
-    customerEmail: bookingData.passengerData?.[0]?.email || checkout.customerEmail || '',
+    // The first address that can be delivered to, in the order route's order:
+    // checkout's customerEmail, the lead traveller's, then the one checkout
+    // recorded (an account's address, when the one typed was not usable). The
+    // lead traveller's typed email was taken first, whatever it held.
+    customerEmail: [checkout.customerEmail, bookingData.passengerData?.[0]?.email, details.customer_email].find(isUsableEmail) || '',
   };
 }

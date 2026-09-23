@@ -8,7 +8,7 @@ import { validate } from '../middleware/validate.js';
 import { z } from 'zod';
 import { protect, admin, bookingStaff, optionalProtect } from '../middleware/auth.middleware.js';
 import { resolveBookingUserId } from '../utils/bookingOwner.js';
-import { handleCancelBookingAction, reverseArcPaymentForOrder, settleManualFlightRefund } from './payment/operations.handlers.js';
+import { handleCancelBookingAction, recordPaymentAfterCancel, reverseArcPaymentForOrder, settleManualFlightRefund } from './payment/operations.handlers.js';
 import { emailMatchesBooking, isBookingOwner } from '../utils/bookingAccess.js';
 import { reconcileBookingPayment } from './payment/checkout.handlers.js';
 import { reportError } from '../services/monitoring.js';
@@ -21,14 +21,17 @@ import { CHAIN_CLAIM_TTL_MS, MAX_QUEUE_ATTEMPTS } from '../utils/bookingChainCla
 import { queueEnvironment } from '../utils/queueEnvironment.js';
 import { unchangedSince } from '../utils/bookingDetailsGuard.js';
 import { UNTICKETED_REVIEW_REASON } from '../jobs/needsReviewAlert.job.js';
-import { itinerariesFromOffer, returnDateOf } from '../../shared/bookingItineraries.js';
+import { clockTime, itinerariesFromOffer, returnDateOf, splitLocalDateTime } from '../../shared/bookingItineraries.js';
 import { flightsKey, travellerNamesKey } from '../utils/tripMatch.js';
 import { needsDateOfBirth } from '../../shared/travellerDetails.js';
 import { buildFlightOrderBody, orderDataFromCheckoutRow } from '../../shared/flightOrderBody.js';
 import { statusChangeRefusal } from '../../shared/bookingStatusChange.js';
 import {
-  attentionOf, reviewResolution, ticketsOf, isTicketed, NO_CONFIRMED_SEAT_REVIEW_REASON, noConfirmedSeatOf,
-  HELD_REVIEW_REASON_PREFIXES, liveTicketNumbersMissingOf, unrecordedCancellationOf, voidedTicketsOf,
+  attentionOf, attentionLabel, reviewResolution, ticketsOf, isTicketed, NO_CONFIRMED_SEAT_REVIEW_REASON, noConfirmedSeatOf,
+  HELD_REVIEW_REASON_PREFIXES, liveTicketNumbersMissingOf, unrecordedCancellationForCustomerOf,
+  voidedTicketsOf, commitUnknownOf, SCHEDULE_CHANGED_REVIEW_REASON, isHeldForReview, ticketIssuedBeforeHoldOf,
+  openFailedCancellationOf, ATTENTION_JOBS, cancellationRecordedByHandOf,
+  notHeldStillPaidOf, scheduleChangeOf,
 } from '../../shared/reviewQueue.js';
 import { errorSummary } from '../utils/errorSummary.js';
 import { flightSearchLimiter, guestBookingLimiter } from '../middleware/security.js';
@@ -397,13 +400,35 @@ async function persistCommittedPnr({ bookingReference, pnr, tstRefs, priced }) {
 }
 
 /**
+ * The airline's schedule change the chain accepted before it failed, kept under
+ * the held flag as `previous` - the flag the provider writes on a booking it
+ * completes (amadeusSoap/index.js createFlightOrder), with any flag already on
+ * the booking under it in turn, as a later cancel keeps the one before
+ * (payment/operations.handlers.js keepingPrevious). Held with the failure as
+ * its only flag, the retiming reached nobody: the desk and the alarm find it
+ * with scheduleChangeOf, on top or under. Nothing when there was none.
+ */
+const keepingScheduleChange = (statuses, details) => (Array.isArray(statuses) && statuses.length > 0
+  ? {
+    previous: {
+      reason: SCHEDULE_CHANGED_REVIEW_REASON,
+      statuses,
+      at: new Date().toISOString(),
+      ...(details.needs_review ? { previous: details.needs_review } : {})
+    }
+  }
+  : {});
+
+/**
  * Mark a booking as needing a human.
  *
  * Used when the chain created a real PNR and then failed: the money and the
  * booking are both real but out of step, and no automatic action is safe.
  */
-export async function flagForReview({ bookingReference, pnr, reason, ticketed, tickets = null, amadeus = null }) {
-  console.error('⚠️ Booking needs review', { bookingReference, pnr, reason, ticketed, amadeus });
+export async function flagForReview({
+  bookingReference, pnr, reason, ticketed, tickets = null, amadeus = null, issuance = null, scheduleChanged = null
+}) {
+  console.error('⚠️ Booking needs review', { bookingReference, pnr, reason, ticketed, issuance, amadeus });
 
   const patched = await patchBookingDetails(bookingReference, (details) => ({
     pnr: pnr || undefined,
@@ -424,13 +449,20 @@ export async function flagForReview({ bookingReference, pnr, reason, ticketed, t
     needs_review: {
       reason,
       ticketed: Boolean(ticketed),
+      // DocIssuance sent and never answered (bookingChain.js callStep): a
+      // ticket may exist that nothing here records. Written as `ticketed:
+      // false` alone, the alarm told staff no ticket was issued before ticket
+      // sync had read the PNR, and a cancel whose retrieve did not show the FA
+      // line yet refunded in full. Beside `ticketed`, not in place of it.
+      ...(issuance ? { issuance } : {}),
       at: new Date().toISOString(),
       // What Amadeus actually said. Without it the row read only "chain failed
       // after commit at issueTicket" and the refusal itself - 2161 PROHIBITED
       // TICKETING CARRIER on every Air India booking - existed only in a dev
       // terminal's scrollback, so a carrier the office may not ticket looked
       // like a code regression. Amadeus error text carries no passenger data.
-      ...(amadeus ? { amadeus } : {})
+      ...(amadeus ? { amadeus } : {}),
+      ...keepingScheduleChange(scheduleChanged, details)
     }
   }));
 
@@ -450,6 +482,27 @@ export async function flagForReview({ bookingReference, pnr, reason, ticketed, t
 
   return patched;
 }
+
+/**
+ * The 202 for a booking held for a person after its ticket was issued.
+ *
+ * It was answered like a hold before issuance, and the order page said "your
+ * ticket could not be issued automatically. Our team is finishing it", while
+ * a retry of the same order answered ticketed. `ticketed` is what the order
+ * page reads; the e-ticket comes from ticket sync, which reads the numbers
+ * from the PNR (jobs/ticketSync.job.js).
+ */
+const ticketedHoldAnswer = (pnr, bookingReference) => ({
+  success: true,
+  data: { id: pnr, pnr, status: 'PENDING_CONFIRMATION', bookingReference },
+  pnr,
+  orderId: pnr,
+  bookingReference,
+  needsReview: true,
+  ticketed: true,
+  message: 'Your ticket has been issued and our team is completing your booking. '
+    + 'We will email you your e-ticket as soon as it is done.'
+});
 
 /**
  * Has this payment already been booked?
@@ -1031,7 +1084,8 @@ export { NO_CONFIRMED_SEAT_REVIEW_REASON };
  *
  *  - 'confirmation': what the success path sends (reservation or confirmation);
  *  - 'held': "your reservation is held, our team is finishing your ticket", for
- *    a booking the order route held for staff after committing its PNR;
+ *    a booking the order route held for staff after committing its PNR and
+ *    before any ticket was issued;
  *  - null: nothing - no booking yet, cancelled, money returned, already sent, or
  *    flagged for a reason a person is handling (a cancellation, say).
  *
@@ -1048,6 +1102,11 @@ export function confirmationEmailKind(booking) {
   const review = details.needs_review;
   if (!review || EMAILED_REVIEW_REASONS.has(review.reason)) return 'confirmation';
   if (review.reason === NO_CONFIRMED_SEAT_REVIEW_REASON) return null;
+  // Held after its ticket was issued: the held email - "your ticket could not
+  // be issued automatically ... a reservation, not a ticket" - is false of it.
+  // Its email is the e-ticket, which ticket sync sends once it has read the
+  // numbers from the PNR (jobs/ticketSync.job.js).
+  if (review.ticketed === true && isHeldForReview(review)) return null;
   const reason = String(review.reason || '');
   return HELD_REVIEW_REASON_PREFIXES.some((prefix) => reason.startsWith(prefix)) ? 'held' : null;
 }
@@ -1197,12 +1256,23 @@ export async function sendConfirmationOnce(bookingReference, emailData, { failOp
  * path's first send. Never throws.
  */
 async function sendHeldForReviewEmail(bookingReference, body) {
+  return sendOwedConfirmation(bookingReference, body, { only: 'held' });
+}
+
+/**
+ * Send the email a booking owes its customer (confirmationEmailKind), read
+ * back from the row and through the confirmation's own claim, so nothing else
+ * sends it a second time. For its first chance to email: it fails open like
+ * the success path's first send. `only` limits it to one kind. Never throws.
+ */
+async function sendOwedConfirmation(bookingReference, body = {}, { only = null } = {}) {
   try {
     const row = await findExistingBooking(bookingReference);
-    if (confirmationEmailKind(row) !== 'held') return { sent: false, reason: 'not-owed' };
+    const kind = confirmationEmailKind(row);
+    if (kind === null || (only && kind !== only)) return { sent: false, reason: 'not-owed' };
     return await sendConfirmationOnce(row.booking_reference, confirmationEmailFromRow(row, body), { failOpen: true });
   } catch (error) {
-    console.error('❌ Held-booking email step failed:', error.message);
+    console.error('❌ Owed booking email step failed:', error.message);
     return { sent: false, reason: 'error' };
   }
 }
@@ -1228,7 +1298,9 @@ const DUPLICATE_LOOKBACK_MS = 30 * DAY_MS;
  *
  * A cancellation that moved the money and could not record it leaves the row
  * reading paid (flagUnrecordedCancellation), and the customer was told "we will
- * confirm what happened to your payment": neither held nor returned is known.
+ * confirm what happened to your payment": neither held nor returned is known -
+ * still, once a person marks the flag handled with the booking left as it was
+ * (unrecordedCancellationForCustomerOf).
  *
  * @returns {'held'|'returned'|'partly_returned'|'unconfirmed'}
  */
@@ -1236,7 +1308,7 @@ export function paymentStateOf(booking) {
   const payment = String(booking?.payment_status ?? '').toLowerCase();
   if (['refunded', 'reversed'].includes(payment)) return 'returned';
   if (payment === 'partially_refunded') return 'partly_returned';
-  if (unrecordedCancellationOf(booking)) return 'unconfirmed';
+  if (unrecordedCancellationForCustomerOf(booking)) return 'unconfirmed';
   return ['paid', 'completed'].includes(payment) ? 'held' : 'unconfirmed';
 }
 
@@ -1245,8 +1317,14 @@ export function paymentStateOf(booking) {
  * payment record says (paymentStateOf). "Our team is reviewing it" and "If you
  * have not heard from us" are for a payment still held, or one whose fate a
  * person is confirming: a refunded booking is on no desk list and no alarm.
+ *
+ * `commitUnknown` (commitUnknownOf): the airline commit never answered, and
+ * nobody knows yet whether the airline holds the booking. A reload of the
+ * order page sends the order again, and the refusal said the booking could
+ * not be completed - with nothing against booking the trip again, which is
+ * what the customer was told moments before.
  */
-function notSentAgainMessage(bookingReference, paymentState) {
+function notSentAgainMessage(bookingReference, paymentState, { commitUnknown = false } = {}) {
   const call = `call (877) 538-7380 with booking reference ${bookingReference}`;
   if (paymentState === 'returned') {
     return 'This booking could not be completed, so it was not sent to the airline again. '
@@ -1255,6 +1333,11 @@ function notSentAgainMessage(bookingReference, paymentState) {
   if (paymentState === 'partly_returned') {
     return 'This booking could not be completed, so it was not sent to the airline again. '
       + `Part of your payment for it has been refunded. Please ${call} about the rest.`;
+  }
+  if (commitUnknown) {
+    return 'Our team is checking with the airline whether this booking went through, so it was not sent to the airline again. '
+      + 'Nothing more has been charged. Please do not book this trip again in the meantime - we will email you either way. '
+      + `If you have not heard from us within 2 business days, ${call}.`;
   }
   return 'This booking could not be completed and our team is reviewing it, so it was not sent to the airline again. '
     + `Nothing more has been charged. If you have not heard from us within 2 business days, ${call}.`;
@@ -1270,7 +1353,7 @@ function notSentAgainMessage(bookingReference, paymentState) {
  * by the row's payment record (paymentStateOf). Where it is caught first, the
  * gateway has just confirmed the capture and nothing refunds it: 'held'.
  */
-function duplicatePaymentAnswer(bookingReference, paymentState = 'held') {
+function duplicatePaymentAnswer(bookingReference, paymentState = 'held', { firstCommitUnknown = false } = {}) {
   const call = `call (877) 538-7380 with booking reference ${bookingReference}`;
   const money = paymentState === 'returned' ? `This payment has been refunded. If you have any questions, ${call}.`
     : paymentState === 'partly_returned' ? `Part of this payment has been refunded. Please ${call} about the rest.`
@@ -1279,8 +1362,14 @@ function duplicatePaymentAnswer(bookingReference, paymentState = 'held') {
           + `heard from us within 2 business days, ${call}.`
         : 'Our support team will check what happened to this payment and contact you. If you have not heard from us '
           + `within 2 business days, ${call}.`;
-  const message = 'This payment looks like a second payment for a trip you have already booked, for the same travellers '
-    + `on the same flights, so we have not booked it again. Your other booking is not affected. ${money}`;
+  // The first booking's commit never answered (commitUnknownOf): it is paid
+  // for, and nobody knows yet whether it was booked.
+  const message = firstCommitUnknown
+    ? 'This payment looks like a second payment for a trip you have already paid for, for the same travellers '
+      + 'on the same flights, so we have not booked it again. Your first payment is not affected, and our team is still '
+      + `checking with the airline whether that booking went through. ${money}`
+    : 'This payment looks like a second payment for a trip you have already booked, for the same travellers '
+      + `on the same flights, so we have not booked it again. Your other booking is not affected. ${money}`;
   return {
     success: false,
     code: 'DUPLICATE_PAYMENT',
@@ -1288,6 +1377,10 @@ function duplicatePaymentAnswer(bookingReference, paymentState = 'held') {
     needsReview: true,
     bookingReference,
     paymentState,
+    // Said to the booking queue too, whose email about a queued second
+    // payment said "a trip you had already booked" (bookingQueue.job.js
+    // failureCopy).
+    firstCommitUnknown: Boolean(firstCommitUnknown),
     error: message,
     message,
   };
@@ -1299,13 +1392,17 @@ function duplicatePaymentAnswer(bookingReference, paymentState = 'held') {
  *
  * "This customer" is the account the checkout was made from, or the email it
  * was made with. "Booked or on its way" is a PNR, a committed or queued chain,
- * or a chain in progress that claimed first - the earlier claim, or the lower
- * reference on a tie. Two paid checkouts racing each other both get here after
- * taking their own claim, so they see each other, and only the later one is
- * held. Same names, not just the same flights: a family can book one flight
- * twice for different people, and nothing here refunds anybody.
+ * a commit the airline never answered, or a chain in progress that claimed
+ * first - the earlier claim, or the lower reference on a tie. Two paid
+ * checkouts racing each other both get here after taking their own claim, so
+ * they see each other, and only the later one is held. Same names, not just
+ * the same flights: a family can book one flight twice for different people,
+ * and nothing here refunds anybody.
  *
- * @returns {Promise<{ duplicateOf: string|null } | { unavailable: true }>}
+ * `firstCommitUnknown`: the booking it repeats is a commit the airline never
+ * answered, for the customer's wording (duplicatePaymentAnswer).
+ *
+ * @returns {Promise<{ duplicateOf: string|null, firstCommitUnknown?: boolean } | { unavailable: true }>}
  */
 async function findDuplicateBooking(booking, { travellers, offer, claimedAt, now = Date.now() }) {
   const flights = flightsKey(offer);
@@ -1349,7 +1446,14 @@ async function findDuplicateBooking(booking, { travellers, offer, claimedAt, now
     if (now - Date.parse(row.created_at) > DUPLICATE_LOOKBACK_MS) continue;
 
     const chain = other.gds_chain || {};
-    const booked = Boolean(other.pnr) || Boolean(other.queued_order) || ['committed', 'queued'].includes(chain.state);
+    // A commit that never answered (commitUnknownOf) may be held at the
+    // airline. Its row has no PNR and its chain stays 'in_progress', so it
+    // counted only for the chain's two-minute claim - after that a second
+    // payment for the trip was sent to the airline. It counts until a person
+    // finds out.
+    const firstCommitUnknown = Boolean(commitUnknownOf(row));
+    const booked = Boolean(other.pnr) || Boolean(other.queued_order) || ['committed', 'queued'].includes(chain.state)
+      || firstCommitUnknown;
     const theirClaim = Date.parse(chain.claimedAt || chain.startedAt);
     const bookingFirst = chain.state === 'in_progress'
       && now - Date.parse(chain.startedAt) < CHAIN_CLAIM_TTL_MS
@@ -1362,7 +1466,7 @@ async function findDuplicateBooking(booking, { travellers, offer, claimedAt, now
       || other.pending_booking_data?.bookingData?.passengerData
       || other.queued_order?.travelers;
     if (flightsKey(theirOffer) === flights && travellerNamesKey(theirTravellers) === names) {
-      return { duplicateOf: row.booking_reference };
+      return { duplicateOf: row.booking_reference, firstCommitUnknown };
     }
   }
   return { duplicateOf: null };
@@ -1408,14 +1512,24 @@ function confirmationEmailFromRow(booking, body = {}) {
   const segments = offer?.itineraries?.[0]?.segments || [];
   const firstSegment = segments[0] || {};
   const lastSegment = segments[segments.length - 1] || firstSegment;
-  const travellers = Array.isArray(body?.travelers) && body.travelers.length > 0
-    ? body.travelers
-    : (checkout?.bookingData?.passengerData || []);
+  // The travellers checkout verified, as the success path, the PNR's contact
+  // and the queue's failure email take them; the request body's only for a row
+  // that kept none. The body was read first, and the one the order page sends
+  // carries no traveller's email (shared/flightOrderBody.js): a lead
+  // traveller's address, when it was the only usable one, was never sent this
+  // email, and a body naming someone else put their name on it.
+  const verified = orderDataFromCheckoutRow(booking).passengerData;
+  const travellers = Array.isArray(verified) && verified.length > 0 ? verified
+    : (Array.isArray(body?.travelers) ? body.travelers : []);
   const lead = travellers[0] || {};
   const name = `${lead.firstName || lead.name?.firstName || ''} ${lead.lastName || lead.name?.lastName || ''}`.trim();
 
   return {
-    customerEmail: body?.contactInfo?.email || body?.customerEmail || lead.email || details.customer_email || '',
+    // The first address that can be delivered to, as the success path picks
+    // it. The first one given was taken whatever it held: a typed
+    // "jane@gmailcom" was sent the held-for-review email and a retry's owed
+    // confirmation, and the address checkout recorded never got them.
+    customerEmail: [body?.contactInfo?.email, body?.customerEmail, lead.email, details.customer_email].find(isUsableEmail) || '',
     customerName: name || 'Valued Customer',
     bookingReference: booking.booking_reference,
     bookingType: 'flight',
@@ -1821,24 +1935,21 @@ const transformAmadeusFlightData = (flights, dictionaries = {}) => {
       const carrierCode = firstSegment.carrierCode;
       const airlineName = airlines[carrierCode] || carrierCode;
 
-      // Format departure and arrival
+      // Format departure and arrival. A time is the airport's own clock, as
+      // the airline sends it and as the booking record keeps it
+      // (shared/bookingItineraries.js), in 24 hours: "02:40".
+      // `new Date(at).toLocaleTimeString()` read it through this server's time
+      // zone: right in UTC by accident, and 03:40 on a server whose zone
+      // springs forward that night.
       const departure = {
-        time: new Date(firstSegment.departure.at).toLocaleTimeString('en-US', {
-          hour: '2-digit',
-          minute: '2-digit',
-          hour12: false
-        }),
+        time: splitLocalDateTime(firstSegment.departure.at).time,
         airport: firstSegment.departure.iataCode,
         terminal: firstSegment.departure.terminal || '',
         date: firstSegment.departure.at.split('T')[0]
       };
 
       const arrival = {
-        time: new Date(lastSegment.arrival.at).toLocaleTimeString('en-US', {
-          hour: '2-digit',
-          minute: '2-digit',
-          hour12: false
-        }),
+        time: splitLocalDateTime(lastSegment.arrival.at).time,
         airport: lastSegment.arrival.iataCode,
         terminal: lastSegment.arrival.terminal || '',
         date: lastSegment.arrival.at.split('T')[0]
@@ -2491,6 +2602,14 @@ router.post('/order', optionalProtect, async (req, res) => {
   // decideFlightRefund's guard ("the booking records a ticket, but the airline
   // showed none") could never fire for it.
   let committedTicketed = false;
+  // The segment statuses of a schedule change the chain accepted and reported
+  // in its answer (`needsReview`, on top or under the numbers flag:
+  // amadeusSoap/index.js createFlightOrder). Hoisted for the same reason. The
+  // final save writes that answer; a hold written instead - the save failed,
+  // or a later step threw - passed flagForReview no schedule change, so the
+  // retiming was recorded nowhere, and ticket sync then sent the e-ticket with
+  // the searched times and settled the hold: nobody told the customer.
+  let committedScheduleChange = null;
   try {
     // ---- Whose payment is this, and is it real? ------------------------------
     //
@@ -2534,7 +2653,40 @@ router.post('/order', optionalProtect, async (req, res) => {
     // booking records as its order, for every later cancel and refund.
     const arcOrderId = existing.booking_details?.order_id || existing.booking_reference;
 
-    if (existing.status === 'cancelled') {
+    // In any case, as the reads below take it (unrecordedCancellationForCustomerOf
+    // lowercases): read exactly, a 'CANCELLED' row was not cancelled here, and
+    // its unrecorded-cancel flag read as settled - "Booking Confirmed!".
+    if (String(existing.status || '').toLowerCase() === 'cancelled') {
+      // Unless the proven payer paid after the cancel: a checkout cancelled with
+      // nothing to refund keeps its payment page open. Their money is put in
+      // front of the desk (payment/operations.handlers.js
+      // recordPaymentAfterCancel), and they are told it is still held.
+      const late = await recordPaymentAfterCancel(existing);
+      // Recorded by this answer or before it - by an earlier answer to this
+      // payer, or by the abandoned-checkout job - and said on every answer.
+      // Only the first one said it: a reload of the order page sends the order
+      // again, found the cancellation no longer NOTHING_TO_REFUND, and was told
+      // "cancelled and cannot be completed" with nothing about the money. What
+      // became of it since is what the payment record says (paymentStateOf).
+      const paidAfterCancel = late?.held > 0 || Boolean(existing.booking_details?.cancellation?.paidAfterCancel);
+      if (paidAfterCancel) {
+        const paymentState = late?.held > 0 ? 'held' : paymentStateOf(existing);
+        const text = 'This booking was cancelled before your payment went through, so it has not been booked.';
+        return res.status(409).json({
+          success: false, error: text, message: text, code: 'BOOKING_CANCELLED', bookingFailed: true,
+          refunded: paymentState === 'returned', paymentState,
+        });
+      }
+      // The gateway could not be asked whether a payment landed after the
+      // cancel. The payer has usually just come back from the payment page,
+      // and was told only that the booking was cancelled. The job asks again,
+      // and a payment it finds is put in front of the desk and the alarm.
+      if (late?.gatewayUnavailable) {
+        const text = 'This booking was cancelled, so it cannot be completed. We could not check with the payment gateway just now '
+          + 'whether a payment was taken for it. If you paid for it after it was cancelled, it has not been booked, and our team will refund you. '
+          + `If you have any questions, call (877) 538-7380 with booking reference ${existing.booking_reference}.`;
+        return res.status(409).json({ success: false, error: text, message: text, code: 'BOOKING_CANCELLED' });
+      }
       return res.status(409).json({
         success: false,
         error: 'This booking was cancelled and cannot be completed',
@@ -2563,7 +2715,16 @@ router.post('/order', optionalProtect, async (req, res) => {
     // exists", which the order page renders as "Your seats are reserved".
     // Found under a later flag too: a refused cancel writes its own on top.
     const awaitingSeat = Boolean(noConfirmedSeatOf(existing));
-    if (existing.booking_details?.pnr && !awaitingSeat) {
+    // Nor a booking a cancel released and could not record
+    // (flagUnrecordedCancellation): the row still reads confirmed and ticketed,
+    // and its flag names no voided ticket, so it was answered "Booking
+    // Confirmed!" with the void number as its ticket - to a customer told not
+    // to try again and to call. Answered as the review below answers it, as it
+    // already was with no PNR. Still once a person marks the flag handled with
+    // the booking left confirmed (unrecordedCancellationForCustomerOf): that
+    // un-voids nothing, and the answer was "Booking Confirmed!" again.
+    const unrecordedCancel = Boolean(unrecordedCancellationForCustomerOf(existing));
+    if (existing.booking_details?.pnr && !awaitingSeat && !unrecordedCancel) {
       const details = existing.booking_details;
       // Committed and still working: the request that holds this booking is
       // queueing it and issuing the ticket. Answered as it was before the
@@ -2585,12 +2746,22 @@ router.post('/order', optionalProtect, async (req, res) => {
       // ticket had been issued. Ticketed only on a live ticket once any was
       // voided; with none voided, as before (a ticket whose number was not
       // read back is still issued).
+      // Or on a ticket whose number was never read back and that the voids do
+      // not cover (liveTicketNumbersMissingOf, as the booking reads count it).
+      // Two travellers, one number read back and voided, the other's void
+      // refused: that was answered "its ticket has been voided", and both pages
+      // said "not valid for travel" of a booking with a live ticket.
       const voidedTickets = voidedTicketsOf(existing);
       const voidedDigits = new Set(voidedTickets.map((number) => String(number).replace(/\D/g, '')));
       const tickets = (Array.isArray(details.tickets) ? details.tickets : [])
         .filter((ticket) => !voidedDigits.has(String(ticket?.number ?? '').replace(/\D/g, '')));
-      const ticketed = tickets.length > 0 || (details.gds?.ticketed === true && voidedTickets.length === 0);
+      const ticketed = tickets.length > 0 || (details.gds?.ticketed === true
+        && (voidedTickets.length === 0 || Boolean(liveTicketNumbersMissingOf(existing))));
       const allVoided = !ticketed && voidedTickets.length > 0;
+      // A cancel the airline refused, which our team is completing: "its
+      // ticket has not been issued yet" promised one, and the order page said
+      // "our team is finishing it", to a customer who had asked to cancel.
+      const cancelFailed = Boolean(openFailedCancellationOf(existing));
       console.log('↩️ Already booked, returning the stored order', details.pnr);
       // A retry can be the first chance to send a confirmation this booking
       // never got: its first send was skipped for want of an address, or failed.
@@ -2620,6 +2791,7 @@ router.post('/order', optionalProtect, async (req, res) => {
         // The numbers a cancel voided, as the booking reads send them
         // (toClientBooking), for the pages' voided wording.
         voided_tickets: voidedTickets,
+        cancelFailed,
         needsReview: Boolean(details.needs_review),
         // What the payment record says, as the 409 retry answers carry it. A
         // held PNR refunded from the Payments tab (payment_status alone) was
@@ -2629,14 +2801,20 @@ router.post('/order', optionalProtect, async (req, res) => {
         savedToDatabase: true,
         message: ticketed ? 'This booking already exists'
           : allVoided ? 'This booking already exists; its ticket has been voided'
-            : 'This booking already exists; its ticket has not been issued yet'
+            : cancelFailed ? 'This booking already exists; its cancellation has not been completed with the airline yet'
+              : 'This booking already exists; its ticket has not been issued yet'
       });
     }
 
     // A payment already held as a second payment for one trip stays held: a
     // human decides whether to book or refund it (findDuplicateBooking, below).
     if (existing.booking_details?.needs_review?.duplicate_of) {
-      return res.status(409).json(duplicatePaymentAnswer(existing.booking_reference, paymentStateOf(existing)));
+      // Worded by what the first booking is now: a commit still being checked
+      // with the airline is paid for, not booked.
+      const first = await findExistingBooking(existing.booking_details.needs_review.duplicate_of);
+      return res.status(409).json(duplicatePaymentAnswer(existing.booking_reference, paymentStateOf(existing), {
+        firstCommitUnknown: Boolean(first && commitUnknownOf(first)),
+      }));
     }
 
     // A booking whose fulfilment already failed, or that a human is sorting
@@ -2649,11 +2827,13 @@ router.post('/order', optionalProtect, async (req, res) => {
     // Refused before the gateway is asked, and nothing is refunded here.
     const failedBefore = existing.booking_details?.fulfillment_failed;
     const review = existing.booking_details?.needs_review;
-    if (failedBefore || (review && !EMAILED_REVIEW_REASONS.has(review.reason))) {
+    if (failedBefore || unrecordedCancel || (review && !EMAILED_REVIEW_REASONS.has(review.reason))) {
       // Said from the row, not assumed: the order page says "your payment is
       // held ... do not book this trip again" only when this says 'held'.
       const paymentState = paymentStateOf(existing);
-      const message = notSentAgainMessage(existing.booking_reference, paymentState);
+      const message = notSentAgainMessage(existing.booking_reference, paymentState, {
+        commitUnknown: Boolean(commitUnknownOf(existing)),
+      });
       return res.status(409).json({
         success: false,
         code: failedBefore ? 'BOOKING_FAILED' : 'BOOKING_NEEDS_REVIEW',
@@ -3022,7 +3202,9 @@ router.post('/order', optionalProtect, async (req, res) => {
           retryable: true
         });
       }
-      return res.status(409).json(duplicatePaymentAnswer(existing.booking_reference));
+      return res.status(409).json(duplicatePaymentAnswer(existing.booking_reference, 'held', {
+        firstCommitUnknown: duplicate.firstCommitUnknown,
+      }));
     }
 
     // Prepare flight order data for Amadeus (only if we have valid Amadeus format)
@@ -3037,6 +3219,19 @@ router.post('/order', optionalProtect, async (req, res) => {
       // as typed.
       ? [{ deviceType: 'MOBILE', ...(contactInfo.countryCode ? { countryCallingCode: String(contactInfo.countryCode).replace(/\D/g, '') } : {}), number: String(contactInfo.phoneNumber) }]
       : [];
+    // The PNR's contact email (SSR CTCE): the first address that can be
+    // delivered to, in the success path's order. The first one given was taken
+    // whatever it held, and the CTCE builder drops an address it cannot write,
+    // so a typed "jane@gmailcom" left the PNR with no email contact at all -
+    // which some airlines refuse to ticket - while checkout had recorded a good
+    // one. The address checkout recorded is the fallback, not a made-up one
+    // (the old placeholder was not even this company's domain).
+    const contactEmail = [
+      contactInfo?.email,
+      req.body.customerEmail,
+      travelersList[0]?.email,
+      existing.booking_details?.customer_email,
+    ].find(isUsableEmail);
 
     const amadeusTravelers = travelersList.map((traveler, idx) => {
       const travelerObj = {
@@ -3052,7 +3247,7 @@ router.post('/order', optionalProtect, async (req, res) => {
           lastName: String(traveler.lastName).trim()
         },
         contact: contactInfo ? {
-          emailAddress: contactInfo.email || travelersList[0]?.email,
+          emailAddress: contactEmail,
           phones: contactPhones
         } : undefined
       };
@@ -3141,9 +3336,7 @@ router.post('/order', optionalProtect, async (req, res) => {
           },
           purpose: 'STANDARD',
           phones: contactPhones,
-          // The address checkout recorded is the fallback, not a made-up one
-          // (the old placeholder was not even this company's domain).
-          emailAddress: contactInfo?.email || travelersList[0]?.email || existing.booking_details?.customer_email || undefined
+          emailAddress: contactEmail
         }]
       }
     };
@@ -3215,6 +3408,7 @@ router.post('/order', optionalProtect, async (req, res) => {
       // throwing getter precisely to simulate "the chain answered, then reading
       // its answer failed", and touching it turned that 202-held into a 502.
       if (orderResponse?.ticketed === true) committedTicketed = true;
+      committedScheduleChange = scheduleChangeOf({ needs_review: orderResponse?.needsReview })?.statuses ?? null;
 
       console.log('✅ Amadeus service call completed:', {
         success: orderResponse?.success,
@@ -3278,6 +3472,10 @@ router.post('/order', optionalProtect, async (req, res) => {
           pnr: providerError.pnr,
           reason: `chain failed after commit at ${providerError.step}`,
           ticketed: providerError.ticketed,
+          // What the chain knows beyond "not ticketed": an issuance nobody saw
+          // answered, and a schedule change it accepted before failing.
+          issuance: providerError.issuance,
+          scheduleChanged: providerError.scheduleChanged,
           amadeus: (providerError.amadeusCode || providerError.technicalError)
             ? {
               operation: providerError.operation || null,
@@ -3327,6 +3525,10 @@ router.post('/order', optionalProtect, async (req, res) => {
         // anything, and saying so would be the kind of promise this route has
         // been cleaned of elsewhere.
         const holdsSeats = Boolean(providerError.pnr);
+        // Failed past issuance: the ticket exists (ticketedHoldAnswer).
+        if (holdsSeats && providerError.ticketed === true) {
+          return res.status(202).json(ticketedHoldAnswer(providerError.pnr, req.body.bookingReference));
+        }
         return res.status(202).json({
           success: true,
           data: { id: providerError.pnr, pnr: providerError.pnr, status: 'PENDING_CONFIRMATION' },
@@ -3488,8 +3690,13 @@ router.post('/order', optionalProtect, async (req, res) => {
       origin: firstSegment.departure?.iataCode || '',
       destination: lastSegment.arrival?.iataCode || '',
       departureDate: firstSegment.departure?.at?.split('T')[0] || '',
-      departureTime: firstSegment.departure?.at ? new Date(firstSegment.departure.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '',
-      arrivalTime: lastSegment.arrival?.at ? new Date(lastSegment.arrival.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '',
+      // The airport's own clock, as the airline sends it and as the legs below
+      // keep it (shared/bookingItineraries.js), printed the way every page
+      // prints a leg ("2:40 AM"). `new Date(at).toLocaleTimeString()` read it
+      // through this server's time zone: right in UTC by accident, and a 02:40
+      // departure stored as 03:40 on a server whose zone springs forward.
+      departureTime: clockTime(splitLocalDateTime(firstSegment.departure?.at).time),
+      arrivalTime: clockTime(splitLocalDateTime(lastSegment.arrival?.at).time),
       arrivalDate: lastSegment.arrival?.at?.split('T')[0] || '',
       airline: firstSegment.carrierCode || '',
       airlineName: firstOffer?.validatingAirlineCodes?.[0] || firstSegment.carrierCode || '',
@@ -3549,6 +3756,51 @@ router.post('/order', optionalProtect, async (req, res) => {
     });
 
     console.log('📝 Database save result:', dbBooking ? 'Success' : 'Skipped/Failed');
+
+    // Issued, and the save that records it failed. The row still says what
+    // the commit wrote - `gds.ticketed: false`, no ticket numbers, no flag -
+    // so the alarm told staff "no ticket was issued ... ticket it, or refund
+    // it" and the desk "Paid, seats held, no ticket", of a live ticket: a
+    // second ticket charges the fare twice. What the chain knew is recorded
+    // on a hold after issue, as the outer catch below records it, which the
+    // desk, the alarm and ticket sync (the e-ticket) all read. Never on a
+    // booking cancelled meanwhile.
+    if (!dbBooking && pnrValue && orderResponse.ticketed === true) {
+      const bookingReference = req.body.bookingReference || orderIdValue;
+      const row = await findExistingBooking(bookingReference);
+      if (row?.status !== 'cancelled') {
+        await flagForReview({
+          bookingReference,
+          pnr: pnrValue,
+          reason: 'order route failed after commit: the booking could not be saved',
+          ticketed: true,
+          tickets: orderResponse.tickets,
+          scheduleChanged: committedScheduleChange
+        });
+      }
+    }
+
+    // Not issued, the airline retimed a flight, and the save that records it
+    // failed. The row kept only what the commit wrote - the PNR and
+    // `gds.ticketed: false`, no flag - so the alarm posted "paid but not
+    // ticketed" with no word of the retiming, ticket sync later emailed the
+    // e-ticket with the searched times, and nobody told the customer. The
+    // chain's own flag is written as the save would have written it (with any
+    // flag already on the row kept under it), and the chain recorded stopped,
+    // as the save and a hold record it. Never on a booking cancelled meanwhile.
+    if (!dbBooking && pnrValue && orderResponse.ticketed !== true && committedScheduleChange) {
+      const bookingReference = req.body.bookingReference || orderIdValue;
+      const chainFlag = orderResponse.needsReview;
+      const row = await findExistingBooking(bookingReference);
+      if (chainFlag && row?.status !== 'cancelled') {
+        await patchBookingDetails(bookingReference, (details) => ({
+          needs_review: details.needs_review && !chainFlag.previous ? { ...chainFlag, previous: details.needs_review } : chainFlag,
+          ...(details.gds_chain?.state === 'committed'
+            ? { gds_chain: { ...details.gds_chain, state: 'finished', finishedAt: new Date().toISOString() } }
+            : {}),
+        }));
+      }
+    }
 
     // --- Send Booking Confirmation Email ---
     if (dbBooking) {
@@ -3678,7 +3930,7 @@ router.post('/order', optionalProtect, async (req, res) => {
       if (pnr && row?.status !== 'cancelled') {
         // A PNR exists: the airline holds seats. Never refund that
         // automatically - a human decides.
-        await flagForReview({
+        const held = {
           bookingReference: ref,
           pnr,
           reason: `order route failed after commit: ${String(error.message || error).slice(0, 200)}`,
@@ -3689,10 +3941,17 @@ router.post('/order', optionalProtect, async (req, res) => {
           // one. Now set when the chain reports a ticket, and `error.ticketed`
           // covers a failure inside a post-issuance step.
           ticketed: committedTicketed || error?.ticketed === true
-            || row?.booking_details?.gds?.ticketed === true
-        });
-        // This answer promises an email; it used to send none.
+            || row?.booking_details?.gds?.ticketed === true,
+          scheduleChanged: committedScheduleChange
+        };
+        await flagForReview(held);
+        // This answer promises an email; it used to send none. Not to a
+        // ticketed booking (confirmationEmailKind): ticket sync sends its
+        // e-ticket.
         await sendHeldForReviewEmail(ref, req.body);
+        // The order page said "your ticket could not be issued automatically"
+        // of a ticket the chain had issued.
+        if (held.ticketed) return res.status(202).json(ticketedHoldAnswer(pnr, ref));
         return res.status(202).json({
           success: true,
           data: { id: pnr, pnr, status: 'PENDING_CONFIRMATION', bookingReference: ref },
@@ -4282,13 +4541,21 @@ export function toClientBooking(booking, { showPassports = false } = {}) {
     // "Reservation Held - your seats are reserved". Only the fact of it: the
     // stored order carries passport numbers and stays in the database.
     queued: Boolean(booking.booking_details?.queued_order) && !booking.booking_details?.pnr,
-    cancellation: booking.booking_details?.cancellation || null,
+    // Or, for a cancel that went through, could not be recorded and was then
+    // recorded cancelled by hand, what its flag says it did with the money
+    // (cancellationRecordedByHandOf). With none, the pages read the row's
+    // 'paid' and said "Refund pending" of a payment the cancel had voided.
+    cancellation: booking.booking_details?.cancellation || cancellationRecordedByHandOf(booking) || null,
     tickets: booking.booking_details?.tickets || [],
     // Which of those a cancel voided. A cancel that voids and then has
     // PNR_Cancel refused leaves the list as it was, so the pages called every
     // number on it an issued ticket and printed void numbers on an "E-Ticket".
     // The booking's own list plus every flag's (voidedTicketsOf).
     voided_tickets: voidedTicketsOf(booking),
+    // A cancel the airline refused, which our team is completing
+    // (openFailedCancellationOf). No page read it, so a held reservation went
+    // on promising a ticket to a customer who had asked to cancel it.
+    cancel_failed: Boolean(openFailedCancellationOf(booking)),
     // The reason is what the e-ticket reads ("ticket_numbers_not_retrieved").
     // The rest of the record is for the support desk: gateway errors, reversal
     // attempts, the GDS detail.
@@ -4303,7 +4570,20 @@ export function toClientBooking(booking, { showPassports = false } = {}) {
         no_confirmed_seat: Boolean(noConfirmedSeatOf(booking)),
         // Issued, but the numbers have not reached us: "not issued" was false.
         // Not once a cancel voided those tickets: "issued" was false then.
-        ticket_numbers_missing: Boolean(liveTicketNumbersMissingOf(booking)),
+        // Held by the order route after its ticket was issued, too
+        // (ticketIssuedBeforeHoldOf): that booking has no number either.
+        ticket_numbers_missing: Boolean(liveTicketNumbersMissingOf(booking) || ticketIssuedBeforeHoldOf(booking)),
+        // The airline commit never answered, and nobody has found out since
+        // (commitUnknownOf). Read from the reason alone, it was a booking
+        // with no PNR like any failed one, and every page said it had failed.
+        commit_unknown: Boolean(commitUnknownOf(booking)),
+        // A cancel that went through - tickets voided, the reservation
+        // released, the money moved - and whose record could not be written
+        // (unrecordedCancellationForCustomerOf). The row still reads confirmed,
+        // paid and ticketed, and the flag names no voided number, so every page
+        // called the void ticket issued and offered it as an E-Ticket. Past a
+        // flag a person resolved, until the booking is recorded cancelled.
+        unrecorded_cancellation: Boolean(unrecordedCancellationForCustomerOf(booking)),
       }
       : null,
     // Whether the GDS ticketed. The rest is the office id, the GDS session and
@@ -4898,6 +5178,10 @@ function normalizeBookingRow(b) {
     ticketNumbers: ticketsOf(d).map((ticket) => ticket.number),
     attention: attentionOf(b),
     reviewResolution: reviewResolution(b),
+    // The airline commit never answered (commitUnknownOf): the desk resolves
+    // it with what the airline said, and a record locator if it holds it
+    // (resolve-review).
+    commitUnknown: Boolean(commitUnknownOf(b)),
     // Being booked, waiting in the queue, or being cancelled right now
     // (utils/bookingChainClaim.js). The panel hides Void for such a booking, as
     // the server refuses it; worked out here, where the claim's lifetime is known.
@@ -5236,6 +5520,164 @@ router.post('/admin-bookings/:id/refund', protect, bookingStaff, async (req, res
   }
 });
 
+/** What the desk found out about a commit the airline never answered. */
+const COMMIT_OUTCOMES = ['not_held', 'held'];
+
+const refuseResolve = (res, status, code, text) => res.status(status).json({ success: false, code, error: text, message: text });
+
+/** What the desk is told when its write lost a race (unchangedSince matched nothing). */
+const BOOKING_CHANGED_TEXT = 'This booking changed while you were recording it. Nothing has been recorded; reload it and try again.';
+
+/**
+ * Pin a desk write to the flag's resolution as it was read. unchangedSince
+ * pins status, payment and the fields that move money, not needs_review, so
+ * two people answering the same booking at once could both succeed: a "held"
+ * written after a "not held" erased the first answer and emailed the customer,
+ * and a second "mark as handled" overwrote the first one's note. The loser now
+ * matches nothing, is told the booking changed, and on reload sees who handled it.
+ */
+const pinResolution = (query, booking) => {
+  const resolvedAt = booking?.booking_details?.needs_review?.resolved_at;
+  return resolvedAt
+    ? query.eq('booking_details->needs_review->>resolved_at', resolvedAt)
+    : query.is('booking_details->needs_review->>resolved_at', null);
+};
+
+/**
+ * The desk found the airline holds a booking whose commit never answered:
+ * write its record locator on the row as the chain records a commit
+ * (persistCommittedPnr, then flagForReview on a stopped chain) - the locator,
+ * not ticketed, the chain finished, pending ticketing - so it reads as held,
+ * counts as booked for the duplicate check, and is followed up like any paid
+ * reservation that was never ticketed: the desk list and the alarm show it
+ * under the flag they give such a booking (UNTICKETED_REVIEW_REASON), and
+ * ticket sync reads its ticket once it is issued by hand. What the desk found
+ * is kept under that flag, resolved.
+ *
+ * Written only onto the row as read (unchangedSince), in one update with the
+ * status: a cancel or anything else that landed in between makes it match
+ * nothing, and nothing is written.
+ *
+ * @returns {Promise<{ pnr: string } | { refused: true, status: number, code: string, text: string }>}
+ */
+async function recordHeldAtAirline(booking, { note, at, by, pnr: given }) {
+  const refused = (status, code, text) => ({ refused: true, status, code, text });
+  const details = booking.booking_details || {};
+  if (details.pnr) {
+    return refused(409, 'HELD_NOT_ALLOWED', `This booking already has a record locator (${details.pnr}), so there is nothing to record as held.`);
+  }
+  if (!commitUnknownOf(booking)) {
+    return refused(409, 'HELD_NOT_ALLOWED', 'Only a booking whose airline commit never answered can be recorded as held here.');
+  }
+  const recordAsNotHeld = 'If the airline holds a reservation for it, cancel that reservation with the airline, then record it as not held with what you did.';
+  if (['cancelled', 'refunded'].includes(String(booking.status || '').toLowerCase())
+    || ['refunded', 'partially_refunded', 'reversed', 'voided'].includes(String(booking.payment_status || '').toLowerCase())) {
+    return refused(409, 'HELD_NOT_ALLOWED', `This booking has been cancelled or refunded, so it cannot be recorded as held. ${recordAsNotHeld}`);
+  }
+  // A cancel already ran on it: recorded (its cancellation), or carried out
+  // and not recorded (unrecordedCancellationForCustomerOf, which reads past a
+  // flag marked handled). Cancel & Refund on a commit that never answered has
+  // no reservation to release and voids the whole payment; when its record
+  // could not be written the row still read pending and paid, and "held" made
+  // it a paid reservation to ticket - the customer emailed a confirmation,
+  // Slack told staff to ticket it - against a payment ARC may no longer hold.
+  const cancelRan = details.cancellation || unrecordedCancellationForCustomerOf(booking);
+  if (cancelRan) {
+    const money = cancelRan.paymentAction
+      ? ` (it recorded payment ${cancelRan.paymentAction} ${Number(cancelRan.refundAmount) || 0} ${cancelRan.currency || details.arc_captured_currency || 'USD'})`
+      : '';
+    return refused(409, 'HELD_NOT_ALLOWED', `A cancellation has already been carried out on this booking${money}, so it cannot be recorded as held: `
+      + `its payment may no longer be held. ${recordAsNotHeld}`);
+  }
+  const pnr = String(given ?? '').trim().toUpperCase();
+  if (!/^[A-Z0-9]{6}$/.test(pnr)) {
+    return refused(400, 'PNR_INVALID', 'A record locator is 6 letters and digits, like ABC123.');
+  }
+  if (liveChainState(details.gds_chain)) {
+    return refused(409, 'BOOKING_BUSY', 'This booking is being booked or cancelled right now. Nothing has been recorded; please try again in a few minutes.');
+  }
+  // Another booking's locator, typed by mistake, would have ticket sync read
+  // that customer's tickets onto this booking and email them to this customer.
+  const { data: others, error: lookupError } = await supabase
+    .from('bookings').select('booking_reference').eq('booking_details->>pnr', pnr).limit(1);
+  if (lookupError) return refused(500, 'LOOKUP_FAILED', 'Could not check the record locator. Nothing has been recorded; please try again.');
+  if (others?.length) {
+    return refused(409, 'PNR_IN_USE', `Record locator ${pnr} is already on booking ${others[0].booking_reference}, so it was not recorded on this one. `
+      + 'Check the locator with the airline.');
+  }
+
+  const heldWrite = unchangedSince(
+    supabase
+      .from('bookings')
+      .update({
+        status: 'pending_ticketing',
+        booking_details: {
+          ...details,
+          pnr,
+          amadeus_order_id: pnr,
+          gds: { ...(details.gds || {}), ticketed: false },
+          gds_chain: { ...(details.gds_chain || {}), state: 'finished', finishedAt: at },
+          needs_review: {
+            reason: UNTICKETED_REVIEW_REASON,
+            ticketed: false,
+            at,
+            previous: { ...details.needs_review, resolved_at: at, resolved_by: by, resolution: note, outcome: 'held', pnr },
+          },
+        },
+        updated_at: at,
+      })
+      .eq('id', booking.id),
+    booking,
+  );
+  const { data: written, error } = await pinResolution(heldWrite, booking).select('id');
+  if (error) return refused(500, 'WRITE_FAILED', 'Could not record it. Nothing has been recorded; please try again.');
+  if (!written?.length) return refused(409, 'BOOKING_CHANGED', BOOKING_CHANGED_TEXT);
+  return { pnr };
+}
+
+/**
+ * The customer's email for a commit the desk found the airline does not hold,
+ * while their payment is still held (shared/reviewQueue.js notHeldStillPaidOf).
+ * Every page had told them "we will email you either way", and "not held" sent
+ * nothing: the held answer emails its confirmation, this one emailed no one.
+ * The booking queue's customer email (bookingQueue.job.js notifyCustomer), the
+ * same template and fields. The refund itself is the desk's to make, and its
+ * cancellation email says what went back.
+ */
+export const NOT_HELD_EMAIL = {
+  subject: 'Your flight booking did not go through',
+  status: 'Not booked - refund on its way',
+  whatHappensNext: 'We checked with the airline, and your booking did not go through: the airline does not hold a reservation '
+    + 'for it, so you are not booked on these flights. Our team is refunding your payment, and we will email you when the '
+    + 'refund is made; it usually reaches your card within 5-10 business days after that. If you have not heard from us within '
+    + '2 business days, call (877) 538-7380 with your booking reference.',
+};
+
+/**
+ * Send NOT_HELD_EMAIL to the address the success path would use
+ * (confirmationEmailFromRow). Once: only the press whose "not held" was
+ * written sends it, and that write is pinned to the flag still unresolved.
+ * Never throws.
+ *
+ * @returns {Promise<boolean>} whether it was sent
+ */
+async function sendNotHeldEmail(booking) {
+  try {
+    const to = confirmationEmailFromRow(booking).customerEmail;
+    if (!to) return false;
+    const { sendEmail } = await import('../services/emailService.js');
+    await sendEmail({
+      to,
+      subject: NOT_HELD_EMAIL.subject,
+      data: { bookingReference: booking.booking_reference, status: NOT_HELD_EMAIL.status, whatHappensNext: NOT_HELD_EMAIL.whatHappensNext },
+    });
+    return true;
+  } catch (error) {
+    console.error('❌ Not-held email not sent:', { reference: booking?.booking_reference, error: error.message });
+    return false;
+  }
+}
+
 /**
  * POST /api/flights/admin-bookings/:id/resolve-review — "I have dealt with this".
  *
@@ -5266,38 +5708,180 @@ router.post('/admin-bookings/:id/resolve-review', protect, bookingStaff, async (
     if (!booking) return res.status(404).json({ success: false, error: 'Booking not found' });
 
     const details = booking.booking_details || {};
-    if (details.needs_review?.resolved_at) {
+    // A flag marked handled before a refund failed does not settle the refund
+    // (shared/reviewQueue.js): the booking is still on the list, so it is
+    // still something to handle.
+    const attention = attentionOf(booking);
+    if (details.needs_review?.resolved_at && !attention) {
       const text = 'This booking was already marked as handled.';
       return res.status(409).json({ success: false, code: 'ALREADY_RESOLVED', error: text, message: text });
     }
-    if (!attentionOf(booking)) {
+    if (!attention) {
       const text = 'There is nothing to handle on this booking.';
       return res.status(409).json({ success: false, code: 'NOTHING_TO_RESOLVE', error: text, message: text });
     }
+    // The press is about what the desk page showed (shownKind, shownSince:
+    // the entry's kind and time as the list gave them), and it is written over
+    // whatever the booking needs NOW. The page never polls: a member still
+    // looking at "Refund to claim from the airline" after someone else handled
+    // the claim recorded the same claim again - as the refused customer
+    // refund's resolution, and the unreturned money left Needs attention. An
+    // entry the booking no longer shows is refused, and nothing is written.
+    //
+    // So is a press that does not say what it showed. It was taken as before,
+    // and the desk page - the only caller - always says; the one press that
+    // did not was a /desk tab still on the bundle from before this check,
+    // and it wrote its stale note over whatever the booking needed by then.
+    const shownKind = String(req.query?.shownKind ?? '');
+    if (!shownKind) {
+      return refuseResolve(res, 409, 'BOOKING_CHANGED', 'Your page did not say which entry it showed; it may be from before an update. '
+        + 'Nothing has been recorded; reload the page to see what this booking needs now.');
+    }
+    const shownSince = String(req.query?.shownSince ?? '') || null;
+    if (shownKind !== attention.kind || shownSince !== (attention.since || null)) {
+      return refuseResolve(res, 409, 'BOOKING_CHANGED', `This booking changed since your page showed it: it now reads `
+        + `"${attentionLabel(attention)}". Nothing has been recorded; reload the page to see what it needs now.`);
+    }
+    const openFlag = details.needs_review?.resolved_at ? null : details.needs_review;
 
     const at = new Date().toISOString();
     const by = req.user?.email || req.user?.id || 'staff';
-    const { error } = await supabase
-      .from('bookings')
-      .update({
-        booking_details: {
-          ...details,
-          // Created when it is missing: the alarm names paid-but-not-ticketed
-          // bookings that were never flagged, and those need a record too.
-          needs_review: {
-            ...(details.needs_review || { reason: 'PNR committed, never ticketed', ticketed: false, at }),
-            resolved_at: at,
-            resolved_by: by,
-            resolution: note,
-          },
-        },
-        updated_at: at,
-      })
-      .eq('id', booking.id);
+
+    // One entry, two jobs (attentionOf `jobs`): a customer refund ARC Pay
+    // refused, under an airline claim flag. A press resolved the claim flag
+    // whatever its note said - kind and time cannot tell the jobs apart, since
+    // a Finish refund leaves the claim open and changes neither - and a refund
+    // note closed an airline claim nobody had made. So the press says which
+    // job it handled, and a job the booking no longer has is refused: nothing
+    // is written either way.
+    const job = req.body?.job ?? null;
+    if (job !== null && !ATTENTION_JOBS.includes(job)) {
+      return refuseResolve(res, 400, 'JOB_INVALID', 'Say which job you handled: the customer\'s refund or the airline claim.');
+    }
+    if (attention.jobs && !job) {
+      return refuseResolve(res, 409, 'JOB_REQUIRED', 'This entry is two jobs: the customer\'s refund, which ARC Pay refused or never answered, and the claim '
+        + 'from the airline. Nothing has been recorded; reload the page and mark the one you handled.');
+    }
+    const jobShown = job === null || (attention.jobs
+      ? attention.jobs.includes(job)
+      : job === 'claim' && attention.kind === 'airline_refund');
+    if (!jobShown) {
+      return refuseResolve(res, 409, 'BOOKING_CHANGED', `This booking changed since your page showed it: it now reads `
+        + `"${attentionLabel(attention)}"${attention.kind === 'airline_refund' ? ', and the customer\'s refund is no longer part of it' : ''}. `
+        + 'Nothing has been recorded; reload the page to see what it needs now.');
+    }
+
+    // "Customer refund handled": recorded on the claim flag, which stays open
+    // for whoever claims the tickets (shared/reviewQueue.js
+    // refusedRefundHandledOn). Pinned to the row as read, to the flag still
+    // open, and to no refund recorded handled in between.
+    if (job === 'refund') {
+      const refundWrite = unchangedSince(
+        supabase
+          .from('bookings')
+          .update({
+            booking_details: { ...details, needs_review: { ...openFlag, refundHandled: { at, by, note } } },
+            updated_at: at,
+          })
+          .eq('id', booking.id)
+          .is('booking_details->needs_review->refundHandled->>at', null),
+        booking,
+      );
+      const { data: written, error } = await pinResolution(refundWrite, booking).select('id');
+      if (error) return res.status(500).json({ success: false, error: 'Could not record it' });
+      if (!written?.length) return refuseResolve(res, 409, 'BOOKING_CHANGED', BOOKING_CHANGED_TEXT);
+      console.log('✅ Refused refund marked handled by the desk; the airline claim stays open:', { reference: booking.booking_reference, by });
+      return res.json({
+        success: true, resolvedAt: at, resolvedBy: by, note, job,
+        message: 'The customer\'s refund is recorded as handled. The claim from the airline is still open.',
+      });
+    }
+
+    // A commit the airline never answered (commitUnknownOf) is resolved with
+    // what the airline said. "Handled" alone read as "did not go through" on
+    // every page and to the duplicate check - false whenever the airline did
+    // hold it, and the record locator the desk had just been given was
+    // written nowhere, so nothing could ticket it.
+    const commitUnknown = Boolean(commitUnknownOf(booking));
+    const outcome = req.body?.outcome ?? null;
+    if (commitUnknown && !COMMIT_OUTCOMES.includes(outcome)) {
+      return refuseResolve(res, 400, 'OUTCOME_REQUIRED',
+        'Say what the airline told you: that it does not hold this booking, or that it does, with its record locator.');
+    }
+    if (outcome === 'held') {
+      const held = await recordHeldAtAirline(booking, { note, at, by, pnr: req.body?.pnr });
+      if (held.refused) return refuseResolve(res, held.status, held.code, held.text);
+      console.log('✅ Commit that never answered recorded as held by the desk:', { reference: booking.booking_reference, pnr: held.pnr, by });
+      // The customer was told "we will email you either way", and nothing
+      // did: the booking now owes the email any paid reservation gets
+      // (confirmationEmailOwed), which only a reload of the order page or the
+      // e-ticket much later would have sent. Sent here, read back from the row
+      // as written, through the confirmation's own claim, so a reload cannot
+      // send it again. Its first chance to email, so it fails open like the
+      // success path's first send. Never throws.
+      const email = await sendOwedConfirmation(booking.booking_reference);
+      return res.json({
+        success: true, resolvedAt: at, resolvedBy: by, note, outcome: 'held', pnr: held.pnr, emailed: email.sent === true,
+        message: `Recorded as held at the airline under ${held.pnr}. It now waits to be ticketed.`,
+      });
+    }
+
+    // Created when it is missing: the alarms name paid-but-not-ticketed
+    // bookings and refused refunds that were never flagged, and those need a
+    // record too - under what was wrong, and over any earlier flag, which is
+    // kept.
+    const resolved = {
+      ...(openFlag || {
+        reason: attention.reason,
+        ...(attention.kind === 'not_ticketed' ? { ticketed: false } : {}),
+        at,
+        ...(details.needs_review ? { previous: details.needs_review } : {}),
+      }),
+      resolved_at: at,
+      resolved_by: by,
+      resolution: note,
+      ...(commitUnknown ? { outcome: 'not_held' } : {}),
+    };
+    // "Not held" while the payment is still held (notHeldStillPaidOf): the
+    // customer paid for a booking that does not exist. It stays on the desk
+    // as a refund to make, and the needs-review alarm announces it once more,
+    // as that: the stamp it left when it announced the commit is not carried
+    // over, or it would never say a word about the money.
+    const refundToMake = commitUnknown
+      && Boolean(notHeldStillPaidOf({ ...booking, booking_details: { ...details, needs_review: resolved } }));
+    const { alerted_at: _announcedAsCommit, ...toAnnounce } = resolved;
+
+    // Pinned to the row as read (unchangedSince), as recordHeldAtAirline is.
+    // The whole column is written back from the copy read above, and filtered
+    // by id alone it put back anything written in between: a "held" recorded
+    // by someone else a moment earlier lost its record locator, and the
+    // booking was left pending_ticketing with no PNR; a ticket that ticket
+    // sync had just recorded was lost the same way.
+    const resolveWrite = unchangedSince(
+      supabase
+        .from('bookings')
+        .update({
+          booking_details: { ...details, needs_review: refundToMake ? toAnnounce : resolved },
+          updated_at: at,
+        })
+        .eq('id', booking.id),
+      booking,
+    );
+    const { data: written, error } = await pinResolution(resolveWrite, booking).select('id');
 
     if (error) return res.status(500).json({ success: false, error: 'Could not record it' });
+    if (!written?.length) return refuseResolve(res, 409, 'BOOKING_CHANGED', BOOKING_CHANGED_TEXT);
 
     console.log('✅ Booking marked handled by the desk:', { reference: booking.booking_reference, by });
+    if (refundToMake) {
+      // The customer was told "we will email you either way". Only this press
+      // wrote "not held" (pinResolution), so it is sent once.
+      const emailed = await sendNotHeldEmail(booking);
+      console.log('↩️ Not held at the airline, payment still held: a refund to make', { reference: booking.booking_reference, emailed });
+      return res.json({
+        success: true, resolvedAt: at, resolvedBy: by, note, outcome: 'not_held', refundToMake: true, emailed, message: 'Marked as handled',
+      });
+    }
     return res.json({ success: true, resolvedAt: at, resolvedBy: by, note, message: 'Marked as handled' });
   } catch (error) {
     console.error('❌ Resolve review error:', errorSummary(error));

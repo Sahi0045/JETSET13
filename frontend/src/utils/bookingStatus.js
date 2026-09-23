@@ -1,4 +1,7 @@
-import { NO_CONFIRMED_SEAT_REVIEW_REASON, hasNoConfirmedSeat, isPaid, ticketState, ticketsVoided } from './eTicket';
+import {
+  NO_CONFIRMED_SEAT_REVIEW_REASON, documentState, hasNoConfirmedSeat, isCancellationUnrecorded, isCommitUnknown, isPaid, ticketState,
+  ticketsVoided,
+} from './eTicket';
 import {
   REFUND_DONE_ACTIONS,
   REFUND_REVIEW_ACTIONS,
@@ -79,7 +82,14 @@ export function refundStatus(booking) {
   if (String(booking?.status || '').toLowerCase() !== 'cancelled') return null;
 
   const cancellation = cancellationOf(booking) || {};
-  if (cancellation.paymentAction) {
+  // A cancel recorded cancelled by hand (cancellationRecordedByHandOf): the
+  // record is what its flag says the cancel did, and the hand cancel writes
+  // the status alone, so a payment status reading returned was written by
+  // something that moved the money since. When the cancel itself returned
+  // nothing, that is read first.
+  const returnedSince = cancellation.recordedByHand === true && refundOutcome(cancellation) !== 'refunded'
+    && Boolean(paymentReturned(booking));
+  if (cancellation.paymentAction && !returnedSince) {
     switch (refundOutcome(cancellation)) {
       case 'stuck': return { key: 'failed', label: 'Refund not processed', tone: 'danger' };
       case 'review': return { key: 'review', label: 'Refund under review', tone: 'warning' };
@@ -132,7 +142,12 @@ export function needsAttention(booking) {
   // sentence still says what happened (attentionMessage).
   const isFlight = String(booking?.type || booking?.travel_type || '').toLowerCase() === 'flight';
   if (isFlight && paymentReturned(booking)) return false;
-  return flaggedOpen(booking);
+  // Issued, its number not read back (ticketState 'pending'), waits on nobody
+  // either: a booking held after its ticket was issued was badged "Needs
+  // attention" and listed under Failed, over a live ticket. It gets the
+  // "Ticket issued" badge, and its sentence still says the number is on its
+  // way (attentionMessage).
+  return flaggedOpen(booking) && ticketState(booking) !== 'pending';
 }
 
 /**
@@ -155,6 +170,21 @@ export function attentionMessage(booking) {
     }
     return null;
   }
+  // A cancel that went through and could not be recorded
+  // (isCancellationUnrecorded). The row reads confirmed, paid and ticketed,
+  // and the customer was told the cancellation was processed, not to try
+  // again, and to call. Read before anything that reads the row's payment or
+  // tickets: neither says what happened - except a payment written returned
+  // since (paymentReturned), which was still told our team would confirm what
+  // happened to the money.
+  if (isCancellationUnrecorded(booking)) {
+    const moneyBack = paymentReturned(booking);
+    return 'Your cancellation went through, but our record of it is still being updated, so this booking may not show as cancelled yet. '
+      + (moneyBack === 'all' ? 'It is not valid for travel, and your payment for it has been refunded - please do not try again. '
+        : moneyBack === 'part' ? 'It is not valid for travel. Part of your payment for it has been refunded, and our team will confirm what happened to the rest - please do not try again. '
+          : 'It is not valid for travel. Our team will confirm what happened to your payment - please do not try again. ')
+      + 'If you have any questions, call (877) 538-7380 with your booking reference.';
+  }
   if (!needsAttention(booking) && !flaggedOpen(booking)) return null;
   // Said from the payment record: a flagged booking refunded since reads
   // refunded, and "our team is looking after your payment" was false of it.
@@ -173,6 +203,15 @@ export function attentionMessage(booking) {
   if (returned === 'part') {
     return 'This booking was not completed. Part of your payment for it has been refunded; '
       + 'please call (877) 538-7380 with your booking reference about the rest.';
+  }
+  // The airline commit never answered (isCommitUnknown), and nobody knows yet
+  // whether it holds a reservation. Read as any booking with no PNR, this said
+  // the booking had failed and nothing against booking again - the opposite of
+  // what the order page told the customer when they paid, and a second booking
+  // of the trip is a second charge.
+  if (isCommitUnknown(booking)) {
+    return 'Your payment is safe and our team is checking with the airline whether your booking went through. '
+      + 'We will email you either way - please do not book this trip again in the meantime.';
   }
   // A PNR is not a seat: "your seats are reserved" was false of this one. And
   // a second trip bought meanwhile is not caught as a duplicate. Read through
@@ -194,6 +233,14 @@ export function attentionMessage(booking) {
   if (ticketsVoided(booking)) {
     return 'Your ticket has been voided and is not valid for travel. The cancellation has not been completed with the airline yet; '
       + 'our team has been alerted and will complete it. If it is urgent, call (877) 538-7380 with your booking reference.';
+  }
+  // A held PNR the customer asked to cancel, whose cancel the airline refused
+  // (documentState 'cancel_pending'). "Your ticket has not been issued yet.
+  // Our team is working on it" promised a ticket nobody will issue, to a
+  // customer told when it was refused that our team would complete it.
+  if (documentState(booking) === 'cancel_pending') {
+    return 'Your cancellation has not been completed with the airline yet. Our team has been alerted and will complete it, '
+      + 'and no ticket will be issued on this booking. If it is urgent, call (877) 538-7380 with your booking reference.';
   }
   return pnrOf(booking)
     ? 'Your seats are reserved, but your ticket has not been issued yet. Our team is working on it and will email you.'

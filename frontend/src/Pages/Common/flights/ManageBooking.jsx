@@ -12,7 +12,7 @@ import FlightETicket from './FlightETicket';
 import BookingItinerary from './BookingItinerary';
 import { bookingItineraries } from '../../../../../shared/bookingItineraries';
 import { formatUsd } from '../../../utils/bookingCharge';
-import { canDownloadDocument, isPaid, ticketState, ticketsVoided } from '../../../utils/eTicket';
+import { canDownloadDocument, isCommitUnknown, isPaid, ticketState, ticketsVoided } from '../../../utils/eTicket';
 import { attentionMessage, bookingStatusBadge, cancellationMessage, refundStatus } from '../../../utils/bookingStatus';
 import { refundOutcome } from '../../../../../shared/cancellationOutcome';
 import ArcPayService from '../../../Services/ArcPayService';
@@ -61,9 +61,17 @@ function ManageBooking() {
       : base;
   }, [passedData, fetchedBooking, cancelledLocally, cancelResult]);
   const loading = !passedData && queryLoading;
-  const error = !passedData && queryError ? queryError.message : (!bookingId && !passedData ? 'No booking ID provided' : null);
-  // The fetch failed but there is a snapshot to show: say it may be out of date.
-  const refreshFailed = Boolean(queryError && passedData);
+  // The error screen only when there is no booking to show. A read that fails
+  // after one succeeded keeps the booking it read (the query keeps its data):
+  // every cancel answer that is not a success reads the booking again, and
+  // with the connection gone that read fails too - which replaced the booking
+  // and the cancel's own answer, with its phone number, by "We couldn't open
+  // this booking" on a page opened from a link or after a reload.
+  const error = !passedData && !fetchedBooking && queryError
+    ? queryError.message
+    : (!bookingId && !passedData ? 'No booking ID provided' : null);
+  // The fetch failed but there is a booking to show: say it may be out of date.
+  const refreshFailed = Boolean(queryError && (passedData || fetchedBooking));
 
   const [activeTab, setActiveTab] = useState('details');
   const [showCancelModal, setShowCancelModal] = useState(false);
@@ -175,6 +183,14 @@ function ManageBooking() {
           success: false,
           error: result.error || 'The booking could not be cancelled. Please contact support.'
         });
+        // And the booking is read again, whatever the refusal: a refusal can
+        // come after the cancel changed the booking. One that went through and
+        // could not be recorded ("Please do not try again"), or one the airline
+        // refused after the ticket was voided (502, needsReview), left this
+        // page offering the void ticket as an E-Ticket, a held reservation's
+        // document promising a ticket, and a second cancel, until a reload.
+        // The booking as the server reads it now takes over.
+        refetch();
       }
     } catch (err) {
       console.error('Cancel booking error:', err);
@@ -616,6 +632,10 @@ function ManageBooking() {
             )}
 
             {bookingData?.status?.toUpperCase() !== 'CANCELLED' && 
+             // Nor a cancel that went through and could not be recorded
+             // (ticketState 'cancelled'): the customer was told not to try
+             // again, and its dialog said no ticket had been issued.
+             ticketState(bookingData) !== 'cancelled' &&
              // From the calendar day the booking names. `new Date(departureDate)`
              // was UTC midnight, so in the US Cancel vanished a day early.
              (daysUntilDate(bookingData?.departureDate) ?? 0) >= 0 && (
@@ -630,13 +650,20 @@ function ManageBooking() {
                   <Phone className="w-4 h-4 mr-2" />
                   Call to change this booking
                 </a>
-                <button
-                  onClick={handleCancelBooking}
-                  className="flex items-center bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition"
-                >
-                  <X className="w-4 h-4 mr-2" />
-                  Cancel Booking
-                </button>
+                {/* Not while our team is checking with the airline whether
+                    the booking went through (isCommitUnknown): the server
+                    refuses it, and a cancel would return the money while the
+                    airline may still hold the reservation. The call link above
+                    stays. */}
+                {!isCommitUnknown(bookingData) && (
+                  <button
+                    onClick={handleCancelBooking}
+                    className="flex items-center bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition"
+                  >
+                    <X className="w-4 h-4 mr-2" />
+                    Cancel Booking
+                  </button>
+                )}
               </>
             )}
           </div>

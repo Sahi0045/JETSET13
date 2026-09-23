@@ -3,7 +3,10 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { CheckCircle, Ship, Plane, Calendar, CreditCard, ArrowLeft, Clock, MapPin, Users, XCircle } from 'lucide-react';
 import Navbar from './Navbar';
 import { attentionMessage, paymentReturned, refundStatus } from '../../utils/bookingStatus';
-import { hasNoConfirmedSeat, isPaid, isVoidedTicket, ticketState, ticketsVoided, voidedTicketDigits } from '../../utils/eTicket';
+import {
+  documentState, hasNoConfirmedSeat, isCancellationUnrecorded, isCommitUnknown, isPaid, isVoidedTicket, ticketState, ticketsVoided,
+  voidedTicketDigits,
+} from '../../utils/eTicket';
 import { daysUntilDate, formatCalendarDate } from '../../utils/dateUtils';
 import { cancellationMessage } from '../../../../shared/cancellationOutcome';
 import { bookingItineraries, returnDateOf } from '../../../../shared/bookingItineraries';
@@ -135,20 +138,33 @@ function BookingConfirmation() {
   // ticket is money returned on a completed booking, not "Booking Not
   // Completed".
   const outcome = statusUpper === 'CANCELLED' ? 'cancelled'
+    // A cancel that went through and could not be recorded
+    // (isCancellationUnrecorded): the row still reads confirmed and ticketed,
+    // and this called it confirmed and its void ticket issued, to a customer
+    // told not to try again and to call.
+    : isFlight && isCancellationUnrecorded(bookingData) ? 'cancellation_unrecorded'
     : !returned && (bookingData.queued === true || statusUpper === 'PENDING_CONFIRMATION') ? 'queued'
       : (bookingData.ticketed === true || hasTickets) ? 'ticketed'
         : isFlight && ticketState(bookingData) === 'pending' ? 'ticket_pending'
           : returned ? 'payment_returned'
             // The airline commit never answered (FlightCreateOrders
             // 'checking'): no PNR, and nobody knows yet whether the airline
-            // holds anything. It read as held, seats reserved.
-            : isFlight && bookingData.commitUnknown === true && !bookingData.pnr ? 'commit_unknown'
+            // holds anything. It read as held, seats reserved. Opened again
+            // from My Trips, the booking is its stored row, which carries the
+            // review flag rather than the order page's word (isCommitUnknown):
+            // read as any flagged row with no PNR, it said the booking could
+            // not be completed, and nothing against booking it again.
+            : isFlight && !bookingData.pnr && (bookingData.commitUnknown === true || isCommitUnknown(bookingData)) ? 'commit_unknown'
             // Every ticket voided by a cancel the airline refused: not "held",
             // whose "Your ticket is being issued" promised a ticket nobody
             // will issue.
             : isFlight && ticketsVoided(bookingData) ? 'tickets_voided'
             : neverBooked ? (bookingData.needs_review ? 'not_completed' : isPaid(bookingData) ? 'not_booked' : 'awaiting_payment')
               : isFlight && hasNoConfirmedSeat(bookingData) ? 'no_confirmed_seat'
+                // A held PNR whose cancel the airline refused: "Your ticket is
+                // being issued" and "Our team is finishing your ticket" were
+                // said to a customer who had asked to cancel it.
+                : isFlight && documentState(bookingData) === 'cancel_pending' ? 'cancel_pending'
                 : isFlight ? 'held'
                   : 'confirmed';
 
@@ -208,6 +224,21 @@ function BookingConfirmation() {
       mail: 'We will email you either way. Please do not book this trip again in the meantime. '
         + 'You can also call (877) 538-7380 with your booking reference.',
     },
+    // Not cancelled on the record, and not a trip either. What happened to the
+    // money is our team's to confirm while the row still says paid; once it
+    // says refunded (paymentReturned), that is what it is told.
+    cancellation_unrecorded: {
+      Icon: Clock,
+      iconWrap: 'bg-gradient-to-br from-amber-400 to-amber-600',
+      badge: 'bg-amber-500',
+      title: 'Cancellation Being Recorded',
+      lead: 'Your cancellation went through, but our record of it is still being updated. This booking is not valid for travel.',
+      badgeText: 'Under review',
+      mail: (returned === 'all' ? 'Your payment for it has been refunded - please do not try again. '
+        : returned === 'part' ? 'Part of your payment for it has been refunded, and our team will confirm what happened to the rest - please do not try again. '
+          : 'Our team will confirm what happened to your payment - please do not try again. ')
+        + 'If you have any questions, call (877) 538-7380 with your booking reference.',
+    },
     tickets_voided: {
       Icon: Clock,
       iconWrap: 'bg-gradient-to-br from-amber-400 to-amber-600',
@@ -215,6 +246,17 @@ function BookingConfirmation() {
       title: 'Ticket Voided',
       lead: 'Your ticket has been voided and is not valid for travel. The cancellation has not been completed with the airline yet.',
       badgeText: 'Ticket voided',
+      mail: 'Our team has been alerted and will complete it. If it is urgent, call (877) 538-7380 with your booking reference.',
+    },
+    // What the customer was told when the airline refused it: our team
+    // completes the cancellation. No ticket is promised.
+    cancel_pending: {
+      Icon: Clock,
+      iconWrap: 'bg-gradient-to-br from-amber-400 to-amber-600',
+      badge: 'bg-amber-500',
+      title: 'Cancellation Pending',
+      lead: 'Your cancellation has not been completed with the airline yet, and no ticket will be issued on this booking.',
+      badgeText: 'Cancellation pending',
       mail: 'Our team has been alerted and will complete it. If it is urgent, call (877) 538-7380 with your booking reference.',
     },
     // Nothing here promises a seat, a ticket or an email: a person contacts
@@ -319,7 +361,9 @@ function BookingConfirmation() {
     : outcome === 'awaiting_payment' ? 'Payment not received'
       : returned === 'all' ? 'Payment refunded'
         : returned === 'part' ? 'Partly refunded'
-          : 'Payment received';
+          // The row says paid; the cancel moved the money (cancellation_unrecorded).
+          : outcome === 'cancellation_unrecorded' ? 'Being confirmed by our team'
+            : 'Payment received';
 
   return (
     <>
@@ -343,8 +387,9 @@ function BookingConfirmation() {
               <p className="text-amber-800 text-sm mb-4">{attention}</p>
             )}
 
-            {/* Travel Countdown */}
-            {daysUntilTrip !== null && daysUntilTrip >= 0 && (
+            {/* Travel Countdown. Not to a booking that is not a trip any more:
+                it sat beside "This booking is not valid for travel". */}
+            {daysUntilTrip !== null && daysUntilTrip >= 0 && !['cancelled', 'cancellation_unrecorded'].includes(outcome) && (
               <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-100 text-blue-800 rounded-full font-medium">
                 <Calendar className="w-4 h-4" />
                 {daysUntilTrip === 0 ? (
@@ -627,7 +672,7 @@ function BookingConfirmation() {
                   <div>
                     {/* "Total Paid" sat over a booking never paid for, and one refunded since. */}
                     <p className="text-sm text-green-700">
-                      {['cancelled', 'payment_returned'].includes(outcome) ? 'Amount Paid'
+                      {['cancelled', 'payment_returned', 'cancellation_unrecorded'].includes(outcome) ? 'Amount Paid'
                         : outcome === 'awaiting_payment' ? 'Booking Total'
                           : 'Total Paid'}
                     </p>

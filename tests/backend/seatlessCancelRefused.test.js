@@ -158,6 +158,8 @@ describe('a PNR with no confirmed seat whose cancel the airline refused', () => 
       reason: 'GDS cancellation failed; refund withheld to avoid paying out against a live booking',
       no_confirmed_seat: true,
       ticket_numbers_missing: false,
+      commit_unknown: false,
+      unrecorded_cancellation: false,
     });
   });
 
@@ -199,7 +201,8 @@ describe('a PNR with no confirmed seat whose cancel the airline refused', () => 
     const { toClientBooking } = await import('../../backend/routes/flight.routes.js');
 
     expect(toClientBooking(row).needs_review).toEqual({
-      reason: 'chain failed after commit at issueTicket', no_confirmed_seat: false, ticket_numbers_missing: false,
+      reason: 'chain failed after commit at issueTicket', no_confirmed_seat: false, ticket_numbers_missing: false, commit_unknown: false,
+      unrecorded_cancellation: false,
     });
   });
 });

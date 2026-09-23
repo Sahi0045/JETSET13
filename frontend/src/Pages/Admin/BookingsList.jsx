@@ -7,7 +7,7 @@ import './AdminPanel.css';
 import { adminFetch, readAdminResponse } from '../../utils/adminAuth';
 import { needsManualRefund } from '../../utils/bookingStatus';
 import { adminCancelOutcome, canVoidPayment, statusOptionsFor } from '../../utils/adminBookingActions';
-import { attentionLabel } from '../../../../shared/reviewQueue';
+import { attentionLabel, refundOwedOf, refundPrefillOf } from '../../../../shared/reviewQueue';
 
 /** How a message looks, by what it is telling the admin. */
 const TONE = {
@@ -269,6 +269,13 @@ const BookingsList = () => {
                 fetchBookings();
             } else {
                 setActionMessage({ type: 'error', text: result.error || 'Could not finish the refund.' });
+                // Synced, and ARC shows nothing returned: the amount the cancel
+                // decided is offered now, not before (refundPrefillOf). Never
+                // over what someone typed.
+                if (mode === 'sync' && result.code === 'NO_REFUND_FOUND') {
+                    const decided = refundPrefillOf(refundModal, { arcChecked: true });
+                    setRefundAmount((typed) => typed || decided);
+                }
             }
         } catch (error) {
             if (error?.sessionExpired) {
@@ -652,7 +659,7 @@ const BookingsList = () => {
                                                     )}
                                                     {!booking.isPackage && needsManualRefund(booking) && (
                                                         <button
-                                                            onClick={() => { setRefundModal(booking); setRefundAmount(''); }}
+                                                            onClick={() => { setRefundModal(booking); setRefundAmount(refundPrefillOf(booking)); }}
                                                             title="Finish refund (failed or under review)"
                                                             style={actionBtnStyle('#059669')}
                                                         >💵</button>
@@ -816,6 +823,26 @@ const BookingsList = () => {
                         }}>
                             <div><strong>Already refunded in the ARC portal?</strong> Use Sync from ARC: nothing is moved, and the booking records the refund ARC shows.</div>
                             <div style={{ marginTop: '8px' }}><strong>Not refunded yet?</strong> Enter the amount and choose Refund now. It cannot be more than ARC still holds (paid {formatCurrency(refundModal.totalAmount)}).</div>
+                            {(() => {
+                                // What the cancel decided goes back, filled in above. The
+                                // server caps a refund at what ARC holds, not at what is
+                                // owed, so a fee the cancel kept went back when the whole
+                                // payment was the only figure here.
+                                const owed = refundOwedOf(refundModal);
+                                if (!owed) return null;
+                                return (
+                                    <div style={{ marginTop: '8px' }}>
+                                        <strong>Owed:</strong> {formatCurrency(owed.owed)}
+                                        {owed.fee > 0 || owed.refunded > 0
+                                            ? ` - ${formatCurrency(owed.paid)} paid, less ${[
+                                                owed.fee > 0 ? `the ${formatCurrency(owed.fee)} cancellation fee the cancel keeps` : null,
+                                                owed.refunded > 0 ? `the ${formatCurrency(owed.refunded)} already refunded` : null,
+                                            ].filter(Boolean).join(' and ')}.`
+                                            : ', the whole payment.'}
+                                        {owed.unanswered && ' The cancel sent that refund to ARC Pay and never heard back: use Sync from ARC before refunding anything.'}
+                                    </div>
+                                );
+                            })()}
                         </div>
                         <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>
                             Amount to refund (USD)

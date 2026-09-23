@@ -15,6 +15,8 @@
  * it, and the admin panel, which offers only what it allows.
  */
 
+import { unrecordedCancellationReleasing } from './reviewQueue.js';
+
 export const ADMIN_STATUSES = Object.freeze(['pending', 'pending_ticketing', 'confirmed', 'completed', 'cancelled']);
 
 export const ADMIN_STATUS_LABELS = Object.freeze({
@@ -65,6 +67,23 @@ export function statusChangeRefusal(booking, nextStatus) {
   }
 
   if (next === 'cancelled') {
+    // Unless the cancel already happened: it released the reservation and
+    // moved the money, and could not record it (flagUnrecordedCancellation).
+    // Cancel & Refund has nothing left to cancel, so this is the one way to
+    // record it - and until it is, the customer is told the record is "still
+    // being updated", and Finish refund, which runs on a cancelled booking
+    // alone, cannot settle the money. Read past "Mark as handled", as the
+    // customer's pages read it.
+    //
+    // Only for a booking with a reservation. With none, Cancel & Refund works
+    // again, asks the gateway first and writes the record a late payment is
+    // caught by (cancelledWithNothingTaken); cancelled by hand, a payment on a
+    // still-open page, or one ARC still held, reached no job, alarm or desk.
+    //
+    // And only for the reservation that cancel released, with nothing since
+    // saying the airline holds it (unrecordedCancellationReleasing): a record
+    // locator the desk wrote after a cancel that found none is live.
+    if (reservation && unrecordedCancellationReleasing(booking, reservation)) return null;
     if (reservation) {
       return refusal(409, 'USE_CANCEL_AND_REFUND',
         `This flight has an airline reservation (${reservation}). Marking it cancelled would release no seats and refund nothing. Use Cancel & Refund.`);

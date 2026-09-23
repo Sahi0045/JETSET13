@@ -23,11 +23,13 @@ import supabase from '../config/supabase.js';
 import { postToSlack } from './slackAlert.js';
 import { readEveryCandidate } from './alarmCandidates.js';
 import { unchangedSince } from '../utils/bookingDetailsGuard.js';
+import { liveChainState } from '../utils/bookingChainClaim.js';
 import { queueEnvironment } from '../utils/queueEnvironment.js';
 import {
-  NO_CONFIRMED_SEAT_REVIEW_REASON, SCHEDULE_CHANGED_REVIEW_REASON, TICKET_NUMBERS_MISSING, attentionOf, flagsInForce,
-  isFailedCancellation, isTicketed, isUnrecordedCancellation, needsAirlineRefundClaim, openTicketedFlagOf,
+  ISSUANCE_UNKNOWN, NO_CONFIRMED_SEAT_REVIEW_REASON, SCHEDULE_CHANGED_REVIEW_REASON, TICKET_NUMBERS_MISSING, attentionOf,
+  flagsInForce, isFailedCancellation, isTicketed, isUnrecordedCancellation, needsAirlineRefundClaim, openTicketedFlagOf,
   scheduleChangeOf, ticketNumbersMissingOf, ticketsOf, unrecordedCancellationOf,
+  notHeldStillPaidOf, commitUnknownOf,
 } from '../../shared/reviewQueue.js';
 
 /**
@@ -50,6 +52,14 @@ const log = (msg, extra = {}) => console.log(`[NeedsReviewAlert] ${msg}`, extra)
  * (confirmationEmailOwed in routes/flight.routes.js).
  */
 export const UNTICKETED_REVIEW_REASON = 'PNR committed, never ticketed';
+
+/**
+ * An airline claim nobody has marked handled. needsAirlineRefundClaim reads
+ * the flag on top whether or not a person resolved it: the desk decides a
+ * resolved flag before it asks, and this alarm did not.
+ */
+const openAirlineClaim = (booking) => needsAirlineRefundClaim(booking)
+  && !booking?.booking_details?.needs_review?.resolved_at;
 
 /**
  * Which flagged bookings actually deserve waking someone up.
@@ -81,7 +91,11 @@ export function selectUnannounced(rows = []) {
 
     // A cancellation with a refund still to claim from the airline. It is
     // cancelled and ticketed, so both checks below would skip it - and did.
-    if (needsAirlineRefundClaim(booking)) return true;
+    // Not once the desk marked the claim handled: a customer refund ARC Pay
+    // refused keeps the booking on the desk after that (attentionOf), and the
+    // check above let it through to be announced as a claim to make. The
+    // refused refund is the failed-refund alarm's (paymentFailureAlert.job.js).
+    if (openAirlineClaim(booking)) return true;
     // A cancellation carried out but not recorded. A retry that voided the
     // tickets leaves none to claim, and the booking still reads ticketed, so
     // the checks below skipped it: seats and money moved, nobody told.
@@ -125,9 +139,29 @@ export function selectUnannounced(rows = []) {
     // committed a PNR, issuance never ran, and the row was written `confirmed`
     // with no flag on it. That is a customer holding a reservation on a
     // ticketing deadline, and it was the MAJORITY case this job could not see.
-    return details.gds?.ticketed === false && Boolean(details.pnr) && payment === 'paid';
+    //
+    // Not while something still holds the booking (liveChainState): the chain
+    // issuing, a cancel, the queue. The chain records the PNR and
+    // `gds.ticketed: false` at the commit and what issuance did only at the
+    // final save - minutes later for an airline that confirms after the
+    // commit - so a run in between posted "no ticket was issued ... ticket it,
+    // or refund it" and stamped the row, and the ticket issued a moment later
+    // was never announced: a refund from Slack paid out against a live
+    // ticket. Left unstamped, the row is judged by what the holder wrote, on a
+    // run after it let go; a claim nothing renews any more (a process that
+    // died mid-chain) lapses, and the row is announced as before.
+    return details.gds?.ticketed === false && Boolean(details.pnr) && payment === 'paid'
+      && !liveChainState(details.gds_chain);
   });
 }
+
+/**
+ * A booking held after DocIssuance was sent and never answered (the order
+ * route's flag, `issuance`), with no ticket recorded since: whether one was
+ * issued is not known until the PNR's FA lines are read.
+ */
+const issuanceUnanswered = (booking) => !isTicketed(booking?.booking_details)
+  && booking?.booking_details?.needs_review?.issuance === ISSUANCE_UNKNOWN;
 
 /** One line per booking. No passenger data: alerts get forwarded around. */
 export function describeBooking(booking) {
@@ -135,9 +169,11 @@ export function describeBooking(booking) {
   const review = details.needs_review || {};
   const hours = Math.round((Date.now() - Date.parse(review.at || booking.created_at)) / 36e5);
   const ticketed = (review.ticketed ?? details.gds?.ticketed) === true;
+  // "NO" was said of an issuance nobody saw answered.
+  const verdict = ticketed ? 'yes' : issuanceUnanswered(booking) ? 'unknown' : 'NO';
   return [
     `*${booking.booking_reference}* — ${booking.status}/${booking.payment_status}, ${booking.total_amount} USD`,
-    `PNR ${details.pnr || 'none'} · ticketed: ${ticketed ? 'yes' : 'NO'}`,
+    `PNR ${details.pnr || 'none'} · ticketed: ${verdict}`,
     `reason: ${review.reason || UNTICKETED_REVIEW_REASON} · flagged ${hours}h ago`,
     // The GDS's own words, when the chain recorded them. "failed at
     // issueTicket" alone cannot tell a carrier the office may not ticket from
@@ -145,6 +181,9 @@ export function describeBooking(booking) {
     ...(review.amadeus
       ? [`Amadeus ${review.amadeus.operation || ''}: ${review.amadeus.message || review.amadeus.code || 'no detail'}`.replace(/\s+:/, ':')]
       : []),
+    // A schedule change the chain accepted before the booking was held sits
+    // under the held flag (flight.routes.js flagForReview).
+    ...alsoRetimed(booking),
   ].join('\n');
 }
 
@@ -324,6 +363,12 @@ export function describeFailedCancellation(booking) {
   const numbersMissing = Boolean(ticketNumbersMissingOf(booking));
   const ticketed = isTicketed(details) || numbersMissing || flags.some((flag) => flag.ticketed === true)
     || voided.length > 0 || flags.some((flag) => Array.isArray(flag.unvoided_tickets) && flag.unvoided_tickets.length > 0);
+  // A hold under this cancel whose DocIssuance was never answered: a ticket
+  // may exist though nothing recorded one. The outage that timed issuance out
+  // often times the cancel's retrieve out too, and this line said "ticketed:
+  // NO · no tickets issued" - an invitation to cancel the PNR and refund in
+  // full over a ticket Amadeus may have issued.
+  const issuanceUnknown = !ticketed && flags.some((flag) => flag.issuance === ISSUANCE_UNKNOWN);
   let tickets;
   if (Array.isArray(review.unvoided_tickets)) {
     // This attempt's own report: every ticket on the PNR it did not void.
@@ -332,13 +377,15 @@ export function describeFailedCancellation(booking) {
     const others = notVoided(unionTickets(ticketsOf(details).map((ticket) => ticket.number), ...flags.map((flag) => flag.unvoided_tickets)));
     tickets = voided.length || others.length
       ? `tickets voided: ${voided.join(', ') || 'none recorded'} · not recorded as voided: ${others.join(', ') || 'none'}`
-      : ticketed ? 'ticket numbers not recorded: read the FA lines' : 'no tickets issued';
+      : ticketed ? 'ticket numbers not recorded: read the FA lines'
+        : issuanceUnknown ? 'DocIssuance was never answered: read the FA lines before cancelling or refunding'
+          : 'no tickets issued';
   }
   // Numbers the chain could not read back are missing from every list above.
   const incomplete = numbersMissing && tickets.startsWith('tickets voided') ? ' · not every ticket number is recorded: read the FA lines' : '';
   return [
     `*${booking.booking_reference}* — ${booking.status}/${booking.payment_status}, ${booking.total_amount} USD`,
-    `PNR ${details.pnr || review.pnr || 'none'} · ticketed: ${ticketed ? 'yes' : 'NO'} · ${tickets}${incomplete}`,
+    `PNR ${details.pnr || review.pnr || 'none'} · ticketed: ${ticketed ? 'yes' : issuanceUnknown ? 'unknown' : 'NO'} · ${tickets}${incomplete}`,
     `airline: ${review.detail || 'no detail recorded'}`,
     `flagged ${hours}h ago`,
   ].join('\n');
@@ -360,12 +407,28 @@ export function describeScheduleChange(booking) {
   ].join('\n');
 }
 
+/**
+ * One line per booking the desk found the airline does not hold, whose payment
+ * is still held (notHeldStillPaidOf). The flag's reason is the commit's, and
+ * describeBooking printed it as though nobody had asked the airline.
+ */
+export function describeNotHeldStillPaid(booking) {
+  const details = booking.booking_details || {};
+  const review = details.needs_review || {};
+  const hours = Math.round((Date.now() - Date.parse(review.resolved_at || booking.created_at)) / 36e5);
+  return [
+    `*${booking.booking_reference}* — ${booking.status}/${booking.payment_status}, ${booking.total_amount} USD`,
+    `PNR none · the airline does not hold it · nothing refunded yet`,
+    `recorded not held on the desk ${hours}h ago`,
+  ].join('\n');
+}
+
 // A ticketed booking the airline retimed. Under "paid but not ticketed" it
 // read "no ticket was issued ... ticket it, or refund it" of a live ticket.
 const ticketedScheduleChange = (booking) => openTicketedFlagOf(booking)?.reason === SCHEDULE_CHANGED_REVIEW_REASON;
 
-// A ticketed booking the order route held for a person after issuing: the
-// customer was sent "our team is finishing your ticket". Under "paid but not
+// A ticketed booking the order route held for a person after issuing, and
+// whose customer has not been sent their e-ticket. Under "paid but not
 // ticketed" it read "ticket it, or refund it" - a second ticket, or a refund
 // of a live one.
 const heldTicketed = (booking) => {
@@ -396,7 +459,9 @@ export function buildMessage(bookings) {
   const cancelFailedPaid = cancelFailed.filter((booking) => !refundedBefore(booking));
   const cancelFailedRefunded = cancelFailed.filter(refundedBefore);
   const rest = bookings.filter((booking) => !isUnrecordedCancellation(booking) && !isFailedCancellation(booking));
-  const claims = rest.filter(needsAirlineRefundClaim);
+  // A claim the desk marked handled is not one to make. Still left out of every
+  // section below: a cancelled booking is not "paid but not ticketed".
+  const claims = rest.filter(openAirlineClaim);
   // A ticketed booking whose numbers did not arrive is NOT "paid but not
   // ticketed". Listed under that heading it read "no ticket was issued ...
   // ticket it, or refund it" beside "ticketed: yes" - an instruction to issue a
@@ -414,8 +479,24 @@ export function buildMessage(bookings) {
     && ticketedScheduleChange(booking));
   const held = rest.filter((booking) => !needsAirlineRefundClaim(booking) && !ticketNumbersMissing(booking)
     && heldTicketed(booking));
-  const unticketed = rest.filter((booking) => !needsAirlineRefundClaim(booking) && !ticketNumbersMissing(booking)
-    && !noConfirmedSeat(booking) && !ticketedScheduleChange(booking) && !heldTicketed(booking));
+  // A commit the desk found the airline does not hold, whose payment is still
+  // held. Under "paid but not ticketed" it read "ticket it, or refund it" of a
+  // booking with nothing to ticket: the money is all there is to act on.
+  const notHeldStillPaid = rest.filter((booking) => Boolean(notHeldStillPaidOf(booking)));
+  // Nor is a commit the airline never answered (commitUnknownOf): no PNR, and
+  // nobody knows yet whether the airline holds it. Under that heading it read
+  // "ticket it, or refund it" (PNR none): nothing to ticket, and a refund
+  // first cancels as never booked what the airline may hold - while the desk
+  // asks staff what the airline said.
+  const commitUnanswered = rest.filter((booking) => Boolean(commitUnknownOf(booking)));
+  const notTicketed = rest.filter((booking) => !needsAirlineRefundClaim(booking) && !ticketNumbersMissing(booking)
+    && !noConfirmedSeat(booking) && !ticketedScheduleChange(booking) && !heldTicketed(booking)
+    && !notHeldStillPaidOf(booking) && !commitUnknownOf(booking));
+  // Nor is an issuance nobody saw answered. Under that heading it read "no
+  // ticket was issued ... ticket it, or refund it" before ticket sync had read
+  // the PNR: a second ticket, or a refund of a live one.
+  const unanswered = notTicketed.filter(issuanceUnanswered);
+  const unticketed = notTicketed.filter((booking) => !issuanceUnanswered(booking));
   const sections = [];
   if (unrecorded.length) {
     sections.push(
@@ -464,6 +545,41 @@ export function buildMessage(bookings) {
       ...seatless.map(describeBooking),
     );
   }
+  if (commitUnanswered.length) {
+    const many = commitUnanswered.length > 1;
+    sections.push(
+      `:question: *${commitUnanswered.length} booking${many ? 's' : ''} paid, the airline never answered when ${many ? 'they were' : 'it was'} booked*`,
+      'We sent the booking to the airline and it never answered (PNR_AddMultiElements timed out, or came back with no record locator), '
+        + 'so there is no PNR and nobody knows yet whether the airline holds it. The customer has paid and was told our team is '
+        + 'checking with the airline and not to book again. Check with the airline whether it holds this booking - by the flights '
+        + 'and the travellers\' names - and record what it said on the desk: held, with its record locator, or not held. '
+        + 'Do NOT ticket, rebook or refund it before that: a refund of a booking the airline holds leaves its seats booked with '
+        + 'nothing paid for them.',
+      '',
+      ...commitUnanswered.map(describeBooking),
+    );
+  }
+  if (notHeldStillPaid.length) {
+    const many = notHeldStillPaid.length > 1;
+    sections.push(
+      `:leftwards_arrow_with_hook: *${notHeldStillPaid.length} booking${many ? 's' : ''} the airline does not hold, payment not returned*`,
+      'The airline never answered when we sent these bookings, and the desk has since found that it does not hold them: '
+        + 'nothing was booked, and the customer\'s payment is still held. Nothing will return it on its own. '
+        + 'Cancel & refund each one on the desk: there is no reservation to release, so the cancel returns the payment.',
+      '',
+      ...notHeldStillPaid.map(describeNotHeldStillPaid),
+    );
+  }
+  if (unanswered.length) {
+    sections.push(
+      `:grey_question: *${unanswered.length} booking${unanswered.length > 1 ? 's' : ''} paid, ticket issuance not answered*`,
+      'DocIssuance did not answer; a ticket may have been issued. Read the PNR\'s FA lines first. '
+        + 'If a ticket is there, do NOT reissue or refund - ticket sync will record it and send the e-ticket. '
+        + 'If none, ticket it, or cancel the PNR and then refund.',
+      '',
+      ...unanswered.map(describeBooking),
+    );
+  }
   if (unticketed.length) {
     sections.push(
       `:rotating_light: *${unticketed.length} booking${unticketed.length > 1 ? 's' : ''} paid but not ticketed*`,
@@ -473,12 +589,16 @@ export function buildMessage(bookings) {
     );
   }
   if (held.length) {
+    // What ticket sync does for it, and what is left for a person. It told
+    // staff to "record any ticket number missing", which no route or desk
+    // action can do.
     sections.push(
       `:envelope: *${held.length} ticketed booking${held.length > 1 ? 's' : ''} held after ${held.length > 1 ? 'their tickets were' : 'its ticket was'} issued*`,
-      'The ticket IS issued, but the order route stopped after it and held the booking for a person. '
-        + 'The customer was told their reservation is held and our team is finishing their ticket, and was NOT sent '
-        + 'their confirmation. Check the booking against the PNR (its FA lines) and record any ticket number missing, '
-        + 'then send the customer their e-ticket and confirmation. Do NOT reissue and do NOT refund: the customer holds a live ticket.',
+      'The ticket IS issued, but the order route stopped after issuing it and held the booking for a person, '
+        + 'and the customer has not been emailed their e-ticket. Ticket sync reads the ticket numbers from the PNR (its FA lines), '
+        + 'records them, emails the customer their e-ticket and marks the booking handled. If it is still open on the desk, '
+        + 'ticket sync could not read them: check the FA lines and email the customer their ticket numbers yourself. '
+        + 'Do NOT reissue and do NOT refund: the customer holds a live ticket.',
       '',
       ...held.map(describeBooking),
     );
@@ -536,14 +656,27 @@ export function buildMessage(bookings) {
  * record - was undone by an alarm. Each booking is read again, and the stamp
  * written only if nothing that matters has moved since
  * (utils/bookingDetailsGuard.js); a race it loses is read and tried again.
+ *
+ * And only on the flag that was announced. The fresh read pins the write to
+ * itself, not to what was announced, so a flag written in between - a cancel
+ * the airline refused while the message was being posted - was stamped as
+ * though it had been announced, and never was: Slack had said "ticket it, or
+ * refund it" of a PNR the customer had since asked to cancel. A different
+ * flag on top is left for the next run to announce.
  */
 const MARK_TRIES = 3;
+
+/** Whether `fresh` is the flag `announced` (both absent for an unflagged booking). */
+const sameFlag = (announced, fresh) => (!announced || !fresh
+  ? !announced && !fresh
+  : announced.reason === fresh.reason && (announced.at ?? null) === (fresh.at ?? null));
 
 async function markAlerted(bookings) {
   for (const booking of bookings) {
     let marked = false;
+    let superseded = false;
     let lastError = null;
-    for (let tries = 0; tries < MARK_TRIES && !marked; tries += 1) {
+    for (let tries = 0; tries < MARK_TRIES && !marked && !superseded; tries += 1) {
       const { data: fresh, error: readError } = await supabase
         .from('bookings')
         .select('status, payment_status, booking_details')
@@ -556,6 +689,10 @@ async function markAlerted(bookings) {
       const details = fresh.booking_details || {};
       if (details.needs_review?.alerted_at) {
         marked = true;
+        break;
+      }
+      if (!sameFlag(booking.booking_details?.needs_review, details.needs_review)) {
+        superseded = true;
         break;
       }
       const now = new Date().toISOString();
@@ -576,7 +713,8 @@ async function markAlerted(bookings) {
       }
       marked = Boolean(data?.length);
     }
-    if (!marked) log('announced but could not mark', { booking: booking.booking_reference, error: lastError?.message || 'the booking kept changing' });
+    if (superseded) log('flagged again since it was announced; left for the next run', { booking: booking.booking_reference });
+    else if (!marked) log('announced but could not mark', { booking: booking.booking_reference, error: lastError?.message || 'the booking kept changing' });
   }
 }
 

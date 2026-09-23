@@ -136,6 +136,8 @@ describe('fence: bookings with nothing voided', () => {
       reason: 'GDS cancellation failed; refund withheld to avoid paying out against a live booking',
       no_confirmed_seat: false,
       ticket_numbers_missing: false,
+      commit_unknown: false,
+      unrecorded_cancellation: false,
     });
   });
 });

@@ -25,6 +25,8 @@ import {
 } from '../utils/bookingChainClaim.js';
 import { queueEnvironment } from '../utils/queueEnvironment.js';
 import { unchangedSince } from '../utils/bookingDetailsGuard.js';
+import { isUsableEmail } from '../../shared/email.js';
+import { orderDataFromCheckoutRow } from '../../shared/flightOrderBody.js';
 const MAX_PER_TICK = 5;
 
 /**
@@ -173,7 +175,7 @@ async function handOver(row) {
     return 'retry';
   }
   log('stale failed booking handed to a person, not replayed', { bookingReference: ref });
-  await notifyFailure(row.booking_details?.queued_order, ref, {}, { alerted });
+  await notifyFailure(row, {}, { alerted });
   await clearQueuedOrder(ref);
   return 'handed-over';
 }
@@ -263,9 +265,19 @@ export function failureCopy(result, { alerted = true } = {}) {
   // A second payment for a trip that was already booked is held for a human:
   // not booked, and not refunded automatically either, because a family can
   // book one flight twice. Say exactly that.
+  //
+  // Unless the first booking is a commit the airline never answered: it is
+  // paid for, and nobody knows yet whether it was booked. The route reads that
+  // with commitUnknownOf for its own answer (duplicatePaymentAnswer) and says
+  // so in it (`firstCommitUnknown`); "a trip you had already booked" was false.
   if (result?.code === 'DUPLICATE_PAYMENT') {
-    return 'This payment looks like a second payment for a trip you had already booked for the same travellers, '
-      + 'so we did not book it again. Your first booking is not affected. Our team will check it and refund '
+    const first = result.firstCommitUnknown === true
+      ? 'This payment looks like a second payment for a trip you have already paid for, for the same travellers, '
+        + 'so we did not book it again. Your first payment is not affected, and our team is still checking with the airline '
+        + 'whether that booking went through. Our team will check it and refund '
+      : 'This payment looks like a second payment for a trip you had already booked for the same travellers, '
+        + 'so we did not book it again. Your first booking is not affected. Our team will check it and refund ';
+    return first
       + 'this payment. If you did mean to book the trip twice, or have not heard from us within 2 business days, '
       + 'call (877) 538-7380 with your booking reference.';
   }
@@ -286,21 +298,54 @@ export function failureCopy(result, { alerted = true } = {}) {
       : 'Please call (877) 538-7380 with your booking reference so we can sort it out.');
 }
 
-async function notifyFailure(order, bookingReference, result, { alerted } = {}) {
-  const to = order?.contactInfo?.email;
+async function notifyFailure(row, result, { alerted } = {}) {
+  return notifyCustomer(row, {
+    subject: 'We could not confirm your flight booking',
+    status: 'Not confirmed',
+    whatHappensNext: failureCopy(result, { alerted }),
+  });
+}
+
+/**
+ * The email for a replay the route answered 409 BOOKING_NEEDS_REVIEW: a
+ * person already has the booking - a commit our team is checking with the
+ * airline, a PNR the airline confirmed no seat on. Neither "confirmed" nor
+ * "could not confirm": the customer left on the queue's "Booking Received",
+ * and is told the one thing true of every such booking, and what not to do.
+ */
+export const CHECKING_EMAIL = {
+  subject: 'We are checking your flight booking',
+  status: 'Being checked',
+  whatHappensNext: 'Our team is checking your booking with the airline and will contact you. '
+    + 'Please do not book this trip again in the meantime. If you have not heard from us within 2 business days, '
+    + 'call (877) 538-7380 with your booking reference.',
+};
+
+async function notifyCustomer(row, { subject, status, whatHappensNext }) {
+  const bookingReference = row.booking_reference;
+  const order = row.booking_details?.queued_order;
+  // The first address that can be delivered to, in the order route's order:
+  // the order's contact email, its customerEmail, the lead traveller's (the
+  // one checkout verified, as the route books), then the one checkout
+  // recorded. The contact email was taken whatever it held, and a typed
+  // "jane@gmailcom" was the only place this - the one word a customer who left
+  // on the 202 gets - was sent.
+  const lead = orderDataFromCheckoutRow(row).passengerData?.[0] ?? order?.travelers?.[0];
+  const to = [order?.contactInfo?.email, order?.customerEmail, lead?.email, row.booking_details?.customer_email]
+    .find(isUsableEmail);
   if (!to) return;
   try {
     await sendEmail({
       to,
-      subject: 'We could not confirm your flight booking',
+      subject,
       data: {
         bookingReference,
-        status: 'Not confirmed',
-        whatHappensNext: failureCopy(result, { alerted }),
+        status,
+        whatHappensNext,
       },
     });
   } catch (error) {
-    log('failure email not sent', { bookingReference, error: error.message });
+    log('customer email not sent', { bookingReference, subject, error: error.message });
   }
 }
 
@@ -504,6 +549,22 @@ export async function replay(row, { baseUrl, fetchImpl = fetch } = {}) {
     return 'already-finished';
   }
 
+  // The route's 202 for a commit the airline never answered: success, held
+  // for a person, and no record locator (the order page reads that answer as
+  // 'checking'). Nothing was confirmed, and the route emails nothing - there
+  // is no booking to confirm. Read as 'confirmed', the queued customer,
+  // promised a confirmation within minutes, and the abandoned-checkout
+  // customer heard nothing, with nothing against booking the trip again. It
+  // is the state the 409 BOOKING_NEEDS_REVIEW below is emailed about, and it
+  // gets the same CHECKING_EMAIL, once: the order is dropped here, and a
+  // flagged row is only ever cleared after this, never replayed.
+  if (body?.success && body.needsReview === true && !(body.pnr || body.data?.pnr)) {
+    log('queued booking\'s commit never answered; sending the checking email', { bookingReference: ref, status });
+    await notifyCustomer(row, CHECKING_EMAIL);
+    await clearQueuedOrder(ref);
+    return 'needs-review';
+  }
+
   if (body?.success) {
     log('queued booking confirmed', { bookingReference: ref, pnr: body.pnr || null });
     await clearQueuedOrder(ref);
@@ -519,10 +580,30 @@ export async function replay(row, { baseUrl, fetchImpl = fetch } = {}) {
     log('queued booking ran out of retries', { bookingReference: ref, status, code: body?.code || null });
   }
 
+  // A booking a person already has (409 BOOKING_NEEDS_REVIEW): the route
+  // found it flagged - a commit our team is checking with the airline, a PNR
+  // the airline confirmed no seat on - and sent nothing to the airline. No
+  // failure email: "We could not confirm your flight booking" said it had
+  // failed while the airline may hold it. But not silence either: the
+  // customer left on "Booking Received" and heard nothing until the desk got
+  // to them, with nothing against booking the trip again. They are sent the
+  // neutral CHECKING_EMAIL, once: the stored order is dropped here as for any
+  // outcome, and a flagged row the worker reads again with its chain let go
+  // is only cleared, never replayed (queueActionFor). The person working the
+  // flag tells them what the airline said. The flag is kept
+  // (flagFinalFailure writes over none).
+  if (body?.code === 'BOOKING_NEEDS_REVIEW') {
+    log('queued booking is with a person; sending the checking email', { bookingReference: ref, status });
+    await flagFinalFailure(ref, status, body);
+    await notifyCustomer(row, CHECKING_EMAIL);
+    await clearQueuedOrder(ref);
+    return 'needs-review';
+  }
+
   // A real failure. Whether money went back is in the body, not assumed.
   log('queued booking failed', { bookingReference: ref, status, refunded: body?.refunded === true, code: body?.code || null });
   const alerted = await flagFinalFailure(ref, status, body);
-  await notifyFailure(order, ref, body, { alerted });
+  await notifyFailure(row, body, { alerted });
   await clearQueuedOrder(ref);
   return 'failed';
 }

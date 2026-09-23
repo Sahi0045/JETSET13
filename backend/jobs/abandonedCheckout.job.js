@@ -29,9 +29,14 @@
  *  - nothing is written to a checkout that has not been paid, and what has been
  *    checked lives in memory, so this job never races the customer's browser
  *    for `booking_details`. A restart just asks again.
+ *
+ * It also asks about checkouts cancelled while their payment page was still
+ * open (selectCancelledCheckouts). One paid there afterwards is never booked;
+ * it is put in front of the desk to return (recordPaymentAfterCancel).
  */
 import supabase from '../config/supabase.js';
 import { reconcileBookingPayment } from '../routes/payment/checkout.handlers.js';
+import { cancelledWithNothingTaken, recordPaymentAfterCancel } from '../routes/payment/operations.handlers.js';
 import { replay } from './bookingQueue.job.js';
 import { queueEnvironment } from '../utils/queueEnvironment.js';
 import { AUTO_COMPLETE_WINDOW_MS, liveChainState } from '../utils/bookingChainClaim.js';
@@ -127,6 +132,51 @@ export function selectCandidates(rows = [], { now = Date.now(), site = siteForEn
     if (seen?.final) return false;
     return !seen || now - seen.at >= RECHECK_MS;
   });
+}
+
+/** Where this process remembers a cancelled checkout, apart from its answer while it was pending. */
+const cancelledKey = (reference) => `cancelled:${reference}`;
+
+/**
+ * Cancelled checkouts a payment may still land on, due a look.
+ *
+ * Cancel & Refund closes a checkout ARC has no order for with nothing to
+ * refund, and its payment page stays open. A payment made there afterwards is
+ * recorded by the order route when the payer comes back; these are for a payer
+ * who does not. Only a hosted checkout of this site, cancelled while its page
+ * could still be paid (PAYABLE_MS from opening), and only until that has
+ * passed. Pure, like selectCandidates.
+ */
+export function selectCancelledCheckouts(rows = [], { now = Date.now(), site = siteForEnv(), checked = new Map() } = {}) {
+  return rows.filter((row) => {
+    if (!cancelledWithNothingTaken(row)) return false;
+    const details = row.booking_details || {};
+    if (!details.success_indicator || !details.pending_booking_data) return false;
+    if (checkoutSite(row) !== site) return false;
+
+    const openedAt = Date.parse(details.checkout_created_at || row.created_at);
+    if (!(now - openedAt <= LOOKBACK_MS)) return false;
+    // Cancelled once the page could no longer be paid: nothing can land on it.
+    const cancelledAt = Date.parse(details.cancellation?.cancelledAt);
+    if (Number.isFinite(cancelledAt) && cancelledAt - openedAt > PAYABLE_MS) return false;
+
+    const seen = checked.get(cancelledKey(row.booking_reference));
+    if (seen?.final) return false;
+    return !seen || now - seen.at >= RECHECK_MS;
+  });
+}
+
+/** Ask about one cancelled checkout. `final` once it is recorded, or once its page can no longer be paid. */
+export async function settleCancelledCheckout(row, { now = Date.now(), record = recordPaymentAfterCancel } = {}) {
+  const result = await record(row);
+  if (!result) return { outcome: 'not-needed', final: true };
+  if (result.gatewayUnavailable) return { outcome: 'gateway-unavailable', final: false };
+  if (result.held > 0) {
+    const done = result.recorded || result.alreadyRecorded;
+    return { outcome: done ? 'paid-after-cancel' : 'retry', final: Boolean(done) };
+  }
+  const openedAt = Date.parse(row.booking_details?.checkout_created_at || row.created_at);
+  return { outcome: 'not-paid', final: now - openedAt > PAYABLE_MS };
 }
 
 /**
@@ -254,6 +304,13 @@ export async function settle(row, { now = Date.now(), reconcile = reconcileBooki
     case 'in-progress':
       // The booking queue, or the customer's own browser, has it now.
       return { outcome: result, final: true };
+    case 'needs-review':
+      // The route found it flagged for a person (409 BOOKING_NEEDS_REVIEW) -
+      // a commit our team is checking with the airline, say - and sent
+      // nothing to the airline. `replay` kept the flag; that person owns it
+      // now. It fell to the default below and was logged 'retry', not final:
+      // a booking a person owns, reported as one still to be settled.
+      return { outcome: 'needs-review', final: true };
     case 'failed': {
       // The route reversed the charge or recorded why it could not, and emailed
       // the customer. Only a refusal that left the row exactly as checkout wrote
@@ -286,7 +343,7 @@ const PAGE = 100;
 const scanPosition = { offset: PAGE };
 
 export async function runOnce({
-  baseUrl, now = Date.now(), site = siteForEnv(), checked = memory, scan = scanPosition, reconcile, send, flag,
+  baseUrl, now = Date.now(), site = siteForEnv(), checked = memory, scan = scanPosition, reconcile, send, flag, record,
 } = {}) {
   const pending = () => supabase
     .from('bookings')
@@ -348,6 +405,32 @@ export async function runOnce({
     }
     checked.set(row.booking_reference, { at: now, final: result.final });
     if (result.outcome !== 'not-paid') log(result.outcome, { bookingReference: row.booking_reference });
+    settled.push({ bookingReference: row.booking_reference, ...result });
+  }
+
+  // And checkouts cancelled with their payment page still open (selectCancelledCheckouts).
+  // One gateway read each, no booking. A read that fails leaves the pending
+  // checkouts above settled.
+  const { data: cancelled, error: cancelledError } = await supabase
+    .from('bookings')
+    .select('id, booking_reference, travel_type, status, payment_status, total_amount, created_at, booking_details')
+    .eq('travel_type', 'flight')
+    .eq('status', 'cancelled')
+    .eq('booking_details->cancellation->>paymentAction', 'NOTHING_TO_REFUND')
+    .gte('created_at', new Date(now - LOOKBACK_MS).toISOString())
+    .order('created_at', { ascending: false })
+    .limit(PAGE);
+  if (cancelledError) log('could not read cancelled checkouts', { error: cancelledError.message });
+  for (const row of selectCancelledCheckouts(cancelled || [], { now, site, checked }).slice(0, MAX_PER_TICK)) {
+    let result;
+    try {
+      result = await settleCancelledCheckout(row, { now, ...(record ? { record } : {}) });
+    } catch (e) {
+      log('could not check a cancelled checkout', { bookingReference: row.booking_reference, error: e.message });
+      result = { outcome: 'error', final: false };
+    }
+    checked.set(cancelledKey(row.booking_reference), { at: now, final: result.final });
+    if (result.outcome !== 'not-paid') log(`cancelled checkout: ${result.outcome}`, { bookingReference: row.booking_reference });
     settled.push({ bookingReference: row.booking_reference, ...result });
   }
   return settled;

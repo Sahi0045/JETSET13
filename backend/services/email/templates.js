@@ -929,9 +929,62 @@ export function generateCancellationTemplate(data) {
   });
 }
 
+/**
+ * Internal cancellation alert for a refund sent to ARC Pay and never answered
+ * (`reversalOutcomeUnknown`, payment/operations.handlers.js returnFlightPayment).
+ *
+ * It read like every REFUND_UNDER_REVIEW: not processed, the fee retained,
+ * nothing to refund - the "no refund was made, make it by hand" that pays the
+ * customer twice when ARC Pay did take it. What is true is that nobody knows,
+ * so it says what to do first, and gives no figure for what went back.
+ *
+ * It does say what the cancel decided (`decidedRefund`, and the fee it keeps):
+ * "refund only what it still holds" was the whole payment when the refund
+ * never landed, and the fee the cancel meant to keep went back with it.
+ */
+function decidedLine({ decidedRefund, cancellationFee, currency }) {
+  if (!(Number(decidedRefund) > 0)) return 'Refund only what it still holds.';
+  const fee = Number(cancellationFee) || 0;
+  return fee > 0
+    ? `The cancel meant to return <strong>${money(decidedRefund, currency)}</strong> and keep the ${money(fee, currency)} cancellation fee: `
+      + `if ARC Pay shows none of it went back, refund ${money(decidedRefund, currency)}, not everything it holds.`
+    : `The cancel meant to return the whole payment, <strong>${money(decidedRefund, currency)}</strong>: `
+      + 'if ARC Pay shows none of it went back, refund that.';
+}
+
+function adminCancellationOutcomeUnknown({ customerName, customerEmail, bookingReference, bookingType, paymentAction, decided }) {
+  return renderBrandedEmail({
+    preheader: line([line(['Cancellation', bookingReference], ' '), 'REFUND OUTCOME UNKNOWN - CHECK ARC PAY FIRST'], ' — '),
+    headerLabel: 'Refund needs a human', emoji: '🚨',
+    heading: 'Refund outcome unknown - check ARC Pay first',
+    subheading: line([customerName || 'Unknown customer', bookingReference]),
+    contentHtml: `
+      ${figureBlock([
+        { label: 'Reference', value: bookingReference || '—', mono: true, small: true, note: statusPill('Cancelled', 'danger') },
+        { label: 'Refund', value: `OUTCOME UNKNOWN (${paymentAction})`, note: statusPill('Check ARC Pay', 'warning') },
+      ])}
+      ${highlightBox('The cancel sent the refund to ARC Pay and no answer came back, so it may already have gone through. '
+        + '<strong>Do not refund by hand yet.</strong> Check ARC Pay first: open Finish refund on the desk and press Check ARC Pay '
+        + `(Sync from ARC in the admin panel), which records what ARC Pay shows. ${decidedLine(decided)}`, {})}
+      ${dataGrid([
+    ['Customer', customerName],
+    ['Email', customerEmail],
+    ['Type', bookingType],
+  ].filter(([, v]) => v))}
+      ${actionRow([{ text: 'Open in admin panel', url: `${BRAND.site}/admin/bookings` }])}
+    `,
+  });
+}
+
 /** Internal cancellation alert. */
 export function generateAdminCancellationTemplate(data) {
   const { customerName, customerEmail, bookingReference, bookingType = 'travel', refundAmount, cancellationFee, currency = 'USD', paymentAction } = data;
+  if (data.reversalOutcomeUnknown === true && refundOutcome({ paymentAction, refundAmount }) === 'review') {
+    return adminCancellationOutcomeUnknown({
+      customerName, customerEmail, bookingReference, bookingType, paymentAction,
+      decided: { decidedRefund: data.decidedRefund, cancellationFee, currency },
+    });
+  }
   // A refund left for review needs the desk exactly as much as one that failed:
   // the customer has been told a person will decide.
   const stuck = ['stuck', 'review'].includes(refundOutcome({ paymentAction, refundAmount }));

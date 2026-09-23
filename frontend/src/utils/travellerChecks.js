@@ -17,16 +17,17 @@ import { bookingTravellerProblems } from '../../../shared/travellerDetails';
  * @param {number}  ctx.index          position on the page; the first traveller is the lead
  * @param {boolean} ctx.international  whether the trip crosses a border
  * @param {string}  ctx.travelDate     YYYY-MM-DD, for the age a fare depends on
- * @param {string}  [ctx.lastDate]     the trip's last day, for later ages and passport expiry
+ * @param {string}  [ctx.lastDate]     the day the last flight lands, for passport expiry
+ * @param {string}  [ctx.lastDepartureDate] the day the last flight leaves, for an infant's age
  * @param {boolean} [ctx.bookingAsGuest]
  * @param {string}  [ctx.contactEmail] the booking's contact email, if any
  * @returns {string[]}
  */
 export function travellerProblems(traveller, {
-  index = 0, international = true, secureFlight = false, travelDate, lastDate, bookingAsGuest = false, contactEmail = '',
+  index = 0, international = true, secureFlight = false, travelDate, lastDate, lastDepartureDate, bookingAsGuest = false, contactEmail = '',
 } = {}) {
   const t = traveller || {};
-  const problems = bookingTravellerProblems(t, { international, secureFlight, travelDate, lastDate });
+  const problems = bookingTravellerProblems(t, { international, secureFlight, travelDate, lastDate, lastDepartureDate });
   const add = (text) => problems.push(text);
 
   // "for booking updates" implied an SMS. None is sent - sms.service.js is

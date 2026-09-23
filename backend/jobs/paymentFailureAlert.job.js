@@ -29,6 +29,9 @@ import { postToSlack } from './slackAlert.js';
 import { readEveryCandidate } from './alarmCandidates.js';
 import { alarmsMayRun } from './needsReviewAlert.job.js';
 import { queueEnvironment } from '../utils/queueEnvironment.js';
+import {
+  REFUND_NOT_RETURNED_ACTIONS, describeRefundOwed, refundNotReturnedOf, refundOwedOf,
+} from '../../shared/reviewQueue.js';
 
 const DEFAULT_INTERVAL_MS = 15 * 60 * 1000;
 // Staggered behind the needs-review job so two alarms waking at once cannot
@@ -39,49 +42,29 @@ const log = (msg, extra = {}) => console.log(`[PaymentFailureAlert] ${msg}`, ext
 
 /**
  * Every branch of the ARC Pay cancel path that ends without returning money.
- *
- * Taken from the handler rather than from observed data: only REFUND_FAILED has
- * happened so far, and an alarm that only knows about the failure it has
- * already seen is worth very little.
+ * Kept in shared/reviewQueue.js with the rule below, so the desk lists what
+ * this announces.
  */
-export const FAILED_PAYMENT_ACTIONS = [
-  'REFUND_FAILED',           // ARC Pay refused the refund
-  'VOID_FAILED',             // ARC Pay refused the void
-  'VOID_MISSING_TXN_ID',     // nothing to void against; not even attempted
-  'MANUAL_PROCESS_REQUIRED', // the handler threw mid-refund
-  // Not attempted, on purpose: a flight whose fare or tickets leave the amount
-  // to a person (payment/operations.handlers.js decideFlightRefund). Nothing
-  // else pages about it - the needs-review watch skips cancelled bookings - so
-  // without this it is money owed that nobody is told about. Also a reversal
-  // sent and never answered (reversalOutcomeUnknown), where it may not be owed.
-  'REFUND_UNDER_REVIEW',
-];
+export const FAILED_PAYMENT_ACTIONS = REFUND_NOT_RETURNED_ACTIONS;
 
 /**
- * Which cancelled bookings still owe the customer money.
+ * Which cancelled bookings still owe the customer money, and have not been
+ * announced yet.
  *
  * Exported and pure so the decision can be tested without a database - it is
- * the part that decides whether this channel stays trusted or gets muted.
+ * the part that decides whether this channel stays trusted or gets muted. The
+ * rule itself is shared/reviewQueue.js refundNotReturnedOf, which the desk's
+ * "Needs attention" list reads too: it used to be written here alone, and the
+ * desk never listed a refund ARC Pay refused.
  *
  * @param {Array<object>} rows - booking rows carrying `booking_details`
  * @returns {Array<object>} the rows worth announcing
  */
 export function selectUnrefunded(rows = []) {
   return rows.filter((booking) => {
-    const cancellation = booking?.booking_details?.cancellation;
-    if (!cancellation) return false;                                    // never cancelled
-    if (cancellation.alerted_at) return false;                          // already announced once
-    if (!FAILED_PAYMENT_ACTIONS.includes(cancellation.paymentAction)) return false;
-
-    // Nothing was ever taken, so there is nothing to give back. Older rows
-    // (HTLMR07MJV4, cancelled/unpaid) carry a cancellation with no action at
-    // all and must not be announced.
-    if (!(Number(booking.total_amount) > 0)) return false;
-
-    // Someone refunded it by hand afterwards and recorded the amount.
-    if (Number(cancellation.refundAmount) > 0) return false;
-
-    return true;
+    if (!booking?.booking_details) return false;                        // the rule reads the row's own column only
+    const cancellation = refundNotReturnedOf(booking);
+    return Boolean(cancellation) && !cancellation.alerted_at;           // announced once
   });
 }
 
@@ -95,15 +78,22 @@ export function selectUnrefunded(rows = []) {
  */
 const readsRefunded = (booking) => ['refunded', 'partially_refunded'].includes(String(booking.payment_status || '').toLowerCase());
 
-/** One line per booking. No passenger data: alerts get forwarded around. */
+/**
+ * One line per booking. No passenger data: alerts get forwarded around.
+ *
+ * With what is owed: the whole payment was the only figure here, and a cancel
+ * that meant to keep its fee had the fee refunded by hand too.
+ */
 export function describeFailure(booking) {
   const cancellation = booking.booking_details?.cancellation || {};
   const hours = Math.round(
     (Date.now() - Date.parse(cancellation.cancelledAt || booking.created_at)) / 36e5,
   );
   const reason = String(cancellation.reason || '').slice(0, 80);
+  const owed = describeRefundOwed(refundOwedOf(booking));
   return [
     `*${booking.booking_reference}* — ${booking.total_amount} USD taken, ${cancellation.refundAmount ?? 0} returned`,
+    ...(owed ? [owed] : []),
     `${cancellation.paymentAction} · the row reads ${booking.status}/${booking.payment_status}${readsRefunded(booking) ? ', which is not what happened' : ''}`,
     `cancelled ${hours}h ago${reason ? ` · ${reason}` : ''}`,
   ].join('\n');
@@ -186,10 +176,17 @@ export function describeHeld(booking) {
   ].join('\n');
 }
 
-/** One line per refund whose outcome is unknown. Not "nothing returned": that is the open question. */
+/**
+ * One line per refund whose outcome is unknown. Not "nothing returned": that is
+ * the open question. With what the cancel decided goes back if none of it did:
+ * "refund what it still holds" was the whole payment then, the fee the cancel
+ * kept included.
+ */
 export function describeOutcomeUnknown(booking) {
+  const decided = describeRefundOwed(refundOwedOf(booking));
   return [
     `*${booking.booking_reference}* — ${booking.total_amount} USD taken, whether any went back is not known`,
+    ...(decided ? [`if none of it went back: ${decided}`] : []),
     `the cancel recorded: ${heldReasonOf(booking)}`,
     `cancelled ${hoursSinceCancelled(booking)}h ago · the row reads ${booking.status}/${booking.payment_status}`,
   ].join('\n');
@@ -197,6 +194,9 @@ export function describeOutcomeUnknown(booking) {
 
 const countOf = (bookings) => `${bookings.length} cancelled booking${bookings.length > 1 ? 's' : ''}`;
 const totalOf = (bookings) => bookings.reduce((sum, b) => sum + (Number(b.total_amount) || 0), 0).toFixed(2);
+/** What the failed rows owe back, the fees their cancels kept left out. */
+const owedTotalOf = (bookings) => bookings
+  .reduce((sum, b) => sum + (refundOwedOf(b)?.owed ?? (Number(b.total_amount) || 0)), 0).toFixed(2);
 
 export function buildMessage(bookings) {
   // REFUND_UNDER_REVIEW is not a refund that failed: the cancel refused to move
@@ -216,7 +216,7 @@ export function buildMessage(bookings) {
   const sections = [];
   if (failed.length) {
     sections.push(
-      `:money_with_wings: *${countOf(failed)} where the refund never went through* — ${totalOf(failed)} USD`,
+      `:money_with_wings: *${countOf(failed)} where the refund never went through* — ${totalOf(failed)} USD taken, ${owedTotalOf(failed)} USD owed`,
       failedLead(failed),
       '',
       ...failed.map(describeFailure),
@@ -228,7 +228,8 @@ export function buildMessage(bookings) {
       `:grey_question: *${countOf(unknown)} whose refund may or may not have gone through* — ${totalOf(unknown)} USD taken`,
       'The cancel asked ARC Pay to return the money and never learned how that ended. '
         + 'Check the order in ARC Pay before anything else: open Finish refund on the desk and press Check ARC Pay '
-        + '(Sync from ARC in the admin panel), which records what ARC Pay shows. Refund by hand only what it still holds.',
+        + '(Sync from ARC in the admin panel), which records what ARC Pay shows. If none of it went back, refund by hand '
+        + 'what the cancel decided, named below, and never more than ARC Pay still holds.',
       '',
       ...unknown.map(describeOutcomeUnknown),
     );
