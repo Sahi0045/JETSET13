@@ -181,7 +181,12 @@ describe('around it', () => {
     const stored = table.row(REF);
     expect(stored.booking_details.gds.ticketed).toBe(false);
     expect(stored.booking_details.needs_review).toBeUndefined();
-    const told = await staffAreTold(stored);
+    // The route has stopped, and nothing renews the chain's claim: the alarm
+    // judges the row once it lapses, not while the chain may still be issuing
+    // (alarmWaitsForRunningChain.test.js).
+    const { CHAIN_CLAIM_TTL_MS } = await import('../../backend/utils/bookingChainClaim.js');
+    const lapsed = { ...stored.booking_details.gds_chain, committedAt: new Date(Date.now() - CHAIN_CLAIM_TTL_MS - 1_000).toISOString() };
+    const told = await staffAreTold({ ...stored, booking_details: { ...stored.booking_details, gds_chain: lapsed } });
     expect(told.desk).toBe('Paid, seats held, no ticket');
     expect(told.slack).toMatch(/paid but not ticketed/);
   });

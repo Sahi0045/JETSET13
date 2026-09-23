@@ -23,6 +23,7 @@ import supabase from '../config/supabase.js';
 import { postToSlack } from './slackAlert.js';
 import { readEveryCandidate } from './alarmCandidates.js';
 import { unchangedSince } from '../utils/bookingDetailsGuard.js';
+import { liveChainState } from '../utils/bookingChainClaim.js';
 import { queueEnvironment } from '../utils/queueEnvironment.js';
 import {
   ISSUANCE_UNKNOWN, NO_CONFIRMED_SEAT_REVIEW_REASON, SCHEDULE_CHANGED_REVIEW_REASON, TICKET_NUMBERS_MISSING, attentionOf,
@@ -138,7 +139,19 @@ export function selectUnannounced(rows = []) {
     // committed a PNR, issuance never ran, and the row was written `confirmed`
     // with no flag on it. That is a customer holding a reservation on a
     // ticketing deadline, and it was the MAJORITY case this job could not see.
-    return details.gds?.ticketed === false && Boolean(details.pnr) && payment === 'paid';
+    //
+    // Not while something still holds the booking (liveChainState): the chain
+    // issuing, a cancel, the queue. The chain records the PNR and
+    // `gds.ticketed: false` at the commit and what issuance did only at the
+    // final save - minutes later for an airline that confirms after the
+    // commit - so a run in between posted "no ticket was issued ... ticket it,
+    // or refund it" and stamped the row, and the ticket issued a moment later
+    // was never announced: a refund from Slack paid out against a live
+    // ticket. Left unstamped, the row is judged by what the holder wrote, on a
+    // run after it let go; a claim nothing renews any more (a process that
+    // died mid-chain) lapses, and the row is announced as before.
+    return details.gds?.ticketed === false && Boolean(details.pnr) && payment === 'paid'
+      && !liveChainState(details.gds_chain);
   });
 }
 
