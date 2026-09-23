@@ -1086,8 +1086,11 @@ export default function TravelDashboard() {
                         } else {
                           setCancelOutcome({ tone: 'error', text: result.error || result.message || 'Failed to cancel booking. Please try again.' })
                           // No answer in time: the cancel may have gone through.
-                          // The list shows what the booking says now.
-                          if (result.timedOut) loadBookings()
+                          // Or it went through and could not be recorded (the
+                          // answer carries what it did): the card still said
+                          // Ticketed and offered a second cancel. The list
+                          // shows what the booking says now.
+                          if (result.timedOut || result.cancellation) loadBookings()
                         }
                       } catch (err) {
                         console.error('Cancel error:', err)

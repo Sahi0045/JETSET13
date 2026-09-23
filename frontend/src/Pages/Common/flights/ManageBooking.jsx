@@ -175,6 +175,11 @@ function ManageBooking() {
           success: false,
           error: result.error || 'The booking could not be cancelled. Please contact support.'
         });
+        // Unless it carries what the cancel did: it went through, and its
+        // record could not be written ("Please do not try again"). The copy on
+        // this page still offered the ticket and a second cancel; the booking
+        // as the server reads it now says the cancellation went through.
+        if (result.cancellation) refetch();
       }
     } catch (err) {
       console.error('Cancel booking error:', err);
