@@ -90,3 +90,14 @@ ds-bundle/
 # Regenerated per run, and carries the office id and WS username of whoever
 # recorded it. The pack goes to Amadeus directly, not through the repo.
 tests/fixtures/amadeus/certification/
+
+# Local, not part of the site: launch videos made with the brag tool, Play
+# Store artwork, other coding tools' settings, Claude's local workspace
+# (worktrees, audit notes) and one-off probe scripts.
+brag-output-*/
+playstore-images/
+.claude/
+.codex/
+.kiro/settings/
+.commandcode/
+cancelprobe.mjs
