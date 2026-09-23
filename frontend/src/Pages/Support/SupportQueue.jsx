@@ -92,6 +92,17 @@ const canMarkHandled = (handling) => {
 };
 
 /**
+ * Which entry the page showed, for resolve-review to check against what the
+ * booking needs now: this page never polls, and a press on an entry someone
+ * else already handled was written over the one the booking showed next. The
+ * server answers BOOKING_CHANGED, and records nothing, when they differ.
+ */
+const shownQuery = (booking) => new URLSearchParams({
+  shownKind: booking?.attention?.kind || '',
+  shownSince: booking?.attention?.since || '',
+}).toString();
+
+/**
  * What Finish refund starts from: what the cancel decided goes back.
  *
  * The box was filled with the booking's whole total, and Refund now sent it.
@@ -245,7 +256,7 @@ function SupportQueue() {
     if (!canMarkHandled(handling)) return;
     setSaving(true);
     try {
-      const response = await adminFetch(getApiUrl(`flights/admin-bookings/${handling.booking.id}/resolve-review`), {
+      const response = await adminFetch(getApiUrl(`flights/admin-bookings/${handling.booking.id}/resolve-review?${shownQuery(handling.booking)}`), {
         method: 'POST',
         body: JSON.stringify({ note: handling.note.trim(), ...commitAnswer(handling) }),
       });

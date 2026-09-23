@@ -27,7 +27,7 @@ import { needsDateOfBirth } from '../../shared/travellerDetails.js';
 import { buildFlightOrderBody, orderDataFromCheckoutRow } from '../../shared/flightOrderBody.js';
 import { statusChangeRefusal } from '../../shared/bookingStatusChange.js';
 import {
-  attentionOf, reviewResolution, ticketsOf, isTicketed, NO_CONFIRMED_SEAT_REVIEW_REASON, noConfirmedSeatOf,
+  attentionOf, attentionLabel, reviewResolution, ticketsOf, isTicketed, NO_CONFIRMED_SEAT_REVIEW_REASON, noConfirmedSeatOf,
   HELD_REVIEW_REASON_PREFIXES, liveTicketNumbersMissingOf, unrecordedCancellationForCustomerOf,
   voidedTicketsOf, commitUnknownOf, SCHEDULE_CHANGED_REVIEW_REASON, isHeldForReview, ticketIssuedBeforeHoldOf,
   openFailedCancellationOf,
@@ -5601,6 +5601,21 @@ router.post('/admin-bookings/:id/resolve-review', protect, bookingStaff, async (
     if (!attention) {
       const text = 'There is nothing to handle on this booking.';
       return res.status(409).json({ success: false, code: 'NOTHING_TO_RESOLVE', error: text, message: text });
+    }
+    // The press is about what the desk page showed (shownKind, shownSince:
+    // the entry's kind and time as the list gave them), and it is written over
+    // whatever the booking needs NOW. The page never polls: a member still
+    // looking at "Refund to claim from the airline" after someone else handled
+    // the claim recorded the same claim again - as the refused customer
+    // refund's resolution, and the unreturned money left Needs attention. An
+    // entry the booking no longer shows is refused, and nothing is written. A
+    // press that does not say what it showed is taken as before.
+    if (req.query?.shownKind) {
+      const shownSince = String(req.query.shownSince ?? '') || null;
+      if (String(req.query.shownKind) !== attention.kind || shownSince !== (attention.since || null)) {
+        return refuseResolve(res, 409, 'BOOKING_CHANGED', `This booking changed since your page showed it: it now reads `
+          + `"${attentionLabel(attention)}". Nothing has been recorded; reload the page to see what it needs now.`);
+      }
     }
     const openFlag = details.needs_review?.resolved_at ? null : details.needs_review;
 
