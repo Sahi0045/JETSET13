@@ -582,6 +582,22 @@ export function refundOwedOf(booking) {
   return { owed, paid: roundCents(paid), fee, ...(refunded > 0 ? { refunded } : {}), ...(unanswered ? { unanswered } : {}), currency };
 }
 
+/**
+ * What a Finish refund box starts from: what the cancel decided goes back
+ * (refundOwedOf), or nothing.
+ *
+ * Nothing while the cancel's own refund is unanswered and ARC Pay has not been
+ * asked since (`arcChecked`: the page's own Check ARC Pay, or Sync from ARC,
+ * found nothing returned). That refund may have landed: on a fare under twice
+ * the fee, the decided amount still fits under what ARC holds after it did, so
+ * a box filled in before anyone looked invited one press to send it again.
+ */
+export function refundPrefillOf(booking, { arcChecked = false } = {}) {
+  const owed = refundOwedOf(booking);
+  if (!owed || (owed.unanswered && !arcChecked)) return '';
+  return String(owed.owed);
+}
+
 /** The owed amount in words, for the desk and the alarm: "241.00 USD owed (291.00 paid less the 50.00 cancellation fee the cancel kept)". */
 export function describeRefundOwed(owed) {
   if (!owed) return null;

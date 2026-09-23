@@ -832,7 +832,27 @@ async function cancelFlightBooking(res, booking, { reason, email }) {
                     basis: decision.reason,
                     // A reversal sent with no answer back, not a hold: whoever
                     // picks this up checks ARC Pay before refunding anything.
-                    ...(cancellationResult.reversalOutcomeUnknown ? { reversalOutcomeUnknown: true } : {}),
+                    //
+                    // Written down as Finish refund writes its own unanswered
+                    // refund (noteUnansweredRefund): how much, when, and what
+                    // ARC showed refunded before it. settleManualFlightRefund's
+                    // guard reads that and nothing else, so with the flag alone
+                    // a press of the decided amount - which fits under what ARC
+                    // still holds whenever the fare is under twice the fee -
+                    // sent the cancel's refund a second time after it had
+                    // landed. Now ARC's ledger decides it first: money returned
+                    // since is recorded, not sent again.
+                    ...(cancellationResult.reversalOutcomeUnknown
+                        ? {
+                            reversalOutcomeUnknown: true,
+                            unansweredRefund: {
+                                amount: decision.refundAmount,
+                                currency,
+                                at: now,
+                                refundedBefore: roundCents(payment.refundedTotal ?? 0),
+                            },
+                        }
+                        : {}),
                 },
                 ...(reviewReasons.length
                     ? {

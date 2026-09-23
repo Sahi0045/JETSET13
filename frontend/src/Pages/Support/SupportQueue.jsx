@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { adminFetch, readAdminResponse } from '../../utils/adminAuth';
 import { getApiUrl } from '../../utils/apiHelper';
-import { attentionLabel, refundOwedOf } from '../../../../shared/reviewQueue';
+import { attentionLabel, refundOwedOf, refundPrefillOf } from '../../../../shared/reviewQueue';
 import { canVoidPayment } from '../../utils/adminBookingActions';
 import { needsManualRefund } from '../../utils/bookingStatus';
 import { formatUsd } from '../../utils/bookingCharge';
@@ -110,9 +110,10 @@ const shownQuery = (booking) => new URLSearchParams({
  * cancel that meant to keep its fee gave the fee back too. With no amount
  * decided - a refund held for a person, or the rest of one after a refund by
  * hand - it starts empty, as the admin panel's does: nothing is filled in
- * that nobody decided.
+ * that nobody decided. Empty too while the cancel's own refund is unanswered,
+ * until Check ARC Pay shows nothing returned (refundPrefillOf).
  */
-const refundStartingAmount = (booking) => String(refundOwedOf(booking)?.owed ?? '');
+const refundStartingAmount = (booking) => refundPrefillOf(booking);
 
 /** The sentence under Finish refund that says where that amount comes from, or null. */
 const owedSentence = (booking) => {
@@ -322,6 +323,12 @@ function SupportQueue() {
         load();
       } else {
         setMessage({ tone: 'error', text: result.error || result.message || 'The server refused that.' });
+        // Check ARC Pay asked, and ARC shows nothing returned: the amount the
+        // cancel decided is offered now, not before (refundPrefillOf). Never
+        // over what someone typed.
+        if (type === 'refund' && current.mode === 'sync' && result.code === 'NO_REFUND_FOUND') {
+          setAction((open) => (open && !open.amount ? { ...open, amount: refundPrefillOf(booking, { arcChecked: true }) } : open));
+        }
       }
     } catch {
       setMessage({ tone: 'error', text: 'That did not go through. Please try again.' });
