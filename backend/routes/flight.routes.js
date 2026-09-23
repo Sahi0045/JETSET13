@@ -8,7 +8,7 @@ import { validate } from '../middleware/validate.js';
 import { z } from 'zod';
 import { protect, admin, bookingStaff, optionalProtect } from '../middleware/auth.middleware.js';
 import { resolveBookingUserId } from '../utils/bookingOwner.js';
-import { handleCancelBookingAction, reverseArcPaymentForOrder, settleManualFlightRefund } from './payment/operations.handlers.js';
+import { handleCancelBookingAction, recordPaymentAfterCancel, reverseArcPaymentForOrder, settleManualFlightRefund } from './payment/operations.handlers.js';
 import { emailMatchesBooking, isBookingOwner } from '../utils/bookingAccess.js';
 import { reconcileBookingPayment } from './payment/checkout.handlers.js';
 import { reportError } from '../services/monitoring.js';
@@ -2605,6 +2605,17 @@ router.post('/order', optionalProtect, async (req, res) => {
     const arcOrderId = existing.booking_details?.order_id || existing.booking_reference;
 
     if (existing.status === 'cancelled') {
+      // Unless the proven payer paid after the cancel: a checkout cancelled with
+      // nothing to refund keeps its payment page open. Their money is put in
+      // front of the desk (payment/operations.handlers.js
+      // recordPaymentAfterCancel), and they are told it is still held.
+      const late = await recordPaymentAfterCancel(existing);
+      if (late?.held > 0) {
+        const text = 'This booking was cancelled before your payment went through, so it has not been booked.';
+        return res.status(409).json({
+          success: false, error: text, message: text, code: 'BOOKING_CANCELLED', bookingFailed: true, refunded: false,
+        });
+      }
       return res.status(409).json({
         success: false,
         error: 'This booking was cancelled and cannot be completed',
