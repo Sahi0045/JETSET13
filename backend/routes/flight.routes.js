@@ -30,7 +30,7 @@ import {
   attentionOf, attentionLabel, reviewResolution, ticketsOf, isTicketed, NO_CONFIRMED_SEAT_REVIEW_REASON, noConfirmedSeatOf,
   HELD_REVIEW_REASON_PREFIXES, liveTicketNumbersMissingOf, unrecordedCancellationForCustomerOf,
   voidedTicketsOf, commitUnknownOf, SCHEDULE_CHANGED_REVIEW_REASON, isHeldForReview, ticketIssuedBeforeHoldOf,
-  openFailedCancellationOf, ATTENTION_JOBS,
+  openFailedCancellationOf, ATTENTION_JOBS, cancellationRecordedByHandOf,
 } from '../../shared/reviewQueue.js';
 import { errorSummary } from '../utils/errorSummary.js';
 import { flightSearchLimiter, guestBookingLimiter } from '../middleware/security.js';
@@ -4488,7 +4488,11 @@ export function toClientBooking(booking, { showPassports = false } = {}) {
     // "Reservation Held - your seats are reserved". Only the fact of it: the
     // stored order carries passport numbers and stays in the database.
     queued: Boolean(booking.booking_details?.queued_order) && !booking.booking_details?.pnr,
-    cancellation: booking.booking_details?.cancellation || null,
+    // Or, for a cancel that went through, could not be recorded and was then
+    // recorded cancelled by hand, what its flag says it did with the money
+    // (cancellationRecordedByHandOf). With none, the pages read the row's
+    // 'paid' and said "Refund pending" of a payment the cancel had voided.
+    cancellation: booking.booking_details?.cancellation || cancellationRecordedByHandOf(booking) || null,
     tickets: booking.booking_details?.tickets || [],
     // Which of those a cancel voided. A cancel that voids and then has
     // PNR_Cancel refused leaves the list as it was, so the pages called every
