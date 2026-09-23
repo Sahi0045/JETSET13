@@ -131,15 +131,18 @@ describe('Manage Booking', () => {
     expect(screen.queryByRole('button', { name: /Cancel Booking/ })).toBeNull();
   });
 
-  // Fence: a refusal changed nothing, and the page is not read again for it.
-  it('a refusal: says so, and reads nothing again', async () => {
+  // Fence: a refusal that wrote nothing. The page is read again, as after
+  // every answer that is not a success (an airline refusal can come after the
+  // cancel voided the ticket), and reads as it did.
+  it('a refusal that changed nothing: says so, and the booking reads as it did', async () => {
     mockCancelFlightBooking.mockResolvedValue(refusal);
+    refetch.mockImplementation(async () => ({ data: ticketed }));
     const { container } = renderPage();
 
     cancelThroughThePopUp();
 
     await waitFor(() => expect(container.textContent).toContain('This booking is already being cancelled.'));
-    expect(refetch).not.toHaveBeenCalled();
+    await waitFor(() => expect(refetch).toHaveBeenCalledTimes(1));
     expect(container.textContent).toMatch(/Download E-Ticket/);
   });
 });
@@ -192,14 +195,18 @@ describe('My Trips', () => {
     expect(card.textContent).not.toMatch(/Ticketed/);
   });
 
-  // Fence: a refusal changed nothing, and the list is not read again for it.
-  it('a refusal: says so, and reads nothing again', async () => {
+  // Fence: a refusal that wrote nothing. The list is read again, as after
+  // every answer that is not a success, and the card reads as it did.
+  it('a refusal that changed nothing: says so, and the card reads as it did', async () => {
     mockCancelFlightBooking.mockResolvedValue(refusal);
-    renderMyTrips(unrecorded);
+    renderMyTrips(ticketed);
 
     await cancelFromTheCard();
 
     await waitFor(() => expect(screen.getByRole('alertdialog').textContent).toContain('This booking is already being cancelled.'));
-    expect(bookingReads).toBe(1);
+    await waitFor(() => expect(bookingReads).toBe(2));
+    const card = await cardFor('FLTHELD1');
+    expect(card.textContent).toMatch(/Ticketed/);
+    expect(within(card).getByRole('button', { name: /Cancel Booking/ })).toBeTruthy();
   });
 });

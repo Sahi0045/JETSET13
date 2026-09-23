@@ -1087,12 +1087,16 @@ export default function TravelDashboard() {
                           loadBookings()
                         } else {
                           setCancelOutcome({ tone: 'error', text: result.error || result.message || 'Failed to cancel booking. Please try again.' })
-                          // No answer in time: the cancel may have gone through.
-                          // Or it went through and could not be recorded (the
-                          // answer carries what it did): the card still said
-                          // Ticketed and offered a second cancel. The list
-                          // shows what the booking says now.
-                          if (result.timedOut || result.cancellation) loadBookings()
+                          // Whatever the refusal, the list is read again: a
+                          // refusal can come after the cancel changed the
+                          // booking. No answer in time: it may have gone
+                          // through. It went through and could not be recorded,
+                          // or the airline refused it after the ticket was
+                          // voided (502, needsReview): the card still said
+                          // Ticketed, printed the void number and offered a
+                          // second cancel. The list shows what the booking
+                          // says now.
+                          loadBookings()
                         }
                       } catch (err) {
                         console.error('Cancel error:', err)
