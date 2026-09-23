@@ -52,6 +52,14 @@ const log = (msg, extra = {}) => console.log(`[NeedsReviewAlert] ${msg}`, extra)
 export const UNTICKETED_REVIEW_REASON = 'PNR committed, never ticketed';
 
 /**
+ * An airline claim nobody has marked handled. needsAirlineRefundClaim reads
+ * the flag on top whether or not a person resolved it: the desk decides a
+ * resolved flag before it asks, and this alarm did not.
+ */
+const openAirlineClaim = (booking) => needsAirlineRefundClaim(booking)
+  && !booking?.booking_details?.needs_review?.resolved_at;
+
+/**
  * Which flagged bookings actually deserve waking someone up.
  *
  * Exported and pure so it can be tested without a database, and so the manual
@@ -81,7 +89,11 @@ export function selectUnannounced(rows = []) {
 
     // A cancellation with a refund still to claim from the airline. It is
     // cancelled and ticketed, so both checks below would skip it - and did.
-    if (needsAirlineRefundClaim(booking)) return true;
+    // Not once the desk marked the claim handled: a customer refund ARC Pay
+    // refused keeps the booking on the desk after that (attentionOf), and the
+    // check above let it through to be announced as a claim to make. The
+    // refused refund is the failed-refund alarm's (paymentFailureAlert.job.js).
+    if (openAirlineClaim(booking)) return true;
     // A cancellation carried out but not recorded. A retry that voided the
     // tickets leaves none to claim, and the booking still reads ticketed, so
     // the checks below skipped it: seats and money moved, nobody told.
@@ -417,7 +429,9 @@ export function buildMessage(bookings) {
   const cancelFailedPaid = cancelFailed.filter((booking) => !refundedBefore(booking));
   const cancelFailedRefunded = cancelFailed.filter(refundedBefore);
   const rest = bookings.filter((booking) => !isUnrecordedCancellation(booking) && !isFailedCancellation(booking));
-  const claims = rest.filter(needsAirlineRefundClaim);
+  // A claim the desk marked handled is not one to make. Still left out of every
+  // section below: a cancelled booking is not "paid but not ticketed".
+  const claims = rest.filter(openAirlineClaim);
   // A ticketed booking whose numbers did not arrive is NOT "paid but not
   // ticketed". Listed under that heading it read "no ticket was issued ...
   // ticket it, or refund it" beside "ticketed: yes" - an instruction to issue a
