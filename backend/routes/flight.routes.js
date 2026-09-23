@@ -5395,6 +5395,21 @@ const refuseResolve = (res, status, code, text) => res.status(status).json({ suc
 const BOOKING_CHANGED_TEXT = 'This booking changed while you were recording it. Nothing has been recorded; reload it and try again.';
 
 /**
+ * Pin a desk write to the flag's resolution as it was read. unchangedSince
+ * pins status, payment and the fields that move money, not needs_review, so
+ * two people answering the same booking at once could both succeed: a "held"
+ * written after a "not held" erased the first answer and emailed the customer,
+ * and a second "mark as handled" overwrote the first one's note. The loser now
+ * matches nothing, is told the booking changed, and on reload sees who handled it.
+ */
+const pinResolution = (query, booking) => {
+  const resolvedAt = booking?.booking_details?.needs_review?.resolved_at;
+  return resolvedAt
+    ? query.eq('booking_details->needs_review->>resolved_at', resolvedAt)
+    : query.is('booking_details->needs_review->>resolved_at', null);
+};
+
+/**
  * The desk found the airline holds a booking whose commit never answered:
  * write its record locator on the row as the chain records a commit
  * (persistCommittedPnr, then flagForReview on a stopped chain) - the locator,
@@ -5442,7 +5457,7 @@ async function recordHeldAtAirline(booking, { note, at, by, pnr: given }) {
       + 'Check the locator with the airline.');
   }
 
-  const { data: written, error } = await unchangedSince(
+  const heldWrite = unchangedSince(
     supabase
       .from('bookings')
       .update({
@@ -5464,7 +5479,8 @@ async function recordHeldAtAirline(booking, { note, at, by, pnr: given }) {
       })
       .eq('id', booking.id),
     booking,
-  ).select('id');
+  );
+  const { data: written, error } = await pinResolution(heldWrite, booking).select('id');
   if (error) return refused(500, 'WRITE_FAILED', 'Could not record it. Nothing has been recorded; please try again.');
   if (!written?.length) return refused(409, 'BOOKING_CHANGED', BOOKING_CHANGED_TEXT);
   return { pnr };
@@ -5547,7 +5563,7 @@ router.post('/admin-bookings/:id/resolve-review', protect, bookingStaff, async (
     // by someone else a moment earlier lost its record locator, and the
     // booking was left pending_ticketing with no PNR; a ticket that ticket
     // sync had just recorded was lost the same way.
-    const { data: written, error } = await unchangedSince(
+    const resolveWrite = unchangedSince(
       supabase
         .from('bookings')
         .update({
@@ -5567,7 +5583,8 @@ router.post('/admin-bookings/:id/resolve-review', protect, bookingStaff, async (
         })
         .eq('id', booking.id),
       booking,
-    ).select('id');
+    );
+    const { data: written, error } = await pinResolution(resolveWrite, booking).select('id');
 
     if (error) return res.status(500).json({ success: false, error: 'Could not record it' });
     if (!written?.length) return refuseResolve(res, 409, 'BOOKING_CHANGED', BOOKING_CHANGED_TEXT);
