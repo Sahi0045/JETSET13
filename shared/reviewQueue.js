@@ -566,6 +566,20 @@ function refusedRefundReason(booking, cancellation) {
 }
 
 /**
+ * A flag's words with a customer refund ARC Pay refused said first, for an
+ * entry whose flag is about something else - an airline claim, a commit that
+ * never answered. A refused refund adds no reason to any flag, so the flag's
+ * words were all the desk read, and nobody was told the customer had nothing
+ * back.
+ */
+function withRefusedRefundFirst(booking, reason) {
+  const notReturned = refundNotReturnedOf(booking);
+  return notReturned && REFUND_STUCK_ACTIONS.includes(notReturned.paymentAction)
+    ? `${refusedRefundReason(booking, notReturned)}; ${reason}`
+    : reason;
+}
+
+/**
  * A cancellation whose money never went back, as the desk lists it, or null.
  *
  * Asked where attentionOf would otherwise call a booking settled: it is
@@ -587,6 +601,11 @@ function refusedRefundReason(booking, cancellation) {
  * until the refund is recorded, or marked handled on its own entry (the route
  * writes that over the claim). A refund held for review is named by the claim
  * flag's own reason, so resolving that flag still settles it.
+ *
+ * So does a commit that never answered, resolved with what the airline said:
+ * staff may cancel it before anyone knows, a refused refund on that cancel
+ * writes no flag, and recording "the airline does not hold it" answered the
+ * commit, not the refund.
  */
 function refundNotReturnedAttentionOf(booking) {
   const cancellation = refundNotReturnedOf(booking);
@@ -594,7 +613,8 @@ function refundNotReturnedAttentionOf(booking) {
   const review = detailsOf(booking)?.needs_review;
   const refused = REFUND_STUCK_ACTIONS.includes(cancellation.paymentAction);
   const handledSince = review?.resolved_at && !(Date.parse(review.resolved_at) < Date.parse(cancellation.cancelledAt));
-  if (handledSince && !(refused && needsAirlineRefundClaim(booking))) return null;
+  const settledSomethingElse = needsAirlineRefundClaim(booking) || review?.reason === COMMIT_UNKNOWN_REVIEW_REASON;
+  if (handledSince && !(refused && settledSomethingElse)) return null;
 
   const since = cancellation.cancelledAt || null;
   if (refused) return { kind: 'refund_failed', reason: refusedRefundReason(booking, cancellation), since };
@@ -652,13 +672,9 @@ export function attentionOf(booking) {
     // no reason to the cancel's flag, so the claim's words were all the desk
     // read, and nobody was told the customer had nothing back. Said first, and
     // kept on the list after the claim is handled (refundNotReturnedAttentionOf).
-    const notReturned = refundNotReturnedOf(booking);
-    const claim = review.reason || 'the refund has to be claimed from the airline';
     return {
       kind: 'airline_refund',
-      reason: notReturned && REFUND_STUCK_ACTIONS.includes(notReturned.paymentAction)
-        ? `${refusedRefundReason(booking, notReturned)}; ${claim}`
-        : claim,
+      reason: withRefusedRefundFirst(booking, review.reason || 'the refund has to be claimed from the airline'),
       since: review.at || null,
       tickets: review.tickets.map((ticket) => ticket?.number ?? ticket),
     };
@@ -678,8 +694,13 @@ export function attentionOf(booking) {
   // Payments tab may refund it: that settles the money, not whether the
   // airline holds a reservation for it - and a cancelled or refunded booking
   // read as settled took it off the desk, the one place anyone would look.
+  //
+  // A staff cancel of it whose refund ARC Pay refused writes no flag, so this
+  // entry is the refused refund's too: said first, as under an airline claim,
+  // and kept on the list once the airline's answer is recorded
+  // (refundNotReturnedAttentionOf).
   if (commitUnknownOf(booking)) {
-    return { kind: 'review', reason: review.reason || 'flagged for review', since: review.at || null };
+    return { kind: 'review', reason: withRefusedRefundFirst(booking, review.reason || 'flagged for review'), since: review.at || null };
   }
 
   if (['cancelled', 'refunded'].includes(statusOf(booking))) return refundNotReturnedAttentionOf(booking);
