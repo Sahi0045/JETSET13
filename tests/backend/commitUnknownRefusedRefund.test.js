@@ -3,6 +3,7 @@ import express from 'express';
 import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakeBookingsTable } from './helpers/fakeBookings.js';
+import { shownQueryFor } from './helpers/deskShown.js';
 import { attentionLabel, attentionOf } from '../../shared/reviewQueue.js';
 
 /**
@@ -106,7 +107,8 @@ const desk = async (rows) => {
   return {
     cancel: () => request(app).post('/api/flights/admin-bookings/bk-unk1/cancel').send({ reason: 'Customer called' }),
     open: async () => (await request(app).get('/api/flights/admin-bookings-all?attention=open')).body.data,
-    handle: (body) => request(app).post('/api/flights/admin-bookings/bk-unk1/resolve-review').send(body),
+    // With the entry the desk page showed, as the page sends it.
+    handle: async (body) => request(app).post(`/api/flights/admin-bookings/bk-unk1/resolve-review${await shownQueryFor('bk-unk1')}`).send(body),
   };
 };
 

@@ -3,6 +3,7 @@ import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { errorHandler } from '../../backend/middleware/errorHandler.js';
 import { fakeBookingsTable } from './helpers/fakeBookings.js';
+import { shownQueryOf } from './helpers/deskShown.js';
 
 /**
  * Two members of the desk answering the same "commit never answered" booking
@@ -117,12 +118,13 @@ describe('"held" while another member of the desk records it NOT held', () => {
   it('is refused, and the "not held" answer stands, with no email sent', async () => {
     const app = await appWith([commitUnknownRow()], recordedNotHeldMeanwhile);
 
-    const res = await request(app).post('/api/flights/admin-bookings/1/resolve-review').set(desk)
+    const res = await request(app).post(`/api/flights/admin-bookings/1/resolve-review${shownQueryOf(table.row(REF))}`).set(desk)
       .send({ note: 'Airline holds it.', outcome: 'held', pnr: 'ABC123' });
 
     const row = table.row(REF);
     expect(res.status).toBe(409);
     expect(res.body.code).toBe('BOOKING_CHANGED');
+    expect(res.body.error).toMatch(/changed while you were recording it/);
     expect(row.booking_details.pnr).toBeFalsy();
     expect(row.booking_details.needs_review.outcome).toBe('not_held');
     expect(row.booking_details.needs_review.resolved_at).toBeTruthy();

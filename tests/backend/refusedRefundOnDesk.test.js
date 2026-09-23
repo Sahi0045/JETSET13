@@ -4,6 +4,7 @@ import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRequest, createResponse } from './helpers/express.helpers.js';
 import { fakeBookingsTable } from './helpers/fakeBookings.js';
+import { shownQueryFor } from './helpers/deskShown.js';
 import { attentionLabel, attentionOf } from '../../shared/reviewQueue.js';
 import { buildMessage, selectUnrefunded } from '../../backend/jobs/paymentFailureAlert.job.js';
 
@@ -223,7 +224,7 @@ describe('marking a refused refund handled on the desk', () => {
     const open = await request(app).get('/api/flights/admin-bookings-all?attention=open');
     expect(open.body.data.map((b) => b.bookingReference)).toEqual(['FLTREF1']);
 
-    const res = await request(app).post('/api/flights/admin-bookings/b-refused/resolve-review').send({ note: 'Refunded 241 in the ARC portal.' });
+    const res = await request(app).post(`/api/flights/admin-bookings/b-refused/resolve-review${await shownQueryFor('b-refused')}`).send({ note: 'Refunded 241 in the ARC portal.' });
 
     expect(res.status).toBe(200);
     const review = table.row('FLTREF1').booking_details.needs_review;
@@ -240,7 +241,7 @@ describe('marking a refused refund handled on the desk', () => {
     const earlierFlag = { reason: 'chain failed after commit at issueTicket', at: '2026-09-18T10:00:00Z', resolved_at: '2026-09-19T09:00:00Z', resolution: 'ticketed by hand' };
     const { app, table } = await appWith([cancelledWith({}, { booking_details: { needs_review: earlierFlag } })]);
 
-    const res = await request(app).post('/api/flights/admin-bookings/b-refused/resolve-review').send({ note: 'Refunded 241 in the ARC portal.' });
+    const res = await request(app).post(`/api/flights/admin-bookings/b-refused/resolve-review${await shownQueryFor('b-refused')}`).send({ note: 'Refunded 241 in the ARC portal.' });
 
     expect(res.status).toBe(200);
     const review = table.row('FLTREF1').booking_details.needs_review;

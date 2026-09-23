@@ -3,6 +3,7 @@ import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { errorHandler } from '../../backend/middleware/errorHandler.js';
 import { fakeBookingsTable } from './helpers/fakeBookings.js';
+import { shownQueryFor } from './helpers/deskShown.js';
 
 // See commitNeverAnsweredReadBack.test.js: the payment handlers take their
 // Supabase client from arcpay.config.js.
@@ -170,7 +171,8 @@ const commitNeverAnswered = async () => {
   return { app, table };
 };
 
-const resolve = (app, body) => request(app).post('/api/flights/admin-bookings/1/resolve-review').set(desk).send(body);
+// With the entry the desk page showed, as the page sends it.
+const resolve = async (app, body) => request(app).post(`/api/flights/admin-bookings/1/resolve-review${await shownQueryFor(1)}`).set(desk).send(body);
 
 describe('the desk records a commit that never answered as held', () => {
   it('emails the customer their reservation, once, and records it sent', async () => {

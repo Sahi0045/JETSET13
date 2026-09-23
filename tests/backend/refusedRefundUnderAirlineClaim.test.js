@@ -4,6 +4,7 @@ import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRequest, createResponse } from './helpers/express.helpers.js';
 import { fakeBookingsTable } from './helpers/fakeBookings.js';
+import { shownQueryFor } from './helpers/deskShown.js';
 import { attentionLabel, attentionOf } from '../../shared/reviewQueue.js';
 
 /**
@@ -103,7 +104,9 @@ const deskOver = async (rows) => {
   app.use(express.json());
   app.use('/api/flights', routes);
   const open = async () => (await request(app).get('/api/flights/admin-bookings-all?attention=open')).body.data;
-  const handle = (note, extra = {}) => request(app).post('/api/flights/admin-bookings/b-claim/resolve-review').send({ note, ...extra });
+  // With the entry the desk page showed, as the page sends it.
+  const handle = async (note, extra = {}) => request(app)
+    .post(`/api/flights/admin-bookings/b-claim/resolve-review${await shownQueryFor('b-claim')}`).send({ note, ...extra });
   return { table, open, handle };
 };
 

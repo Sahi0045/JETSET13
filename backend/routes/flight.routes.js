@@ -5611,14 +5611,21 @@ router.post('/admin-bookings/:id/resolve-review', protect, bookingStaff, async (
     // looking at "Refund to claim from the airline" after someone else handled
     // the claim recorded the same claim again - as the refused customer
     // refund's resolution, and the unreturned money left Needs attention. An
-    // entry the booking no longer shows is refused, and nothing is written. A
-    // press that does not say what it showed is taken as before.
-    if (req.query?.shownKind) {
-      const shownSince = String(req.query.shownSince ?? '') || null;
-      if (String(req.query.shownKind) !== attention.kind || shownSince !== (attention.since || null)) {
-        return refuseResolve(res, 409, 'BOOKING_CHANGED', `This booking changed since your page showed it: it now reads `
-          + `"${attentionLabel(attention)}". Nothing has been recorded; reload the page to see what it needs now.`);
-      }
+    // entry the booking no longer shows is refused, and nothing is written.
+    //
+    // So is a press that does not say what it showed. It was taken as before,
+    // and the desk page - the only caller - always says; the one press that
+    // did not was a /desk tab still on the bundle from before this check,
+    // and it wrote its stale note over whatever the booking needed by then.
+    const shownKind = String(req.query?.shownKind ?? '');
+    if (!shownKind) {
+      return refuseResolve(res, 409, 'BOOKING_CHANGED', 'Your page did not say which entry it showed; it may be from before an update. '
+        + 'Nothing has been recorded; reload the page to see what this booking needs now.');
+    }
+    const shownSince = String(req.query?.shownSince ?? '') || null;
+    if (shownKind !== attention.kind || shownSince !== (attention.since || null)) {
+      return refuseResolve(res, 409, 'BOOKING_CHANGED', `This booking changed since your page showed it: it now reads `
+        + `"${attentionLabel(attention)}". Nothing has been recorded; reload the page to see what it needs now.`);
     }
     const openFlag = details.needs_review?.resolved_at ? null : details.needs_review;
 

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { errorHandler } from '../../backend/middleware/errorHandler.js';
 import { attentionOf, flagsInForce, scheduleChangeOf } from '../../shared/reviewQueue.js';
 import { fakeBookingsTable } from './helpers/fakeBookings.js';
+import { shownQueryOf } from './helpers/deskShown.js';
 
 vi.mock('../../backend/middleware/auth.middleware.js', async () => {
   const actual = await vi.importActual('../../backend/middleware/auth.middleware.js');
@@ -317,7 +318,7 @@ describe('verifier: the desk and a held booking the airline retimed', () => {
     const shownOnDesk = attentionOf(before).reason;
 
     const resolved = await request(app)
-      .post('/api/flights/admin-bookings/1/resolve-review')
+      .post(`/api/flights/admin-bookings/1/resolve-review${shownQueryOf(before)}`)
       .send({ note: 'Ticket issued by hand in Amadeus.' });
     expect(resolved.status).toBe(200);
 
