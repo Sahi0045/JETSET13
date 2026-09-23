@@ -26,13 +26,13 @@ import { clearStaleStoredBookings } from '../../../utils/bookingStorage';
 import { formatCheckedBag } from '../../../utils/baggage';
 import FlightCancellationPolicy from './FlightCancellationPolicy';
 import { searchToQuery } from './searchQuery';
-import { seatsLeftLabel } from './searchResults';
+import { airportClockLabel, minutesBetweenAirportTimes, seatsLeftLabel } from './searchResults';
 import apiConfig from '@/config/api';
 // The same formula checkout verifies the charge with, so this page can never
 // quote a total the server will not accept.
 import { computeFlightCharge, PASSENGER_TYPES, travellerTypesOf } from '../../../../../shared/flightCharge';
 import { describeGroup, groupFromOffer, travellerGroupProblem } from '../../../../../shared/travellerGroup';
-import { needsDateOfBirth, tripDates } from '../../../../../shared/travellerDetails';
+import { lastFlightDepartureDate, needsDateOfBirth, tripDates } from '../../../../../shared/travellerDetails';
 import { CALLING_CODES, COUNTRIES, callingCodeDigits } from '../../../../../shared/countries';
 import { arcItineraries, returnLegOf } from '../../../utils/reviewTrip';
 import { fareIdentity, findSameFare, rebuildTravellers, searchForGroup } from '../../../utils/travellerGroupChange';
@@ -139,6 +139,16 @@ function FlightBookingConfirmation() {
   const [couponToRestore, setCouponToRestore] = useState(() => cancelledCheckout?.couponCode ?? null);
   // The total a coupon's discount was computed on, so a changed total drops it.
   const couponBase = React.useRef(null);
+  // The page taking the coupon off by itself: checkout refused it, the fare or
+  // the total changed, or another flight or group of travellers was chosen.
+  // The coupon box keeps its own applied display until it is remounted, and it
+  // was remounted only for a changed total - with the same total it went on
+  // showing the discount over a Pay button for the full amount.
+  const dropCoupon = () => {
+    setAppliedCoupon(null);
+    couponBase.current = null;
+    setCouponInputRound((round) => round + 1);
+  };
   // The airline's price for this offer, checked on arrival and again by the
   // server at checkout. Null until the check answers; the search price stands.
   const [pricedFare, setPricedFare] = useState(null);
@@ -280,6 +290,7 @@ function FlightBookingConfirmation() {
       || bookingDetails?.flight?.segments?.at?.(-1)?.arrival?.at
       || bookingDetails?.flight?.arrivalDate
       || bookingDetails?.flight?.departureDate,
+    lastDepartureDate: lastFlightDepartureDate(reviewState?.flightData?.originalOffer),
     bookingAsGuest,
     contactEmail: bookingDetails?.contact?.email,
   });
@@ -378,8 +389,7 @@ function FlightBookingConfirmation() {
       // The old group's airline price must not stand in for the new group's
       // while the arrival check runs again for this offer.
       setPricedFare(null);
-      setAppliedCoupon(null);
-      couponBase.current = null;
+      dropCoupon();
       swapNotice.current = `Updated for ${describeGroup(group)} on the same flight and fare. Please check the new total.`;
       setFareNotice(swapNotice.current);
       setGroupChange({ busy: false, problem: null, unavailable: null });
@@ -501,8 +511,7 @@ function FlightBookingConfirmation() {
     // The dead fare's figures must not stand in for this one while the arrival
     // check runs again.
     setPricedFare(null);
-    setAppliedCoupon(null);
-    couponBase.current = null;
+    dropCoupon();
     setFareGone(false);
     setAlternatives(null);
     setNotice(null);
@@ -898,8 +907,7 @@ function FlightBookingConfirmation() {
   // go on charging the old, frozen figure.
   useEffect(() => {
     if (appliedCoupon && couponBase.current !== null && couponBase.current !== calculatedFare.totalAmount) {
-      setAppliedCoupon(null);
-      couponBase.current = null;
+      dropCoupon();
       setFareNotice((notice) => notice || 'The total changed, so your coupon was removed. Please apply it again.');
     }
   }, [calculatedFare.totalAmount]);
@@ -1010,9 +1018,6 @@ function FlightBookingConfirmation() {
   // early, on the screen where they confirm and pay. dateUtils was written for
   // exactly this bug and its docstring names it; every post-booking surface
   // already uses it, and this page alone did not.
-  //
-  // Connecting itineraries were never affected: renderSegmentList formats
-  // `seg.departure.at`, a full airport-local timestamp, which round-trips.
 
   // Format just month and day
   const formatShortDate = (dateString) => formatCalendarDate(dateString, { day: 'numeric', month: 'short' });
@@ -1022,33 +1027,27 @@ function FlightBookingConfirmation() {
     weekday: 'short', day: 'numeric', month: 'short', year: 'numeric',
   });
 
-  // Format time from ISO datetime: "11:20"
-  const formatTimeFromISO = (isoString) => {
-    if (!isoString) return '';
-    const date = new Date(isoString);
-    if (isNaN(date.getTime())) return '';
-    return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
-  };
-
-  // A time value may be an ISO string ("2024-08-10T10:00:00Z") or already
-  // "HH:MM". Format the former to a clean time; pass a plain time through.
-  // Never render a raw ISO string as the departure/arrival time.
+  // A flight time is the airport's own clock, as the airline sends it
+  // ("2026-11-15T02:40:00", no offset), read by the results page's helpers
+  // (searchResults.js). Formatted through the viewer's time zone, a time in
+  // their spring-forward hour moved an hour on this page, and a connection
+  // across it lost one.
+  //
+  // A time value may be such a timestamp or already "HH:MM". Take the clock
+  // from the former; pass a plain time through. Never render a raw ISO string
+  // as the departure/arrival time.
   const displayTime = (v) => {
-    const f = formatTimeFromISO(v);
+    const f = airportClockLabel(v);
     if (f) return f;
     return String(v || '').includes('T') ? '' : (v || '');
   };
 
-  // Calculate layover duration between two ISO datetimes
+  // The time on the ground between landing and the next departure, both on the
+  // connecting airport's clock: "1h 40m".
   const calcLayover = (arrivalAt, departureAt) => {
-    if (!arrivalAt || !departureAt) return '';
-    const arr = new Date(arrivalAt);
-    const dep = new Date(departureAt);
-    const diffMs = dep - arr;
-    if (diffMs <= 0) return '';
-    const hours = Math.floor(diffMs / 3600000);
-    const minutes = Math.floor((diffMs % 3600000) / 60000);
-    return `${hours}h ${minutes}m`;
+    const minutes = minutesBetweenAirportTimes(arrivalAt, departureAt);
+    if (!(minutes > 0)) return '';
+    return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
   };
 
   /**
@@ -1366,8 +1365,7 @@ function FlightBookingConfirmation() {
       const refusal = checkoutResponse.error || {};
       if (refusal.code === 'PRICE_CHANGED' && refusal.pricedFare?.total) {
         setPricedFare(refusal.pricedFare);
-        setAppliedCoupon(null);
-        couponBase.current = null;
+        dropCoupon();
         // The fee settings may have changed as well as the fare, and the page's
         // copy is cached for minutes: without a fresh read it recomputed the old
         // total, and every retry was refused again "with the total updated".
@@ -1386,8 +1384,7 @@ function FlightBookingConfirmation() {
       // customer. Take it off and say why: a generic error left it applied, and
       // every retry was refused the same way.
       if (refusal.code === 'COUPON_INVALID') {
-        setAppliedCoupon(null);
-        couponBase.current = null;
+        dropCoupon();
         setFareNotice(`${refusal.error} The coupon has been removed, so please check the total. Nothing has been charged.`);
         window.scrollTo({ top: 0, behavior: 'smooth' });
         return;
@@ -1541,8 +1538,8 @@ function FlightBookingConfirmation() {
       {segments.map((seg, idx) => {
         const depDate = seg.departure.at ? formatFullDate(seg.departure.at) : formatShortDate(bookingDetails?.flight?.departureDate);
         const arrDate = seg.arrival.at ? formatFullDate(seg.arrival.at) : '';
-        const depTime = seg.departure.at ? formatTimeFromISO(seg.departure.at) : seg.departure.time;
-        const arrTime = seg.arrival.at ? formatTimeFromISO(seg.arrival.at) : seg.arrival.time;
+        const depTime = seg.departure.at ? airportClockLabel(seg.departure.at) : seg.departure.time;
+        const arrTime = seg.arrival.at ? airportClockLabel(seg.arrival.at) : seg.arrival.time;
         const nextSeg = segments[idx + 1];
         const layover = nextSeg ? calcLayover(seg.arrival.at, nextSeg.departure.at) : '';
 
