@@ -74,7 +74,12 @@ export function statusChangeRefusal(booking, nextStatus) {
     // being updated", and Finish refund, which runs on a cancelled booking
     // alone, cannot settle the money. Read past "Mark as handled", as the
     // customer's pages read it.
-    if (unrecordedCancellationForCustomerOf(booking)) return null;
+    //
+    // Only for a booking with a reservation. With none, Cancel & Refund works
+    // again, asks the gateway first and writes the record a late payment is
+    // caught by (cancelledWithNothingTaken); cancelled by hand, a payment on a
+    // still-open page, or one ARC still held, reached no job, alarm or desk.
+    if (reservation && unrecordedCancellationForCustomerOf(booking)) return null;
     if (reservation) {
       return refusal(409, 'USE_CANCEL_AND_REFUND',
         `This flight has an airline reservation (${reservation}). Marking it cancelled would release no seats and refund nothing. Use Cancel & Refund.`);
