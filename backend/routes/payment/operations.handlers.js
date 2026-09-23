@@ -29,8 +29,8 @@ import { unchangedSince } from '../../utils/bookingDetailsGuard.js';
 import { DEFAULT_PRICE_SETTINGS } from '../../config/priceDefaults.js';
 import { cancellationMessage, refundOutcome } from '../../../shared/cancellationOutcome.js';
 import {
-    COMMIT_UNKNOWN_REVIEW_REASON, ISSUANCE_UNKNOWN, commitUnknownOf, decidedFeeOf, flagInForce, needsAirlineRefundClaim, refundOwedOf,
-    ticketNumbersMissingOf,
+    COMMIT_UNKNOWN_REVIEW_REASON, ISSUANCE_UNKNOWN, commitUnknownOf, decidedFeeOf, flagInForce, needsAirlineRefundClaim, notHeldAnswerOf,
+    refundOwedOf, ticketNumbersMissingOf,
 } from '../../../shared/reviewQueue.js';
 import { reconcileBookingPayment } from './checkout.handlers.js';
 import { errorSummary } from '../../utils/errorSummary.js';
@@ -1476,6 +1476,40 @@ async function sendCancellationEmail(booking, email, cancellationResult) {
     }
 }
 
+/**
+ * Whether the desk action about to return this booking's money owes its
+ * customer the email saying so - read from the booking as it was BEFORE the
+ * action ran.
+ *
+ * The desk's "not held" answer emails the customer "Our team is refunding
+ * your payment, and we will email you when the refund is made"
+ * (flight.routes.js NOT_HELD_EMAIL). Cancel & refund keeps that with its
+ * cancellation email. Void payment - offered on the same desk card - the
+ * Payments tab and Finish refund returned the money and emailed no one, so the
+ * customer never heard the refund was made.
+ *
+ * Owed by whichever of them first records money returned: while the booking
+ * still reads paid. Once it reads refunded or partially refunded, that email
+ * (or Cancel & refund's) has been sent, so nothing sends it a second time.
+ */
+function refundMadeEmailOwedOf(booking) {
+    return Boolean(booking) && String(booking.payment_status || '').toLowerCase() === 'paid'
+        && Boolean(notHeldAnswerOf(booking));
+}
+
+/**
+ * Keep that promise with the email Cancel & refund sends (sendCancellationEmail),
+ * saying what went back. Only after the action's record landed. Never throws.
+ */
+async function sendRefundMadeEmail(booking, { paymentAction, refundAmount, cancellationFee = 0, currency }) {
+    await sendCancellationEmail(booking, null, {
+        paymentAction,
+        refundAmount,
+        cancellationFee,
+        currency: currency || booking?.booking_details?.arc_captured_currency || 'USD',
+    });
+}
+
 // ============================================
 // ADMIN PAYMENT MANAGEMENT HANDLERS
 // These handle refund, void, and status retrieval
@@ -1668,6 +1702,17 @@ export async function handlePaymentRefund(req, res) {
         // rows below read `refunded` or `partially_refunded`.
         const returnsEverything = refundAmount + 0.01 >= refundCeiling;
 
+        // The booking as it is before any money moves, for the email its
+        // customer may be owed once it does (refundMadeEmailOwedOf). A read
+        // that fails only costs that email, never the refund. Whether this
+        // refund is the one that owes it is the booking write's to decide.
+        let bookingBefore = null;
+        if (payment.arc_order_id) {
+            const { data } = await supabase.from('bookings').select('*')
+                .eq('booking_reference', payment.arc_order_id).maybeSingle();
+            bookingBefore = data || null;
+        }
+
         const refundTxnId = `refund-admin-${Date.now()}`;
         const refundUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${arcOrderId}/transaction/${refundTxnId}`;
 
@@ -1747,17 +1792,31 @@ export async function handlePaymentRefund(req, res) {
         // `bookings` has no quote_id, payment_id or inquiry_id column; the ARC
         // order id is the booking reference.
         let bookingWriteError = null;
+        // Whether this refund is the first money the booking records returned
+        // (refundMadeEmailOwedOf): decided by the write itself, pinned to
+        // `paid`, so of two refunds that both read the booking paid only one
+        // is. Any other booking is written as before.
+        let firstReturned = false;
         if (payment.arc_order_id) {
-            const { error } = await supabase.from('bookings')
-                // `bookings.payment_status` DOES allow partially_refunded
-                // (migrations/add_partially_refunded_status.sql), so the row can
-                // say what actually happened.
-                .update({
-                    payment_status: returnsEverything ? 'refunded' : 'partially_refunded',
-                    updated_at: refundedAt,
-                })
-                .eq('booking_reference', payment.arc_order_id);
-            bookingWriteError = error || null;
+            // `bookings.payment_status` DOES allow partially_refunded
+            // (migrations/add_partially_refunded_status.sql), so the row can
+            // say what actually happened.
+            const statusUpdate = {
+                payment_status: returnsEverything ? 'refunded' : 'partially_refunded',
+                updated_at: refundedAt,
+            };
+            const { data: fromPaid, error: firstError } = await supabase.from('bookings')
+                .update(statusUpdate)
+                .eq('booking_reference', payment.arc_order_id)
+                .eq('payment_status', 'paid')
+                .select('id');
+            firstReturned = !firstError && (fromPaid?.length ?? 0) > 0;
+            if (!firstReturned) {
+                const { error } = await supabase.from('bookings')
+                    .update(statusUpdate)
+                    .eq('booking_reference', payment.arc_order_id);
+                bookingWriteError = error || null;
+            }
         }
 
         if (paymentWriteError || bookingWriteError) {
@@ -1772,6 +1831,18 @@ export async function handlePaymentRefund(req, res) {
         }
 
         console.log('✅ Refund processed successfully:', paymentId);
+        // The first money returned on a booking the desk found the airline
+        // does not hold: its customer was told they would be emailed when the
+        // refund is made. Only the refund whose write took the booking from
+        // paid sends it.
+        if (firstReturned && refundMadeEmailOwedOf(bookingBefore)) {
+            const cancellation = {
+                paymentAction: returnsEverything ? 'FULL_REFUND' : 'PARTIAL_REFUND',
+                refundAmount,
+                currency: payment.currency || 'USD',
+            };
+            await sendRefundMadeEmail(bookingBefore, cancellation);
+        }
         return res.json({
             success: true,
             message: 'Refund processed successfully',
@@ -1992,11 +2063,23 @@ export async function handlePaymentVoid(req, res) {
         // as a live payment. It is answered the way a refund that could not be
         // recorded is (handlePaymentRefund, RECORD_FAILED).
         let recordError = null;
+        let recorded = null;
         if (booking) {
             // Read back rather than spread the row this request started with:
             // reconcile, a chain or a cancellation may have written since, and
             // writing the old copy of the whole column undid them.
             const current = (await readBookingDetails(booking.id)) || claim?.details || booking.booking_details || {};
+            recorded = {
+                ...current,
+                cancellation: {
+                    ...(current.cancellation || {}),
+                    cancelledAt: voidedAt,
+                    reason,
+                    paymentAction: 'VOID',
+                    refundAmount: voidedAmount ?? (parseFloat(booking.total_amount) || 0),
+                    cancellationFee: 0
+                }
+            };
             let update = supabase.from('bookings').update({
                 status: 'cancelled',
                 payment_status: 'refunded',
@@ -2011,14 +2094,7 @@ export async function handlePaymentVoid(req, res) {
                         reason,
                         voidedAt
                     },
-                    cancellation: {
-                        ...(current.cancellation || {}),
-                        cancelledAt: voidedAt,
-                        reason,
-                        paymentAction: 'VOID',
-                        refundAmount: voidedAmount ?? (parseFloat(booking.total_amount) || 0),
-                        cancellationFee: 0
-                    }
+                    cancellation: recorded.cancellation
                 },
                 updated_at: voidedAt
             }).eq('id', booking.id);
@@ -2061,6 +2137,14 @@ export async function handlePaymentVoid(req, res) {
                 reason: recordError,
                 void: { bookingReference: booking?.booking_reference || ref, orderId: arcOrderId, voidTransactionId: voidTxnId, targetTransactionId: targetTxnId }
             });
+        }
+
+        // A booking the desk found the airline does not hold: its customer was
+        // told they would be emailed when the refund is made, and this is it.
+        // Only the void whose record landed (pinned to its claim) gets here,
+        // and a voided booking is never voided again.
+        if (booking && refundMadeEmailOwedOf(booking)) {
+            await sendRefundMadeEmail({ ...booking, booking_details: recorded }, recorded.cancellation);
         }
 
         return res.json({
@@ -2283,7 +2367,9 @@ async function claimManualRefund(booking, adminId) {
     const { data, error } = await update.select('id');
     if (error) return { claimed: false, error };
     if (!data?.length) return { claimed: false };
-    return { claimed: true, stamp, details: claimedDetails };
+    // The payment as the claim was pinned to it (unchangedSince), for what
+    // the press that records a refund owes the customer (refundMadeEmailOwedOf).
+    return { claimed: true, stamp, details: claimedDetails, paymentStatus: row.payment_status };
 }
 
 /** Let go of a refund claim that recorded nothing. Conditioned on its own stamp. */
@@ -2569,6 +2655,14 @@ export async function settleManualFlightRefund(booking, { mode = 'sync', amount,
     }
 
     console.log('💵 Manual refund recorded', { bookingReference: booking.booking_reference, mode, returnedTotal, held, stillHeld });
+    // The first money recorded returned on a booking the desk found the
+    // airline does not hold: its customer was told they would be emailed
+    // when the refund is made (refundMadeEmailOwedOf). Read as the claim
+    // found it, not as the route read it earlier: the claim lets one press
+    // record at a time, and the next one finds it no longer paid.
+    if (refundMadeEmailOwedOf({ ...booking, payment_status: claim.paymentStatus, booking_details: claim.details })) {
+        await sendRefundMadeEmail({ ...booking, booking_details: { ...currentDetails, cancellation } }, cancellation);
+    }
     return answer(200, {
         success: true,
         message: manual.earlierUnanswered
