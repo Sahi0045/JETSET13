@@ -18,7 +18,21 @@ import { fakeBookingsTable } from './helpers/fakeBookings.js';
  * No failure email is sent for it: the booking already carries the flag a
  * person works from, and that person tells the customer what the airline said.
  * Every other final failure is emailed as before.
+ *
+ * These asserted that no email at all was sent, which pinned the next defect:
+ * a queued customer heard nothing until the desk got to them. They now assert
+ * no failure email; the one neutral email sent instead ("our team is checking
+ * your booking with the airline") is queueNeedsReviewCheckingEmail.test.js's.
  */
+
+/** No "could not confirm" email: the neutral one, once. */
+const noFailureEmail = (sendEmail) => {
+  expect(sendEmail).toHaveBeenCalledTimes(1);
+  for (const [mail] of sendEmail.mock.calls) {
+    expect(mail.subject).not.toBe('We could not confirm your flight booking');
+    expect(JSON.stringify(mail)).not.toMatch(/could not confirm|not confirmed/i);
+  }
+};
 
 const REF = 'FLTQREV1';
 const minuteAgo = () => new Date(Date.now() - 60_000).toISOString();
@@ -99,13 +113,13 @@ describe('a queued booking the route answered "a person is on this one"', () => 
       }),
     });
 
-    expect(sendEmail).not.toHaveBeenCalled();
+    noFailureEmail(sendEmail);
     expect(outcome).toBe('needs-review');
     expect(table.row(REF).booking_details.needs_review).toEqual(flag);
     expect(table.row(REF).booking_details.queued_order).toBeUndefined();
   });
 
-  it('a PNR the airline confirmed no seat on: no email either - the route sends none, a person contacts them', async () => {
+  it('a PNR the airline confirmed no seat on: no failure email either - a person contacts them', async () => {
     const { replay, sendEmail } = await load([seatlessRow()]);
     const message = 'The airline has not confirmed a seat on every flight - our team will contact you';
 
@@ -114,7 +128,7 @@ describe('a queued booking the route answered "a person is on this one"', () => 
       fetchImpl: answering(409, { success: false, code: 'BOOKING_NEEDS_REVIEW', needsReview: true, pnr: 'SEAT42', error: message, message }),
     });
 
-    expect(sendEmail).not.toHaveBeenCalled();
+    noFailureEmail(sendEmail);
     expect(outcome).toBe('needs-review');
   });
 });

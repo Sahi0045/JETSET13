@@ -1227,12 +1227,23 @@ export async function sendConfirmationOnce(bookingReference, emailData, { failOp
  * path's first send. Never throws.
  */
 async function sendHeldForReviewEmail(bookingReference, body) {
+  return sendOwedConfirmation(bookingReference, body, { only: 'held' });
+}
+
+/**
+ * Send the email a booking owes its customer (confirmationEmailKind), read
+ * back from the row and through the confirmation's own claim, so nothing else
+ * sends it a second time. For its first chance to email: it fails open like
+ * the success path's first send. `only` limits it to one kind. Never throws.
+ */
+async function sendOwedConfirmation(bookingReference, body = {}, { only = null } = {}) {
   try {
     const row = await findExistingBooking(bookingReference);
-    if (confirmationEmailKind(row) !== 'held') return { sent: false, reason: 'not-owed' };
+    const kind = confirmationEmailKind(row);
+    if (kind === null || (only && kind !== only)) return { sent: false, reason: 'not-owed' };
     return await sendConfirmationOnce(row.booking_reference, confirmationEmailFromRow(row, body), { failOpen: true });
   } catch (error) {
-    console.error('❌ Held-booking email step failed:', error.message);
+    console.error('❌ Owed booking email step failed:', error.message);
     return { sent: false, reason: 'error' };
   }
 }
@@ -1337,6 +1348,10 @@ function duplicatePaymentAnswer(bookingReference, paymentState = 'held', { first
     needsReview: true,
     bookingReference,
     paymentState,
+    // Said to the booking queue too, whose email about a queued second
+    // payment said "a trip you had already booked" (bookingQueue.job.js
+    // failureCopy).
+    firstCommitUnknown: Boolean(firstCommitUnknown),
     error: message,
     message,
   };
@@ -5376,6 +5391,9 @@ const COMMIT_OUTCOMES = ['not_held', 'held'];
 
 const refuseResolve = (res, status, code, text) => res.status(status).json({ success: false, code, error: text, message: text });
 
+/** What the desk is told when its write lost a race (unchangedSince matched nothing). */
+const BOOKING_CHANGED_TEXT = 'This booking changed while you were recording it. Nothing has been recorded; reload it and try again.';
+
 /**
  * The desk found the airline holds a booking whose commit never answered:
  * write its record locator on the row as the chain records a commit
@@ -5448,9 +5466,7 @@ async function recordHeldAtAirline(booking, { note, at, by, pnr: given }) {
     booking,
   ).select('id');
   if (error) return refused(500, 'WRITE_FAILED', 'Could not record it. Nothing has been recorded; please try again.');
-  if (!written?.length) {
-    return refused(409, 'BOOKING_CHANGED', 'This booking changed while you were recording it. Nothing has been recorded; reload it and try again.');
-  }
+  if (!written?.length) return refused(409, 'BOOKING_CHANGED', BOOKING_CHANGED_TEXT);
   return { pnr };
 }
 
@@ -5511,32 +5527,50 @@ router.post('/admin-bookings/:id/resolve-review', protect, bookingStaff, async (
       const held = await recordHeldAtAirline(booking, { note, at, by, pnr: req.body?.pnr });
       if (held.refused) return refuseResolve(res, held.status, held.code, held.text);
       console.log('✅ Commit that never answered recorded as held by the desk:', { reference: booking.booking_reference, pnr: held.pnr, by });
+      // The customer was told "we will email you either way", and nothing
+      // did: the booking now owes the email any paid reservation gets
+      // (confirmationEmailOwed), which only a reload of the order page or the
+      // e-ticket much later would have sent. Sent here, read back from the row
+      // as written, through the confirmation's own claim, so a reload cannot
+      // send it again. Its first chance to email, so it fails open like the
+      // success path's first send. Never throws.
+      const email = await sendOwedConfirmation(booking.booking_reference);
       return res.json({
-        success: true, resolvedAt: at, resolvedBy: by, note, outcome: 'held', pnr: held.pnr,
+        success: true, resolvedAt: at, resolvedBy: by, note, outcome: 'held', pnr: held.pnr, emailed: email.sent === true,
         message: `Recorded as held at the airline under ${held.pnr}. It now waits to be ticketed.`,
       });
     }
 
-    const { error } = await supabase
-      .from('bookings')
-      .update({
-        booking_details: {
-          ...details,
-          // Created when it is missing: the alarm names paid-but-not-ticketed
-          // bookings that were never flagged, and those need a record too.
-          needs_review: {
-            ...(details.needs_review || { reason: 'PNR committed, never ticketed', ticketed: false, at }),
-            resolved_at: at,
-            resolved_by: by,
-            resolution: note,
-            ...(commitUnknown ? { outcome: 'not_held' } : {}),
+    // Pinned to the row as read (unchangedSince), as recordHeldAtAirline is.
+    // The whole column is written back from the copy read above, and filtered
+    // by id alone it put back anything written in between: a "held" recorded
+    // by someone else a moment earlier lost its record locator, and the
+    // booking was left pending_ticketing with no PNR; a ticket that ticket
+    // sync had just recorded was lost the same way.
+    const { data: written, error } = await unchangedSince(
+      supabase
+        .from('bookings')
+        .update({
+          booking_details: {
+            ...details,
+            // Created when it is missing: the alarm names paid-but-not-ticketed
+            // bookings that were never flagged, and those need a record too.
+            needs_review: {
+              ...(details.needs_review || { reason: 'PNR committed, never ticketed', ticketed: false, at }),
+              resolved_at: at,
+              resolved_by: by,
+              resolution: note,
+              ...(commitUnknown ? { outcome: 'not_held' } : {}),
+            },
           },
-        },
-        updated_at: at,
-      })
-      .eq('id', booking.id);
+          updated_at: at,
+        })
+        .eq('id', booking.id),
+      booking,
+    ).select('id');
 
     if (error) return res.status(500).json({ success: false, error: 'Could not record it' });
+    if (!written?.length) return refuseResolve(res, 409, 'BOOKING_CHANGED', BOOKING_CHANGED_TEXT);
 
     console.log('✅ Booking marked handled by the desk:', { reference: booking.booking_reference, by });
     return res.json({ success: true, resolvedAt: at, resolvedBy: by, note, message: 'Marked as handled' });
