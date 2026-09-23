@@ -742,7 +742,14 @@ function refundNotReturnedAttentionOf(booking) {
   const refundJob = isRefundJob(cancellation);
   if (refundJob && refusedRefundHandledOn(review, cancellation)) return null;
   const handledSince = review?.resolved_at && !(Date.parse(review.resolved_at) < Date.parse(cancellation.cancelledAt));
-  const settledSomethingElse = needsAirlineRefundClaim(booking) || review?.reason === COMMIT_UNKNOWN_REVIEW_REASON;
+  // A flag closed with the airline's answer (resolve-review's held / not_held
+  // outcome) settled the airline question, not the money. Staff may cancel a
+  // commit nobody heard back from before anyone knows; when the VOID of that
+  // cancel went unanswered its flag sits on top of the commit's, and "not
+  // held" recorded on it took the unknown refund off the desk.
+  const settledSomethingElse = needsAirlineRefundClaim(booking)
+    || review?.reason === COMMIT_UNKNOWN_REVIEW_REASON
+    || Boolean(review?.outcome);
   if (handledSince && !(refundJob && settledSomethingElse)) return null;
 
   const since = cancellation.cancelledAt || null;
