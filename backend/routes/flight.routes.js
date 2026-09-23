@@ -3663,6 +3663,28 @@ router.post('/order', optionalProtect, async (req, res) => {
 
     console.log('📝 Database save result:', dbBooking ? 'Success' : 'Skipped/Failed');
 
+    // Issued, and the save that records it failed. The row still says what
+    // the commit wrote - `gds.ticketed: false`, no ticket numbers, no flag -
+    // so the alarm told staff "no ticket was issued ... ticket it, or refund
+    // it" and the desk "Paid, seats held, no ticket", of a live ticket: a
+    // second ticket charges the fare twice. What the chain knew is recorded
+    // on a hold after issue, as the outer catch below records it, which the
+    // desk, the alarm and ticket sync (the e-ticket) all read. Never on a
+    // booking cancelled meanwhile.
+    if (!dbBooking && pnrValue && orderResponse.ticketed === true) {
+      const bookingReference = req.body.bookingReference || orderIdValue;
+      const row = await findExistingBooking(bookingReference);
+      if (row?.status !== 'cancelled') {
+        await flagForReview({
+          bookingReference,
+          pnr: pnrValue,
+          reason: 'order route failed after commit: the booking could not be saved',
+          ticketed: true,
+          tickets: orderResponse.tickets
+        });
+      }
+    }
+
     // --- Send Booking Confirmation Email ---
     if (dbBooking) {
       try {
