@@ -28,7 +28,7 @@ import {
   ISSUANCE_UNKNOWN, NO_CONFIRMED_SEAT_REVIEW_REASON, SCHEDULE_CHANGED_REVIEW_REASON, TICKET_NUMBERS_MISSING, attentionOf,
   flagsInForce, isFailedCancellation, isTicketed, isUnrecordedCancellation, needsAirlineRefundClaim, openTicketedFlagOf,
   scheduleChangeOf, ticketNumbersMissingOf, ticketsOf, unrecordedCancellationOf,
-  notHeldStillPaidOf,
+  notHeldStillPaidOf, commitUnknownOf,
 } from '../../shared/reviewQueue.js';
 
 /**
@@ -470,9 +470,15 @@ export function buildMessage(bookings) {
   // held. Under "paid but not ticketed" it read "ticket it, or refund it" of a
   // booking with nothing to ticket: the money is all there is to act on.
   const notHeldStillPaid = rest.filter((booking) => Boolean(notHeldStillPaidOf(booking)));
+  // Nor is a commit the airline never answered (commitUnknownOf): no PNR, and
+  // nobody knows yet whether the airline holds it. Under that heading it read
+  // "ticket it, or refund it" (PNR none): nothing to ticket, and a refund
+  // first cancels as never booked what the airline may hold - while the desk
+  // asks staff what the airline said.
+  const commitUnanswered = rest.filter((booking) => Boolean(commitUnknownOf(booking)));
   const notTicketed = rest.filter((booking) => !needsAirlineRefundClaim(booking) && !ticketNumbersMissing(booking)
     && !noConfirmedSeat(booking) && !ticketedScheduleChange(booking) && !heldTicketed(booking)
-    && !notHeldStillPaidOf(booking));
+    && !notHeldStillPaidOf(booking) && !commitUnknownOf(booking));
   // Nor is an issuance nobody saw answered. Under that heading it read "no
   // ticket was issued ... ticket it, or refund it" before ticket sync had read
   // the PNR: a second ticket, or a refund of a live one.
@@ -524,6 +530,20 @@ export function buildMessage(bookings) {
         + 'Do not refund while the PNR is live: its confirmed flights would stay held with nothing paid for them.',
       '',
       ...seatless.map(describeBooking),
+    );
+  }
+  if (commitUnanswered.length) {
+    const many = commitUnanswered.length > 1;
+    sections.push(
+      `:question: *${commitUnanswered.length} booking${many ? 's' : ''} paid, the airline never answered when ${many ? 'they were' : 'it was'} booked*`,
+      'We sent the booking to the airline and it never answered (PNR_AddMultiElements timed out, or came back with no record locator), '
+        + 'so there is no PNR and nobody knows yet whether the airline holds it. The customer has paid and was told our team is '
+        + 'checking with the airline and not to book again. Check with the airline whether it holds this booking - by the flights '
+        + 'and the travellers\' names - and record what it said on the desk: held, with its record locator, or not held. '
+        + 'Do NOT ticket, rebook or refund it before that: a refund of a booking the airline holds leaves its seats booked with '
+        + 'nothing paid for them.',
+      '',
+      ...commitUnanswered.map(describeBooking),
     );
   }
   if (notHeldStillPaid.length) {
