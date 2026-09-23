@@ -2653,11 +2653,30 @@ router.post('/order', optionalProtect, async (req, res) => {
       // front of the desk (payment/operations.handlers.js
       // recordPaymentAfterCancel), and they are told it is still held.
       const late = await recordPaymentAfterCancel(existing);
-      if (late?.held > 0) {
+      // Recorded by this answer or before it - by an earlier answer to this
+      // payer, or by the abandoned-checkout job - and said on every answer.
+      // Only the first one said it: a reload of the order page sends the order
+      // again, found the cancellation no longer NOTHING_TO_REFUND, and was told
+      // "cancelled and cannot be completed" with nothing about the money. What
+      // became of it since is what the payment record says (paymentStateOf).
+      const paidAfterCancel = late?.held > 0 || Boolean(existing.booking_details?.cancellation?.paidAfterCancel);
+      if (paidAfterCancel) {
+        const paymentState = late?.held > 0 ? 'held' : paymentStateOf(existing);
         const text = 'This booking was cancelled before your payment went through, so it has not been booked.';
         return res.status(409).json({
-          success: false, error: text, message: text, code: 'BOOKING_CANCELLED', bookingFailed: true, refunded: false,
+          success: false, error: text, message: text, code: 'BOOKING_CANCELLED', bookingFailed: true,
+          refunded: paymentState === 'returned', paymentState,
         });
+      }
+      // The gateway could not be asked whether a payment landed after the
+      // cancel. The payer has usually just come back from the payment page,
+      // and was told only that the booking was cancelled. The job asks again,
+      // and a payment it finds is put in front of the desk and the alarm.
+      if (late?.gatewayUnavailable) {
+        const text = 'This booking was cancelled, so it cannot be completed. We could not check with the payment gateway just now '
+          + 'whether a payment was taken for it. If you paid for it after it was cancelled, it has not been booked, and our team will refund you. '
+          + `If you have any questions, call (877) 538-7380 with booking reference ${existing.booking_reference}.`;
+        return res.status(409).json({ success: false, error: text, message: text, code: 'BOOKING_CANCELLED' });
       }
       return res.status(409).json({
         success: false,
