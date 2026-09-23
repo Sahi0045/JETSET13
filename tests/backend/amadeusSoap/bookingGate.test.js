@@ -1191,7 +1191,12 @@ describe('the fare the customer paid for', () => {
 
     const committed = updates.find((u) => u.booking_details?.gds?.committed_at);
     expect(committed.booking_details).toMatchObject({ pnr: 'ABC123', gds: { ticketed: false } });
-    expect(selectUnannounced([{ status: 'pending', payment_status: 'paid', booking_details: committed.booking_details }])).toHaveLength(1);
+    // Nothing after it was saved: nothing renews the chain's claim either, and
+    // the alarm finds the booking once it lapses. While the claim is live the
+    // chain may still be issuing (alarmWaitsForRunningChain.test.js).
+    const { CHAIN_CLAIM_TTL_MS } = await import('../../../backend/utils/bookingChainClaim.js');
+    const lapsed = { ...committed.booking_details.gds_chain, committedAt: new Date(Date.now() - CHAIN_CLAIM_TTL_MS - 1_000).toISOString() };
+    expect(selectUnannounced([{ status: 'pending', payment_status: 'paid', booking_details: { ...committed.booking_details, gds_chain: lapsed } }])).toHaveLength(1);
   });
 
   // The chain stopped before its commit: this request no longer holds the
