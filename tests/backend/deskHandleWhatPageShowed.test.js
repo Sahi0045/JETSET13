@@ -125,12 +125,14 @@ describe('a second member on a page loaded before the first press', () => {
     const [shown] = await desk.open();
     expect(shown.attention).toMatchObject({ kind: 'airline_refund' });
 
-    // X claims the tickets from the airline.
-    expect((await desk.handle('b-claim', 'Claimed 108-2412345671 from the airline.', shown.attention)).status).toBe(200);
+    // X claims the tickets from the airline. The entry is two jobs, the
+    // refused refund and the claim (attention.jobs), so the press names the one
+    // X handled.
+    expect((await desk.handle('b-claim', 'Claimed 108-2412345671 from the airline.', shown.attention, { job: 'claim' })).status).toBe(200);
     const flagAfterX = desk.table.row('FLT123').booking_details.needs_review;
 
     // Y, on the page as it was, records the same claim.
-    const second = await desk.handle('b-claim', 'Claimed the ticket from the airline (Y).', shown.attention);
+    const second = await desk.handle('b-claim', 'Claimed the ticket from the airline (Y).', shown.attention, { job: 'claim' });
     expect(second.status, 'Y\'s claim note was written as the refused refund\'s resolution').toBe(409);
     expect(second.body.code).toBe('BOOKING_CHANGED');
     expect(second.body.error).toMatch(/changed/);

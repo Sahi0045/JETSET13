@@ -30,7 +30,7 @@ import {
   attentionOf, attentionLabel, reviewResolution, ticketsOf, isTicketed, NO_CONFIRMED_SEAT_REVIEW_REASON, noConfirmedSeatOf,
   HELD_REVIEW_REASON_PREFIXES, liveTicketNumbersMissingOf, unrecordedCancellationForCustomerOf,
   voidedTicketsOf, commitUnknownOf, SCHEDULE_CHANGED_REVIEW_REASON, isHeldForReview, ticketIssuedBeforeHoldOf,
-  openFailedCancellationOf,
+  openFailedCancellationOf, ATTENTION_JOBS,
 } from '../../shared/reviewQueue.js';
 import { errorSummary } from '../utils/errorSummary.js';
 import { flightSearchLimiter, guestBookingLimiter } from '../middleware/security.js';
@@ -5624,6 +5624,56 @@ router.post('/admin-bookings/:id/resolve-review', protect, bookingStaff, async (
 
     const at = new Date().toISOString();
     const by = req.user?.email || req.user?.id || 'staff';
+
+    // One entry, two jobs (attentionOf `jobs`): a customer refund ARC Pay
+    // refused, under an airline claim flag. A press resolved the claim flag
+    // whatever its note said - kind and time cannot tell the jobs apart, since
+    // a Finish refund leaves the claim open and changes neither - and a refund
+    // note closed an airline claim nobody had made. So the press says which
+    // job it handled, and a job the booking no longer has is refused: nothing
+    // is written either way.
+    const job = req.body?.job ?? null;
+    if (job !== null && !ATTENTION_JOBS.includes(job)) {
+      return refuseResolve(res, 400, 'JOB_INVALID', 'Say which job you handled: the customer\'s refund or the airline claim.');
+    }
+    if (attention.jobs && !job) {
+      return refuseResolve(res, 409, 'JOB_REQUIRED', 'This entry is two jobs: the customer\'s refund, which ARC Pay refused, and the claim '
+        + 'from the airline. Nothing has been recorded; reload the page and mark the one you handled.');
+    }
+    const jobShown = job === null || (attention.jobs
+      ? attention.jobs.includes(job)
+      : job === 'claim' && attention.kind === 'airline_refund');
+    if (!jobShown) {
+      return refuseResolve(res, 409, 'BOOKING_CHANGED', `This booking changed since your page showed it: it now reads `
+        + `"${attentionLabel(attention)}"${attention.kind === 'airline_refund' ? ', and the customer\'s refund is no longer part of it' : ''}. `
+        + 'Nothing has been recorded; reload the page to see what it needs now.');
+    }
+
+    // "Customer refund handled": recorded on the claim flag, which stays open
+    // for whoever claims the tickets (shared/reviewQueue.js
+    // refusedRefundHandledOn). Pinned to the row as read, to the flag still
+    // open, and to no refund recorded handled in between.
+    if (job === 'refund') {
+      const refundWrite = unchangedSince(
+        supabase
+          .from('bookings')
+          .update({
+            booking_details: { ...details, needs_review: { ...openFlag, refundHandled: { at, by, note } } },
+            updated_at: at,
+          })
+          .eq('id', booking.id)
+          .is('booking_details->needs_review->refundHandled->>at', null),
+        booking,
+      );
+      const { data: written, error } = await pinResolution(refundWrite, booking).select('id');
+      if (error) return res.status(500).json({ success: false, error: 'Could not record it' });
+      if (!written?.length) return refuseResolve(res, 409, 'BOOKING_CHANGED', BOOKING_CHANGED_TEXT);
+      console.log('✅ Refused refund marked handled by the desk; the airline claim stays open:', { reference: booking.booking_reference, by });
+      return res.json({
+        success: true, resolvedAt: at, resolvedBy: by, note, job,
+        message: 'The customer\'s refund is recorded as handled. The claim from the airline is still open.',
+      });
+    }
 
     // A commit the airline never answered (commitUnknownOf) is resolved with
     // what the airline said. "Handled" alone read as "did not go through" on
