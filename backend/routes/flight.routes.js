@@ -1906,24 +1906,21 @@ const transformAmadeusFlightData = (flights, dictionaries = {}) => {
       const carrierCode = firstSegment.carrierCode;
       const airlineName = airlines[carrierCode] || carrierCode;
 
-      // Format departure and arrival
+      // Format departure and arrival. A time is the airport's own clock, as
+      // the airline sends it and as the booking record keeps it
+      // (shared/bookingItineraries.js), in 24 hours: "02:40".
+      // `new Date(at).toLocaleTimeString()` read it through this server's time
+      // zone: right in UTC by accident, and 03:40 on a server whose zone
+      // springs forward that night.
       const departure = {
-        time: new Date(firstSegment.departure.at).toLocaleTimeString('en-US', {
-          hour: '2-digit',
-          minute: '2-digit',
-          hour12: false
-        }),
+        time: splitLocalDateTime(firstSegment.departure.at).time,
         airport: firstSegment.departure.iataCode,
         terminal: firstSegment.departure.terminal || '',
         date: firstSegment.departure.at.split('T')[0]
       };
 
       const arrival = {
-        time: new Date(lastSegment.arrival.at).toLocaleTimeString('en-US', {
-          hour: '2-digit',
-          minute: '2-digit',
-          hour12: false
-        }),
+        time: splitLocalDateTime(lastSegment.arrival.at).time,
         airport: lastSegment.arrival.iataCode,
         terminal: lastSegment.arrival.terminal || '',
         date: lastSegment.arrival.at.split('T')[0]
