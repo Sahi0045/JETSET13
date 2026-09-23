@@ -471,6 +471,12 @@ export function describeRefundOwed(owed) {
   return `${amount(owed.owed)} ${owed.currency} owed${basis}`;
 }
 
+/** What the desk reads of a refund ARC Pay refused: that nothing went back, and what is owed. */
+function refusedRefundReason(booking, cancellation) {
+  const owed = describeRefundOwed(refundOwedOf(booking));
+  return `the refund did not go through (${cancellation.paymentAction}): nothing has gone back to the customer${owed ? `; ${owed}` : ''}`;
+}
+
 /**
  * A cancellation whose money never went back, as the desk lists it, or null.
  *
@@ -485,22 +491,25 @@ export function describeRefundOwed(owed) {
  * Marked handled by a person at or after the cancel, it is settled. A flag
  * marked handled before it - a ticket issued by hand, say, and the booking
  * cancelled later - settled something else.
+ *
+ * The airline claim's flag settles something else too, when ARC Pay refused
+ * the refund: handling it claims the tickets' value from the airline, and the
+ * flag never named the refusal (a refused refund adds no reason). Marking the
+ * claim handled took the customer's unreturned refund off the list. It stays
+ * until the refund is recorded, or marked handled on its own entry (the route
+ * writes that over the claim). A refund held for review is named by the claim
+ * flag's own reason, so resolving that flag still settles it.
  */
 function refundNotReturnedAttentionOf(booking) {
   const cancellation = refundNotReturnedOf(booking);
   if (!cancellation) return null;
   const review = detailsOf(booking)?.needs_review;
-  if (review?.resolved_at && !(Date.parse(review.resolved_at) < Date.parse(cancellation.cancelledAt))) return null;
+  const refused = REFUND_STUCK_ACTIONS.includes(cancellation.paymentAction);
+  const handledSince = review?.resolved_at && !(Date.parse(review.resolved_at) < Date.parse(cancellation.cancelledAt));
+  if (handledSince && !(refused && needsAirlineRefundClaim(booking))) return null;
 
   const since = cancellation.cancelledAt || null;
-  if (REFUND_STUCK_ACTIONS.includes(cancellation.paymentAction)) {
-    const owed = describeRefundOwed(refundOwedOf(booking));
-    return {
-      kind: 'refund_failed',
-      reason: `the refund did not go through (${cancellation.paymentAction}): nothing has gone back to the customer${owed ? `; ${owed}` : ''}`,
-      since,
-    };
-  }
+  if (refused) return { kind: 'refund_failed', reason: refusedRefundReason(booking, cancellation), since };
   const decided = cancellation.reversalOutcomeUnknown ? describeRefundOwed(refundOwedOf(booking)) : null;
   return {
     kind: 'refund_not_made',
@@ -551,9 +560,17 @@ export function attentionOf(booking) {
   // owes the money back and somebody has to claim it. This one IS on a
   // cancelled booking, so it is decided before the cancelled check below.
   if (needsAirlineRefundClaim(booking)) {
+    // A customer refund ARC Pay refused, under the claim: a refused refund adds
+    // no reason to the cancel's flag, so the claim's words were all the desk
+    // read, and nobody was told the customer had nothing back. Said first, and
+    // kept on the list after the claim is handled (refundNotReturnedAttentionOf).
+    const notReturned = refundNotReturnedOf(booking);
+    const claim = review.reason || 'the refund has to be claimed from the airline';
     return {
       kind: 'airline_refund',
-      reason: review.reason || 'the refund has to be claimed from the airline',
+      reason: notReturned && REFUND_STUCK_ACTIONS.includes(notReturned.paymentAction)
+        ? `${refusedRefundReason(booking, notReturned)}; ${claim}`
+        : claim,
       since: review.at || null,
       tickets: review.tickets.map((ticket) => ticket?.number ?? ticket),
     };
