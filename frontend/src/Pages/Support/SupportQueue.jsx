@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { adminFetch, readAdminResponse } from '../../utils/adminAuth';
 import { getApiUrl } from '../../utils/apiHelper';
-import { attentionLabel } from '../../../../shared/reviewQueue';
+import { attentionLabel, refundOwedOf } from '../../../../shared/reviewQueue';
 import { canVoidPayment } from '../../utils/adminBookingActions';
 import { needsManualRefund } from '../../utils/bookingStatus';
 import { formatUsd } from '../../utils/bookingCharge';
@@ -89,6 +89,34 @@ const canMarkHandled = (handling) => {
   if (!handling.booking?.commitUnknown) return true;
   if (handling.outcome === 'not_held') return true;
   return handling.outcome === 'held' && RECORD_LOCATOR.test(String(handling.pnr || '').trim().toUpperCase());
+};
+
+/**
+ * What Finish refund starts from: what the cancel decided goes back.
+ *
+ * The box was filled with the booking's whole total, and Refund now sent it.
+ * The server caps a refund at what ARC holds, not at what is owed, so a
+ * cancel that meant to keep its fee gave the fee back too. With no amount
+ * decided - a refund held for a person, or the rest of one after a refund by
+ * hand - it starts empty, as the admin panel's does: nothing is filled in
+ * that nobody decided.
+ */
+const refundStartingAmount = (booking) => String(refundOwedOf(booking)?.owed ?? '');
+
+/** The sentence under Finish refund that says where that amount comes from, or null. */
+const owedSentence = (booking) => {
+  const owed = refundOwedOf(booking);
+  if (!owed) return null;
+  const less = [
+    owed.fee > 0 ? `the ${formatUsd(owed.fee)} cancellation fee it keeps` : null,
+    owed.refunded > 0 ? `the ${formatUsd(owed.refunded)} already refunded` : null,
+  ].filter(Boolean);
+  const decided = less.length
+    ? `The cancel decided ${formatUsd(owed.owed)} ${owed.refunded > 0 ? 'more ' : ''}goes back: ${formatUsd(owed.paid)} paid, less ${less.join(' and ')}.`
+    : `The cancel decided the whole ${formatUsd(owed.owed)} goes back.`;
+  return owed.unanswered
+    ? `${decided} Its refund was sent to ARC Pay and never answered: press Check ARC Pay before sending anything.`
+    : decided;
 };
 
 const hoursSince = (iso) => {
@@ -452,7 +480,7 @@ function SupportQueue() {
                   {needsManualRefund(booking) && (
                     <button
                       type="button"
-                      onClick={() => setAction({ type: 'refund', booking, amount: String(booking.totalAmount || '') })}
+                      onClick={() => setAction({ type: 'refund', booking, amount: refundStartingAmount(booking) })}
                       className="px-3 py-2 rounded-lg border border-amber-300 bg-amber-50 text-amber-900 text-sm font-semibold"
                     >
                       Finish refund
@@ -532,6 +560,9 @@ function SupportQueue() {
               {action.type === 'void' && 'This reverses a payment that has not settled yet. It does not release any seats.'}
               {action.type === 'refund' && 'Check what ARC Pay already shows, or send the refund now. The amount is capped by what the gateway holds.'}
             </p>
+            {action.type === 'refund' && owedSentence(action.booking) && (
+              <p className="text-sm font-semibold text-gray-800 mb-3">{owedSentence(action.booking)}</p>
+            )}
             {action.type !== 'refund' && (
               <textarea
                 value={action.reason || ''}
