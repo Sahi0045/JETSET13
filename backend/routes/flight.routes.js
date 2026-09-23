@@ -5644,7 +5644,7 @@ router.post('/admin-bookings/:id/resolve-review', protect, bookingStaff, async (
       return refuseResolve(res, 400, 'JOB_INVALID', 'Say which job you handled: the customer\'s refund or the airline claim.');
     }
     if (attention.jobs && !job) {
-      return refuseResolve(res, 409, 'JOB_REQUIRED', 'This entry is two jobs: the customer\'s refund, which ARC Pay refused, and the claim '
+      return refuseResolve(res, 409, 'JOB_REQUIRED', 'This entry is two jobs: the customer\'s refund, which ARC Pay refused or never answered, and the claim '
         + 'from the airline. Nothing has been recorded; reload the page and mark the one you handled.');
     }
     const jobShown = job === null || (attention.jobs

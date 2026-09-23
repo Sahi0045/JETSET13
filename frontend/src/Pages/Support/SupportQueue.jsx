@@ -86,10 +86,10 @@ const commitAnswer = (handling) => {
 
 /**
  * The two jobs of one entry (attention.jobs, shared/reviewQueue.js
- * ATTENTION_JOBS): a customer refund ARC Pay refused, under a claim from the
- * airline. One "Mark as handled" closed the claim whatever the note said, so
- * each job is handled on its own and the press says which (resolve-review
- * `job`).
+ * ATTENTION_JOBS): a customer refund ARC Pay refused, or sent and never
+ * answered, under a claim from the airline. One "Mark as handled" closed the
+ * claim whatever the note said, so each job is handled on its own and the
+ * press says which (resolve-review `job`).
  */
 const JOB_LABELS = {
   refund: 'Customer refund handled',
@@ -100,6 +100,15 @@ const JOB_HINTS = {
   refund: 'Say what you did about the customer\'s refund. The claim from the airline stays open for whoever makes it.',
   claim: 'Say how the tickets were claimed from the airline. The customer\'s refund stays on the list until it is handled.',
 };
+
+/**
+ * What the handling box says about a job. A refund the cancel sent and ARC Pay
+ * never answered (refundOwedOf `unanswered`) may already have gone back: the
+ * desk checks ARC Pay before recording anything about it.
+ */
+const jobHint = (handling) => (handling.job === 'refund' && refundOwedOf(handling.booking)?.unanswered
+  ? `Its refund was sent to ARC Pay and never answered, and may already have gone back: press Check ARC Pay under Finish refund before you record anything. ${JOB_HINTS.refund}`
+  : JOB_HINTS[handling.job]);
 
 const jobAnswer = (handling) => (handling?.job ? { job: handling.job } : {});
 
@@ -670,7 +679,7 @@ function SupportQueue() {
                 : `Mark ${handling.booking.bookingReference} as handled`}
             </h3>
             <p className="text-sm text-gray-600 mb-3">
-              {handling.job ? JOB_HINTS[handling.job] : 'Say what you did, so the next person knows.'} This does not move any money.
+              {handling.job ? jobHint(handling) : 'Say what you did, so the next person knows.'} This does not move any money.
             </p>
             {handling.booking.commitUnknown && (
               <fieldset className="mb-3 border border-[#D1E9F0] rounded-lg p-3">
