@@ -481,12 +481,17 @@ async function returnFlightPayment(decision, { arcOrderId, currency, reason }) {
             if (reversal.action === 'REFUND') {
                 return { paymentAction: 'FULL_REFUND', refundAmount: reversal.amount, cancellationFee: 0, paymentProcessed: true, refundTransactionId: reversal.transactionId };
             }
-            if (reversal.action === 'FAILED' && reversal.details) {
+            // Refused only when ARC Pay said no (arcRefused). A VOID or REFUND
+            // answered by a 5xx or a PENDING, UNKNOWN or missing result came
+            // back FAILED with details too, and read "nothing has gone back"
+            // over money that may have.
+            if (reversal.action === 'FAILED' && reversal.refused) {
                 return { paymentAction: 'REFUND_FAILED', refundAmount: 0, cancellationFee: 0, errorDetails: reversal.details };
             }
             // The order could not be read, it had been reversed by something else
-            // in the last few seconds, or the request broke mid-flight. Whether
-            // money moved is not known here, so nobody is told either way.
+            // in the last few seconds, the request broke mid-flight, or ARC's
+            // reply was not a verdict. Whether money moved is not known here, so
+            // nobody is told either way.
             //
             // Said outright: REFUND_UNDER_REVIEW is also the code for a refund
             // held on purpose, and the alarm told this one "nothing was
@@ -507,6 +512,14 @@ async function returnFlightPayment(decision, { arcOrderId, currency, reason }) {
             const refundTxnId = `refund-cancel-${Date.now()}`;
             const refundUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${arcOrderId}/transaction/${refundTxnId}`;
             console.log('💸 Issuing cancellation REFUND:', decision.refundAmount.toFixed(2), '(fee:', decision.fee, ')');
+            // Sent, or about to be, and no answer: ARC Pay may have refunded.
+            const unanswered = (detail) => ({
+                paymentAction: 'REFUND_UNDER_REVIEW',
+                refundAmount: 0,
+                cancellationFee: decision.fee,
+                reviewReason: `refund request did not complete: ${detail}`,
+                reversalOutcomeUnknown: true,
+            });
             try {
                 const refundResponse = await axios.put(refundUrl, {
                     apiOperation: 'REFUND',
@@ -522,18 +535,21 @@ async function returnFlightPayment(decision, { arcOrderId, currency, reason }) {
                 if (arcSucceeded(refundResponse)) {
                     return { paymentAction: 'PARTIAL_REFUND', refundAmount: decision.refundAmount, cancellationFee: decision.fee, paymentProcessed: true, refundTransactionId: refundTxnId };
                 }
+                // Nor is anything short of SUCCESS a refusal. A proxy's 504 page,
+                // a 502, or a 200 whose result is PENDING, UNKNOWN or missing was
+                // recorded REFUND_FAILED - "nothing has gone back" - over a refund
+                // that had landed; the desk filled in the decided amount, and on a
+                // fare under twice the fee one press sent it again. Read as the
+                // desk's own refund reads it (arcRefused).
+                if (!arcRefused(refundResponse)) {
+                    console.error('❌ ARC Pay REFUND not answered:', refundResponse?.status, arcFailureSummary(refundResponse?.data));
+                    return unanswered(arcReplyWithoutVerdict(refundResponse));
+                }
                 console.error('❌ ARC Pay REFUND failed:', refundResponse?.status, arcFailureSummary(refundResponse?.data));
                 return { paymentAction: 'REFUND_FAILED', refundAmount: 0, cancellationFee: decision.fee, errorDetails: arcFailureSummary(refundResponse?.data) };
             } catch (error) {
                 console.error('❌ ARC Pay REFUND did not complete:', error.message);
-                // Sent, or about to be, and no answer: ARC Pay may have refunded.
-                return {
-                    paymentAction: 'REFUND_UNDER_REVIEW',
-                    refundAmount: 0,
-                    cancellationFee: decision.fee,
-                    reviewReason: `refund request did not complete: ${error.message}`,
-                    reversalOutcomeUnknown: true,
-                };
+                return unanswered(error.message);
             }
         }
         default:
@@ -2181,6 +2197,12 @@ const roundCents = (value) => Math.round(Number(value) * 100) / 100;
 const arcRefused = (response) => Number(response?.status) < 500
     && ['FAILURE', 'ERROR'].includes(response?.data?.result);
 
+/** What came back instead of a verdict, for the review reason: "ARC Pay answered HTTP 504 with no result". */
+const arcReplyWithoutVerdict = (response) => {
+    const result = response?.data && typeof response.data === 'object' ? response.data.result : null;
+    return `ARC Pay answered HTTP ${response?.status ?? 'none'} with ${result ? `result ${result}` : 'no result'}`;
+};
+
 /**
  * REFUND exactly `amount` on an ARC order. Never throws.
  *
@@ -2562,6 +2584,9 @@ export async function settleManualFlightRefund(booking, { mode = 'sync', amount,
 // not yet settled, otherwise a full REFUND. Safe to call even if there is nothing to
 // reverse (reports reversed:false rather than throwing). Returns:
 //   { reversed: boolean, action: 'VOID'|'REFUND'|'ALREADY_REVERSED'|'NONE'|'FAILED', ... }
+// A FAILED is `refused` only when ARC Pay said no (arcRefused), and
+// `outcomeUnknown` when a VOID or REFUND was sent and its reply was not a
+// verdict: the money may have moved.
 export async function reverseArcPaymentForOrder(orderId, { amount, currency = 'USD', reason = 'Booking could not be completed' } = {}) {
     if (!orderId) return { reversed: false, action: 'NONE', error: 'no orderId' };
     const authConfig = getArcPayAuthConfig();
@@ -2621,6 +2646,18 @@ export async function reverseArcPaymentForOrder(orderId, { amount, currency = 'U
             if (arcSucceeded(voidResp)) {
                 return { reversed: true, action: 'VOID', transactionId: voidTxnId, targetTransactionId: targetTxnId };
             }
+            // Nor is it a refusal (arcRefused): a 5xx, or a PENDING, UNKNOWN or
+            // missing result, may be a VOID that went through. The REFUND sent
+            // after one was refused by ARC - there was nothing left to refund -
+            // and that refusal read "nothing has gone back" over money returned.
+            if (!arcRefused(voidResp)) {
+                return {
+                    reversed: false,
+                    action: 'FAILED',
+                    outcomeUnknown: true,
+                    error: `VOID sent and not answered: ${arcReplyWithoutVerdict(voidResp)}; no REFUND was sent after it`,
+                };
+            }
         }
 
         // 2) VOID rejected (likely already settled) → REFUND what is left.
@@ -2646,9 +2683,19 @@ export async function reverseArcPaymentForOrder(orderId, { amount, currency = 'U
             if (arcSucceeded(refundResp)) {
                 return { reversed: true, action: 'REFUND', amount: refundAmt, transactionId: refundTxnId };
             }
-            return { reversed: false, action: 'FAILED', error: 'VOID and REFUND both failed', details: arcFailureSummary(refundResp.data) };
+            if (!arcRefused(refundResp)) {
+                return { reversed: false, action: 'FAILED', outcomeUnknown: true, error: `REFUND sent and not answered: ${arcReplyWithoutVerdict(refundResp)}` };
+            }
+            return { reversed: false, action: 'FAILED', refused: true, error: 'VOID and REFUND both failed', details: arcFailureSummary(refundResp.data) };
         }
-        return { reversed: false, action: 'FAILED', error: 'VOID failed and no amount available to refund', details: arcFailureSummary(voidResp?.data) };
+        // Reached with a VOID ARC refused, or none sent.
+        return {
+            reversed: false,
+            action: 'FAILED',
+            ...(voidResp ? { refused: true } : {}),
+            error: 'VOID failed and no amount available to refund',
+            details: arcFailureSummary(voidResp?.data),
+        };
     } catch (err) {
         return { reversed: false, action: 'FAILED', error: err.message };
     }
