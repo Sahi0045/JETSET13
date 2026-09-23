@@ -77,10 +77,11 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
     // ticket, the second a PNR with a seat on it. Neither is made for a booking
     // that holds none - including a PNR the airline confirmed no seat on.
     // Nor for one whose tickets a cancel voided: it holds no valid ticket, and
-    // it is being cancelled.
+    // it is being cancelled. Nor a held PNR whose cancel the airline refused:
+    // it is being cancelled too.
     const documentTitle = isCancelled ? 'Cancelled Booking'
         : isTicketed ? 'E-Ticket'
-            : hasPnr && docState !== 'no_confirmed_seat' && docState !== 'tickets_voided' ? 'Booking Confirmation'
+            : hasPnr && !['no_confirmed_seat', 'tickets_voided', 'cancel_pending'].includes(docState) ? 'Booking Confirmation'
                 : 'Booking Summary';
 
     // Worded from what is true of the booking. "Your seat is held under the PNR
@@ -105,6 +106,13 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
         tickets_voided: {
             title: 'The ticket on this booking has been voided. It is not valid for travel.',
             body: 'The cancellation has not been completed with the airline yet. Our team has been alerted and will complete it. Please do not travel on this document.',
+        },
+        // A held PNR whose cancel the airline refused. Manage Booking does not
+        // offer this one (canDownloadDocument): "We will email your e-ticket
+        // once it is issued" was said of it.
+        cancel_pending: {
+            title: 'Your cancellation has not been completed with the airline yet. No ticket will be issued on this booking.',
+            body: 'Our team has been alerted and will complete it. Please do not travel on this document.',
         },
         held: {
             title: 'This is a confirmed reservation, not a ticket.',
@@ -182,6 +190,7 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
         // than none, and "not yet issued" would be untrue.
         if (state === 'pending' || state === 'issued') return 'Ticket issued — number pending';
         if (docState === 'tickets_voided') return 'Ticket voided — not valid for travel';
+        if (docState === 'cancel_pending') return 'No ticket — cancellation pending';
         return 'Ticket not yet issued';
     };
 
@@ -216,6 +225,7 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
                             : issuedOn
                                 ? `Date of Issue: ${formatCalendarDate(issuedOn, { month: 'short', day: 'numeric', year: 'numeric' }, issuedOn)}`
                                 : docState === 'tickets_voided' ? 'Ticket voided — not valid for travel'
+                                : docState === 'cancel_pending' ? 'No ticket — cancellation pending'
                                     // Issued, its number not here yet: "not yet
                                     // issued" sat under a notice saying it was.
                                     : state === 'pending' ? 'Ticket issued — number pending'

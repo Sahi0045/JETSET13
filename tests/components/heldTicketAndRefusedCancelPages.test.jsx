@@ -1,4 +1,6 @@
 import React from 'react';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { render, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -25,6 +27,12 @@ const { default: FlightETicket } = await import('../../frontend/src/Pages/Common
  *  - held after its ticket was issued: every page said no ticket was issued -
  *    "your ticket could not be issued automatically", "not a ticket", "Ticket
  *    not yet issued" - and My Trips badged it "Needs attention".
+ *  - held, and its cancel refused by the airline (proved against the real
+ *    cancel handler and routes in
+ *    tests/backend/heldCancelRefusedCustomerPages.test.js): the customer was
+ *    told "Our team has been alerted and will complete it", and every page
+ *    then promised a ticket - "Your ticket is being issued", "Our team is
+ *    finishing your ticket", "We will email your e-ticket once it is issued".
  */
 
 const offer = {
@@ -155,5 +163,101 @@ describe('an ordinary held reservation', () => {
     });
     expect(orderPage).toMatch(/Reservation Held/);
     expect(orderPage).toMatch(/your ticket could not be issued automatically/);
+  }, 10000);
+});
+
+// Held, and the customer's cancel refused by the airline, as toClientBooking
+// sends it: the refused cancel's flag on top, `cancel_failed` worked out by
+// the server.
+const REFUSED = 'GDS cancellation failed; refund withheld to avoid paying out against a live booking';
+const heldRefusedCancel = {
+  ...base, bookingReference: 'FLTHCR1', status: 'pending_ticketing', pnr: 'HCR111', gds: { ticketed: false },
+  needs_review: flags({ reason: REFUSED }), cancel_failed: true,
+};
+// The order route's ALREADY_BOOKED answer for it, on a reload of the order page.
+const heldRefusedCancelRetry = {
+  success: true, data: { id: 'HCR111', pnr: 'HCR111', status: 'PENDING_TICKETING', bookingReference: 'FLT1' },
+  pnr: 'HCR111', orderId: 'HCR111', bookingReference: 'FLT1', mode: 'ALREADY_BOOKED', ticketed: false, tickets: [], voided_tickets: [],
+  cancelFailed: true, needsReview: true, paymentState: 'paid', savedToDatabase: true,
+  message: 'This booking already exists; its cancellation has not been completed with the airline yet',
+};
+
+// Anything that promises this booking a ticket.
+const TICKET_PROMISED = /is being issued|once it is issued|not been issued yet|not yet issued|could not be issued automatically|finishing (it|your ticket)|Our team is working on it/i;
+const promise = (text) => text.match(TICKET_PROMISED)?.[0] ?? null;
+
+describe('held, and the cancel refused by the airline: every page says the cancellation is being completed', () => {
+  it('a reload of the order page, and the confirmation it redirects to', async () => {
+    const { orderPage, confirmation } = await orderPages(200, heldRefusedCancelRetry);
+    expect({ orderPage: promise(orderPage), confirmation: promise(confirmation) }).toEqual({ orderPage: null, confirmation: null });
+    expect(orderPage).toMatch(/Cancellation Pending/);
+    expect(orderPage).toMatch(/no ticket will be issued/);
+    expect(confirmation).toMatch(/Cancellation Pending/);
+    expect(confirmation).toMatch(/Our team has been alerted and will complete it/);
+  }, 10000);
+
+  it('My Trips View Details, Manage Booking and the document', () => {
+    const pages = { viewDetails: viewDetails(heldRefusedCancel), manageBooking: manageBooking(heldRefusedCancel), document: document(heldRefusedCancel) };
+    expect({
+      viewDetails: promise(pages.viewDetails),
+      manageBooking: promise(pages.manageBooking),
+      document: promise(pages.document),
+    }).toEqual({ viewDetails: null, manageBooking: null, document: null });
+    expect(pages.viewDetails).toMatch(/Cancellation Pending/);
+    expect(pages.viewDetails).toMatch(/no ticket will be issued on this booking/);
+    expect(pages.manageBooking).toMatch(/Your cancellation has not been completed with the airline yet/);
+    // Nothing to download for a booking being cancelled.
+    expect(pages.manageBooking).not.toMatch(/Download Booking Confirmation|Download E-Ticket/);
+    expect(pages.document).not.toMatch(/Booking Confirmation|confirmed reservation|held under the PNR/);
+    expect(pages.document).toMatch(/No ticket will be issued on this booking/);
+  });
+
+  it('the My Trips ticket cell does not say "Not yet issued" of it', () => {
+    const trips = readFileSync(path.resolve(process.cwd(), 'frontend/src/Pages/Common/login/mytrips.jsx'), 'utf8');
+    expect(trips).toMatch(/if \(documentState\(booking\) === 'cancel_pending'\) return 'None, cancellation pending';/);
+  });
+});
+
+// Fences: the same refused cancel on the states next to it, as the server
+// sends them (`cancel_failed` true on each) - each page reads as it did.
+describe('a refused cancel on the states next to it', () => {
+  const A = '220-7491175301';
+  const refused = (over) => ({ ...heldRefusedCancel, ...over });
+
+  it('a ticketed booking: its ticket, and its E-Ticket', () => {
+    const ticketed = refused({ status: 'confirmed', gds: { ticketed: true }, tickets: [{ number: A, travelerId: '1' }] });
+    expect(viewDetails(ticketed)).toMatch(/Booking Confirmed!/);
+    const manage = manageBooking(ticketed);
+    expect(manage).toMatch(/Booking Status: Ticketed/);
+    expect(manage).toMatch(/Download E-Ticket/);
+    expect(document(ticketed)).toMatch(/E-Ticket/);
+  });
+
+  it('every ticket voided: Ticket Voided', () => {
+    const voided = refused({ status: 'confirmed', gds: { ticketed: true }, tickets: [{ number: A, travelerId: '1' }], voided_tickets: [A] });
+    expect(viewDetails(voided)).toMatch(/Ticket Voided/);
+    expect(manageBooking(voided)).toMatch(/Your ticket has been voided and is not valid for travel/);
+    expect(document(voided)).toMatch(/The ticket on this booking has been voided/);
+  });
+
+  it('no confirmed seat: Seat Not Confirmed', () => {
+    const seatless = refused({ needs_review: flags({ reason: REFUSED, no_confirmed_seat: true }) });
+    expect(viewDetails(seatless)).toMatch(/Seat Not Confirmed/);
+    expect(manageBooking(seatless)).toMatch(/The airline has not confirmed a seat on every flight/);
+    expect(document(seatless)).toMatch(/The airline has not confirmed a seat on every flight/);
+  });
+
+  it('a commit nobody heard back from: still being checked', () => {
+    const checking = refused({ status: 'pending', pnr: undefined, gds: null, needs_review: flags({ reason: REFUSED, commit_unknown: true }) });
+    expect(viewDetails(checking)).toMatch(/Checking With the Airline/);
+    expect(manageBooking(checking)).toMatch(/our team is checking with the airline whether your booking went through/);
+  });
+
+  it('the order page for a held reservation nobody asked to cancel: its ticket has not been issued yet', async () => {
+    const { orderPage, confirmation } = await orderPages(200, {
+      ...heldRefusedCancelRetry, cancelFailed: false, needsReview: false, message: 'This booking already exists; its ticket has not been issued yet',
+    });
+    expect(orderPage).toMatch(/Your ticket has not been issued yet; we will email it to you once it is/);
+    expect(confirmation).toMatch(/Your ticket is being issued and is not ready yet/);
   }, 10000);
 });

@@ -29,7 +29,7 @@ import { statusChangeRefusal } from '../../shared/bookingStatusChange.js';
 import {
   attentionOf, reviewResolution, ticketsOf, isTicketed, NO_CONFIRMED_SEAT_REVIEW_REASON, noConfirmedSeatOf,
   HELD_REVIEW_REASON_PREFIXES, liveTicketNumbersMissingOf, unrecordedCancellationOf, voidedTicketsOf, commitUnknownOf,
-  SCHEDULE_CHANGED_REVIEW_REASON, isHeldForReview, ticketIssuedBeforeHoldOf,
+  SCHEDULE_CHANGED_REVIEW_REASON, isHeldForReview, ticketIssuedBeforeHoldOf, openFailedCancellationOf,
 } from '../../shared/reviewQueue.js';
 import { errorSummary } from '../utils/errorSummary.js';
 import { flightSearchLimiter, guestBookingLimiter } from '../middleware/security.js';
@@ -2683,6 +2683,10 @@ router.post('/order', optionalProtect, async (req, res) => {
       const ticketed = tickets.length > 0 || (details.gds?.ticketed === true
         && (voidedTickets.length === 0 || Boolean(liveTicketNumbersMissingOf(existing))));
       const allVoided = !ticketed && voidedTickets.length > 0;
+      // A cancel the airline refused, which our team is completing: "its
+      // ticket has not been issued yet" promised one, and the order page said
+      // "our team is finishing it", to a customer who had asked to cancel.
+      const cancelFailed = Boolean(openFailedCancellationOf(existing));
       console.log('↩️ Already booked, returning the stored order', details.pnr);
       // A retry can be the first chance to send a confirmation this booking
       // never got: its first send was skipped for want of an address, or failed.
@@ -2712,6 +2716,7 @@ router.post('/order', optionalProtect, async (req, res) => {
         // The numbers a cancel voided, as the booking reads send them
         // (toClientBooking), for the pages' voided wording.
         voided_tickets: voidedTickets,
+        cancelFailed,
         needsReview: Boolean(details.needs_review),
         // What the payment record says, as the 409 retry answers carry it. A
         // held PNR refunded from the Payments tab (payment_status alone) was
@@ -2721,7 +2726,8 @@ router.post('/order', optionalProtect, async (req, res) => {
         savedToDatabase: true,
         message: ticketed ? 'This booking already exists'
           : allVoided ? 'This booking already exists; its ticket has been voided'
-            : 'This booking already exists; its ticket has not been issued yet'
+            : cancelFailed ? 'This booking already exists; its cancellation has not been completed with the airline yet'
+              : 'This booking already exists; its ticket has not been issued yet'
       });
     }
 
@@ -4430,6 +4436,10 @@ export function toClientBooking(booking, { showPassports = false } = {}) {
     // number on it an issued ticket and printed void numbers on an "E-Ticket".
     // The booking's own list plus every flag's (voidedTicketsOf).
     voided_tickets: voidedTicketsOf(booking),
+    // A cancel the airline refused, which our team is completing
+    // (openFailedCancellationOf). No page read it, so a held reservation went
+    // on promising a ticket to a customer who had asked to cancel it.
+    cancel_failed: Boolean(openFailedCancellationOf(booking)),
     // The reason is what the e-ticket reads ("ticket_numbers_not_retrieved").
     // The rest of the record is for the support desk: gateway errors, reversal
     // attempts, the GDS detail.

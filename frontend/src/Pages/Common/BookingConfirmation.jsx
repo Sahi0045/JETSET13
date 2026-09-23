@@ -3,7 +3,9 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { CheckCircle, Ship, Plane, Calendar, CreditCard, ArrowLeft, Clock, MapPin, Users, XCircle } from 'lucide-react';
 import Navbar from './Navbar';
 import { attentionMessage, paymentReturned, refundStatus } from '../../utils/bookingStatus';
-import { hasNoConfirmedSeat, isCommitUnknown, isPaid, isVoidedTicket, ticketState, ticketsVoided, voidedTicketDigits } from '../../utils/eTicket';
+import {
+  documentState, hasNoConfirmedSeat, isCommitUnknown, isPaid, isVoidedTicket, ticketState, ticketsVoided, voidedTicketDigits,
+} from '../../utils/eTicket';
 import { daysUntilDate, formatCalendarDate } from '../../utils/dateUtils';
 import { cancellationMessage } from '../../../../shared/cancellationOutcome';
 import { bookingItineraries, returnDateOf } from '../../../../shared/bookingItineraries';
@@ -153,6 +155,10 @@ function BookingConfirmation() {
             : isFlight && ticketsVoided(bookingData) ? 'tickets_voided'
             : neverBooked ? (bookingData.needs_review ? 'not_completed' : isPaid(bookingData) ? 'not_booked' : 'awaiting_payment')
               : isFlight && hasNoConfirmedSeat(bookingData) ? 'no_confirmed_seat'
+                // A held PNR whose cancel the airline refused: "Your ticket is
+                // being issued" and "Our team is finishing your ticket" were
+                // said to a customer who had asked to cancel it.
+                : isFlight && documentState(bookingData) === 'cancel_pending' ? 'cancel_pending'
                 : isFlight ? 'held'
                   : 'confirmed';
 
@@ -219,6 +225,17 @@ function BookingConfirmation() {
       title: 'Ticket Voided',
       lead: 'Your ticket has been voided and is not valid for travel. The cancellation has not been completed with the airline yet.',
       badgeText: 'Ticket voided',
+      mail: 'Our team has been alerted and will complete it. If it is urgent, call (877) 538-7380 with your booking reference.',
+    },
+    // What the customer was told when the airline refused it: our team
+    // completes the cancellation. No ticket is promised.
+    cancel_pending: {
+      Icon: Clock,
+      iconWrap: 'bg-gradient-to-br from-amber-400 to-amber-600',
+      badge: 'bg-amber-500',
+      title: 'Cancellation Pending',
+      lead: 'Your cancellation has not been completed with the airline yet, and no ticket will be issued on this booking.',
+      badgeText: 'Cancellation pending',
       mail: 'Our team has been alerted and will complete it. If it is urgent, call (877) 538-7380 with your booking reference.',
     },
     // Nothing here promises a seat, a ticket or an email: a person contacts

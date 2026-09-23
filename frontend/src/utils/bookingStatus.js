@@ -1,4 +1,6 @@
-import { NO_CONFIRMED_SEAT_REVIEW_REASON, hasNoConfirmedSeat, isCommitUnknown, isPaid, ticketState, ticketsVoided } from './eTicket';
+import {
+  NO_CONFIRMED_SEAT_REVIEW_REASON, documentState, hasNoConfirmedSeat, isCommitUnknown, isPaid, ticketState, ticketsVoided,
+} from './eTicket';
 import {
   REFUND_DONE_ACTIONS,
   REFUND_REVIEW_ACTIONS,
@@ -208,6 +210,14 @@ export function attentionMessage(booking) {
   if (ticketsVoided(booking)) {
     return 'Your ticket has been voided and is not valid for travel. The cancellation has not been completed with the airline yet; '
       + 'our team has been alerted and will complete it. If it is urgent, call (877) 538-7380 with your booking reference.';
+  }
+  // A held PNR the customer asked to cancel, whose cancel the airline refused
+  // (documentState 'cancel_pending'). "Your ticket has not been issued yet.
+  // Our team is working on it" promised a ticket nobody will issue, to a
+  // customer told when it was refused that our team would complete it.
+  if (documentState(booking) === 'cancel_pending') {
+    return 'Your cancellation has not been completed with the airline yet. Our team has been alerted and will complete it, '
+      + 'and no ticket will be issued on this booking. If it is urgent, call (877) 538-7380 with your booking reference.';
   }
   return pnrOf(booking)
     ? 'Your seats are reserved, but your ticket has not been issued yet. Our team is working on it and will email you.'

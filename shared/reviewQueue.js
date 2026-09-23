@@ -374,6 +374,24 @@ export function isFailedCancellation(booking) {
 }
 
 /**
+ * The refused cancel while the desk lists it ("Cancel failed at the airline"),
+ * or null: for what the customer is told.
+ *
+ * The cancel answered them "We could not cancel your reservation with the
+ * airline. Our team has been alerted and will complete it", and nobody issues
+ * a ticket on it after that. No customer page read it, so a held reservation
+ * went on promising one: "Our team is working on it", "We will email your
+ * e-ticket once it is issued".
+ *
+ * The desk's own rule (attentionOf), so the customer hears the cancellation is
+ * being completed exactly while the desk has it to complete: not once a person
+ * resolved it, not over a cancellation carried out and not recorded, and not
+ * once a later cancel went through.
+ */
+export const openFailedCancellationOf = (booking) => (attentionOf(booking)?.kind === 'cancel_failed'
+  ? detailsOf(booking).needs_review : null);
+
+/**
  * What still needs doing on this booking, or null.
  *
  * @returns {null | { kind: 'not_ticketed'|'review'|'airline_refund'|'unrecorded_cancellation'|'cancel_failed'|'schedule_changed'

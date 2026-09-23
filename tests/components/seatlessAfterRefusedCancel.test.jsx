@@ -42,6 +42,8 @@ const afterRefusedCancel = {
     no_confirmed_seat: true,
     ticket_numbers_missing: false,
   },
+  // The refused cancel, as the server works it out (openFailedCancellationOf).
+  cancel_failed: true,
 };
 
 // The same failed cancel on an ordinary held reservation: its seats ARE held.
@@ -104,10 +106,15 @@ describe('a PNR with no confirmed seat, after the airline refused its cancel', (
     expect(text).not.toMatch(/held under the PNR/);
   });
 
-  it('a held reservation whose cancel was refused keeps its held wording and its document', () => {
-    expect(confirmationText(heldAfterRefusedCancel)).toMatch(/Reservation Held/);
-    expect(documentState(heldAfterRefusedCancel)).toBe('held');
-    expect(canDownloadDocument(heldAfterRefusedCancel)).toBe(true);
+  // It kept "Reservation Held - Your ticket is being issued" and a document
+  // saying "We will email your e-ticket once it is issued", to a customer who
+  // had asked to cancel it. Its seats are held until our team completes the
+  // cancellation; no ticket will be issued
+  // (tests/backend/heldCancelRefusedCustomerPages.test.js).
+  it('a held reservation whose cancel was refused is being cancelled, and offers no document', () => {
+    expect(confirmationText(heldAfterRefusedCancel)).toMatch(/Cancellation Pending/);
+    expect(documentState(heldAfterRefusedCancel)).toBe('cancel_pending');
+    expect(canDownloadDocument(heldAfterRefusedCancel)).toBe(false);
   });
 
   it('a copy of the row that carries the whole chain is read the same way', () => {
