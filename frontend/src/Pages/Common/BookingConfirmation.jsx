@@ -220,7 +220,8 @@ function BookingConfirmation() {
         + 'You can also call (877) 538-7380 with your booking reference.',
     },
     // Not cancelled on the record, and not a trip either. What happened to the
-    // money is our team's to confirm: the row still says paid.
+    // money is our team's to confirm while the row still says paid; once it
+    // says refunded (paymentReturned), that is what it is told.
     cancellation_unrecorded: {
       Icon: Clock,
       iconWrap: 'bg-gradient-to-br from-amber-400 to-amber-600',
@@ -228,7 +229,9 @@ function BookingConfirmation() {
       title: 'Cancellation Being Recorded',
       lead: 'Your cancellation went through, but our record of it is still being updated. This booking is not valid for travel.',
       badgeText: 'Under review',
-      mail: 'Our team will confirm what happened to your payment - please do not try again. '
+      mail: (returned === 'all' ? 'Your payment for it has been refunded - please do not try again. '
+        : returned === 'part' ? 'Part of your payment for it has been refunded, and our team will confirm what happened to the rest - please do not try again. '
+          : 'Our team will confirm what happened to your payment - please do not try again. ')
         + 'If you have any questions, call (877) 538-7380 with your booking reference.',
     },
     tickets_voided: {
@@ -340,11 +343,11 @@ function BookingConfirmation() {
   const attention = attentionMessage(bookingData);
   const paymentNote = outcome === 'cancelled' ? (refund?.label || 'Booking cancelled')
     : outcome === 'awaiting_payment' ? 'Payment not received'
-      // The row says paid; the cancel moved the money (cancellation_unrecorded).
-      : outcome === 'cancellation_unrecorded' ? 'Being confirmed by our team'
       : returned === 'all' ? 'Payment refunded'
         : returned === 'part' ? 'Partly refunded'
-          : 'Payment received';
+          // The row says paid; the cancel moved the money (cancellation_unrecorded).
+          : outcome === 'cancellation_unrecorded' ? 'Being confirmed by our team'
+            : 'Payment received';
 
   return (
     <>

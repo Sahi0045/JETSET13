@@ -161,10 +161,15 @@ export function attentionMessage(booking) {
   // (isCancellationUnrecorded). The row reads confirmed, paid and ticketed,
   // and the customer was told the cancellation was processed, not to try
   // again, and to call. Read before anything that reads the row's payment or
-  // tickets: neither says what happened.
+  // tickets: neither says what happened - except a payment written returned
+  // since (paymentReturned), which was still told our team would confirm what
+  // happened to the money.
   if (isCancellationUnrecorded(booking)) {
+    const moneyBack = paymentReturned(booking);
     return 'Your cancellation went through, but our record of it is still being updated, so this booking may not show as cancelled yet. '
-      + 'It is not valid for travel. Our team will confirm what happened to your payment - please do not try again. '
+      + (moneyBack === 'all' ? 'It is not valid for travel, and your payment for it has been refunded - please do not try again. '
+        : moneyBack === 'part' ? 'It is not valid for travel. Part of your payment for it has been refunded, and our team will confirm what happened to the rest - please do not try again. '
+          : 'It is not valid for travel. Our team will confirm what happened to your payment - please do not try again. ')
       + 'If you have any questions, call (877) 538-7380 with your booking reference.';
   }
   if (!needsAttention(booking) && !flaggedOpen(booking)) return null;
