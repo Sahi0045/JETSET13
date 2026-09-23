@@ -255,9 +255,9 @@ export const isHeldForReview = (review) => {
  * "Ticketed, so done" holds for most flags - the ticket turned up later, by
  * retry or by hand - and the desk and the alarm skip those. Not for these two:
  *
- *  - held after the ticket was issued: the customer was told "our team is
- *    finishing your ticket" and was never sent the confirmation. Skipped as
- *    done, nobody sent it. Only when the flag itself says the ticket was
+ *  - held after the ticket was issued: the customer was never sent their
+ *    e-ticket. Skipped as done, nobody sent it (ticket sync now does, and
+ *    marks the flag handled). Only when the flag itself says the ticket was
  *    already issued (flagForReview writes `ticketed`): a booking held BEFORE
  *    issuance and ticketed later - by hand, then ticket sync, which sends the
  *    e-ticket - is the "ticketed, so done" case;
@@ -285,6 +285,21 @@ export function heldAfterIssueOf(booking) {
   const review = topFlagOf(booking);
   return review && !review.resolved_at && review.ticketed === true && isHeldForReview(review) ? review : null;
 }
+
+/**
+ * That hold, for what the customer is told: its ticket was issued, whether or
+ * not its number has reached us. On top or under a later flag, resolved or
+ * not - a person dealing with the booking does not un-issue its ticket, as
+ * ticketNumbersMissingOf reads it. Null once a cancel voided any ticket on the
+ * booking, as the order route's ALREADY_BOOKED answer reads gds.ticketed.
+ *
+ * The customer's pages read only ticket numbers and the chain's numbers flag,
+ * and this booking has neither: every one said no ticket was issued - "not a
+ * ticket", "Ticket not yet issued" - while the desk and a retry of the order
+ * said it was.
+ */
+export const ticketIssuedBeforeHoldOf = (booking) => (voidedTicketsOf(booking).length > 0 ? null
+  : flagInForce(booking, (review) => review.ticketed === true && isHeldForReview(review), { pastResolved: true }));
 
 /** What a member of staff recorded when they dealt with it, or null. */
 export const reviewResolution = (booking) => {

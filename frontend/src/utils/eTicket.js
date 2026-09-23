@@ -18,7 +18,8 @@
  */
 
 import {
-  NO_CONFIRMED_SEAT_REVIEW_REASON, commitUnknownOf, liveTicketNumbersMissingOf, noConfirmedSeatOf, voidedTicketsOf,
+  NO_CONFIRMED_SEAT_REVIEW_REASON, commitUnknownOf, liveTicketNumbersMissingOf, noConfirmedSeatOf, ticketIssuedBeforeHoldOf,
+  voidedTicketsOf,
 } from '../../../shared/reviewQueue';
 
 /**
@@ -164,8 +165,11 @@ export function ticketState(bookingData) {
 
   // Under a refused cancel's flag too (sentByServer): the ticket was issued
   // whatever flag sits on top now, and the top reason alone read "none" - but
-  // not once a cancel voided it (liveTicketNumbersMissingOf).
-  const numbersMissing = sentByServer(bookingData, 'ticket_numbers_missing') ?? Boolean(liveTicketNumbersMissingOf(bookingData));
+  // not once a cancel voided it (liveTicketNumbersMissingOf). Or held by the
+  // order route after its ticket was issued (ticketIssuedBeforeHoldOf), which
+  // has no number either: every page said no ticket was issued.
+  const numbersMissing = sentByServer(bookingData, 'ticket_numbers_missing')
+    ?? Boolean(liveTicketNumbersMissingOf(bookingData) || ticketIssuedBeforeHoldOf(bookingData));
   if (numbersMissing) return 'pending';
 
   return 'none';

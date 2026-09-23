@@ -216,7 +216,10 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
                             : issuedOn
                                 ? `Date of Issue: ${formatCalendarDate(issuedOn, { month: 'short', day: 'numeric', year: 'numeric' }, issuedOn)}`
                                 : docState === 'tickets_voided' ? 'Ticket voided — not valid for travel'
-                                    : hasPnr ? 'Ticket not yet issued' : 'Not yet confirmed with the airline'}
+                                    // Issued, its number not here yet: "not yet
+                                    // issued" sat under a notice saying it was.
+                                    : state === 'pending' ? 'Ticket issued — number pending'
+                                        : hasPnr ? 'Ticket not yet issued' : 'Not yet confirmed with the airline'}
                     </span>
                     <span className={`font-bold uppercase px-3 py-1 rounded text-xs ${isCancelled ? 'bg-red-600' : isTicketed ? 'bg-green-500' : 'bg-amber-500'}`}>
                         {/* The status in words. The raw database value

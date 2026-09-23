@@ -9,7 +9,7 @@ import { confirmationEmailKind } from '../../backend/routes/flight.routes.js';
  * When the order route fails after commit (its outer catch, or the chain
  * failing at a step past issuance), flagForReview writes `order route failed
  * after commit: ...` or `chain failed after commit at <step>` with `ticketed:
- * true`, which sets `gds.ticketed`. The customer is sent "Reservation held -
+ * true`, which sets `gds.ticketed`. The customer was sent "Reservation held -
  * our team is finishing your ticket" (confirmationEmailKind 'held') and never
  * the real confirmation. Both the desk and the Slack alarm skipped the row as
  * "ticketed, so done", so the team that promised to finish it was never told:
@@ -37,9 +37,13 @@ const routeFailed = row({ reason: 'order route failed after commit: boom' });
 const chainFailed = row({ reason: 'chain failed after commit at retrieve' }, { tickets: [{ number: '220-1234567890' }] });
 
 describe('a ticketed booking the order route held for a person', () => {
-  it('was sent the held email, promising our team will finish it', () => {
-    expect(confirmationEmailKind(routeFailed)).toBe('held');
-    expect(confirmationEmailKind(chainFailed)).toBe('held');
+  // It was owed the held email - "your ticket could not be issued
+  // automatically ... a reservation, not a ticket" - of a ticket the chain had
+  // issued. Its email is the e-ticket, which ticket sync sends
+  // (heldAfterTicketCustomerPages.test.js, ticketSyncHeldAfterIssue.test.js).
+  it('is not owed the held email: its ticket is issued', () => {
+    expect(confirmationEmailKind(routeFailed)).toBeNull();
+    expect(confirmationEmailKind(chainFailed)).toBeNull();
   });
 
   it('is on the desk, labelled as a ticket the customer has not been sent', () => {

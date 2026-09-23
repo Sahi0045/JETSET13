@@ -385,8 +385,8 @@ export function describeScheduleChange(booking) {
 // read "no ticket was issued ... ticket it, or refund it" of a live ticket.
 const ticketedScheduleChange = (booking) => openTicketedFlagOf(booking)?.reason === SCHEDULE_CHANGED_REVIEW_REASON;
 
-// A ticketed booking the order route held for a person after issuing: the
-// customer was sent "our team is finishing your ticket". Under "paid but not
+// A ticketed booking the order route held for a person after issuing, and
+// whose customer has not been sent their e-ticket. Under "paid but not
 // ticketed" it read "ticket it, or refund it" - a second ticket, or a refund
 // of a live one.
 const heldTicketed = (booking) => {

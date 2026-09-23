@@ -132,7 +132,12 @@ export function needsAttention(booking) {
   // sentence still says what happened (attentionMessage).
   const isFlight = String(booking?.type || booking?.travel_type || '').toLowerCase() === 'flight';
   if (isFlight && paymentReturned(booking)) return false;
-  return flaggedOpen(booking);
+  // Issued, its number not read back (ticketState 'pending'), waits on nobody
+  // either: a booking held after its ticket was issued was badged "Needs
+  // attention" and listed under Failed, over a live ticket. It gets the
+  // "Ticket issued" badge, and its sentence still says the number is on its
+  // way (attentionMessage).
+  return flaggedOpen(booking) && ticketState(booking) !== 'pending';
 }
 
 /**
