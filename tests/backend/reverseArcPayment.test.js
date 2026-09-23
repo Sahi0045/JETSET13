@@ -98,14 +98,16 @@ describe('what counts as reversed', () => {
   });
 
   // The old escape hatch: `|| !voidResp.data?.result` made a reply with no
-  // verdict count as a successful void.
-  it('a VOID reply with no result is not a reversal - it falls through to REFUND', async () => {
+  // verdict count as a successful void. Nor is it a refusal: the VOID may have
+  // gone through, so no REFUND follows it
+  // (cancelRefundReplyWithoutVerdict.test.js).
+  it('a VOID reply with no result is not a reversal - and no REFUND follows it', async () => {
     axios.put.mockResolvedValueOnce({ status: 200, data: {} }).mockResolvedValueOnce(ok);
 
     const result = await reverse('FLT1', {});
 
-    expect(result.action).toBe('REFUND');
-    expect(axios.put).toHaveBeenCalledTimes(2);
+    expect(result).toMatchObject({ reversed: false, action: 'FAILED', outcomeUnknown: true });
+    expect(axios.put).toHaveBeenCalledTimes(1);
   });
 
   // The bug: 200 + FAILURE used to be reported as reversed:true.

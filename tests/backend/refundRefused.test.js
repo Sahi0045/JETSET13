@@ -129,12 +129,15 @@ describe('when the gateway refuses the refund', () => {
 });
 
 describe('when the gateway answers 200 with no verdict', () => {
-  it('is not treated as a refund', async () => {
+  // Nor as a refusal: the refund may have been made, and REFUND_FAILED told
+  // the desk nothing had gone back (cancelRefundReplyWithoutVerdict.test.js).
+  it('is not treated as a refund, nor as a refusal', async () => {
     axios.put.mockResolvedValue({ status: 200, data: {} });
 
     const res = await runCancel();
 
-    expect(res.body.cancellation.paymentAction).toBe('REFUND_FAILED');
+    expect(res.body.cancellation.paymentAction).toBe('REFUND_UNDER_REVIEW');
+    expect(res.body.cancellation.reversalOutcomeUnknown).toBe(true);
     expect(bookingUpdate().payment_status).toBe('paid');
   });
 });

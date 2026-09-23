@@ -489,6 +489,13 @@ export const openFailedCancellationOf = (booking) => (attentionOf(booking)?.kind
 export const REFUND_NOT_RETURNED_ACTIONS = Object.freeze([...REFUND_STUCK_ACTIONS, ...REFUND_REVIEW_ACTIONS]);
 
 /**
+ * A cancel's own refund sent to ARC Pay and never answered: REFUND_UNDER_REVIEW
+ * with reversalOutcomeUnknown. It may have gone back.
+ */
+const isUnansweredRefund = (cancellation) => REFUND_REVIEW_ACTIONS.includes(cancellation?.paymentAction)
+  && cancellation?.reversalOutcomeUnknown === true;
+
+/**
  * The cancellation record of a booking whose money never went back, or null.
  *
  * The failed-refund alarm's selection (jobs/paymentFailureAlert.job.js
@@ -530,8 +537,7 @@ export function decidedFeeOf(cancellation) {
     const recorded = Number(cancellation.decidedFee);
     return Number.isFinite(recorded) ? roundCents(Math.max(0, recorded)) : null;
   }
-  const decided = REFUND_STUCK_ACTIONS.includes(cancellation.paymentAction)
-    || (REFUND_REVIEW_ACTIONS.includes(cancellation.paymentAction) && cancellation.reversalOutcomeUnknown === true);
+  const decided = REFUND_STUCK_ACTIONS.includes(cancellation.paymentAction) || isUnansweredRefund(cancellation);
   if (!decided) return null;
   return roundCents(Math.max(0, Number(cancellation.cancellationFee) || 0));
 }
@@ -578,7 +584,7 @@ export function refundOwedOf(booking) {
   const decided = Math.max(0, roundCents(paid - fee - refunded));
   const owed = stillHeld ? Math.min(decided, stillHeld) : decided;
   if (stillHeld && !(owed > 0)) return null;
-  const unanswered = REFUND_REVIEW_ACTIONS.includes(cancellation.paymentAction) && cancellation.reversalOutcomeUnknown === true;
+  const unanswered = isUnansweredRefund(cancellation);
   return { owed, paid: roundCents(paid), fee, ...(refunded > 0 ? { refunded } : {}), ...(unanswered ? { unanswered } : {}), currency };
 }
 
@@ -617,14 +623,16 @@ function refusedRefundReason(booking, cancellation) {
 }
 
 /**
- * The two jobs of one desk entry: a customer refund ARC Pay refused, under an
- * airline claim flag (attentionOf `jobs`). "Mark as handled" says which one a
- * press handled (resolve-review `job`).
+ * The two jobs of one desk entry: a customer refund ARC Pay refused, or sent
+ * and never answered, under an airline claim flag (attentionOf `jobs`). "Mark
+ * as handled" says which one a press handled (resolve-review `job`).
  *
  * One press resolved the claim flag whatever the note said: the entry's kind
  * and time cannot tell the jobs apart - a Finish refund leaves the claim flag
  * open, so they do not change - and a refund note closed an airline claim
- * nobody had made.
+ * nobody had made. A claim note closed the refund the same way: one that was
+ * never answered, and may never have gone back, left the desk with nobody
+ * asked to check ARC Pay.
  */
 export const ATTENTION_JOBS = Object.freeze(['refund', 'claim']);
 
@@ -638,11 +646,20 @@ function refusedRefundHandledOn(review, cancellation) {
   return Date.parse(handled.at) < Date.parse(cancellation?.cancelledAt) ? null : handled;
 }
 
+/** The customer refund job: one ARC Pay refused, or sent and never answered. */
+const isRefundJob = (cancellation) => REFUND_STUCK_ACTIONS.includes(cancellation?.paymentAction) || isUnansweredRefund(cancellation);
+
+/** A customer refund job (isRefundJob) that nobody has handled, or null. */
+function openRefundJobOf(booking) {
+  const notReturned = refundNotReturnedOf(booking);
+  if (!notReturned || !isRefundJob(notReturned)) return null;
+  return refusedRefundHandledOn(detailsOf(booking)?.needs_review, notReturned) ? null : notReturned;
+}
+
 /** A customer refund ARC Pay refused that nobody has handled, or null. */
 function openRefusedRefundOf(booking) {
-  const notReturned = refundNotReturnedOf(booking);
-  if (!notReturned || !REFUND_STUCK_ACTIONS.includes(notReturned.paymentAction)) return null;
-  return refusedRefundHandledOn(detailsOf(booking)?.needs_review, notReturned) ? null : notReturned;
+  const open = openRefundJobOf(booking);
+  return open && REFUND_STUCK_ACTIONS.includes(open.paymentAction) ? open : null;
 }
 
 /**
@@ -678,8 +695,11 @@ function withRefusedRefundFirst(booking, reason) {
  * claim handled took the customer's unreturned refund off the list. It stays
  * until the refund is recorded, or marked handled - on its own entry (the
  * route writes that over the claim), or as "Customer refund handled" while
- * the claim was open (refusedRefundHandledOn). A refund held for review is
- * named by the claim flag's own reason, so resolving that flag still settles it.
+ * the claim was open (refusedRefundHandledOn). So does one sent and never
+ * answered: the claim flag's reason names it, but the claim's note is about the
+ * tickets, and the refund may never have gone back. A refund held on purpose
+ * for a person is named by the claim flag's own reason, so resolving that flag
+ * still settles it.
  *
  * So does a commit that never answered, resolved with what the airline said:
  * staff may cancel it before anyone knows, a refused refund on that cancel
@@ -691,10 +711,11 @@ function refundNotReturnedAttentionOf(booking) {
   if (!cancellation) return null;
   const review = detailsOf(booking)?.needs_review;
   const refused = REFUND_STUCK_ACTIONS.includes(cancellation.paymentAction);
-  if (refused && refusedRefundHandledOn(review, cancellation)) return null;
+  const refundJob = isRefundJob(cancellation);
+  if (refundJob && refusedRefundHandledOn(review, cancellation)) return null;
   const handledSince = review?.resolved_at && !(Date.parse(review.resolved_at) < Date.parse(cancellation.cancelledAt));
   const settledSomethingElse = needsAirlineRefundClaim(booking) || review?.reason === COMMIT_UNKNOWN_REVIEW_REASON;
-  if (handledSince && !(refused && settledSomethingElse)) return null;
+  if (handledSince && !(refundJob && settledSomethingElse)) return null;
 
   const since = cancellation.cancelledAt || null;
   if (refused) return { kind: 'refund_failed', reason: refusedRefundReason(booking, cancellation), since };
@@ -754,13 +775,15 @@ export function attentionOf(booking) {
     // kept on the list after the claim is handled (refundNotReturnedAttentionOf).
     //
     // Two jobs then, and the entry names them (ATTENTION_JOBS): a press says
-    // which one it handled, so a refund note cannot close the claim.
+    // which one it handled, so a refund note cannot close the claim. So too
+    // for a refund sent and never answered, which the claim's reason names
+    // already: a claim note cannot close it.
     return {
       kind: 'airline_refund',
       reason: withRefusedRefundFirst(booking, review.reason || 'the refund has to be claimed from the airline'),
       since: review.at || null,
       tickets: review.tickets.map((ticket) => ticket?.number ?? ticket),
-      ...(openRefusedRefundOf(booking) ? { jobs: [...ATTENTION_JOBS] } : {}),
+      ...(openRefundJobOf(booking) ? { jobs: [...ATTENTION_JOBS] } : {}),
     };
   }
   // Any other cancellation that asked for a person - a refund the gateway
