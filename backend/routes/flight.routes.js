@@ -30,7 +30,7 @@ import {
   attentionOf, attentionLabel, reviewResolution, ticketsOf, isTicketed, NO_CONFIRMED_SEAT_REVIEW_REASON, noConfirmedSeatOf,
   HELD_REVIEW_REASON_PREFIXES, liveTicketNumbersMissingOf, unrecordedCancellationForCustomerOf,
   voidedTicketsOf, commitUnknownOf, SCHEDULE_CHANGED_REVIEW_REASON, isHeldForReview, ticketIssuedBeforeHoldOf,
-  openFailedCancellationOf, ATTENTION_JOBS,
+  openFailedCancellationOf, ATTENTION_JOBS, scheduleChangeOf,
 } from '../../shared/reviewQueue.js';
 import { errorSummary } from '../utils/errorSummary.js';
 import { flightSearchLimiter, guestBookingLimiter } from '../middleware/security.js';
@@ -2601,6 +2601,14 @@ router.post('/order', optionalProtect, async (req, res) => {
   // decideFlightRefund's guard ("the booking records a ticket, but the airline
   // showed none") could never fire for it.
   let committedTicketed = false;
+  // The segment statuses of a schedule change the chain accepted and reported
+  // in its answer (`needsReview`, on top or under the numbers flag:
+  // amadeusSoap/index.js createFlightOrder). Hoisted for the same reason. The
+  // final save writes that answer; a hold written instead - the save failed,
+  // or a later step threw - passed flagForReview no schedule change, so the
+  // retiming was recorded nowhere, and ticket sync then sent the e-ticket with
+  // the searched times and settled the hold: nobody told the customer.
+  let committedScheduleChange = null;
   try {
     // ---- Whose payment is this, and is it real? ------------------------------
     //
@@ -3380,6 +3388,7 @@ router.post('/order', optionalProtect, async (req, res) => {
       // throwing getter precisely to simulate "the chain answered, then reading
       // its answer failed", and touching it turned that 202-held into a 502.
       if (orderResponse?.ticketed === true) committedTicketed = true;
+      committedScheduleChange = scheduleChangeOf({ needs_review: orderResponse?.needsReview })?.statuses ?? null;
 
       console.log('✅ Amadeus service call completed:', {
         success: orderResponse?.success,
@@ -3745,7 +3754,8 @@ router.post('/order', optionalProtect, async (req, res) => {
           pnr: pnrValue,
           reason: 'order route failed after commit: the booking could not be saved',
           ticketed: true,
-          tickets: orderResponse.tickets
+          tickets: orderResponse.tickets,
+          scheduleChanged: committedScheduleChange
         });
       }
     }
@@ -3889,7 +3899,8 @@ router.post('/order', optionalProtect, async (req, res) => {
           // one. Now set when the chain reports a ticket, and `error.ticketed`
           // covers a failure inside a post-issuance step.
           ticketed: committedTicketed || error?.ticketed === true
-            || row?.booking_details?.gds?.ticketed === true
+            || row?.booking_details?.gds?.ticketed === true,
+          scheduleChanged: committedScheduleChange
         };
         await flagForReview(held);
         // This answer promises an email; it used to send none. Not to a
