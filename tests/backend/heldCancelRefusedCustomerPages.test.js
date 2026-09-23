@@ -288,15 +288,20 @@ describe('around it', () => {
     expect(said.myTrips).toMatch(/^Your payment is safe and our team is checking with the airline whether your booking went through/);
   });
 
-  it('a cancellation carried out and not recorded, over or under a refused one, reads as it did', async () => {
+  // A cancellation carried out and not recorded reads as cancelled, over or
+  // under a refused one: the airline released the reservation, whatever an
+  // earlier or later attempt said. This fence was written before the
+  // unrecorded-cancellation surfaces (unrecordedCancelOtherSurfaces) and
+  // pinned the older "seats are reserved" reading; it now pins theirs.
+  it('a cancellation carried out and not recorded, over or under a refused one, reads as cancelled', async () => {
     const unrecorded = {
       reason: 'cancellation carried out but not recorded: airline reservation released, payment REFUND_PROCESSED 291 USD; check the airline and ARC Pay and record it by hand',
       source: 'cancellation', unrecorded: true, at: '2026-09-21T10:00:00Z',
     };
     for (const flag of [{ ...unrecorded, previous: refusedFlag() }, refusedFlag({ previous: unrecorded })]) {
       const said = await pagesSay(withFlag(flag));
-      // As before this change - not an endorsement of the words.
-      expect({ document: said.document, myTrips: said.myTrips }).toEqual({ document: 'held', myTrips: HELD_FOR_STAFF });
+      expect(said.document).toBe('cancelled');
+      expect(said.myTrips).toMatch(/^Your cancellation went through, but our record of it is still being updated/);
     }
   });
 
