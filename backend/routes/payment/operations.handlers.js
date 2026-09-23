@@ -29,7 +29,8 @@ import { unchangedSince } from '../../utils/bookingDetailsGuard.js';
 import { DEFAULT_PRICE_SETTINGS } from '../../config/priceDefaults.js';
 import { cancellationMessage, refundOutcome } from '../../../shared/cancellationOutcome.js';
 import {
-    ISSUANCE_UNKNOWN, commitUnknownOf, decidedFeeOf, flagInForce, needsAirlineRefundClaim, refundOwedOf, ticketNumbersMissingOf,
+    COMMIT_UNKNOWN_REVIEW_REASON, ISSUANCE_UNKNOWN, commitUnknownOf, decidedFeeOf, flagInForce, needsAirlineRefundClaim, refundOwedOf,
+    ticketNumbersMissingOf,
 } from '../../../shared/reviewQueue.js';
 import { reconcileBookingPayment } from './checkout.handlers.js';
 import { errorSummary } from '../../utils/errorSummary.js';
@@ -2513,7 +2514,17 @@ export async function settleManualFlightRefund(booking, { mode = 'sync', amount,
     // customer's refund: the tickets' value is still with the airline. Stamped
     // here, "Refund to claim from the airline" left the desk with nothing
     // claimed. Whoever makes the claim resolves it.
-    const review = currentDetails.needs_review && settled
+    //
+    // Nor is a commit that never answered: the refund settles the money, not
+    // whether the airline holds a reservation. Stamped here, it read answered
+    // with no held or not-held (commitUnknownOf), and the airline question
+    // left the desk unasked; on one the desk had answered, this wrote over
+    // its note. Nor the flag on top of one still open, whose resolving
+    // settles it too (flagInForce stops there). The desk answers it with its
+    // outcome (resolve-review).
+    const commitQuestion = currentDetails.needs_review?.reason === COMMIT_UNKNOWN_REVIEW_REASON
+        || Boolean(commitUnknownOf({ ...booking, booking_details: currentDetails }));
+    const review = currentDetails.needs_review && settled && !commitQuestion
         && !needsAirlineRefundClaim({ booking_details: currentDetails })
         ? { ...currentDetails.needs_review, resolved_at: manual.at, resolution: 'refund finished by the desk' }
         : currentDetails.needs_review;
