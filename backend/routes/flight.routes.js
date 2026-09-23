@@ -3780,6 +3780,28 @@ router.post('/order', optionalProtect, async (req, res) => {
       }
     }
 
+    // Not issued, the airline retimed a flight, and the save that records it
+    // failed. The row kept only what the commit wrote - the PNR and
+    // `gds.ticketed: false`, no flag - so the alarm posted "paid but not
+    // ticketed" with no word of the retiming, ticket sync later emailed the
+    // e-ticket with the searched times, and nobody told the customer. The
+    // chain's own flag is written as the save would have written it (with any
+    // flag already on the row kept under it), and the chain recorded stopped,
+    // as the save and a hold record it. Never on a booking cancelled meanwhile.
+    if (!dbBooking && pnrValue && orderResponse.ticketed !== true && committedScheduleChange) {
+      const bookingReference = req.body.bookingReference || orderIdValue;
+      const chainFlag = orderResponse.needsReview;
+      const row = await findExistingBooking(bookingReference);
+      if (chainFlag && row?.status !== 'cancelled') {
+        await patchBookingDetails(bookingReference, (details) => ({
+          needs_review: details.needs_review && !chainFlag.previous ? { ...chainFlag, previous: details.needs_review } : chainFlag,
+          ...(details.gds_chain?.state === 'committed'
+            ? { gds_chain: { ...details.gds_chain, state: 'finished', finishedAt: new Date().toISOString() } }
+            : {}),
+        }));
+      }
+    }
+
     // --- Send Booking Confirmation Email ---
     if (dbBooking) {
       try {

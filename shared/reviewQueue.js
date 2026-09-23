@@ -785,6 +785,22 @@ export function notHeldStillPaidOf(booking) {
   return Number(booking?.total_amount ?? booking?.totalAmount) > 0 ? review : null;
 }
 
+/**
+ * The desk's answer that the airline does not hold a commit that never
+ * answered (resolve-review, outcome 'not_held'), anywhere on the booking, or
+ * null. Past a resolved flag - it is one itself, and a later "Mark as handled"
+ * writes its own over it - since what the airline said stays said.
+ *
+ * Its email told the customer "we will email you when the refund is made"
+ * (flight.routes.js NOT_HELD_EMAIL); the desk actions that return the money
+ * read it to keep that promise (payment/operations.handlers.js).
+ */
+export const notHeldAnswerOf = (booking) => flagInForce(
+  booking,
+  (review) => review.reason === COMMIT_UNKNOWN_REVIEW_REASON && review.outcome === 'not_held',
+  { pastResolved: true },
+);
+
 /** notHeldStillPaidOf as the desk lists it: a refund nobody has made. */
 function notHeldRefundAttentionOf(booking) {
   const review = notHeldStillPaidOf(booking);
@@ -888,7 +904,15 @@ export function attentionOf(booking) {
     if (open?.reason === SCHEDULE_CHANGED_REVIEW_REASON) {
       return { kind: 'schedule_changed', reason: open.reason, since: open.at || null };
     }
-    if (open) return { kind: 'held_ticketed', reason: open.reason, since: open.at || null };
+    // A ticketed hold keeps the chain's schedule change under it
+    // (flight.routes.js flagForReview). Read from the hold alone, the desk
+    // named no retiming, and "Mark as handled" - which settles everything
+    // under the flag it resolves - settled it unseen before ticket sync could
+    // lift it back on top. Named here, as under an unticketed hold below.
+    if (open) {
+      const reason = [open.reason, scheduleChangeOf(booking)?.reason].filter(Boolean).join('; ');
+      return { kind: 'held_ticketed', reason, since: open.at || null };
+    }
     return null;
   }
 

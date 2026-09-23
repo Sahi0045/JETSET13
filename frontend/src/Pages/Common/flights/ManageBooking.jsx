@@ -61,9 +61,17 @@ function ManageBooking() {
       : base;
   }, [passedData, fetchedBooking, cancelledLocally, cancelResult]);
   const loading = !passedData && queryLoading;
-  const error = !passedData && queryError ? queryError.message : (!bookingId && !passedData ? 'No booking ID provided' : null);
-  // The fetch failed but there is a snapshot to show: say it may be out of date.
-  const refreshFailed = Boolean(queryError && passedData);
+  // The error screen only when there is no booking to show. A read that fails
+  // after one succeeded keeps the booking it read (the query keeps its data):
+  // every cancel answer that is not a success reads the booking again, and
+  // with the connection gone that read fails too - which replaced the booking
+  // and the cancel's own answer, with its phone number, by "We couldn't open
+  // this booking" on a page opened from a link or after a reload.
+  const error = !passedData && !fetchedBooking && queryError
+    ? queryError.message
+    : (!bookingId && !passedData ? 'No booking ID provided' : null);
+  // The fetch failed but there is a booking to show: say it may be out of date.
+  const refreshFailed = Boolean(queryError && (passedData || fetchedBooking));
 
   const [activeTab, setActiveTab] = useState('details');
   const [showCancelModal, setShowCancelModal] = useState(false);
