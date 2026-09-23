@@ -888,7 +888,15 @@ export function attentionOf(booking) {
     if (open?.reason === SCHEDULE_CHANGED_REVIEW_REASON) {
       return { kind: 'schedule_changed', reason: open.reason, since: open.at || null };
     }
-    if (open) return { kind: 'held_ticketed', reason: open.reason, since: open.at || null };
+    // A ticketed hold keeps the chain's schedule change under it
+    // (flight.routes.js flagForReview). Read from the hold alone, the desk
+    // named no retiming, and "Mark as handled" - which settles everything
+    // under the flag it resolves - settled it unseen before ticket sync could
+    // lift it back on top. Named here, as under an unticketed hold below.
+    if (open) {
+      const reason = [open.reason, scheduleChangeOf(booking)?.reason].filter(Boolean).join('; ');
+      return { kind: 'held_ticketed', reason, since: open.at || null };
+    }
     return null;
   }
 
