@@ -113,8 +113,10 @@ describe('finishing a refused refund on the desk', () => {
   });
 
   it('owes what a partial refund by hand left held', async () => {
+    // As the settle writes it: the fee the cancel decided (none) is kept as
+    // `decidedFee`. Without it, what ARC still holds is not known to be owed.
     const { body } = await refundNow(refusedWith({
-      paymentAction: 'PARTIAL_REFUND', refundAmount: 241, cancellationFee: 0, stillHeld: 50,
+      paymentAction: 'PARTIAL_REFUND', refundAmount: 241, cancellationFee: 0, decidedFee: 0, stillHeld: 50,
     }, { paymentStatus: 'partially_refunded' }));
     expect(body.amount).toBe(50);
   });

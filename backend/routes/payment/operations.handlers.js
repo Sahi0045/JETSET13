@@ -28,7 +28,9 @@ import { canReachAmadeus } from '../../utils/amadeusReach.js';
 import { unchangedSince } from '../../utils/bookingDetailsGuard.js';
 import { DEFAULT_PRICE_SETTINGS } from '../../config/priceDefaults.js';
 import { cancellationMessage, refundOutcome } from '../../../shared/cancellationOutcome.js';
-import { ISSUANCE_UNKNOWN, flagInForce, needsAirlineRefundClaim, ticketNumbersMissingOf } from '../../../shared/reviewQueue.js';
+import {
+    ISSUANCE_UNKNOWN, decidedFeeOf, flagInForce, needsAirlineRefundClaim, ticketNumbersMissingOf,
+} from '../../../shared/reviewQueue.js';
 import { reconcileBookingPayment } from './checkout.handlers.js';
 import { errorSummary } from '../../utils/errorSummary.js';
 import { orderVoided, voidsPayment } from '../../utils/arcTransactions.js';
@@ -2333,7 +2335,14 @@ export async function settleManualFlightRefund(booking, { mode = 'sync', amount,
     // "a cancellation fee was kept" - and the Finish refund button went away
     // with money still owed. Now the rest is recorded as still held, and the
     // desk is offered the refund again until it is returned.
-    const intendedFee = roundCents(Number(previous.cancellationFee) || 0);
+    //
+    // The fee the cancel DECIDED, carried across every refund by hand
+    // (`decidedFee`, shared/reviewQueue.js decidedFeeOf): `cancellationFee`
+    // below is what was kept so far, 0 while more than the fee is held, and
+    // read back from there the next press lost the fee - it was "owed", and
+    // finishing the refund sent it back to the card.
+    const decidedFee = decidedFeeOf(previous);
+    const intendedFee = decidedFee ?? roundCents(Number(previous.cancellationFee) || 0);
     const feeKept = !fullyReturned && intendedFee > 0 && held <= intendedFee + 0.009;
     const stillHeld = fullyReturned || feeKept ? 0 : held;
     const cancellation = {
@@ -2341,6 +2350,7 @@ export async function settleManualFlightRefund(booking, { mode = 'sync', amount,
         paymentAction: voided ? 'VOID' : fullyReturned ? 'FULL_REFUND' : 'PARTIAL_REFUND',
         refundAmount: returnedTotal,
         cancellationFee: feeKept ? held : 0,
+        ...(decidedFee !== null ? { decidedFee } : {}),
         ...(stillHeld > 0 ? { stillHeld } : {}),
         ...(stillUnanswered ? { unansweredRefund: unanswered } : {}),
         currency,

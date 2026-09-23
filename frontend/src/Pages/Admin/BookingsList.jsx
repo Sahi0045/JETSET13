@@ -826,11 +826,12 @@ const BookingsList = () => {
                                 return (
                                     <div style={{ marginTop: '8px' }}>
                                         <strong>Owed:</strong> {formatCurrency(owed.owed)}
-                                        {owed.paid === null
-                                            ? ', still held after a refund by hand.'
-                                            : owed.fee > 0
-                                                ? ` - ${formatCurrency(owed.paid)} paid, less the ${formatCurrency(owed.fee)} cancellation fee the cancel keeps.`
-                                                : ', the whole payment.'}
+                                        {owed.fee > 0 || owed.refunded > 0
+                                            ? ` - ${formatCurrency(owed.paid)} paid, less ${[
+                                                owed.fee > 0 ? `the ${formatCurrency(owed.fee)} cancellation fee the cancel keeps` : null,
+                                                owed.refunded > 0 ? `the ${formatCurrency(owed.refunded)} already refunded` : null,
+                                            ].filter(Boolean).join(' and ')}.`
+                                            : ', the whole payment.'}
                                     </div>
                                 );
                             })()}

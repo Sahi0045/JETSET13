@@ -72,19 +72,22 @@ const telFor = (phone) => `tel:${String(phone).replace(/[^\d+]/g, '')}`;
  * The box was filled with the booking's whole total, and Refund now sent it.
  * The server caps a refund at what ARC holds, not at what is owed, so a
  * cancel that meant to keep its fee gave the fee back too. With no amount
- * decided - a refund held for a person - it starts from the total, as it did.
+ * decided - a refund held for a person, or the rest of one after a refund by
+ * hand - it starts empty, as the admin panel's does: nothing is filled in
+ * that nobody decided.
  */
-const refundStartingAmount = (booking) => String(refundOwedOf(booking)?.owed ?? (booking.totalAmount || ''));
+const refundStartingAmount = (booking) => String(refundOwedOf(booking)?.owed ?? '');
 
 /** The sentence under Finish refund that says where that amount comes from, or null. */
 const owedSentence = (booking) => {
   const owed = refundOwedOf(booking);
   if (!owed) return null;
-  if (owed.paid === null) return `${formatUsd(owed.owed)} is still held and owed back: a refund by hand left it.`;
-  if (owed.fee > 0) {
-    return `The cancel decided ${formatUsd(owed.owed)} goes back: ${formatUsd(owed.paid)} paid, less the ${formatUsd(owed.fee)} cancellation fee it keeps.`;
-  }
-  return `The cancel decided the whole ${formatUsd(owed.owed)} goes back.`;
+  const less = [
+    owed.fee > 0 ? `the ${formatUsd(owed.fee)} cancellation fee it keeps` : null,
+    owed.refunded > 0 ? `the ${formatUsd(owed.refunded)} already refunded` : null,
+  ].filter(Boolean);
+  if (!less.length) return `The cancel decided the whole ${formatUsd(owed.owed)} goes back.`;
+  return `The cancel decided ${formatUsd(owed.owed)} ${owed.refunded > 0 ? 'more ' : ''}goes back: ${formatUsd(owed.paid)} paid, less ${less.join(' and ')}.`;
 };
 
 const hoursSince = (iso) => {

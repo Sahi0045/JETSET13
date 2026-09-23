@@ -385,45 +385,78 @@ export function refundNotReturnedOf(booking) {
 const roundCents = (value) => Math.round(Number(value) * 100) / 100;
 
 /**
+ * The fee a cancel decided to keep when it decided what goes back, or null
+ * when nothing decided an amount.
+ *
+ *  - a refund or void that did not go through (REFUND_STUCK_ACTIONS): the
+ *    cancel worked out the refund and recorded the fee it keeps as
+ *    `cancellationFee`;
+ *  - after a refund by hand, `decidedFee` (payment/operations.handlers.js
+ *    settleManualFlightRefund carries it over). The settle writes what was kept
+ *    SO FAR as `cancellationFee` - 0 while ARC still holds more than the fee -
+ *    and read from there the fee was nothing, and went back to the card.
+ *
+ * A refund held for a person has none, before a refund by hand or after one:
+ * what the desk returned is not a decision that the rest is owed.
+ */
+export function decidedFeeOf(cancellation) {
+  if (!cancellation) return null;
+  if (cancellation.decidedFee !== undefined && cancellation.decidedFee !== null) {
+    const recorded = Number(cancellation.decidedFee);
+    return Number.isFinite(recorded) ? roundCents(Math.max(0, recorded)) : null;
+  }
+  if (!REFUND_STUCK_ACTIONS.includes(cancellation.paymentAction)) return null;
+  return roundCents(Math.max(0, Number(cancellation.cancellationFee) || 0));
+}
+
+/**
  * What the customer is owed back on a cancellation, as the cancel decided it,
  * or null when nothing decided an amount.
  *
- *  - a refund or void that did not go through (REFUND_STUCK_ACTIONS): what
- *    ARC held when the cancel ran, less the fee the cancel meant to keep and
- *    anything recorded as refunded since - the refund it tried to make. Slack
- *    named only the whole payment and the desk filled that in, so finishing a
- *    refund "less the fee" by hand sent the fee back too;
- *  - a partial refund by hand that left money the cancel did not keep as a
- *    fee (`stillHeld`, payment/operations.handlers.js settleManualFlightRefund).
+ * What ARC held when the cancel ran, less the fee the cancel decided to keep
+ * (decidedFeeOf) and anything refunded since:
+ *  - a refund or void that did not go through (REFUND_STUCK_ACTIONS) - the
+ *    refund it tried to make. Slack named only the whole payment and the desk
+ *    filled that in, so finishing a refund "less the fee" by hand sent the fee
+ *    back too;
+ *  - the rest of one, after a refund by hand left money at ARC (`stillHeld`),
+ *    never more than that.
  *
- * A refund held for a person to decide has no amount here: nothing decided it.
+ * Never what ARC still holds as such: that took the rest of a refund a person
+ * was deciding, and a fee a cancel kept, as owed, and one press sent it.
  *
- * @returns {null | { owed: number, paid: number|null, fee: number, currency: string }}
+ * @returns {null | { owed: number, paid: number, fee: number, refunded?: number, currency: string }}
  */
 export function refundOwedOf(booking) {
   const details = detailsOf(booking);
   const cancellation = details?.cancellation;
   if (!cancellation) return null;
+  const fee = decidedFeeOf(cancellation);
+  if (fee === null) return null;
+  const stillHeld = Number(cancellation.stillHeld) > 0 ? roundCents(cancellation.stillHeld) : 0;
+  if (!stillHeld && !REFUND_STUCK_ACTIONS.includes(cancellation.paymentAction)) return null;
   const currency = cancellation.currency || details.arc_captured_currency || details.currency || 'USD';
-  if (Number(cancellation.stillHeld) > 0) return { owed: roundCents(cancellation.stillHeld), paid: null, fee: 0, currency };
-  if (!REFUND_STUCK_ACTIONS.includes(cancellation.paymentAction)) return null;
   // The cancel reconciles with ARC first and writes what it holds; a row from
   // before that has the checkout amount only.
   const captured = Number(details.arc_captured_amount);
   const paid = captured > 0 ? captured : Number(booking?.total_amount ?? booking?.totalAmount);
   if (!(paid > 0)) return null;
-  const fee = Math.max(0, Number(cancellation.cancellationFee) || 0);
-  const owed = Math.max(0, roundCents(paid - fee - (Number(cancellation.refundAmount) || 0)));
-  return { owed, paid: roundCents(paid), fee: roundCents(fee), currency };
+  const refunded = roundCents(Math.max(0, Number(cancellation.refundAmount) || 0));
+  const decided = Math.max(0, roundCents(paid - fee - refunded));
+  const owed = stillHeld ? Math.min(decided, stillHeld) : decided;
+  if (stillHeld && !(owed > 0)) return null;
+  return { owed, paid: roundCents(paid), fee, ...(refunded > 0 ? { refunded } : {}), currency };
 }
 
 /** The owed amount in words, for the desk and the alarm: "241.00 USD owed (291.00 paid less the 50.00 cancellation fee the cancel kept)". */
 export function describeRefundOwed(owed) {
   if (!owed) return null;
   const amount = (value) => Number(value).toFixed(2);
-  const basis = owed.fee > 0 && owed.paid !== null
-    ? ` (${amount(owed.paid)} paid less the ${amount(owed.fee)} cancellation fee the cancel kept)`
-    : '';
+  const less = [
+    owed.fee > 0 ? `the ${amount(owed.fee)} cancellation fee the cancel kept` : null,
+    owed.refunded > 0 ? `${amount(owed.refunded)} already refunded` : null,
+  ].filter(Boolean);
+  const basis = less.length ? ` (${amount(owed.paid)} paid less ${less.join(' and ')})` : '';
   return `${amount(owed.owed)} ${owed.currency} owed${basis}`;
 }
 
