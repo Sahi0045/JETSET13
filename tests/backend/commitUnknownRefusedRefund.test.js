@@ -169,16 +169,30 @@ describe('beside it', () => {
     expect(attentionOf(answeredFirst)).toMatchObject({ kind: 'refund_failed', since: '2026-09-22T10:00:00Z' });
   });
 
-  it('a refund the cancel sent and never heard back about is the cancel\'s own flag, and settled with it, as before', () => {
-    const unknown = cancelledRow({ paymentAction: 'REFUND_UNDER_REVIEW', reversalOutcomeUnknown: true });
-    unknown.booking_details.needs_review = {
-      reason: 'automatic reversal ended NONE: retrieve order failed (503)', source: 'cancellation', at: '2026-09-22T10:00:00Z',
-      previous: unknown.booking_details.needs_review,
+  // The cancel's own flag for a refund nobody heard back about. Closed with the
+  // airline's answer ("not held") it settled the airline question only: the
+  // unknown refund stays on the desk (unansweredRefundSurvivesAirlineAnswer).
+  // This case used to expect it gone - the defect the final check found.
+  // Closed plainly, with no airline answer, it is settled, as before.
+  it('a refund the cancel sent and never heard back about stays on the desk after the airline answer, and is settled by a plain close', () => {
+    const unknown = () => {
+      const row = cancelledRow({ paymentAction: 'REFUND_UNDER_REVIEW', reversalOutcomeUnknown: true });
+      row.booking_details.needs_review = {
+        reason: 'automatic reversal ended NONE: retrieve order failed (503)', source: 'cancellation', at: '2026-09-22T10:00:00Z',
+        previous: row.booking_details.needs_review,
+      };
+      return row;
     };
-    expect(attentionOf(unknown)).toMatchObject({ kind: 'review', reason: 'automatic reversal ended NONE: retrieve order failed (503)' });
-    unknown.booking_details.needs_review.resolved_at = '2026-09-22T11:00:00Z';
-    unknown.booking_details.needs_review.outcome = 'not_held';
-    expect(attentionOf(unknown)).toBeNull();
+    expect(attentionOf(unknown())).toMatchObject({ kind: 'review', reason: 'automatic reversal ended NONE: retrieve order failed (503)' });
+
+    const answered = unknown();
+    answered.booking_details.needs_review.resolved_at = '2026-09-22T11:00:00Z';
+    answered.booking_details.needs_review.outcome = 'not_held';
+    expect(attentionOf(answered)).toMatchObject({ kind: 'refund_not_made' });
+
+    const closedPlainly = unknown();
+    closedPlainly.booking_details.needs_review.resolved_at = '2026-09-22T11:00:00Z';
+    expect(attentionOf(closedPlainly)).toBeNull();
   });
 
   it('a refused refund whose own entry was marked handled after the cancel is settled, as before', () => {
