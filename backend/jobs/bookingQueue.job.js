@@ -549,6 +549,22 @@ export async function replay(row, { baseUrl, fetchImpl = fetch } = {}) {
     return 'already-finished';
   }
 
+  // The route's 202 for a commit the airline never answered: success, held
+  // for a person, and no record locator (the order page reads that answer as
+  // 'checking'). Nothing was confirmed, and the route emails nothing - there
+  // is no booking to confirm. Read as 'confirmed', the queued customer,
+  // promised a confirmation within minutes, and the abandoned-checkout
+  // customer heard nothing, with nothing against booking the trip again. It
+  // is the state the 409 BOOKING_NEEDS_REVIEW below is emailed about, and it
+  // gets the same CHECKING_EMAIL, once: the order is dropped here, and a
+  // flagged row is only ever cleared after this, never replayed.
+  if (body?.success && body.needsReview === true && !(body.pnr || body.data?.pnr)) {
+    log('queued booking\'s commit never answered; sending the checking email', { bookingReference: ref, status });
+    await notifyCustomer(row, CHECKING_EMAIL);
+    await clearQueuedOrder(ref);
+    return 'needs-review';
+  }
+
   if (body?.success) {
     log('queued booking confirmed', { bookingReference: ref, pnr: body.pnr || null });
     await clearQueuedOrder(ref);

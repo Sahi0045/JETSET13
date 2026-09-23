@@ -245,7 +245,9 @@ describe('marking a commit that never answered as handled', () => {
 
     const { commitUnknownOf, attentionOf } = await import('../../shared/reviewQueue.js');
     expect(commitUnknownOf(row)).toBeNull();
-    expect(attentionOf(row)).toBeNull();
+    // Its payment is still held: a refund to make, not settled
+    // (commitNotHeldRefundOwed.test.js).
+    expect(attentionOf(row)).toMatchObject({ kind: 'refund_not_made' });
     const { toClientBooking } = await import('../../backend/routes/flight.routes.js');
     const { attentionMessage } = await import('../../frontend/src/utils/bookingStatus.js');
     expect(attentionMessage(toClientBooking(row))).toMatch(/could not be completed/);

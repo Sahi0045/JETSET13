@@ -206,7 +206,27 @@ describe('a reservation the unrecorded cancel did not release, given Cancelled b
 
     const held = await request(server).post(`/api/flights/admin-bookings/bk-1/resolve-review${shownQueryOf(table.row(REF))}`)
       .send({ note: 'The airline holds it', outcome: 'held', pnr: 'NEWPNR' });
-    expect(held.status).toBe(200);
+    // "Held" over a cancel that already ran is refused now
+    // (commitHeldRefusedAfterCancel.test.js). A row stored before that: the
+    // locator written over the unrecorded cancel as recordHeldAtAirline wrote it.
+    expect(held.status).toBe(409);
+    expect(held.body.code).toBe('HELD_NOT_ALLOWED');
+    const at = new Date().toISOString();
+    const stored = table.row(REF);
+    Object.assign(stored, { status: 'pending_ticketing' });
+    stored.booking_details = {
+      ...stored.booking_details,
+      pnr: 'NEWPNR',
+      amadeus_order_id: 'NEWPNR',
+      gds: { ticketed: false },
+      gds_chain: { ...stored.booking_details.gds_chain, state: 'finished', finishedAt: at },
+      needs_review: {
+        reason: UNTICKETED_REVIEW_REASON,
+        ticketed: false,
+        at,
+        previous: { ...stored.booking_details.needs_review, resolved_at: at, resolved_by: 'desk@jetsetterss.com', resolution: 'The airline holds it', outcome: 'held', pnr: 'NEWPNR' },
+      },
+    };
     const booking = table.row(REF);
     expect(booking.booking_details.pnr).toBe('NEWPNR');
     expect(booking.booking_details.needs_review.reason).toBe(UNTICKETED_REVIEW_REASON);

@@ -28,6 +28,7 @@ import {
   ISSUANCE_UNKNOWN, NO_CONFIRMED_SEAT_REVIEW_REASON, SCHEDULE_CHANGED_REVIEW_REASON, TICKET_NUMBERS_MISSING, attentionOf,
   flagsInForce, isFailedCancellation, isTicketed, isUnrecordedCancellation, needsAirlineRefundClaim, openTicketedFlagOf,
   scheduleChangeOf, ticketNumbersMissingOf, ticketsOf, unrecordedCancellationOf,
+  notHeldStillPaidOf, commitUnknownOf,
 } from '../../shared/reviewQueue.js';
 
 /**
@@ -393,6 +394,22 @@ export function describeScheduleChange(booking) {
   ].join('\n');
 }
 
+/**
+ * One line per booking the desk found the airline does not hold, whose payment
+ * is still held (notHeldStillPaidOf). The flag's reason is the commit's, and
+ * describeBooking printed it as though nobody had asked the airline.
+ */
+export function describeNotHeldStillPaid(booking) {
+  const details = booking.booking_details || {};
+  const review = details.needs_review || {};
+  const hours = Math.round((Date.now() - Date.parse(review.resolved_at || booking.created_at)) / 36e5);
+  return [
+    `*${booking.booking_reference}* — ${booking.status}/${booking.payment_status}, ${booking.total_amount} USD`,
+    `PNR none · the airline does not hold it · nothing refunded yet`,
+    `recorded not held on the desk ${hours}h ago`,
+  ].join('\n');
+}
+
 // A ticketed booking the airline retimed. Under "paid but not ticketed" it
 // read "no ticket was issued ... ticket it, or refund it" of a live ticket.
 const ticketedScheduleChange = (booking) => openTicketedFlagOf(booking)?.reason === SCHEDULE_CHANGED_REVIEW_REASON;
@@ -449,8 +466,19 @@ export function buildMessage(bookings) {
     && ticketedScheduleChange(booking));
   const held = rest.filter((booking) => !needsAirlineRefundClaim(booking) && !ticketNumbersMissing(booking)
     && heldTicketed(booking));
+  // A commit the desk found the airline does not hold, whose payment is still
+  // held. Under "paid but not ticketed" it read "ticket it, or refund it" of a
+  // booking with nothing to ticket: the money is all there is to act on.
+  const notHeldStillPaid = rest.filter((booking) => Boolean(notHeldStillPaidOf(booking)));
+  // Nor is a commit the airline never answered (commitUnknownOf): no PNR, and
+  // nobody knows yet whether the airline holds it. Under that heading it read
+  // "ticket it, or refund it" (PNR none): nothing to ticket, and a refund
+  // first cancels as never booked what the airline may hold - while the desk
+  // asks staff what the airline said.
+  const commitUnanswered = rest.filter((booking) => Boolean(commitUnknownOf(booking)));
   const notTicketed = rest.filter((booking) => !needsAirlineRefundClaim(booking) && !ticketNumbersMissing(booking)
-    && !noConfirmedSeat(booking) && !ticketedScheduleChange(booking) && !heldTicketed(booking));
+    && !noConfirmedSeat(booking) && !ticketedScheduleChange(booking) && !heldTicketed(booking)
+    && !notHeldStillPaidOf(booking) && !commitUnknownOf(booking));
   // Nor is an issuance nobody saw answered. Under that heading it read "no
   // ticket was issued ... ticket it, or refund it" before ticket sync had read
   // the PNR: a second ticket, or a refund of a live one.
@@ -502,6 +530,31 @@ export function buildMessage(bookings) {
         + 'Do not refund while the PNR is live: its confirmed flights would stay held with nothing paid for them.',
       '',
       ...seatless.map(describeBooking),
+    );
+  }
+  if (commitUnanswered.length) {
+    const many = commitUnanswered.length > 1;
+    sections.push(
+      `:question: *${commitUnanswered.length} booking${many ? 's' : ''} paid, the airline never answered when ${many ? 'they were' : 'it was'} booked*`,
+      'We sent the booking to the airline and it never answered (PNR_AddMultiElements timed out, or came back with no record locator), '
+        + 'so there is no PNR and nobody knows yet whether the airline holds it. The customer has paid and was told our team is '
+        + 'checking with the airline and not to book again. Check with the airline whether it holds this booking - by the flights '
+        + 'and the travellers\' names - and record what it said on the desk: held, with its record locator, or not held. '
+        + 'Do NOT ticket, rebook or refund it before that: a refund of a booking the airline holds leaves its seats booked with '
+        + 'nothing paid for them.',
+      '',
+      ...commitUnanswered.map(describeBooking),
+    );
+  }
+  if (notHeldStillPaid.length) {
+    const many = notHeldStillPaid.length > 1;
+    sections.push(
+      `:leftwards_arrow_with_hook: *${notHeldStillPaid.length} booking${many ? 's' : ''} the airline does not hold, payment not returned*`,
+      'The airline never answered when we sent these bookings, and the desk has since found that it does not hold them: '
+        + 'nothing was booked, and the customer\'s payment is still held. Nothing will return it on its own. '
+        + 'Cancel & refund each one on the desk: there is no reservation to release, so the cancel returns the payment.',
+      '',
+      ...notHeldStillPaid.map(describeNotHeldStillPaid),
     );
   }
   if (unanswered.length) {
