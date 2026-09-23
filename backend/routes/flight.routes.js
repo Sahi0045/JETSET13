@@ -30,7 +30,7 @@ import {
   attentionOf, attentionLabel, reviewResolution, ticketsOf, isTicketed, NO_CONFIRMED_SEAT_REVIEW_REASON, noConfirmedSeatOf,
   HELD_REVIEW_REASON_PREFIXES, liveTicketNumbersMissingOf, unrecordedCancellationForCustomerOf,
   voidedTicketsOf, commitUnknownOf, SCHEDULE_CHANGED_REVIEW_REASON, isHeldForReview, ticketIssuedBeforeHoldOf,
-  openFailedCancellationOf, ATTENTION_JOBS,
+  openFailedCancellationOf, ATTENTION_JOBS, cancellationRecordedByHandOf,
   notHeldStillPaidOf,
 } from '../../shared/reviewQueue.js';
 import { errorSummary } from '../utils/errorSummary.js';
@@ -2654,11 +2654,30 @@ router.post('/order', optionalProtect, async (req, res) => {
       // front of the desk (payment/operations.handlers.js
       // recordPaymentAfterCancel), and they are told it is still held.
       const late = await recordPaymentAfterCancel(existing);
-      if (late?.held > 0) {
+      // Recorded by this answer or before it - by an earlier answer to this
+      // payer, or by the abandoned-checkout job - and said on every answer.
+      // Only the first one said it: a reload of the order page sends the order
+      // again, found the cancellation no longer NOTHING_TO_REFUND, and was told
+      // "cancelled and cannot be completed" with nothing about the money. What
+      // became of it since is what the payment record says (paymentStateOf).
+      const paidAfterCancel = late?.held > 0 || Boolean(existing.booking_details?.cancellation?.paidAfterCancel);
+      if (paidAfterCancel) {
+        const paymentState = late?.held > 0 ? 'held' : paymentStateOf(existing);
         const text = 'This booking was cancelled before your payment went through, so it has not been booked.';
         return res.status(409).json({
-          success: false, error: text, message: text, code: 'BOOKING_CANCELLED', bookingFailed: true, refunded: false,
+          success: false, error: text, message: text, code: 'BOOKING_CANCELLED', bookingFailed: true,
+          refunded: paymentState === 'returned', paymentState,
         });
+      }
+      // The gateway could not be asked whether a payment landed after the
+      // cancel. The payer has usually just come back from the payment page,
+      // and was told only that the booking was cancelled. The job asks again,
+      // and a payment it finds is put in front of the desk and the alarm.
+      if (late?.gatewayUnavailable) {
+        const text = 'This booking was cancelled, so it cannot be completed. We could not check with the payment gateway just now '
+          + 'whether a payment was taken for it. If you paid for it after it was cancelled, it has not been booked, and our team will refund you. '
+          + `If you have any questions, call (877) 538-7380 with booking reference ${existing.booking_reference}.`;
+        return res.status(409).json({ success: false, error: text, message: text, code: 'BOOKING_CANCELLED' });
       }
       return res.status(409).json({
         success: false,
@@ -4489,7 +4508,11 @@ export function toClientBooking(booking, { showPassports = false } = {}) {
     // "Reservation Held - your seats are reserved". Only the fact of it: the
     // stored order carries passport numbers and stays in the database.
     queued: Boolean(booking.booking_details?.queued_order) && !booking.booking_details?.pnr,
-    cancellation: booking.booking_details?.cancellation || null,
+    // Or, for a cancel that went through, could not be recorded and was then
+    // recorded cancelled by hand, what its flag says it did with the money
+    // (cancellationRecordedByHandOf). With none, the pages read the row's
+    // 'paid' and said "Refund pending" of a payment the cancel had voided.
+    cancellation: booking.booking_details?.cancellation || cancellationRecordedByHandOf(booking) || null,
     tickets: booking.booking_details?.tickets || [],
     // Which of those a cancel voided. A cancel that voids and then has
     // PNR_Cancel refused leaves the list as it was, so the pages called every

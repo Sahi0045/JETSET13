@@ -82,7 +82,14 @@ export function refundStatus(booking) {
   if (String(booking?.status || '').toLowerCase() !== 'cancelled') return null;
 
   const cancellation = cancellationOf(booking) || {};
-  if (cancellation.paymentAction) {
+  // A cancel recorded cancelled by hand (cancellationRecordedByHandOf): the
+  // record is what its flag says the cancel did, and the hand cancel writes
+  // the status alone, so a payment status reading returned was written by
+  // something that moved the money since. When the cancel itself returned
+  // nothing, that is read first.
+  const returnedSince = cancellation.recordedByHand === true && refundOutcome(cancellation) !== 'refunded'
+    && Boolean(paymentReturned(booking));
+  if (cancellation.paymentAction && !returnedSince) {
     switch (refundOutcome(cancellation)) {
       case 'stuck': return { key: 'failed', label: 'Refund not processed', tone: 'danger' };
       case 'review': return { key: 'review', label: 'Refund under review', tone: 'warning' };

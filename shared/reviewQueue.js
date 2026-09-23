@@ -403,6 +403,34 @@ export function unrecordedCancellationOf(booking) {
 export const unrecordedCancellationForCustomerOf = (booking) => (statusOf(booking) === 'cancelled' ? null
   : flagInForce(booking, isUnrecordedCancellationFlag, { pastResolved: true }));
 
+/**
+ * What a cancel that went through and could not be recorded did with the
+ * money, for a booking since recorded cancelled by hand: the cancellation
+ * record it could not write, taken from its flag; or null.
+ *
+ * Modify Status records it cancelled (shared/bookingStatusChange.js) and
+ * writes the status alone: no cancellation record, and payment_status as the
+ * cancel left it - 'paid', though the cancel voided or refunded the payment.
+ * Read from the row, the customer's pages said "Refund pending", "Not refunded
+ * yet" and "Refunded To Your Card $0.00" of money that had gone back. The flag
+ * says what the cancel did (flagUnrecordedCancellation's paymentAction and
+ * refundAmount). Read past a resolved flag, as the customer's pages read it,
+ * and only while the booking has no cancellation record of its own.
+ */
+export function cancellationRecordedByHandOf(booking) {
+  if (statusOf(booking) !== 'cancelled' || booking?.cancellation || detailsOf(booking)?.cancellation) return null;
+  const flag = flagInForce(booking, isUnrecordedCancellationFlag, { pastResolved: true });
+  if (!flag?.paymentAction) return null;
+  return {
+    paymentAction: flag.paymentAction,
+    refundAmount: Number(flag.refundAmount) || 0,
+    cancelledAt: flag.at ?? null,
+    amadeusCancelled: flag.amadeusCancelled ?? null,
+    ticketsVoided: flag.ticketsVoided ?? null,
+    recordedByHand: true,
+  };
+}
+
 /** flagUnrecordedCancellation's words for a cancel that released the reservation. */
 const RELEASED_REASON = 'airline reservation released';
 

@@ -175,11 +175,14 @@ function ManageBooking() {
           success: false,
           error: result.error || 'The booking could not be cancelled. Please contact support.'
         });
-        // Unless it carries what the cancel did: it went through, and its
-        // record could not be written ("Please do not try again"). The copy on
-        // this page still offered the ticket and a second cancel; the booking
-        // as the server reads it now says the cancellation went through.
-        if (result.cancellation) refetch();
+        // And the booking is read again, whatever the refusal: a refusal can
+        // come after the cancel changed the booking. One that went through and
+        // could not be recorded ("Please do not try again"), or one the airline
+        // refused after the ticket was voided (502, needsReview), left this
+        // page offering the void ticket as an E-Ticket, a held reservation's
+        // document promising a ticket, and a second cancel, until a reload.
+        // The booking as the server reads it now takes over.
+        refetch();
       }
     } catch (err) {
       console.error('Cancel booking error:', err);

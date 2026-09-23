@@ -23,7 +23,7 @@ import { clearTravellerDraft } from '../../../utils/flightTravellerDraft';
  * to a payment that cannot be used.
  */
 const TERMINAL_ERROR_CODES = new Set([
-  'BOOKING_CANCELLED',    // row already cancelled and refunded
+  'BOOKING_CANCELLED',    // row already cancelled; a payment made after it is answered bookingFailed
   'BOOKING_DISABLED',     // booking switched off; the charge was reversed
   'OFFER_NOT_BOOKABLE',   // offer expired or failed the shape gate
   'OFFER_MISSING',        // this session lost the offer; nothing to resend
@@ -630,7 +630,12 @@ function FlightCreateOrders() {
 
       setErrorCode(error.response?.data?.code || error.code || null);
       const failure = error.response?.data;
-      setRefundAttempt(failure?.bookingFailed === true ? { refunded: failure.refunded === true } : null);
+      // `partly`: a payment made after the checkout was cancelled, part of which
+      // has gone back since (the order route's paymentState). Read as not
+      // refunded, it was told nothing had been reversed.
+      setRefundAttempt(failure?.bookingFailed === true
+        ? { refunded: failure.refunded === true, partly: failure.paymentState === 'partly_returned' }
+        : null);
 
       if (error.response?.data) {
         // Backend returned structured error
@@ -1122,7 +1127,9 @@ function FlightCreateOrders() {
                       <p className={`text-sm font-medium ${refundAttempt.refunded ? 'text-green-700' : 'text-amber-800'}`}>
                         {refundAttempt.refunded
                           ? 'Your payment has been reversed. You do not need to do anything.'
-                          : 'Your payment has not been reversed yet. Our team has been alerted and will refund you.'}
+                          : refundAttempt.partly
+                            ? 'Part of your payment has been refunded. Please call (877) 538-7380 with your booking reference about the rest.'
+                            : 'Your payment has not been reversed yet. Our team has been alerted and will refund you.'}
                         {orderReference ? ` Booking reference: ${orderReference}.` : ''}
                       </p>
                     )}
