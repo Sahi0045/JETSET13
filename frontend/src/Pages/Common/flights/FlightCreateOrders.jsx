@@ -11,7 +11,8 @@ import { endpoints } from '@/config/api';
 import { useSupabaseAuth } from '../../../contexts/SupabaseAuthContext';
 import { buildFlightOrderBody } from '../../../../../shared/flightOrderBody';
 import { isUsableEmail } from '../../../../../shared/email';
-import { itinerariesFromOffer, returnDateOf } from '../../../../../shared/bookingItineraries';
+import { clockTime, itinerariesFromOffer, returnDateOf } from '../../../../../shared/bookingItineraries';
+import { airportClockLabel } from './searchResults';
 import { clearStoredBookings } from '../../../utils/bookingStorage';
 import { clearTravellerDraft } from '../../../utils/flightTravellerDraft';
 
@@ -450,10 +451,15 @@ function FlightCreateOrders() {
           destination: lastSegment.arrival?.iataCode || flightData.destination || flightData.arrival || '',
           originCity: flightData.originCity || flightData.departureCity || '',
           destinationCity: flightData.destinationCity || flightData.arrivalCity || '',
-          // Flight times and dates
+          // Flight times and dates. A time is the airport's own clock, as the
+          // airline sends it ("2027-03-14T02:40:00", no offset), read by the
+          // results page's helper and printed as the itinerary below prints
+          // it ("2:40 AM"). Through `new Date(at).toLocaleTimeString()` it was
+          // the viewer's clock: in New York on its spring-forward day a 02:40
+          // departure read 03:40 at the top of the confirmation page.
           departureDate: firstSegment.departure?.at?.split('T')[0] || flightData.departureDate || '',
-          departureTime: firstSegment.departure?.at ? new Date(firstSegment.departure.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : flightData.departureTime || '',
-          arrivalTime: lastSegment.arrival?.at ? new Date(lastSegment.arrival.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : flightData.arrivalTime || '',
+          departureTime: clockTime(airportClockLabel(firstSegment.departure?.at)) || flightData.departureTime || '',
+          arrivalTime: clockTime(airportClockLabel(lastSegment.arrival?.at)) || flightData.arrivalTime || '',
           duration: itinerary.duration || flightData.duration || '',
           // Airline info
           airline: firstSegment.carrierCode || flightData.airline || flightData.carrierCode || '',
