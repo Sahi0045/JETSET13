@@ -385,8 +385,8 @@ export function describeScheduleChange(booking) {
 // read "no ticket was issued ... ticket it, or refund it" of a live ticket.
 const ticketedScheduleChange = (booking) => openTicketedFlagOf(booking)?.reason === SCHEDULE_CHANGED_REVIEW_REASON;
 
-// A ticketed booking the order route held for a person after issuing: the
-// customer was sent "our team is finishing your ticket". Under "paid but not
+// A ticketed booking the order route held for a person after issuing, and
+// whose customer has not been sent their e-ticket. Under "paid but not
 // ticketed" it read "ticket it, or refund it" - a second ticket, or a refund
 // of a live one.
 const heldTicketed = (booking) => {
@@ -509,12 +509,16 @@ export function buildMessage(bookings) {
     );
   }
   if (held.length) {
+    // What ticket sync does for it, and what is left for a person. It told
+    // staff to "record any ticket number missing", which no route or desk
+    // action can do.
     sections.push(
       `:envelope: *${held.length} ticketed booking${held.length > 1 ? 's' : ''} held after ${held.length > 1 ? 'their tickets were' : 'its ticket was'} issued*`,
-      'The ticket IS issued, but the order route stopped after it and held the booking for a person. '
-        + 'The customer was told their reservation is held and our team is finishing their ticket, and was NOT sent '
-        + 'their confirmation. Check the booking against the PNR (its FA lines) and record any ticket number missing, '
-        + 'then send the customer their e-ticket and confirmation. Do NOT reissue and do NOT refund: the customer holds a live ticket.',
+      'The ticket IS issued, but the order route stopped after issuing it and held the booking for a person, '
+        + 'and the customer has not been emailed their e-ticket. Ticket sync reads the ticket numbers from the PNR (its FA lines), '
+        + 'records them, emails the customer their e-ticket and marks the booking handled. If it is still open on the desk, '
+        + 'ticket sync could not read them: check the FA lines and email the customer their ticket numbers yourself. '
+        + 'Do NOT reissue and do NOT refund: the customer holds a live ticket.',
       '',
       ...held.map(describeBooking),
     );
@@ -572,14 +576,27 @@ export function buildMessage(bookings) {
  * record - was undone by an alarm. Each booking is read again, and the stamp
  * written only if nothing that matters has moved since
  * (utils/bookingDetailsGuard.js); a race it loses is read and tried again.
+ *
+ * And only on the flag that was announced. The fresh read pins the write to
+ * itself, not to what was announced, so a flag written in between - a cancel
+ * the airline refused while the message was being posted - was stamped as
+ * though it had been announced, and never was: Slack had said "ticket it, or
+ * refund it" of a PNR the customer had since asked to cancel. A different
+ * flag on top is left for the next run to announce.
  */
 const MARK_TRIES = 3;
+
+/** Whether `fresh` is the flag `announced` (both absent for an unflagged booking). */
+const sameFlag = (announced, fresh) => (!announced || !fresh
+  ? !announced && !fresh
+  : announced.reason === fresh.reason && (announced.at ?? null) === (fresh.at ?? null));
 
 async function markAlerted(bookings) {
   for (const booking of bookings) {
     let marked = false;
+    let superseded = false;
     let lastError = null;
-    for (let tries = 0; tries < MARK_TRIES && !marked; tries += 1) {
+    for (let tries = 0; tries < MARK_TRIES && !marked && !superseded; tries += 1) {
       const { data: fresh, error: readError } = await supabase
         .from('bookings')
         .select('status, payment_status, booking_details')
@@ -592,6 +609,10 @@ async function markAlerted(bookings) {
       const details = fresh.booking_details || {};
       if (details.needs_review?.alerted_at) {
         marked = true;
+        break;
+      }
+      if (!sameFlag(booking.booking_details?.needs_review, details.needs_review)) {
+        superseded = true;
         break;
       }
       const now = new Date().toISOString();
@@ -612,7 +633,8 @@ async function markAlerted(bookings) {
       }
       marked = Boolean(data?.length);
     }
-    if (!marked) log('announced but could not mark', { booking: booking.booking_reference, error: lastError?.message || 'the booking kept changing' });
+    if (superseded) log('flagged again since it was announced; left for the next run', { booking: booking.booking_reference });
+    else if (!marked) log('announced but could not mark', { booking: booking.booking_reference, error: lastError?.message || 'the booking kept changing' });
   }
 }
 

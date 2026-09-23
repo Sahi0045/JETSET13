@@ -1,5 +1,6 @@
 import {
-  NO_CONFIRMED_SEAT_REVIEW_REASON, hasNoConfirmedSeat, isCancellationUnrecorded, isCommitUnknown, isPaid, ticketState, ticketsVoided,
+  NO_CONFIRMED_SEAT_REVIEW_REASON, documentState, hasNoConfirmedSeat, isCancellationUnrecorded, isCommitUnknown, isPaid, ticketState,
+  ticketsVoided,
 } from './eTicket';
 import {
   REFUND_DONE_ACTIONS,
@@ -134,7 +135,12 @@ export function needsAttention(booking) {
   // sentence still says what happened (attentionMessage).
   const isFlight = String(booking?.type || booking?.travel_type || '').toLowerCase() === 'flight';
   if (isFlight && paymentReturned(booking)) return false;
-  return flaggedOpen(booking);
+  // Issued, its number not read back (ticketState 'pending'), waits on nobody
+  // either: a booking held after its ticket was issued was badged "Needs
+  // attention" and listed under Failed, over a live ticket. It gets the
+  // "Ticket issued" badge, and its sentence still says the number is on its
+  // way (attentionMessage).
+  return flaggedOpen(booking) && ticketState(booking) !== 'pending';
 }
 
 /**
@@ -215,6 +221,14 @@ export function attentionMessage(booking) {
   if (ticketsVoided(booking)) {
     return 'Your ticket has been voided and is not valid for travel. The cancellation has not been completed with the airline yet; '
       + 'our team has been alerted and will complete it. If it is urgent, call (877) 538-7380 with your booking reference.';
+  }
+  // A held PNR the customer asked to cancel, whose cancel the airline refused
+  // (documentState 'cancel_pending'). "Your ticket has not been issued yet.
+  // Our team is working on it" promised a ticket nobody will issue, to a
+  // customer told when it was refused that our team would complete it.
+  if (documentState(booking) === 'cancel_pending') {
+    return 'Your cancellation has not been completed with the airline yet. Our team has been alerted and will complete it, '
+      + 'and no ticket will be issued on this booking. If it is urgent, call (877) 538-7380 with your booking reference.';
   }
   return pnrOf(booking)
     ? 'Your seats are reserved, but your ticket has not been issued yet. Our team is working on it and will email you.'

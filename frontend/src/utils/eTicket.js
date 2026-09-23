@@ -18,8 +18,8 @@
  */
 
 import {
-  NO_CONFIRMED_SEAT_REVIEW_REASON, commitUnknownOf, liveTicketNumbersMissingOf, noConfirmedSeatOf, unrecordedCancellationForCustomerOf,
-  voidedTicketsOf,
+  NO_CONFIRMED_SEAT_REVIEW_REASON, commitUnknownOf, liveTicketNumbersMissingOf, noConfirmedSeatOf, openFailedCancellationOf,
+  ticketIssuedBeforeHoldOf, unrecordedCancellationForCustomerOf, voidedTicketsOf,
 } from '../../../shared/reviewQueue';
 
 /**
@@ -113,6 +113,20 @@ export function isCancellationUnrecorded(bookingData) {
   return sentByServer(bookingData, 'unrecorded_cancellation') ?? Boolean(unrecordedCancellationForCustomerOf(bookingData));
 }
 
+/**
+ * Whether the customer asked to cancel this booking, the airline refused, and
+ * our team is completing it: as the server worked it out (toClientBooking's
+ * `cancel_failed`), or - for a copy that does not say, such as a raw row - by
+ * the same rule (openFailedCancellationOf).
+ *
+ * The customer was told "Our team has been alerted and will complete it", and
+ * nobody issues a ticket on it after that.
+ */
+export function isCancelPending(bookingData) {
+  return typeof bookingData?.cancel_failed === 'boolean' ? bookingData.cancel_failed
+    : Boolean(openFailedCancellationOf(bookingData));
+}
+
 /** Whether the booking was cancelled, from whichever shape it arrived in. */
 export function isCancelledBooking(bookingData) {
   return [bookingData?.status, bookingData?.bookingDetails?.status, bookingData?.booking_details?.status, bookingData?.data?.status]
@@ -183,8 +197,11 @@ export function ticketState(bookingData) {
 
   // Under a refused cancel's flag too (sentByServer): the ticket was issued
   // whatever flag sits on top now, and the top reason alone read "none" - but
-  // not once a cancel voided it (liveTicketNumbersMissingOf).
-  const numbersMissing = sentByServer(bookingData, 'ticket_numbers_missing') ?? Boolean(liveTicketNumbersMissingOf(bookingData));
+  // not once a cancel voided it (liveTicketNumbersMissingOf). Or held by the
+  // order route after its ticket was issued (ticketIssuedBeforeHoldOf), which
+  // has no number either: every page said no ticket was issued.
+  const numbersMissing = sentByServer(bookingData, 'ticket_numbers_missing')
+    ?? Boolean(liveTicketNumbersMissingOf(bookingData) || ticketIssuedBeforeHoldOf(bookingData));
   if (numbersMissing) return 'pending';
 
   return 'none';
@@ -259,7 +276,10 @@ export function pnrOf(bookingData) {
  * And not a PNR whose tickets a cancel voided (ticketsVoided): "Your seat is
  * held ... We will email your e-ticket once it is issued" was false of it.
  *
- * @returns {'cancelled'|'ticketed'|'ticket_pending'|'tickets_voided'|'held'|'no_confirmed_seat'|'queued'|'not_booked'}
+ * Nor a held PNR the customer asked to cancel, whose cancel the airline
+ * refused (isCancelPending): no ticket will be issued on it.
+ *
+ * @returns {'cancelled'|'ticketed'|'ticket_pending'|'tickets_voided'|'held'|'no_confirmed_seat'|'cancel_pending'|'queued'|'not_booked'}
  */
 export function documentState(bookingData) {
   const tickets = ticketState(bookingData);
@@ -268,7 +288,8 @@ export function documentState(bookingData) {
   if (pnrOf(bookingData)) {
     if (tickets === 'pending') return 'ticket_pending';
     if (ticketsVoided(bookingData)) return 'tickets_voided';
-    return hasNoConfirmedSeat(bookingData) ? 'no_confirmed_seat' : 'held';
+    if (hasNoConfirmedSeat(bookingData)) return 'no_confirmed_seat';
+    return isCancelPending(bookingData) ? 'cancel_pending' : 'held';
   }
   const status = String(bookingData?.status ?? '').toLowerCase();
   return bookingData?.queued === true || status === 'pending_confirmation' ? 'queued' : 'not_booked';
@@ -287,6 +308,10 @@ export function documentState(bookingData) {
  * Nor one whose tickets a cancel voided ('tickets_voided', left out below):
  * it was offered as an "E-Ticket" of the void numbers. Nor one whose cancel
  * went through and could not be recorded ('cancelled', isCancellationUnrecorded).
+ *
+ * Nor a held PNR whose cancel the airline refused ('cancel_pending'): it was
+ * offered saying "We will email your e-ticket once it is issued", to a
+ * customer who had asked to cancel it.
  */
 export function canDownloadDocument(bookingData) {
   const state = documentState(bookingData);

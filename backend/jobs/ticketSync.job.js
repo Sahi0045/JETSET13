@@ -37,7 +37,7 @@ import FlightProvider, { providerStatus } from '../services/flightProvider.js';
 import { sendTicketIssuedEmail } from '../services/emailService.js';
 import { patchBookingDetails } from '../routes/flight.routes.js';
 import { queueEnvironment } from '../utils/queueEnvironment.js';
-import { TICKET_NUMBERS_MISSING, liveTicketNumbersMissingOf } from '../../shared/reviewQueue.js';
+import { TICKET_NUMBERS_MISSING, heldAfterIssueOf, liveTicketNumbersMissingOf } from '../../shared/reviewQueue.js';
 import { attributeTickets } from '../services/amadeusSoap/mappers/flightOrder.js';
 
 const DEFAULT_INTERVAL_MS = 5 * 60 * 1000;
@@ -164,8 +164,8 @@ const leastRecentlyAskedFirst = (a, b) => {
  * read.
  */
 /**
- * The resolved numbers flag, with anything still open under it lifted back on
- * top.
+ * The resolved numbers flag (or hold after issue), with anything still open
+ * under it lifted back on top.
  *
  * The chain keeps the airline's schedule change under the numbers flag
  * (amadeusSoap/index.js createFlightOrder). A resolved flag settles everything
@@ -193,6 +193,18 @@ const numbersMissingOnTop = (row) => {
   return review?.reason === TICKET_NUMBERS_MISSING && !review.resolved_at && Boolean(liveTicketNumbersMissingOf(row));
 };
 
+/**
+ * A ticketed booking whose numbers are this job's to read: the chain's
+ * numbers flag above, or the order route's hold on a booking whose ticket was
+ * already issued (heldAfterIssueOf) - on top and open, for the same reasons.
+ *
+ * The hold records no ticket numbers, and nothing else could: no route or
+ * desk action writes one, and this job skipped the booking as ticketed. Staff
+ * were told to record the numbers and send the e-ticket, and the booking kept
+ * no ticket number for good. The same retrieve finds them.
+ */
+const issuedNumbersToRead = (row) => numbersMissingOnTop(row) || Boolean(heldAfterIssueOf(row));
+
 async function findNumbersMissing({ limit }) {
   // Never at the cost of the unticketed rows: a refused read here is logged
   // and the tick goes on with those, as it did before this existed.
@@ -202,7 +214,7 @@ async function findNumbersMissing({ limit }) {
     if (error) throw new Error(error.message);
     return (data || [])
       .filter(open)
-      .filter((row) => Boolean(row.booking_details?.pnr) && numbersMissingOnTop(row))
+      .filter((row) => Boolean(row.booking_details?.pnr) && issuedNumbersToRead(row))
       .slice(0, limit);
   } catch (error) {
     log('could not read the bookings whose ticket numbers are missing; going on without them', { error: error.message });
@@ -214,7 +226,8 @@ async function findNumbersMissing({ limit }) {
  * Narrowed in the query, for the reason the unticketed one is: filtered only
  * here, rows this job has resolved would keep matching, fill the window from
  * the front and never be stamped. The flag on top, unresolved - which is what
- * resolving takes a row out of.
+ * resolving takes a row out of. The numbers flag, or a hold that says the
+ * ticket was issued.
  */
 function numbersMissingQuery({ limit, leastRecentlyAsked }) {
   let query = supabase
@@ -222,7 +235,7 @@ function numbersMissingQuery({ limit, leastRecentlyAsked }) {
     .select(SELECT)
     .in('payment_status', PAID)
     .not('booking_details->>pnr', 'is', null)
-    .eq('booking_details->needs_review->>reason', TICKET_NUMBERS_MISSING)
+    .or(`booking_details->needs_review->>reason.eq.${TICKET_NUMBERS_MISSING},booking_details->needs_review->>ticketed.eq.true`)
     .is('booking_details->needs_review->>resolved_at', null)
     .not('status', 'in', `(${CLOSED.join(',')})`);
   if (leastRecentlyAsked) query = query.order('booking_details->>ticket_checked_at', { ascending: true, nullsFirst: true });
@@ -472,10 +485,13 @@ export async function syncOne(row, { provider = FlightProvider, sendEmail = send
   const reference = row.booking_reference;
   const details = row.booking_details || {};
   const pnr = details.pnr;
-  // Ticketed by the chain, numbers not read back (findNumbersMissing). The
-  // retrieve below is the only call made either way: nothing is issued,
-  // voided, cancelled or priced.
-  const numbersMissing = numbersMissingOnTop(row);
+  // Ticketed by the chain, numbers not read back, or held by the order route
+  // after issuing (findNumbersMissing). The retrieve below is the only call
+  // made either way: nothing is issued, voided, cancelled or priced.
+  const numbersMissing = issuedNumbersToRead(row);
+  // The hold: no e-ticket or confirmation went to the customer, whatever
+  // numbers the order route recorded before it stopped.
+  const heldAfterIssue = Boolean(heldAfterIssueOf(row));
 
   let order;
   try {
@@ -522,10 +538,10 @@ export async function syncOne(row, { provider = FlightProvider, sendEmail = send
     // A cancel flagged it since it was read: it is the desk's now, and gets
     // neither tickets nor an e-ticket email from here. Worked out on every
     // read, as `claimed` is: the patch runs again when the row moved under it.
-    leftAlone = numbersMissing && !numbersMissingOnTop({ ...row, booking_details: current });
+    leftAlone = numbersMissing && !issuedNumbersToRead({ ...row, booking_details: current });
     if (leftAlone) return {};
     const already = Array.isArray(current.tickets) && current.tickets.length > 0;
-    claimed = !already && current.ticket_issued_emailed !== true;
+    claimed = (heldAfterIssue || !already) && current.ticket_issued_emailed !== true;
     const at = new Date().toISOString();
     key = claimed ? idempotencyKeyFor(reference, at) : null;
     return {
@@ -541,13 +557,15 @@ export async function syncOne(row, { provider = FlightProvider, sendEmail = send
       ...(claimed ? { ticket_issued_emailed: true, ticket_email_claimed_at: at, ticket_email_key: key } : {}),
       // Every number is in: the flag has nothing left to ask for, so it is
       // resolved the way a person resolves one, and the desk list and the
-      // alarm stop showing it.
+      // alarm stop showing it. A hold after issue asked for the e-ticket too,
+      // which is sent below (or by the owed-email pass, if this send fails).
       ...(numbersMissing ? {
         needs_review: settlingNumbersOnly({
           ...current.needs_review,
           resolved_at: at,
           resolved_by: 'ticket sync',
-          resolution: `Ticket numbers read from the PNR and recorded: ${tickets.map((t) => t.number).join(', ')}`,
+          resolution: `Ticket numbers read from the PNR and recorded: ${tickets.map((t) => t.number).join(', ')}`
+            + (heldAfterIssue ? '; ticket sync sends the customer their e-ticket' : ''),
         }),
       } : {}),
     };

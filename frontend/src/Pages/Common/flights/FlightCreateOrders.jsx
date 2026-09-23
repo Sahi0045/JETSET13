@@ -95,12 +95,17 @@ const UNAVAILABLE_RETRY_MS = 15000;
  *   voided   - no live ticket, and the answer names tickets a cancel voided
  *              (ALREADY_BOOKED after a cancel whose PNR_Cancel was refused).
  *              Neither issued nor held: nobody can fly on it.
+ *   cancel_pending - a held PNR the customer asked to cancel, whose cancel the
+ *              airline refused (ALREADY_BOOKED `cancelFailed`). Our team is
+ *              completing it. It read "your ticket could not be issued
+ *              automatically. Our team is finishing it".
  */
 function outcomeOf(body) {
   if (body?.queued === true) return 'queued';
   if (body?.ticketed === true) return 'ticketed';
   if (['returned', 'partly_returned'].includes(body?.paymentState)) return body.paymentState;
   if (Array.isArray(body?.voided_tickets) && body.voided_tickets.length > 0) return 'voided';
+  if (body?.cancelFailed === true) return 'cancel_pending';
   if ((body?.needsReview || body?.data?.needsReview) && !pnrOfAnswer(body)) return 'checking';
   return 'held';
 }
@@ -436,6 +441,10 @@ function FlightCreateOrders() {
           // The airline commit never answered: the confirmation page's own
           // outcome for it, as nothing there can tell it from a held PNR.
           ...(result === 'checking' ? { commitUnknown: true } : {}),
+          // A cancel the airline refused, as the booking reads send it
+          // (toClientBooking `cancel_failed`): the confirmation page read this
+          // copy as a reservation whose ticket our team was finishing.
+          cancel_failed: result === 'cancel_pending',
           // A payment the booking's record says went back, for the
           // confirmation page (paymentReturned): it said "Total Paid ...
           // Payment received" of a refunded booking.
@@ -791,6 +800,17 @@ function FlightCreateOrders() {
                         <h2 className="text-xl font-semibold text-gray-800">Ticket Voided</h2>
                         <p className="text-gray-600">
                           Your ticket has been voided and is not valid for travel. The cancellation has not been completed with the airline yet.
+                        </p>
+                      </>
+                    ) : outcome === 'cancel_pending' ? (
+                      // As the confirmation page says it (cancel_pending).
+                      <>
+                        <div className="mx-auto w-16 h-16 rounded-full bg-amber-50 flex items-center justify-center">
+                          <Clock className="w-8 h-8 text-amber-600" />
+                        </div>
+                        <h2 className="text-xl font-semibold text-gray-800">Cancellation Pending</h2>
+                        <p className="text-gray-600">
+                          Your cancellation has not been completed with the airline yet, and no ticket will be issued on this booking. Our team has been alerted and will complete it.
                         </p>
                       </>
                     ) : outcome === 'checking' ? (

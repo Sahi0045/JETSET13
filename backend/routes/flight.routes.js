@@ -29,7 +29,8 @@ import { statusChangeRefusal } from '../../shared/bookingStatusChange.js';
 import {
   attentionOf, reviewResolution, ticketsOf, isTicketed, NO_CONFIRMED_SEAT_REVIEW_REASON, noConfirmedSeatOf,
   HELD_REVIEW_REASON_PREFIXES, liveTicketNumbersMissingOf, unrecordedCancellationForCustomerOf,
-  voidedTicketsOf, commitUnknownOf, SCHEDULE_CHANGED_REVIEW_REASON,
+  voidedTicketsOf, commitUnknownOf, SCHEDULE_CHANGED_REVIEW_REASON, isHeldForReview, ticketIssuedBeforeHoldOf,
+  openFailedCancellationOf,
 } from '../../shared/reviewQueue.js';
 import { errorSummary } from '../utils/errorSummary.js';
 import { flightSearchLimiter, guestBookingLimiter } from '../middleware/security.js';
@@ -480,6 +481,27 @@ export async function flagForReview({
 
   return patched;
 }
+
+/**
+ * The 202 for a booking held for a person after its ticket was issued.
+ *
+ * It was answered like a hold before issuance, and the order page said "your
+ * ticket could not be issued automatically. Our team is finishing it", while
+ * a retry of the same order answered ticketed. `ticketed` is what the order
+ * page reads; the e-ticket comes from ticket sync, which reads the numbers
+ * from the PNR (jobs/ticketSync.job.js).
+ */
+const ticketedHoldAnswer = (pnr, bookingReference) => ({
+  success: true,
+  data: { id: pnr, pnr, status: 'PENDING_CONFIRMATION', bookingReference },
+  pnr,
+  orderId: pnr,
+  bookingReference,
+  needsReview: true,
+  ticketed: true,
+  message: 'Your ticket has been issued and our team is completing your booking. '
+    + 'We will email you your e-ticket as soon as it is done.'
+});
 
 /**
  * Has this payment already been booked?
@@ -1061,7 +1083,8 @@ export { NO_CONFIRMED_SEAT_REVIEW_REASON };
  *
  *  - 'confirmation': what the success path sends (reservation or confirmation);
  *  - 'held': "your reservation is held, our team is finishing your ticket", for
- *    a booking the order route held for staff after committing its PNR;
+ *    a booking the order route held for staff after committing its PNR and
+ *    before any ticket was issued;
  *  - null: nothing - no booking yet, cancelled, money returned, already sent, or
  *    flagged for a reason a person is handling (a cancellation, say).
  *
@@ -1078,6 +1101,11 @@ export function confirmationEmailKind(booking) {
   const review = details.needs_review;
   if (!review || EMAILED_REVIEW_REASONS.has(review.reason)) return 'confirmation';
   if (review.reason === NO_CONFIRMED_SEAT_REVIEW_REASON) return null;
+  // Held after its ticket was issued: the held email - "your ticket could not
+  // be issued automatically ... a reservation, not a ticket" - is false of it.
+  // Its email is the e-ticket, which ticket sync sends once it has read the
+  // numbers from the PNR (jobs/ticketSync.job.js).
+  if (review.ticketed === true && isHeldForReview(review)) return null;
   const reason = String(review.reason || '');
   return HELD_REVIEW_REASON_PREFIXES.some((prefix) => reason.startsWith(prefix)) ? 'held' : null;
 }
@@ -2702,6 +2730,10 @@ router.post('/order', optionalProtect, async (req, res) => {
       const ticketed = tickets.length > 0 || (details.gds?.ticketed === true
         && (voidedTickets.length === 0 || Boolean(liveTicketNumbersMissingOf(existing))));
       const allVoided = !ticketed && voidedTickets.length > 0;
+      // A cancel the airline refused, which our team is completing: "its
+      // ticket has not been issued yet" promised one, and the order page said
+      // "our team is finishing it", to a customer who had asked to cancel.
+      const cancelFailed = Boolean(openFailedCancellationOf(existing));
       console.log('↩️ Already booked, returning the stored order', details.pnr);
       // A retry can be the first chance to send a confirmation this booking
       // never got: its first send was skipped for want of an address, or failed.
@@ -2731,6 +2763,7 @@ router.post('/order', optionalProtect, async (req, res) => {
         // The numbers a cancel voided, as the booking reads send them
         // (toClientBooking), for the pages' voided wording.
         voided_tickets: voidedTickets,
+        cancelFailed,
         needsReview: Boolean(details.needs_review),
         // What the payment record says, as the 409 retry answers carry it. A
         // held PNR refunded from the Payments tab (payment_status alone) was
@@ -2740,7 +2773,8 @@ router.post('/order', optionalProtect, async (req, res) => {
         savedToDatabase: true,
         message: ticketed ? 'This booking already exists'
           : allVoided ? 'This booking already exists; its ticket has been voided'
-            : 'This booking already exists; its ticket has not been issued yet'
+            : cancelFailed ? 'This booking already exists; its cancellation has not been completed with the airline yet'
+              : 'This booking already exists; its ticket has not been issued yet'
       });
     }
 
@@ -3462,6 +3496,10 @@ router.post('/order', optionalProtect, async (req, res) => {
         // anything, and saying so would be the kind of promise this route has
         // been cleaned of elsewhere.
         const holdsSeats = Boolean(providerError.pnr);
+        // Failed past issuance: the ticket exists (ticketedHoldAnswer).
+        if (holdsSeats && providerError.ticketed === true) {
+          return res.status(202).json(ticketedHoldAnswer(providerError.pnr, req.body.bookingReference));
+        }
         return res.status(202).json({
           success: true,
           data: { id: providerError.pnr, pnr: providerError.pnr, status: 'PENDING_CONFIRMATION' },
@@ -3685,6 +3723,28 @@ router.post('/order', optionalProtect, async (req, res) => {
 
     console.log('📝 Database save result:', dbBooking ? 'Success' : 'Skipped/Failed');
 
+    // Issued, and the save that records it failed. The row still says what
+    // the commit wrote - `gds.ticketed: false`, no ticket numbers, no flag -
+    // so the alarm told staff "no ticket was issued ... ticket it, or refund
+    // it" and the desk "Paid, seats held, no ticket", of a live ticket: a
+    // second ticket charges the fare twice. What the chain knew is recorded
+    // on a hold after issue, as the outer catch below records it, which the
+    // desk, the alarm and ticket sync (the e-ticket) all read. Never on a
+    // booking cancelled meanwhile.
+    if (!dbBooking && pnrValue && orderResponse.ticketed === true) {
+      const bookingReference = req.body.bookingReference || orderIdValue;
+      const row = await findExistingBooking(bookingReference);
+      if (row?.status !== 'cancelled') {
+        await flagForReview({
+          bookingReference,
+          pnr: pnrValue,
+          reason: 'order route failed after commit: the booking could not be saved',
+          ticketed: true,
+          tickets: orderResponse.tickets
+        });
+      }
+    }
+
     // --- Send Booking Confirmation Email ---
     if (dbBooking) {
       try {
@@ -3813,7 +3873,7 @@ router.post('/order', optionalProtect, async (req, res) => {
       if (pnr && row?.status !== 'cancelled') {
         // A PNR exists: the airline holds seats. Never refund that
         // automatically - a human decides.
-        await flagForReview({
+        const held = {
           bookingReference: ref,
           pnr,
           reason: `order route failed after commit: ${String(error.message || error).slice(0, 200)}`,
@@ -3825,9 +3885,15 @@ router.post('/order', optionalProtect, async (req, res) => {
           // covers a failure inside a post-issuance step.
           ticketed: committedTicketed || error?.ticketed === true
             || row?.booking_details?.gds?.ticketed === true
-        });
-        // This answer promises an email; it used to send none.
+        };
+        await flagForReview(held);
+        // This answer promises an email; it used to send none. Not to a
+        // ticketed booking (confirmationEmailKind): ticket sync sends its
+        // e-ticket.
         await sendHeldForReviewEmail(ref, req.body);
+        // The order page said "your ticket could not be issued automatically"
+        // of a ticket the chain had issued.
+        if (held.ticketed) return res.status(202).json(ticketedHoldAnswer(pnr, ref));
         return res.status(202).json({
           success: true,
           data: { id: pnr, pnr, status: 'PENDING_CONFIRMATION', bookingReference: ref },
@@ -4424,6 +4490,10 @@ export function toClientBooking(booking, { showPassports = false } = {}) {
     // number on it an issued ticket and printed void numbers on an "E-Ticket".
     // The booking's own list plus every flag's (voidedTicketsOf).
     voided_tickets: voidedTicketsOf(booking),
+    // A cancel the airline refused, which our team is completing
+    // (openFailedCancellationOf). No page read it, so a held reservation went
+    // on promising a ticket to a customer who had asked to cancel it.
+    cancel_failed: Boolean(openFailedCancellationOf(booking)),
     // The reason is what the e-ticket reads ("ticket_numbers_not_retrieved").
     // The rest of the record is for the support desk: gateway errors, reversal
     // attempts, the GDS detail.
@@ -4438,7 +4508,9 @@ export function toClientBooking(booking, { showPassports = false } = {}) {
         no_confirmed_seat: Boolean(noConfirmedSeatOf(booking)),
         // Issued, but the numbers have not reached us: "not issued" was false.
         // Not once a cancel voided those tickets: "issued" was false then.
-        ticket_numbers_missing: Boolean(liveTicketNumbersMissingOf(booking)),
+        // Held by the order route after its ticket was issued, too
+        // (ticketIssuedBeforeHoldOf): that booking has no number either.
+        ticket_numbers_missing: Boolean(liveTicketNumbersMissingOf(booking) || ticketIssuedBeforeHoldOf(booking)),
         // The airline commit never answered, and nobody has found out since
         // (commitUnknownOf). Read from the reason alone, it was a booking
         // with no PNR like any failed one, and every page said it had failed.

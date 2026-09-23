@@ -875,6 +875,8 @@ export default function TravelDashboard() {
                           const numbers = liveTickets(booking).map((t) => t?.number).filter(Boolean);
                           if (numbers.length) return <span className="tracking-wider">{numbers.join(', ')}</span>;
                           if (ticketsVoided(booking)) return 'Voided';
+                          // Being cancelled: "Not yet issued" promised a ticket nobody will issue.
+                          if (documentState(booking) === 'cancel_pending') return 'None, cancellation pending';
                           return ticketState(booking) === 'pending' ? 'Issued, number pending' : 'Not yet issued';
                         })()}
                       </DetailCell>

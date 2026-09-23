@@ -277,9 +277,9 @@ export const isAwaitingTicketOnly = (booking) => {
  * "Ticketed, so done" holds for most flags - the ticket turned up later, by
  * retry or by hand - and the desk and the alarm skip those. Not for these two:
  *
- *  - held after the ticket was issued: the customer was told "our team is
- *    finishing your ticket" and was never sent the confirmation. Skipped as
- *    done, nobody sent it. Only when the flag itself says the ticket was
+ *  - held after the ticket was issued: the customer was never sent their
+ *    e-ticket. Skipped as done, nobody sent it (ticket sync now does, and
+ *    marks the flag handled). Only when the flag itself says the ticket was
  *    already issued (flagForReview writes `ticketed`): a booking held BEFORE
  *    issuance and ticketed later - by hand, then ticket sync, which sends the
  *    e-ticket - is the "ticketed, so done" case;
@@ -292,10 +292,36 @@ export const isAwaitingTicketOnly = (booking) => {
  */
 export function openTicketedFlagOf(booking) {
   if (!isTicketed(detailsOf(booking))) return null;
-  const review = topFlagOf(booking);
-  if (review && !review.resolved_at && review.ticketed === true && isHeldForReview(review)) return review;
-  return scheduleChangeOf(booking);
+  return heldAfterIssueOf(booking) ?? scheduleChangeOf(booking);
 }
+
+/**
+ * The order route's hold on a booking whose ticket was already issued
+ * (flagForReview writes `ticketed: true`), on top and unresolved, or null.
+ *
+ * The desk, the alarm and ticket sync read it: ticket sync reads such a
+ * booking's numbers from the PNR, records them and sends the e-ticket, which
+ * is everything the hold asks of a person.
+ */
+export function heldAfterIssueOf(booking) {
+  const review = topFlagOf(booking);
+  return review && !review.resolved_at && review.ticketed === true && isHeldForReview(review) ? review : null;
+}
+
+/**
+ * That hold, for what the customer is told: its ticket was issued, whether or
+ * not its number has reached us. On top or under a later flag, resolved or
+ * not - a person dealing with the booking does not un-issue its ticket, as
+ * ticketNumbersMissingOf reads it. Null once a cancel voided any ticket on the
+ * booking, as the order route's ALREADY_BOOKED answer reads gds.ticketed.
+ *
+ * The customer's pages read only ticket numbers and the chain's numbers flag,
+ * and this booking has neither: every one said no ticket was issued - "not a
+ * ticket", "Ticket not yet issued" - while the desk and a retry of the order
+ * said it was.
+ */
+export const ticketIssuedBeforeHoldOf = (booking) => (voidedTicketsOf(booking).length > 0 ? null
+  : flagInForce(booking, (review) => review.ticketed === true && isHeldForReview(review), { pastResolved: true }));
 
 /** What a member of staff recorded when they dealt with it, or null. */
 export const reviewResolution = (booking) => {
@@ -390,6 +416,24 @@ export function isFailedCancellation(booking) {
   const review = detailsOf(booking)?.needs_review;
   return review?.source === 'cancellation' && review.cancelFailed === true && statusOf(booking) !== 'cancelled';
 }
+
+/**
+ * The refused cancel while the desk lists it ("Cancel failed at the airline"),
+ * or null: for what the customer is told.
+ *
+ * The cancel answered them "We could not cancel your reservation with the
+ * airline. Our team has been alerted and will complete it", and nobody issues
+ * a ticket on it after that. No customer page read it, so a held reservation
+ * went on promising one: "Our team is working on it", "We will email your
+ * e-ticket once it is issued".
+ *
+ * The desk's own rule (attentionOf), so the customer hears the cancellation is
+ * being completed exactly while the desk has it to complete: not once a person
+ * resolved it, not over a cancellation carried out and not recorded, and not
+ * once a later cancel went through.
+ */
+export const openFailedCancellationOf = (booking) => (attentionOf(booking)?.kind === 'cancel_failed'
+  ? detailsOf(booking).needs_review : null);
 
 /**
  * What still needs doing on this booking, or null.

@@ -9,7 +9,7 @@ import { confirmationEmailKind } from '../../backend/routes/flight.routes.js';
  * When the order route fails after commit (its outer catch, or the chain
  * failing at a step past issuance), flagForReview writes `order route failed
  * after commit: ...` or `chain failed after commit at <step>` with `ticketed:
- * true`, which sets `gds.ticketed`. The customer is sent "Reservation held -
+ * true`, which sets `gds.ticketed`. The customer was sent "Reservation held -
  * our team is finishing your ticket" (confirmationEmailKind 'held') and never
  * the real confirmation. Both the desk and the Slack alarm skipped the row as
  * "ticketed, so done", so the team that promised to finish it was never told:
@@ -37,9 +37,13 @@ const routeFailed = row({ reason: 'order route failed after commit: boom' });
 const chainFailed = row({ reason: 'chain failed after commit at retrieve' }, { tickets: [{ number: '220-1234567890' }] });
 
 describe('a ticketed booking the order route held for a person', () => {
-  it('was sent the held email, promising our team will finish it', () => {
-    expect(confirmationEmailKind(routeFailed)).toBe('held');
-    expect(confirmationEmailKind(chainFailed)).toBe('held');
+  // It was owed the held email - "your ticket could not be issued
+  // automatically ... a reservation, not a ticket" - of a ticket the chain had
+  // issued. Its email is the e-ticket, which ticket sync sends
+  // (heldAfterTicketCustomerPages.test.js, ticketSyncHeldAfterIssue.test.js).
+  it('is not owed the held email: its ticket is issued', () => {
+    expect(confirmationEmailKind(routeFailed)).toBeNull();
+    expect(confirmationEmailKind(chainFailed)).toBeNull();
   });
 
   it('is on the desk, labelled as a ticket the customer has not been sent', () => {
@@ -61,10 +65,13 @@ describe('a ticketed booking the order route held for a person', () => {
       const text = buildMessage([row({ reason: 'order route failed after commit: boom', at: '2026-09-22T09:00:00.000Z' })]);
       expect(text).toBe([
         ':envelope: *1 ticketed booking held after its ticket was issued*',
-        'The ticket IS issued, but the order route stopped after it and held the booking for a person. '
-          + 'The customer was told their reservation is held and our team is finishing their ticket, and was NOT sent '
-          + 'their confirmation. Check the booking against the PNR (its FA lines) and record any ticket number missing, '
-          + 'then send the customer their e-ticket and confirmation. Do NOT reissue and do NOT refund: the customer holds a live ticket.',
+        // It told staff to "record any ticket number missing", which nothing
+        // could do; ticket sync reads and records them (ticketSyncHeldAfterIssue.test.js).
+        'The ticket IS issued, but the order route stopped after issuing it and held the booking for a person, '
+          + 'and the customer has not been emailed their e-ticket. Ticket sync reads the ticket numbers from the PNR (its FA lines), '
+          + 'records them, emails the customer their e-ticket and marks the booking handled. If it is still open on the desk, '
+          + 'ticket sync could not read them: check the FA lines and email the customer their ticket numbers yourself. '
+          + 'Do NOT reissue and do NOT refund: the customer holds a live ticket.',
         '',
         '*FLTHT1* — confirmed/paid, 300 USD\n'
           + 'PNR DEF456 · ticketed: yes\n'
