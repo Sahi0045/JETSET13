@@ -883,6 +883,12 @@ async function cancelFlightBooking(res, booking, { reason, email }) {
             // booking. A retry that voided the tickets leaves none to claim,
             // and "ticketed, so done" kept exactly that booking from anyone.
             unrecorded: true,
+            // Whether this cancel released a reservation, and which. Staff may
+            // record the booking cancelled by hand only for that one
+            // (shared/reviewQueue.js unrecordedCancellationReleasing): a PNR
+            // the desk records after a cancel that found none is live.
+            amadeusCancelled: cancellationResult.amadeusCancelled,
+            ...(cancellationResult.amadeusCancelled ? { pnr } : {}),
             ticketsVoided: cancellationResult.ticketsVoided,
             at: now,
             paymentAction: cancellationResult.paymentAction,

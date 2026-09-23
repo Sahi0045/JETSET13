@@ -15,7 +15,7 @@
  * it, and the admin panel, which offers only what it allows.
  */
 
-import { unrecordedCancellationForCustomerOf } from './reviewQueue.js';
+import { unrecordedCancellationReleasing } from './reviewQueue.js';
 
 export const ADMIN_STATUSES = Object.freeze(['pending', 'pending_ticketing', 'confirmed', 'completed', 'cancelled']);
 
@@ -79,7 +79,11 @@ export function statusChangeRefusal(booking, nextStatus) {
     // again, asks the gateway first and writes the record a late payment is
     // caught by (cancelledWithNothingTaken); cancelled by hand, a payment on a
     // still-open page, or one ARC still held, reached no job, alarm or desk.
-    if (reservation && unrecordedCancellationForCustomerOf(booking)) return null;
+    //
+    // And only for the reservation that cancel released, with nothing since
+    // saying the airline holds it (unrecordedCancellationReleasing): a record
+    // locator the desk wrote after a cancel that found none is live.
+    if (reservation && unrecordedCancellationReleasing(booking, reservation)) return null;
     if (reservation) {
       return refusal(409, 'USE_CANCEL_AND_REFUND',
         `This flight has an airline reservation (${reservation}). Marking it cancelled would release no seats and refund nothing. Use Cancel & Refund.`);
