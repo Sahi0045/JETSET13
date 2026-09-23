@@ -371,8 +371,9 @@ function BookingConfirmation() {
               <p className="text-amber-800 text-sm mb-4">{attention}</p>
             )}
 
-            {/* Travel Countdown */}
-            {daysUntilTrip !== null && daysUntilTrip >= 0 && (
+            {/* Travel Countdown. Not to a booking that is not a trip any more:
+                it sat beside "This booking is not valid for travel". */}
+            {daysUntilTrip !== null && daysUntilTrip >= 0 && !['cancelled', 'cancellation_unrecorded'].includes(outcome) && (
               <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-100 text-blue-800 rounded-full font-medium">
                 <Calendar className="w-4 h-4" />
                 {daysUntilTrip === 0 ? (
