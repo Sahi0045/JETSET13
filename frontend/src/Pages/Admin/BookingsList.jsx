@@ -832,6 +832,7 @@ const BookingsList = () => {
                                                 owed.refunded > 0 ? `the ${formatCurrency(owed.refunded)} already refunded` : null,
                                             ].filter(Boolean).join(' and ')}.`
                                             : ', the whole payment.'}
+                                        {owed.unanswered && ' The cancel sent that refund to ARC Pay and never heard back: use Sync from ARC before refunding anything.'}
                                     </div>
                                 );
                             })()}

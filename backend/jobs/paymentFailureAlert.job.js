@@ -176,10 +176,17 @@ export function describeHeld(booking) {
   ].join('\n');
 }
 
-/** One line per refund whose outcome is unknown. Not "nothing returned": that is the open question. */
+/**
+ * One line per refund whose outcome is unknown. Not "nothing returned": that is
+ * the open question. With what the cancel decided goes back if none of it did:
+ * "refund what it still holds" was the whole payment then, the fee the cancel
+ * kept included.
+ */
 export function describeOutcomeUnknown(booking) {
+  const decided = describeRefundOwed(refundOwedOf(booking));
   return [
     `*${booking.booking_reference}* — ${booking.total_amount} USD taken, whether any went back is not known`,
+    ...(decided ? [`if none of it went back: ${decided}`] : []),
     `the cancel recorded: ${heldReasonOf(booking)}`,
     `cancelled ${hoursSinceCancelled(booking)}h ago · the row reads ${booking.status}/${booking.payment_status}`,
   ].join('\n');
@@ -221,7 +228,8 @@ export function buildMessage(bookings) {
       `:grey_question: *${countOf(unknown)} whose refund may or may not have gone through* — ${totalOf(unknown)} USD taken`,
       'The cancel asked ARC Pay to return the money and never learned how that ended. '
         + 'Check the order in ARC Pay before anything else: open Finish refund on the desk and press Check ARC Pay '
-        + '(Sync from ARC in the admin panel), which records what ARC Pay shows. Refund by hand only what it still holds.',
+        + '(Sync from ARC in the admin panel), which records what ARC Pay shows. If none of it went back, refund by hand '
+        + 'what the cancel decided, named below, and never more than ARC Pay still holds.',
       '',
       ...unknown.map(describeOutcomeUnknown),
     );

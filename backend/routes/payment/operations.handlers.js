@@ -29,7 +29,7 @@ import { unchangedSince } from '../../utils/bookingDetailsGuard.js';
 import { DEFAULT_PRICE_SETTINGS } from '../../config/priceDefaults.js';
 import { cancellationMessage, refundOutcome } from '../../../shared/cancellationOutcome.js';
 import {
-    ISSUANCE_UNKNOWN, decidedFeeOf, flagInForce, needsAirlineRefundClaim, ticketNumbersMissingOf,
+    ISSUANCE_UNKNOWN, decidedFeeOf, flagInForce, needsAirlineRefundClaim, refundOwedOf, ticketNumbersMissingOf,
 } from '../../../shared/reviewQueue.js';
 import { reconcileBookingPayment } from './checkout.handlers.js';
 import { errorSummary } from '../../utils/errorSummary.js';
@@ -883,7 +883,9 @@ async function cancelFlightBooking(res, booking, { reason, email }) {
         return res.status(500).json({ success: false, error: text, message: text, cancellation: cancellationResult });
     }
 
-    await sendCancellationEmail(booking, email, cancellationResult);
+    // With the details read back after reconcile, so what the office is told
+    // was decided is worked out from what ARC captured, as the desk's is.
+    await sendCancellationEmail({ ...booking, booking_details: current }, email, cancellationResult);
     console.log('✅ Booking cancelled:', booking.id, cancellationResult.paymentAction);
 
     return res.status(200).json({
@@ -1280,6 +1282,9 @@ async function sendCancellationEmail(booking, email, cancellationResult) {
             return;
         }
 
+        const decided = cancellationResult.reversalOutcomeUnknown
+            ? refundOwedOf({ ...booking, booking_details: { ...(booking.booking_details || {}), cancellation: cancellationResult } })
+            : null;
         const cancelEmailData = {
             customerEmail,
             customerName: booking.customer_name || (Array.isArray(booking.passenger_details) && booking.passenger_details[0]?.firstName ? `${booking.passenger_details[0].firstName} ${booking.passenger_details[0].lastName || ''}`.trim() : 'Valued Customer'),
@@ -1294,6 +1299,10 @@ async function sendCancellationEmail(booking, email, cancellationResult) {
             // A refund sent and never answered is not one that was not made:
             // the office email must not tell the desk to refund it by hand.
             ...(cancellationResult.reversalOutcomeUnknown ? { reversalOutcomeUnknown: true } : {}),
+            // ...and if ARC Pay shows it never landed, what goes back is what
+            // the cancel decided - the figure the desk fills in - not what ARC
+            // holds, which includes the fee the cancel keeps.
+            ...(decided ? { decidedRefund: decided.owed } : {}),
             currency: cancellationResult.currency || 'USD'
         };
 

@@ -936,9 +936,23 @@ export function generateCancellationTemplate(data) {
  * It read like every REFUND_UNDER_REVIEW: not processed, the fee retained,
  * nothing to refund - the "no refund was made, make it by hand" that pays the
  * customer twice when ARC Pay did take it. What is true is that nobody knows,
- * so it gives no refund figures at all and says what to do first.
+ * so it says what to do first, and gives no figure for what went back.
+ *
+ * It does say what the cancel decided (`decidedRefund`, and the fee it keeps):
+ * "refund only what it still holds" was the whole payment when the refund
+ * never landed, and the fee the cancel meant to keep went back with it.
  */
-function adminCancellationOutcomeUnknown({ customerName, customerEmail, bookingReference, bookingType, paymentAction }) {
+function decidedLine({ decidedRefund, cancellationFee, currency }) {
+  if (!(Number(decidedRefund) > 0)) return 'Refund only what it still holds.';
+  const fee = Number(cancellationFee) || 0;
+  return fee > 0
+    ? `The cancel meant to return <strong>${money(decidedRefund, currency)}</strong> and keep the ${money(fee, currency)} cancellation fee: `
+      + `if ARC Pay shows none of it went back, refund ${money(decidedRefund, currency)}, not everything it holds.`
+    : `The cancel meant to return the whole payment, <strong>${money(decidedRefund, currency)}</strong>: `
+      + 'if ARC Pay shows none of it went back, refund that.';
+}
+
+function adminCancellationOutcomeUnknown({ customerName, customerEmail, bookingReference, bookingType, paymentAction, decided }) {
   return renderBrandedEmail({
     preheader: line([line(['Cancellation', bookingReference], ' '), 'REFUND OUTCOME UNKNOWN - CHECK ARC PAY FIRST'], ' — '),
     headerLabel: 'Refund needs a human', emoji: '🚨',
@@ -951,7 +965,7 @@ function adminCancellationOutcomeUnknown({ customerName, customerEmail, bookingR
       ])}
       ${highlightBox('The cancel sent the refund to ARC Pay and no answer came back, so it may already have gone through. '
         + '<strong>Do not refund by hand yet.</strong> Check ARC Pay first: open Finish refund on the desk and press Check ARC Pay '
-        + '(Sync from ARC in the admin panel), which records what ARC Pay shows. Refund only what it still holds.', {})}
+        + `(Sync from ARC in the admin panel), which records what ARC Pay shows. ${decidedLine(decided)}`, {})}
       ${dataGrid([
     ['Customer', customerName],
     ['Email', customerEmail],
@@ -966,7 +980,10 @@ function adminCancellationOutcomeUnknown({ customerName, customerEmail, bookingR
 export function generateAdminCancellationTemplate(data) {
   const { customerName, customerEmail, bookingReference, bookingType = 'travel', refundAmount, cancellationFee, currency = 'USD', paymentAction } = data;
   if (data.reversalOutcomeUnknown === true && refundOutcome({ paymentAction, refundAmount }) === 'review') {
-    return adminCancellationOutcomeUnknown({ customerName, customerEmail, bookingReference, bookingType, paymentAction });
+    return adminCancellationOutcomeUnknown({
+      customerName, customerEmail, bookingReference, bookingType, paymentAction,
+      decided: { decidedRefund: data.decidedRefund, cancellationFee, currency },
+    });
   }
   // A refund left for review needs the desk exactly as much as one that failed:
   // the customer has been told a person will decide.

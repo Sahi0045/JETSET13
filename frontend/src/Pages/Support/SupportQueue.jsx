@@ -86,8 +86,12 @@ const owedSentence = (booking) => {
     owed.fee > 0 ? `the ${formatUsd(owed.fee)} cancellation fee it keeps` : null,
     owed.refunded > 0 ? `the ${formatUsd(owed.refunded)} already refunded` : null,
   ].filter(Boolean);
-  if (!less.length) return `The cancel decided the whole ${formatUsd(owed.owed)} goes back.`;
-  return `The cancel decided ${formatUsd(owed.owed)} ${owed.refunded > 0 ? 'more ' : ''}goes back: ${formatUsd(owed.paid)} paid, less ${less.join(' and ')}.`;
+  const decided = less.length
+    ? `The cancel decided ${formatUsd(owed.owed)} ${owed.refunded > 0 ? 'more ' : ''}goes back: ${formatUsd(owed.paid)} paid, less ${less.join(' and ')}.`
+    : `The cancel decided the whole ${formatUsd(owed.owed)} goes back.`;
+  return owed.unanswered
+    ? `${decided} Its refund was sent to ARC Pay and never answered: press Check ARC Pay before sending anything.`
+    : decided;
 };
 
 const hoursSince = (iso) => {

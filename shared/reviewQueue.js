@@ -388,9 +388,11 @@ const roundCents = (value) => Math.round(Number(value) * 100) / 100;
  * The fee a cancel decided to keep when it decided what goes back, or null
  * when nothing decided an amount.
  *
- *  - a refund or void that did not go through (REFUND_STUCK_ACTIONS): the
- *    cancel worked out the refund and recorded the fee it keeps as
- *    `cancellationFee`;
+ *  - a refund or void that did not go through (REFUND_STUCK_ACTIONS), or one
+ *    sent and never answered (REFUND_UNDER_REVIEW with reversalOutcomeUnknown):
+ *    the cancel worked out the refund and recorded the fee it keeps as
+ *    `cancellationFee`. Not knowing whether the unanswered one landed does not
+ *    change what was decided; if it never did, the fee is still kept;
  *  - after a refund by hand, `decidedFee` (payment/operations.handlers.js
  *    settleManualFlightRefund carries it over). The settle writes what was kept
  *    SO FAR as `cancellationFee` - 0 while ARC still holds more than the fee -
@@ -405,7 +407,9 @@ export function decidedFeeOf(cancellation) {
     const recorded = Number(cancellation.decidedFee);
     return Number.isFinite(recorded) ? roundCents(Math.max(0, recorded)) : null;
   }
-  if (!REFUND_STUCK_ACTIONS.includes(cancellation.paymentAction)) return null;
+  const decided = REFUND_STUCK_ACTIONS.includes(cancellation.paymentAction)
+    || (REFUND_REVIEW_ACTIONS.includes(cancellation.paymentAction) && cancellation.reversalOutcomeUnknown === true);
+  if (!decided) return null;
   return roundCents(Math.max(0, Number(cancellation.cancellationFee) || 0));
 }
 
@@ -419,13 +423,19 @@ export function decidedFeeOf(cancellation) {
  *    refund it tried to make. Slack named only the whole payment and the desk
  *    filled that in, so finishing a refund "less the fee" by hand sent the fee
  *    back too;
+ *  - one sent and never answered (reversalOutcomeUnknown): what goes back if
+ *    ARC Pay shows it never landed. The desk filled in the whole payment here
+ *    too, and the office email said to refund everything ARC held;
  *  - the rest of one, after a refund by hand left money at ARC (`stillHeld`),
  *    never more than that.
  *
  * Never what ARC still holds as such: that took the rest of a refund a person
  * was deciding, and a fee a cancel kept, as owed, and one press sent it.
  *
- * @returns {null | { owed: number, paid: number, fee: number, refunded?: number, currency: string }}
+ * `unanswered` when the cancel's own refund was never answered: whoever
+ * finishes it checks ARC Pay first.
+ *
+ * @returns {null | { owed: number, paid: number, fee: number, refunded?: number, unanswered?: true, currency: string }}
  */
 export function refundOwedOf(booking) {
   const details = detailsOf(booking);
@@ -434,7 +444,7 @@ export function refundOwedOf(booking) {
   const fee = decidedFeeOf(cancellation);
   if (fee === null) return null;
   const stillHeld = Number(cancellation.stillHeld) > 0 ? roundCents(cancellation.stillHeld) : 0;
-  if (!stillHeld && !REFUND_STUCK_ACTIONS.includes(cancellation.paymentAction)) return null;
+  if (!stillHeld && !REFUND_NOT_RETURNED_ACTIONS.includes(cancellation.paymentAction)) return null;
   const currency = cancellation.currency || details.arc_captured_currency || details.currency || 'USD';
   // The cancel reconciles with ARC first and writes what it holds; a row from
   // before that has the checkout amount only.
@@ -445,7 +455,8 @@ export function refundOwedOf(booking) {
   const decided = Math.max(0, roundCents(paid - fee - refunded));
   const owed = stillHeld ? Math.min(decided, stillHeld) : decided;
   if (stillHeld && !(owed > 0)) return null;
-  return { owed, paid: roundCents(paid), fee, ...(refunded > 0 ? { refunded } : {}), currency };
+  const unanswered = REFUND_REVIEW_ACTIONS.includes(cancellation.paymentAction) && cancellation.reversalOutcomeUnknown === true;
+  return { owed, paid: roundCents(paid), fee, ...(refunded > 0 ? { refunded } : {}), ...(unanswered ? { unanswered } : {}), currency };
 }
 
 /** The owed amount in words, for the desk and the alarm: "241.00 USD owed (291.00 paid less the 50.00 cancellation fee the cancel kept)". */
@@ -490,10 +501,11 @@ function refundNotReturnedAttentionOf(booking) {
       since,
     };
   }
+  const decided = cancellation.reversalOutcomeUnknown ? describeRefundOwed(refundOwedOf(booking)) : null;
   return {
     kind: 'refund_not_made',
     reason: cancellation.reversalOutcomeUnknown
-      ? 'the refund was sent to ARC Pay and never answered: check ARC Pay before refunding anything'
+      ? `the refund was sent to ARC Pay and never answered: check ARC Pay before refunding anything${decided ? `; if none of it went back, ${decided}` : ''}`
       : String(cancellation.basis || cancellation.reason || 'no refund was made'),
     since,
   };
