@@ -709,6 +709,46 @@ function refundNotReturnedAttentionOf(booking) {
 }
 
 /**
+ * A commit that never answered, which the desk recorded the airline does not
+ * hold (flight.routes.js resolve-review, outcome 'not_held'), on a booking
+ * that still holds the payment: nothing cancelled it and nothing returned the
+ * money. The flag it returns, or null.
+ *
+ * The customer paid for a booking that does not exist, and nothing else would
+ * ever say so: resolved, the flag read as settled, so the booking left the
+ * desk and the needs-review alarm; the failed-refund alarm needs a
+ * cancellation, the abandoned-checkout job skips a flagged row, and ticket
+ * sync needs a PNR. The whole payment stayed at ARC with nobody told to
+ * return it. It is a refund to make until Cancel & refund (or the Payments
+ * tab) returns the money, or a person marks that entry handled, which writes
+ * a flag of its own on top.
+ *
+ * Only while the flag on top is that answer: a cancel since has its own
+ * record (refundNotReturnedAttentionOf reads what it left owed).
+ */
+export function notHeldStillPaidOf(booking) {
+  const details = detailsOf(booking);
+  const review = details?.needs_review;
+  if (!review?.resolved_at || review.reason !== COMMIT_UNKNOWN_REVIEW_REASON || review.outcome !== 'not_held') return null;
+  if (booking?.pnr || details.pnr || details.cancellation) return null;
+  if (['cancelled', 'refunded'].includes(statusOf(booking)) || paymentOf(booking) !== 'paid') return null;
+  // Nothing was ever taken, so there is nothing to give back.
+  return Number(booking?.total_amount ?? booking?.totalAmount) > 0 ? review : null;
+}
+
+/** notHeldStillPaidOf as the desk lists it: a refund nobody has made. */
+function notHeldRefundAttentionOf(booking) {
+  const review = notHeldStillPaidOf(booking);
+  if (!review) return null;
+  return {
+    kind: 'refund_not_made',
+    reason: 'the airline does not hold this booking, and its payment has not been returned: nothing was booked. '
+      + 'Cancel & refund it - there is no reservation to release, so the cancel returns the payment',
+    since: review.resolved_at,
+  };
+}
+
+/**
  * What still needs doing on this booking, or null.
  *
  * @returns {null | { kind: 'not_ticketed'|'review'|'airline_refund'|'unrecorded_cancellation'|'cancel_failed'|'schedule_changed'
@@ -718,7 +758,7 @@ function refundNotReturnedAttentionOf(booking) {
 export function attentionOf(booking) {
   const details = detailsOf(booking);
   const review = details?.needs_review || null;
-  if (review?.resolved_at) return refundNotReturnedAttentionOf(booking);
+  if (review?.resolved_at) return refundNotReturnedAttentionOf(booking) ?? notHeldRefundAttentionOf(booking);
 
   // Before anything reads the booking's status or tickets: neither says what
   // happened, which is the point of this flag. Found under a later flag too.

@@ -31,6 +31,7 @@ import {
   HELD_REVIEW_REASON_PREFIXES, liveTicketNumbersMissingOf, unrecordedCancellationForCustomerOf,
   voidedTicketsOf, commitUnknownOf, SCHEDULE_CHANGED_REVIEW_REASON, isHeldForReview, ticketIssuedBeforeHoldOf,
   openFailedCancellationOf, ATTENTION_JOBS,
+  notHeldStillPaidOf,
 } from '../../shared/reviewQueue.js';
 import { errorSummary } from '../utils/errorSummary.js';
 import { flightSearchLimiter, guestBookingLimiter } from '../middleware/security.js';
@@ -5564,6 +5565,49 @@ async function recordHeldAtAirline(booking, { note, at, by, pnr: given }) {
 }
 
 /**
+ * The customer's email for a commit the desk found the airline does not hold,
+ * while their payment is still held (shared/reviewQueue.js notHeldStillPaidOf).
+ * Every page had told them "we will email you either way", and "not held" sent
+ * nothing: the held answer emails its confirmation, this one emailed no one.
+ * The booking queue's customer email (bookingQueue.job.js notifyCustomer), the
+ * same template and fields. The refund itself is the desk's to make, and its
+ * cancellation email says what went back.
+ */
+export const NOT_HELD_EMAIL = {
+  subject: 'Your flight booking did not go through',
+  status: 'Not booked - refund on its way',
+  whatHappensNext: 'We checked with the airline, and your booking did not go through: the airline does not hold a reservation '
+    + 'for it, so you are not booked on these flights. Our team is refunding your payment, and we will email you when the '
+    + 'refund is made; it usually reaches your card within 5-10 business days after that. If you have not heard from us within '
+    + '2 business days, call (877) 538-7380 with your booking reference.',
+};
+
+/**
+ * Send NOT_HELD_EMAIL to the address the success path would use
+ * (confirmationEmailFromRow). Once: only the press whose "not held" was
+ * written sends it, and that write is pinned to the flag still unresolved.
+ * Never throws.
+ *
+ * @returns {Promise<boolean>} whether it was sent
+ */
+async function sendNotHeldEmail(booking) {
+  try {
+    const to = confirmationEmailFromRow(booking).customerEmail;
+    if (!to) return false;
+    const { sendEmail } = await import('../services/emailService.js');
+    await sendEmail({
+      to,
+      subject: NOT_HELD_EMAIL.subject,
+      data: { bookingReference: booking.booking_reference, status: NOT_HELD_EMAIL.status, whatHappensNext: NOT_HELD_EMAIL.whatHappensNext },
+    });
+    return true;
+  } catch (error) {
+    console.error('❌ Not-held email not sent:', { reference: booking?.booking_reference, error: error.message });
+    return false;
+  }
+}
+
+/**
  * POST /api/flights/admin-bookings/:id/resolve-review — "I have dealt with this".
  *
  * The alarms announce a booking once and stamp `alerted_at`; nothing ever took
@@ -5711,6 +5755,31 @@ router.post('/admin-bookings/:id/resolve-review', protect, bookingStaff, async (
       });
     }
 
+    // Created when it is missing: the alarms name paid-but-not-ticketed
+    // bookings and refused refunds that were never flagged, and those need a
+    // record too - under what was wrong, and over any earlier flag, which is
+    // kept.
+    const resolved = {
+      ...(openFlag || {
+        reason: attention.reason,
+        ...(attention.kind === 'not_ticketed' ? { ticketed: false } : {}),
+        at,
+        ...(details.needs_review ? { previous: details.needs_review } : {}),
+      }),
+      resolved_at: at,
+      resolved_by: by,
+      resolution: note,
+      ...(commitUnknown ? { outcome: 'not_held' } : {}),
+    };
+    // "Not held" while the payment is still held (notHeldStillPaidOf): the
+    // customer paid for a booking that does not exist. It stays on the desk
+    // as a refund to make, and the needs-review alarm announces it once more,
+    // as that: the stamp it left when it announced the commit is not carried
+    // over, or it would never say a word about the money.
+    const refundToMake = commitUnknown
+      && Boolean(notHeldStillPaidOf({ ...booking, booking_details: { ...details, needs_review: resolved } }));
+    const { alerted_at: _announcedAsCommit, ...toAnnounce } = resolved;
+
     // Pinned to the row as read (unchangedSince), as recordHeldAtAirline is.
     // The whole column is written back from the copy read above, and filtered
     // by id alone it put back anything written in between: a "held" recorded
@@ -5721,25 +5790,7 @@ router.post('/admin-bookings/:id/resolve-review', protect, bookingStaff, async (
       supabase
         .from('bookings')
         .update({
-          booking_details: {
-            ...details,
-            // Created when it is missing: the alarms name paid-but-not-ticketed
-            // bookings and refused refunds that were never flagged, and those
-            // need a record too - under what was wrong, and over any earlier
-            // flag, which is kept.
-            needs_review: {
-              ...(openFlag || {
-                reason: attention.reason,
-                ...(attention.kind === 'not_ticketed' ? { ticketed: false } : {}),
-                at,
-                ...(details.needs_review ? { previous: details.needs_review } : {}),
-              }),
-              resolved_at: at,
-              resolved_by: by,
-              resolution: note,
-              ...(commitUnknown ? { outcome: 'not_held' } : {}),
-            },
-          },
+          booking_details: { ...details, needs_review: refundToMake ? toAnnounce : resolved },
           updated_at: at,
         })
         .eq('id', booking.id),
@@ -5751,6 +5802,15 @@ router.post('/admin-bookings/:id/resolve-review', protect, bookingStaff, async (
     if (!written?.length) return refuseResolve(res, 409, 'BOOKING_CHANGED', BOOKING_CHANGED_TEXT);
 
     console.log('✅ Booking marked handled by the desk:', { reference: booking.booking_reference, by });
+    if (refundToMake) {
+      // The customer was told "we will email you either way". Only this press
+      // wrote "not held" (pinResolution), so it is sent once.
+      const emailed = await sendNotHeldEmail(booking);
+      console.log('↩️ Not held at the airline, payment still held: a refund to make', { reference: booking.booking_reference, emailed });
+      return res.json({
+        success: true, resolvedAt: at, resolvedBy: by, note, outcome: 'not_held', refundToMake: true, emailed, message: 'Marked as handled',
+      });
+    }
     return res.json({ success: true, resolvedAt: at, resolvedBy: by, note, message: 'Marked as handled' });
   } catch (error) {
     console.error('❌ Resolve review error:', errorSummary(error));
