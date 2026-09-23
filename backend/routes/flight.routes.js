@@ -21,7 +21,7 @@ import { CHAIN_CLAIM_TTL_MS, MAX_QUEUE_ATTEMPTS } from '../utils/bookingChainCla
 import { queueEnvironment } from '../utils/queueEnvironment.js';
 import { unchangedSince } from '../utils/bookingDetailsGuard.js';
 import { UNTICKETED_REVIEW_REASON } from '../jobs/needsReviewAlert.job.js';
-import { itinerariesFromOffer, returnDateOf } from '../../shared/bookingItineraries.js';
+import { clockTime, itinerariesFromOffer, returnDateOf, splitLocalDateTime } from '../../shared/bookingItineraries.js';
 import { flightsKey, travellerNamesKey } from '../utils/tripMatch.js';
 import { needsDateOfBirth } from '../../shared/travellerDetails.js';
 import { buildFlightOrderBody, orderDataFromCheckoutRow } from '../../shared/flightOrderBody.js';
@@ -1934,24 +1934,21 @@ const transformAmadeusFlightData = (flights, dictionaries = {}) => {
       const carrierCode = firstSegment.carrierCode;
       const airlineName = airlines[carrierCode] || carrierCode;
 
-      // Format departure and arrival
+      // Format departure and arrival. A time is the airport's own clock, as
+      // the airline sends it and as the booking record keeps it
+      // (shared/bookingItineraries.js), in 24 hours: "02:40".
+      // `new Date(at).toLocaleTimeString()` read it through this server's time
+      // zone: right in UTC by accident, and 03:40 on a server whose zone
+      // springs forward that night.
       const departure = {
-        time: new Date(firstSegment.departure.at).toLocaleTimeString('en-US', {
-          hour: '2-digit',
-          minute: '2-digit',
-          hour12: false
-        }),
+        time: splitLocalDateTime(firstSegment.departure.at).time,
         airport: firstSegment.departure.iataCode,
         terminal: firstSegment.departure.terminal || '',
         date: firstSegment.departure.at.split('T')[0]
       };
 
       const arrival = {
-        time: new Date(lastSegment.arrival.at).toLocaleTimeString('en-US', {
-          hour: '2-digit',
-          minute: '2-digit',
-          hour12: false
-        }),
+        time: splitLocalDateTime(lastSegment.arrival.at).time,
         airport: lastSegment.arrival.iataCode,
         terminal: lastSegment.arrival.terminal || '',
         date: lastSegment.arrival.at.split('T')[0]
@@ -3661,8 +3658,13 @@ router.post('/order', optionalProtect, async (req, res) => {
       origin: firstSegment.departure?.iataCode || '',
       destination: lastSegment.arrival?.iataCode || '',
       departureDate: firstSegment.departure?.at?.split('T')[0] || '',
-      departureTime: firstSegment.departure?.at ? new Date(firstSegment.departure.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '',
-      arrivalTime: lastSegment.arrival?.at ? new Date(lastSegment.arrival.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '',
+      // The airport's own clock, as the airline sends it and as the legs below
+      // keep it (shared/bookingItineraries.js), printed the way every page
+      // prints a leg ("2:40 AM"). `new Date(at).toLocaleTimeString()` read it
+      // through this server's time zone: right in UTC by accident, and a 02:40
+      // departure stored as 03:40 on a server whose zone springs forward.
+      departureTime: clockTime(splitLocalDateTime(firstSegment.departure?.at).time),
+      arrivalTime: clockTime(splitLocalDateTime(lastSegment.arrival?.at).time),
       arrivalDate: lastSegment.arrival?.at?.split('T')[0] || '',
       airline: firstSegment.carrierCode || '',
       airlineName: firstOffer?.validatingAirlineCodes?.[0] || firstSegment.carrierCode || '',
