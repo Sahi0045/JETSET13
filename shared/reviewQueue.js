@@ -403,6 +403,41 @@ export function unrecordedCancellationOf(booking) {
 export const unrecordedCancellationForCustomerOf = (booking) => (statusOf(booking) === 'cancelled' ? null
   : flagInForce(booking, isUnrecordedCancellationFlag, { pastResolved: true }));
 
+/** flagUnrecordedCancellation's words for a cancel that released the reservation. */
+const RELEASED_REASON = 'airline reservation released';
+
+/** Whether a flag records the airline holding the booking: held, or never ticketed. */
+const recordsHold = (review) => review.outcome === 'held' || review.reason === UNTICKETED_REVIEW_REASON || isHeldForReview(review);
+
+/**
+ * The unrecorded-cancellation flag whose own cancel released `reservation`,
+ * with nothing recorded since that says the airline holds it; or null. Read
+ * past a resolved flag, as the customer's pages read it.
+ *
+ * What lets staff record such a booking cancelled by hand
+ * (shared/bookingStatusChange.js). The flag says a cancel happened, not what
+ * it released: one that found no reservation - a commit that never answered -
+ * says "no airline reservation", and a record locator the desk writes after it
+ * (flight.routes.js recordHeldAtAirline) is live. So the flag must name this
+ * reservation (`amadeusCancelled` and `pnr`; a flag stored before says so only
+ * in its text), and above it may sit only a later cancel of the same
+ * reservation that the airline refused - it was already released - and that a
+ * person has looked at.
+ */
+export function unrecordedCancellationReleasing(booking, reservation) {
+  if (!reservation || statusOf(booking) === 'cancelled') return null;
+  const flags = flagsInForce(booking, { pastResolved: true });
+  const at = flags.findIndex(isUnrecordedCancellationFlag);
+  if (at < 0) return null;
+  const flag = flags[at];
+  const released = typeof flag.amadeusCancelled === 'boolean'
+    ? flag.amadeusCancelled && flag.pnr === reservation
+    : String(flag.reason || '').includes(RELEASED_REASON);
+  if (!released || recordsHold(flag)) return null;
+  const settledRetry = (review) => review.cancelFailed === true && Boolean(review.resolved_at) && review.pnr === reservation;
+  return flags.slice(0, at).every(settledRetry) ? flag : null;
+}
+
 /**
  * A cancellation the airline did not carry out (payment/operations.handlers.js
  * cancelFlightBooking): PNR_Cancel or a ticket void was refused, so the PNR is

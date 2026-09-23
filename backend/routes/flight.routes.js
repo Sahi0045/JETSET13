@@ -2644,7 +2644,10 @@ router.post('/order', optionalProtect, async (req, res) => {
     // booking records as its order, for every later cancel and refund.
     const arcOrderId = existing.booking_details?.order_id || existing.booking_reference;
 
-    if (existing.status === 'cancelled') {
+    // In any case, as the reads below take it (unrecordedCancellationForCustomerOf
+    // lowercases): read exactly, a 'CANCELLED' row was not cancelled here, and
+    // its unrecorded-cancel flag read as settled - "Booking Confirmed!".
+    if (String(existing.status || '').toLowerCase() === 'cancelled') {
       // Unless the proven payer paid after the cancel: a checkout cancelled with
       // nothing to refund keeps its payment page open. Their money is put in
       // front of the desk (payment/operations.handlers.js
