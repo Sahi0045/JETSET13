@@ -5513,10 +5513,25 @@ async function recordHeldAtAirline(booking, { note, at, by, pnr: given }) {
   if (!commitUnknownOf(booking)) {
     return refused(409, 'HELD_NOT_ALLOWED', 'Only a booking whose airline commit never answered can be recorded as held here.');
   }
+  const recordAsNotHeld = 'If the airline holds a reservation for it, cancel that reservation with the airline, then record it as not held with what you did.';
   if (['cancelled', 'refunded'].includes(String(booking.status || '').toLowerCase())
-    || ['refunded', 'partially_refunded', 'reversed'].includes(String(booking.payment_status || '').toLowerCase())) {
-    return refused(409, 'HELD_NOT_ALLOWED', 'This booking has been cancelled or refunded, so it cannot be recorded as held. '
-      + 'If the airline holds a reservation for it, cancel that reservation with the airline, then record it as not held with what you did.');
+    || ['refunded', 'partially_refunded', 'reversed', 'voided'].includes(String(booking.payment_status || '').toLowerCase())) {
+    return refused(409, 'HELD_NOT_ALLOWED', `This booking has been cancelled or refunded, so it cannot be recorded as held. ${recordAsNotHeld}`);
+  }
+  // A cancel already ran on it: recorded (its cancellation), or carried out
+  // and not recorded (unrecordedCancellationForCustomerOf, which reads past a
+  // flag marked handled). Cancel & Refund on a commit that never answered has
+  // no reservation to release and voids the whole payment; when its record
+  // could not be written the row still read pending and paid, and "held" made
+  // it a paid reservation to ticket - the customer emailed a confirmation,
+  // Slack told staff to ticket it - against a payment ARC may no longer hold.
+  const cancelRan = details.cancellation || unrecordedCancellationForCustomerOf(booking);
+  if (cancelRan) {
+    const money = cancelRan.paymentAction
+      ? ` (it recorded payment ${cancelRan.paymentAction} ${Number(cancelRan.refundAmount) || 0} ${cancelRan.currency || details.arc_captured_currency || 'USD'})`
+      : '';
+    return refused(409, 'HELD_NOT_ALLOWED', `A cancellation has already been carried out on this booking${money}, so it cannot be recorded as held: `
+      + `its payment may no longer be held. ${recordAsNotHeld}`);
   }
   const pnr = String(given ?? '').trim().toUpperCase();
   if (!/^[A-Z0-9]{6}$/.test(pnr)) {
