@@ -899,11 +899,14 @@ function FlightSearchPage() {
   }, [flights]);
 
   // Handle booking a flight
-  const handleBookFlight = useCallback((flight) => {
+  const handleBookFlight = useCallback((flight, fareCheck = null) => {
     navigate('/flights/booking-confirmation', {
       state: {
         flightData: flight,
         searchData: searchParams,
+        // The fare check BOOK just made, which the review page takes instead of
+        // pricing the same offer again (utils/fareCheckHandoff.js).
+        ...(fareCheck ? { fareCheck } : {}),
         // Identifies THIS booking attempt, so a half-typed traveller draft
         // cannot be restored into a different one. A refresh keeps it (React
         // Router holds state in history.state); a new BOOK click makes a new
@@ -1361,9 +1364,9 @@ function FlightSearchPage() {
         <FlightFareOptions
           flight={fareFlight}
           onClose={() => setFareFlight(null)}
-          onSelect={(chosenFlight) => {
+          onSelect={(chosenFlight, fareCheck) => {
             setFareFlight(null);
-            handleBookFlight(chosenFlight);
+            handleBookFlight(chosenFlight, fareCheck);
           }}
         />
       )}

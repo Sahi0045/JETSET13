@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Check, Luggage, Briefcase, ShieldCheck, ArrowRight, Loader2 } from 'lucide-react';
 import Price from '../../../Components/Price';
 import apiConfig from '@/config/api';
+import { fareCheckFor } from '../../../utils/fareCheckHandoff';
 import { formatCheckedBag } from '../../../utils/baggage';
 
 const prettyFare = (opt) => {
@@ -105,20 +106,25 @@ function FlightFareOptions({ flight, onClose, onSelect }) {
    * chosen it and started on the traveller forms. It is found here instead,
    * and the customer stays on the results. Only that answer stops them: if the
    * check cannot be made, the review page and checkout both check again.
+   *
+   * It asks for the fare rules too, so the answer is the review page's own
+   * arrival check - one Amadeus session that priced the offer and read its
+   * rules - and is handed on rather than repeated (utils/fareCheckHandoff.js).
    */
   const stillSold = async (offer) => {
-    if (!offer) return true;
+    if (!offer) return { sold: true, fareCheck: null };
     try {
       const res = await fetch(apiConfig.endpoints.flights.price, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ flightOffer: offer }),
+        body: JSON.stringify({ flightOffer: offer, withFareRules: true }),
         signal: AbortSignal.timeout(15000),
       });
       const body = await res.json().catch(() => null);
-      return body?.code !== 'FARE_UNAVAILABLE';
+      if (body?.code === 'FARE_UNAVAILABLE') return { sold: false, fareCheck: null };
+      return { sold: true, fareCheck: res.ok && body?.success ? fareCheckFor(offer, body) : null };
     } catch {
-      return true;
+      return { sold: true, fareCheck: null };
     }
   };
 
@@ -128,21 +134,21 @@ function FlightFareOptions({ flight, onClose, onSelect }) {
     if (checkingKey) return;
     const key = keyOf(opt);
     setCheckingKey(key);
-    const sold = await stillSold(opt?.originalOffer || flight.originalOffer);
+    const { sold, fareCheck } = await stillSold(opt?.originalOffer || flight.originalOffer);
     setCheckingKey(null);
     if (!sold) {
       setWithdrawn((previous) => new Set(previous).add(key));
       return;
     }
-    choose(opt);
+    choose(opt, fareCheck);
   };
 
   // Merge a chosen fare option onto the base (display) flight, keeping booking data
-  const choose = (opt) => {
-    if (!opt) { onSelect(flight); return; }
+  const choose = (opt, fareCheck = null) => {
+    if (!opt) { onSelect(flight, fareCheck); return; }
     // A fare option is only bookable with its own offer. Falling back to the
     // clicked flight's offer showed one fare's price and booked another fare.
-    if (!opt.originalOffer) { onSelect(flight); return; }
+    if (!opt.originalOffer) { onSelect(flight, fareCheck); return; }
     const merged = {
       ...flight,
       price: opt.price || flight.price,
@@ -157,7 +163,7 @@ function FlightFareOptions({ flight, onClose, onSelect }) {
         : flight.baggage,
       originalOffer: opt.originalOffer,
     };
-    onSelect(merged);
+    onSelect(merged, fareCheck);
   };
 
   return (

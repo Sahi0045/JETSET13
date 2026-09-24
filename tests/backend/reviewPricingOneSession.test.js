@@ -134,6 +134,27 @@ describe('the review page prices and reads rules in one session', () => {
   });
 });
 
+describe('an answer from Amadeus is never asked again without a session', () => {
+  // Amadeus answering the in-session pricing with an error it maps to no
+  // refusal (a 502) is still its answer about this offer. The fallback priced
+  // it again statelessly - the same pair the certification review flagged.
+  const pricingError = `<?xml version="1.0" encoding="UTF-8"?><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:awsse="http://xml.amadeus.com/2010/06/Session_v3"><soap:Header><awsse:Session TransactionStatusCode="InSeries"><awsse:SessionId>S1</awsse:SessionId><awsse:SequenceNumber>1</awsse:SequenceNumber><awsse:SecurityToken>T</awsse:SecurityToken></awsse:Session></soap:Header><soap:Body><Fare_InformativePricingWithoutPNRReply xmlns="http://xml.amadeus.com/TIPNRR_24_3_1A"><errorGroup><errorOrWarningCodeDetails><errorDetails><errorCode>1</errorCode><errorCategory>EC</errorCategory></errorDetails></errorOrWarningCodeDetails><errorWarningDescription><freeText>NO VALID FARE/RULE COMBINATIONS FOR PRICING</freeText></errorWarningDescription></errorGroup></Fare_InformativePricingWithoutPNRReply></soap:Body></soap:Envelope>`;
+  const signOut = `<?xml version="1.0" encoding="UTF-8"?><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:awsse="http://xml.amadeus.com/2010/06/Session_v3"><soap:Header><awsse:Session TransactionStatusCode="End"><awsse:SessionId>S1</awsse:SessionId><awsse:SequenceNumber>2</awsse:SequenceNumber><awsse:SecurityToken>T</awsse:SecurityToken></awsse:Session></soap:Header><soap:Body><Security_SignOutReply xmlns="http://xml.amadeus.com/VLSSOR_04_1_1A"><processStatus><statusCode>P</statusCode></processStatus></Security_SignOutReply></soap:Body></soap:Envelope>`;
+
+  it('answers the error it got, having priced once, in the session', async () => {
+    axios.post
+      .mockResolvedValueOnce(reply(pricingError))
+      .mockResolvedValue(reply(signOut));
+    const app = await makeApp();
+
+    const res = await request(app).post('/api/flights/price')
+      .send({ flightOffer: await offerFrom('mptbs-oneway-jfk-lhr'), withFareRules: true });
+
+    expect(res.status).toBeGreaterThanOrEqual(500);
+    expect(pricings()).toEqual([{ op: 'Fare_InformativePricingWithoutPNR', session: 'Start' }]);
+  });
+});
+
 describe('/fare-rules is unchanged for the mobile app', () => {
   it('answers bags, rules and a cancellation policy as before', async () => {
     axios.post.mockResolvedValue(reply(fixture('informative-pricing')));

@@ -2216,6 +2216,16 @@ router.post('/search', validate({ body: flightSearchSchema }), async (req, res) 
   }
 });
 
+/**
+ * Whether a pricing failed without Amadeus answering it: no permit came free
+ * (SlotTimeoutError, or the transport's own "too many concurrent requests"), or
+ * the request went out and no whole reply came back (transportError, 504).
+ * A fault or an error reply is an answer, and is not this.
+ */
+const pricingUnanswered = (error) => error?.name === 'SlotTimeoutError'
+  || (error?.name === 'AmadeusSoapError' && Number(error.code) === 504)
+  || (error?.name !== 'AmadeusSoapError' && Number(error?.code) === 503);
+
 // Flight pricing endpoint
 router.post('/price', async (req, res) => {
   try {
@@ -2242,11 +2252,13 @@ router.post('/price', async (req, res) => {
       try {
         pricingResponse = await FlightProvider.getFiledFareRules(flightOffer, { refuseUnbookable: true });
       } catch (cause) {
-        // A fare the airline will not sell is the answer, not a reason to ask again.
-        if (isFareRefusal(cause)) throw cause;
-        // The session could not be had (an outage, no free slot). The price
-        // still matters more than the rules, so check it on its own.
-        console.warn('Priced with fare rules failed, pricing alone:', cause?.technicalError || cause?.message);
+        // Only when Amadeus never answered the pricing - no slot came free, or
+        // nothing came back - is the price worth asking for on its own. Any
+        // answer, a refusal or an error, is Amadeus's word on this offer, and
+        // asking again without a session would send the very stateful-then-
+        // stateless pair the certification review pointed out.
+        if (isFareRefusal(cause) || !pricingUnanswered(cause)) throw cause;
+        console.warn('Priced with fare rules got no answer, pricing alone:', cause?.technicalError || cause?.message);
         pricingResponse = await FlightProvider.priceFlightOffer(flightOffer);
       }
     } else {

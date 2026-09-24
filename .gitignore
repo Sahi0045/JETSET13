@@ -90,6 +90,9 @@ ds-bundle/
 # Regenerated per run, and carries the office id and WS username of whoever
 # recorded it. The pack goes to Amadeus directly, not through the repo.
 tests/fixtures/amadeus/certification/
+# The same, from scripts/certification-testcases.mjs (--out defaults here, and
+# carries real session ids and PNRs).
+certification-evidence*/
 
 # Local, not part of the site: launch videos made with the brag tool, Play
 # Store artwork, other coding tools' settings, Claude's local workspace

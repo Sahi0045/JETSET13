@@ -4,7 +4,7 @@ import Price from '../../../Components/Price';
 
 /**
  * `rules` is the review page's one fare check: { status: 'loading' | 'ready' |
- * 'failed', data: { bags, fareRules } }. This panel used to fetch
+ * 'failed' | 'refused', data: { bags, fareRules } }. This panel used to fetch
  * /flights/fare-rules itself - another pricing of an offer the page had
  * already priced.
  */

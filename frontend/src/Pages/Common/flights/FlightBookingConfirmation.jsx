@@ -28,6 +28,7 @@ import FlightCancellationPolicy from './FlightCancellationPolicy';
 import { searchToQuery } from './searchQuery';
 import { airportClockLabel, minutesBetweenAirportTimes, seatsLeftLabel } from './searchResults';
 import apiConfig from '@/config/api';
+import { handedFareCheck } from '../../../utils/fareCheckHandoff';
 // The same formula checkout verifies the charge with, so this page can never
 // quote a total the server will not accept.
 import { computeFlightCharge, PASSENGER_TYPES, travellerTypesOf } from '../../../../../shared/flightCharge';
@@ -154,7 +155,7 @@ function FlightBookingConfirmation() {
   const [pricedFare, setPricedFare] = useState(null);
   // The fare rules and bags from that same check - one stateful Amadeus session
   // prices the offer and reads its rules - for the cancellation and baggage
-  // panels: { status: 'loading' | 'ready' | 'failed', data }.
+  // panels: { status: 'loading' | 'ready' | 'failed' | 'refused', data }.
   const [fareRulesCheck, setFareRulesCheck] = useState({ status: 'loading', data: null });
   const [fareNotice, setFareNotice] = useState(null);
   // The notice a swap - another flight chosen, the travellers changed - puts
@@ -850,17 +851,26 @@ function FlightBookingConfirmation() {
     (async () => {
       try {
         // The price and the fare rules in one request, which the server answers
-        // from one Amadeus session (see /flights/price, withFareRules).
-        const res = await fetch(apiConfig.endpoints.flights.price, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ flightOffer: offer, withFareRules: true }),
-        });
-        const body = await res.json().catch(() => null);
+        // from one Amadeus session (see /flights/price, withFareRules). The check
+        // BOOK made on the results page a moment ago, for this very offer, stands
+        // in for it (utils/fareCheckHandoff.js).
+        const handed = handedFareCheck(reviewState, offer);
+        let res = { ok: true };
+        let body = handed;
+        if (!handed) {
+          res = await fetch(apiConfig.endpoints.flights.price, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ flightOffer: offer, withFareRules: true }),
+          });
+          body = await res.json().catch(() => null);
+        }
         if (cancelled) return;
         if (body?.code === 'FARE_UNAVAILABLE') {
           setFareGone(true);
-          setFareRulesCheck({ status: 'failed', data: null });
+          // The airline answered and refused the fare: its rules are moot, and
+          // "could not reach the airline" would be untrue.
+          setFareRulesCheck({ status: 'refused', data: null });
           setFareNotice('The airline can no longer sell this fare. The fares on sale now are below.');
           loadAlternatives(offer);
           return;

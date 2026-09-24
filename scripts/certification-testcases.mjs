@@ -172,17 +172,18 @@ const CASES = {
     title: 'Book a round trip for 1 ADT in business class',
     slug: '7-Book-RoundTrip-1ADT-Business',
     scenario: 'Book a Master Pricer recommendation for 1 adult in business class, round trip.',
-    comment: 'Search in business class. Review page: the price and the fare rules from ONE stateful session (Fare_InformativePricingWithoutPNR, then Fare_CheckRules on that pricing). Checkout, before the card is charged: a stateless price check, then the seats confirmed (Air_SellFromRecommendation + Fare_PricePNRWithBookingClass) in a session signed out without committing. After payment: a final stateless price check, then the booking chain: sell, PNR elements, FOP, price with booking class, TST, commit, queue, ticket, retrieve.',
+    comment: 'Search in business class. Choosing the fare and the review page: the price and the fare rules from ONE stateful session (Fare_InformativePricingWithoutPNR, then Fare_CheckRules on that pricing). Checkout, before the card is charged: a stateless price check, then the seats confirmed (Air_SellFromRecommendation + Fare_PricePNRWithBookingClass) in a session signed out without committing. After payment: a final stateless price check, then the booking chain: sell, PNR elements, FOP, price with booking class, TST, commit, queue, ticket, retrieve.',
     run: async () => {
       const search = await attempt('search business 1 ADT', () => FlightProvider.searchFlights({
         from: 'JFK', to: 'LHR', departDate: dateIn(35), returnDate: dateIn(42), adults: 1, travelClass: 'BUSINESS',
       }));
       const offer = ticketableOffer(search);
       if (!offer) return { skipped: 'no offer' };
-      // The review page, as /flights/price with withFareRules answers it. It
-      // used to price statelessly beside this session too - the duplicate
-      // Amadeus's review of this case (24 Sep 2026) pointed out.
-      await attempt('review page: price and fare rules in one session', () => FlightProvider.getFiledFareRules(offer, { refuseUnbookable: true }));
+      // BOOK on the results, whose answer the review page takes: /flights/price
+      // with withFareRules. The review page used to price statelessly beside
+      // this session too - the duplicate Amadeus's review of this case
+      // (24 Sep 2026) pointed out.
+      await attempt('fare chosen / review page: price and fare rules in one session', () => FlightProvider.getFiledFareRules(offer, { refuseUnbookable: true }));
       // Checkout, as flightCheckout.service asks /flights/price with confirmSeats.
       const checkedOut = await attempt('checkout: price check', () => FlightProvider.priceFlightOffer(offer));
       await attempt('checkout: seat check', () => FlightProvider.confirmSeats(checkedOut?.data?.flightOffers?.[0] ?? offer));

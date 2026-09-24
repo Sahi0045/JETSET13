@@ -36,14 +36,15 @@ const cur = (code) => {
 
 /**
  * `rules` is the review page's one fare check: { status: 'loading' | 'ready' |
- * 'failed', data: { cancellation, fareRules } }. The panel used to fetch the
+ * 'failed' | 'refused', data: { cancellation, fareRules } }. The panel used to fetch the
  * rules itself, and so did the baggage panel beside it - two more pricings of
  * the same offer next to the page's own price check.
  */
 function FlightCancellationPolicy({ flightOffer, fromCode, toCode, departureAt, rules: fareCheck }) {
   const [showPolicy, setShowPolicy] = useState(false);
   const loading = !fareCheck || fareCheck.status === 'loading';
-  // The airline could not be reached, as opposed to filing no rules.
+  // The airline could not be reached, as opposed to filing no rules. A fare it
+  // refused ('refused') reads like one with no rules on file.
   const unreachable = fareCheck?.status === 'failed';
   const c = fareCheck?.status === 'ready' ? fareCheck.data?.cancellation || null : null;
   const rules = fareCheck?.status === 'ready'

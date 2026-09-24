@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import FlightCard from '../../frontend/src/Pages/Common/flights/FlightCard.jsx';
 import FlightFareOptions from '../../frontend/src/Pages/Common/flights/FlightFareOptions.jsx';
+import { offerFingerprint } from '../../frontend/src/utils/fareCheckHandoff.js';
 
 /**
  * What a result says about its price, its seats and its fares.
@@ -88,6 +89,38 @@ describe('the fare options', () => {
       fireEvent.click(await screen.findByRole('button', { name: 'BOOK' }));
 
       await waitFor(() => expect(onSelect).toHaveBeenCalledTimes(1));
+    });
+
+    // The review page's own arrival question - the price with the fare rules,
+    // one Amadeus session - asked here and handed on, so the offer is not
+    // priced statelessly here and statefully again on arrival.
+    it('asks with the fare rules and hands the answer to the review page', async () => {
+      const priced = { success: true, data: { flightOffers: [{ price: { total: '400.00' } }] }, fareRules: { bags: [], fareRules: [], cancellation: null } };
+      answers(priced);
+      const onSelect = vi.fn();
+      render(<FlightFareOptions flight={flight()} onClose={() => {}} onSelect={onSelect} />);
+
+      fireEvent.click(await screen.findByRole('button', { name: 'BOOK' }));
+
+      await waitFor(() => expect(onSelect).toHaveBeenCalledTimes(1));
+      const priceCall = globalThis.fetch.mock.calls.find(([url]) => String(url).includes('/flights/price'));
+      expect(JSON.parse(priceCall[1].body).withFareRules).toBe(true);
+      const [, fareCheck] = onSelect.mock.calls[0];
+      expect(fareCheck.body).toEqual(priced);
+      expect(fareCheck.fingerprint).toBe(offerFingerprint(flight().originalOffer));
+    });
+
+    it('hands nothing on when the check could not be made', async () => {
+      globalThis.fetch = vi.fn((url) => (String(url).includes('upsell')
+        ? Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ success: true, data: [] }) })
+        : Promise.reject(new Error('offline'))));
+      const onSelect = vi.fn();
+      render(<FlightFareOptions flight={flight()} onClose={() => {}} onSelect={onSelect} />);
+
+      fireEvent.click(await screen.findByRole('button', { name: 'BOOK' }));
+
+      await waitFor(() => expect(onSelect).toHaveBeenCalledTimes(1));
+      expect(onSelect.mock.calls[0][1]).toBeNull();
     });
   });
 

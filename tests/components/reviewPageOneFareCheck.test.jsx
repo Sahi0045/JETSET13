@@ -2,6 +2,7 @@ import React from 'react';
 import { screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { offer, renderReviewPage, reviewFlight, segment } from './reviewPageHarness.jsx';
+import { FARE_CHECK_FRESH_MS, fareCheckFor } from '../../frontend/src/utils/fareCheckHandoff.js';
 
 /**
  * Amadeus's certification review (test case 7, 24 Sep 2026) asked why the
@@ -91,6 +92,27 @@ describe('the review page checks the fare once', () => {
     expect(fetch.ruleRequests).toHaveLength(0);
   });
 
+  // The airline answered and refused the fare. Saying it "could not be
+  // reached" was untrue, beside the banner saying it no longer sells the fare.
+  it('does not say the airline could not be reached when it refused the fare', async () => {
+    const fetch = vi.fn((url, init) => {
+      if (String(url).includes('/flights/price')) {
+        fetch.priceRequests.push(JSON.parse(init?.body || '{}'));
+        return answer({ success: false, code: 'FARE_UNAVAILABLE' }, false);
+      }
+      if (String(url).includes('/flights/search')) return answer({ success: true, data: [] });
+      return answer({}, false);
+    });
+    fetch.priceRequests = [];
+    vi.stubGlobal('fetch', fetch);
+
+    renderReviewPage(FlightBookingConfirmation, { state: { flightData: reviewFlight(fare()), searchData: { from: 'DEL', to: 'BOM', departDate: '2026-11-15' } } });
+
+    expect(await screen.findByText(/The airline can no longer sell this fare/)).toBeTruthy();
+    expect(screen.queryByText(/We could not reach the airline/)).toBeNull();
+    expect(screen.getByText(/Cancellation and date-change charges apply as per the airline's fare rules/)).toBeTruthy();
+  });
+
   it('says the rules could not be reached when the one check fails, and asks nothing more', async () => {
     const fetch = server({ priceOk: false });
     vi.stubGlobal('fetch', fetch);
@@ -101,5 +123,52 @@ describe('the review page checks the fare once', () => {
     expect(screen.getByText('Fare rules unavailable for this fare.')).toBeTruthy();
     await waitFor(() => expect(fetch.priceRequests).toHaveLength(1));
     expect(fetch.ruleRequests).toHaveLength(0);
+  });
+});
+
+// BOOK on the results page checks the fare with the rules - the same one-session
+// question - and hands the answer on. The review page priced the offer again
+// straight after: a stateless check on the results page, a stateful one here.
+describe('the check BOOK just made', () => {
+  const handedBody = (offer) => ({
+    success: true,
+    data: { flightOffers: [{ price: offer.price }] },
+    meta: {},
+    fareRules: RULES,
+  });
+
+  it('is taken instead of pricing the offer again', async () => {
+    const fetch = server();
+    vi.stubGlobal('fetch', fetch);
+    const offer = fare();
+
+    renderReviewPage(FlightBookingConfirmation, { state: {
+      flightData: reviewFlight(offer),
+      searchData: { from: 'DEL', to: 'BOM', departDate: '2026-11-15' },
+      fareCheck: fareCheckFor(offer, handedBody(offer)),
+    } });
+
+    expect((await screen.findAllByText('$150')).length).toBeGreaterThan(0);
+    expect(screen.getByText(/\+23 KG checked baggage/)).toBeTruthy();
+    expect(fetch.priceRequests).toHaveLength(0);
+    expect(fetch.ruleRequests).toHaveLength(0);
+  });
+
+  it('is not taken once it is stale, nor for another offer', async () => {
+    const offer = fare();
+    const stale = { ...fareCheckFor(offer, handedBody(offer)), checkedAt: Date.now() - FARE_CHECK_FRESH_MS - 1000 };
+    const other = fareCheckFor({ ...offer, price: { ...offer.price, total: '999.00', grandTotal: '999.00' } }, handedBody(offer));
+
+    for (const fareCheck of [stale, other]) {
+      const fetch = server();
+      vi.stubGlobal('fetch', fetch);
+      const { unmount } = renderReviewPage(FlightBookingConfirmation, { state: {
+        flightData: reviewFlight(offer), searchData: { from: 'DEL', to: 'BOM', departDate: '2026-11-15' }, fareCheck,
+      } });
+      await waitFor(() => expect(fetch.priceRequests).toHaveLength(1));
+      expect(fetch.priceRequests[0].withFareRules).toBe(true);
+      unmount?.();
+      vi.unstubAllGlobals();
+    }
   });
 });
