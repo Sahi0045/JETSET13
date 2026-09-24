@@ -28,6 +28,7 @@ import FlightCancellationPolicy from './FlightCancellationPolicy';
 import { searchToQuery } from './searchQuery';
 import { airportClockLabel, minutesBetweenAirportTimes, seatsLeftLabel } from './searchResults';
 import apiConfig from '@/config/api';
+import { handedFareCheck } from '../../../utils/fareCheckHandoff';
 // The same formula checkout verifies the charge with, so this page can never
 // quote a total the server will not accept.
 import { computeFlightCharge, PASSENGER_TYPES, travellerTypesOf } from '../../../../../shared/flightCharge';
@@ -152,6 +153,10 @@ function FlightBookingConfirmation() {
   // The airline's price for this offer, checked on arrival and again by the
   // server at checkout. Null until the check answers; the search price stands.
   const [pricedFare, setPricedFare] = useState(null);
+  // The fare rules and bags from that same check - one stateful Amadeus session
+  // prices the offer and reads its rules - for the cancellation and baggage
+  // panels: { status: 'loading' | 'ready' | 'failed' | 'refused', data }.
+  const [fareRulesCheck, setFareRulesCheck] = useState({ status: 'loading', data: null });
   const [fareNotice, setFareNotice] = useState(null);
   // The notice a swap - another flight chosen, the travellers changed - puts
   // up while the airline has yet to price the new offer. A failed check only
@@ -827,6 +832,7 @@ function FlightBookingConfirmation() {
     if (!bookingDetails || !offer) return undefined;
     let cancelled = false;
     setFareGone(false);
+    setFareRulesCheck({ status: 'loading', data: null });
     // A check that fails is said, not swallowed: the page used to go on
     // quoting the search price as if the airline had confirmed it.
     //
@@ -835,6 +841,7 @@ function FlightBookingConfirmation() {
     // exception: it is about this very check, so the warning joins it.
     const couldNotCheck = () => {
       if (cancelled) return;
+      setFareRulesCheck({ status: 'failed', data: null });
       const warning = "We couldn't check this fare with the airline just now. The total below is from your search. It is checked again before you pay, and nothing is charged if it has changed.";
       setFareNotice((notice) => {
         if (!notice) return warning;
@@ -843,15 +850,27 @@ function FlightBookingConfirmation() {
     };
     (async () => {
       try {
-        const res = await fetch(apiConfig.endpoints.flights.price, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ flightOffer: offer }),
-        });
-        const body = await res.json().catch(() => null);
+        // The price and the fare rules in one request, which the server answers
+        // from one Amadeus session (see /flights/price, withFareRules). The check
+        // BOOK made on the results page a moment ago, for this very offer, stands
+        // in for it (utils/fareCheckHandoff.js).
+        const handed = handedFareCheck(reviewState, offer);
+        let res = { ok: true };
+        let body = handed;
+        if (!handed) {
+          res = await fetch(apiConfig.endpoints.flights.price, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ flightOffer: offer, withFareRules: true }),
+          });
+          body = await res.json().catch(() => null);
+        }
         if (cancelled) return;
         if (body?.code === 'FARE_UNAVAILABLE') {
           setFareGone(true);
+          // The airline answered and refused the fare: its rules are moot, and
+          // "could not reach the airline" would be untrue.
+          setFareRulesCheck({ status: 'refused', data: null });
           setFareNotice('The airline can no longer sell this fare. The fares on sale now are below.');
           loadAlternatives(offer);
           return;
@@ -869,6 +888,9 @@ function FlightBookingConfirmation() {
         const flightPrice = reviewState?.flightData?.price;
         const searched = Number(flightPrice?.amount || flightPrice?.grandTotal || flightPrice?.total || offer?.price?.total || 0);
         setPricedFare({ total, base: Number(price.base) || null, currency: price.currency || null });
+        setFareRulesCheck(body?.fareRules
+          ? { status: 'ready', data: body.fareRules }
+          : { status: 'failed', data: null });
         // Whether the trip crosses a border, as the server decides it from its
         // full airport index - the answer checkout holds travellers to. The
         // page's own shorter airport list could call a trip domestic and hide
@@ -1840,6 +1862,7 @@ function FlightBookingConfirmation() {
             {reviewState?.flightData?.originalOffer && (
               <FlightCancellationPolicy
                 flightOffer={reviewState.flightData.originalOffer}
+                rules={fareRulesCheck}
                 fromCode={bookingDetails?.flight?.departureCode}
                 toCode={bookingDetails?.flight?.arrivalCode}
                 departureAt={reviewState.flightData.originalOffer?.itineraries?.[0]?.segments?.[0]?.departure?.at}
@@ -2274,6 +2297,7 @@ function FlightBookingConfirmation() {
                 <div className="booking-card-body">
                   <FlightFareRules
                     flightOffer={reviewState.flightData.originalOffer}
+                    rules={fareRulesCheck}
                   />
                 </div>
               </div>

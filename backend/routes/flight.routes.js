@@ -2216,6 +2216,16 @@ router.post('/search', validate({ body: flightSearchSchema }), async (req, res) 
   }
 });
 
+/**
+ * Whether a pricing failed without Amadeus answering it: no permit came free
+ * (SlotTimeoutError, or the transport's own "too many concurrent requests"), or
+ * the request went out and no whole reply came back (transportError, 504).
+ * A fault or an error reply is an answer, and is not this.
+ */
+const pricingUnanswered = (error) => error?.name === 'SlotTimeoutError'
+  || (error?.name === 'AmadeusSoapError' && Number(error.code) === 504)
+  || (error?.name !== 'AmadeusSoapError' && Number(error?.code) === 503);
+
 // Flight pricing endpoint
 router.post('/price', async (req, res) => {
   try {
@@ -2230,7 +2240,30 @@ router.post('/price', async (req, res) => {
       });
     }
 
-    const pricingResponse = await FlightProvider.priceFlightOffer(flightOffer);
+    // The review page asks for its price and its fare rules together, and gets
+    // both from ONE stateful session: informative pricing, then Fare_CheckRules
+    // on that pricing. It used to price the same offer three times - statelessly
+    // here, and statefully again from each of its two rule panels - which
+    // Amadeus's certification review (test case 7) rightly called redundant.
+    // Checkout does not ask, and keeps its single stateless price check.
+    const withFareRules = req.body.withFareRules === true;
+    let pricingResponse;
+    if (withFareRules) {
+      try {
+        pricingResponse = await FlightProvider.getFiledFareRules(flightOffer, { refuseUnbookable: true });
+      } catch (cause) {
+        // Only when Amadeus never answered the pricing - no slot came free, or
+        // nothing came back - is the price worth asking for on its own. Any
+        // answer, a refusal or an error, is Amadeus's word on this offer, and
+        // asking again without a session would send the very stateful-then-
+        // stateless pair the certification review pointed out.
+        if (isFareRefusal(cause) || !pricingUnanswered(cause)) throw cause;
+        console.warn('Priced with fare rules got no answer, pricing alone:', cause?.technicalError || cause?.message);
+        pricingResponse = await FlightProvider.priceFlightOffer(flightOffer);
+      }
+    } else {
+      pricingResponse = await FlightProvider.priceFlightOffer(flightOffer);
+    }
 
     if (!pricingResponse.success) {
       throw new Error(pricingResponse.error);
@@ -2278,6 +2311,7 @@ router.post('/price', async (req, res) => {
         // host that would do the booking, exactly as `international` does.
         bookingEnabled: providerStatus().bookingEnabled,
       },
+      ...(withFareRules ? { fareRules: fareRulesFrom(pricingResponse, flightOffer) } : {}),
       message: 'Flight priced successfully'
     });
 
@@ -2400,6 +2434,116 @@ router.post('/date-prices', async (req, res) => {
   }
 });
 
+/**
+ * Bags, rule notes and the cancellation policy a fare-rules panel shows, from a
+ * pricing reply (filed CheckRules text, or informative pricing's thinner text).
+ * Shared by /fare-rules (the mobile app) and /price with withFareRules (the
+ * web review page), so both panels read the same fare the same way.
+ */
+const fareRulesFrom = (priced, flightOffer) => {
+  const included = priced.included || {};
+
+  // Structured extra-baggage options
+  const bags = Object.values(included.bags || {}).map((b) => ({
+    quantity: b.quantity,
+    // A weight allowance and a piece count are different things; the client
+    // renders whichever it is given.
+    weight: b.weight,
+    weightUnit: b.weightUnit,
+    name: b.name,
+    price: b.price ? { amount: parseFloat(b.price.amount), currency: b.price.currencyCode } : null,
+    segmentIds: b.segmentIds || [],
+  }));
+
+  // Fare-rule notes (free text) — surface penalty/general categories
+  const rulesObj = included['detailed-fare-rules'] || {};
+  const fareRules = [];
+  Object.values(rulesObj).forEach((r) => {
+    const descs = r.fareNotes?.descriptions || [];
+    descs.forEach((d) => {
+      if (d.text) fareRules.push({ title: d.descriptionType || 'INFORMATION', text: d.text });
+    });
+  });
+
+  // ===== Derive a structured cancellation/change policy from the PENALTIES text =====
+  const penaltyText = fareRules
+    .filter((r) => /PENALT|CANCEL|REISSUE|CHANGE|REFUND/i.test((r.title || '') + ' ' + (r.text || '')))
+    .map((r) => r.text)
+    .join(' \n ')
+    .toUpperCase();
+
+  let cancellation = null;
+  if (penaltyText) {
+    // All "CHARGE <CUR> <amount>" occurrences with their position in the text
+    const charges = [];
+    const re = /CHARGE\s+([A-Z]{3})\s+([\d,]+(?:\.\d+)?)/g;
+    let m;
+    while ((m = re.exec(penaltyText)) !== null) {
+      // Not rounded: a 75.50 penalty was shown to the customer as 76.
+      charges.push({ currency: m[1], amount: parseFloat(m[2].replace(/,/g, '')), index: m.index });
+    }
+
+    const changeIdx = penaltyText.search(/CHANGE|REISSUE|REVALIDATION/);
+    const cancelIdx = penaltyText.search(/CANCELLATION|CANCEL\b|REFUND/);
+
+    // A fee belongs to its own mention, and stops at the next one.
+    //
+    // This took the first charge at or after its anchor and never stopped at
+    // the following anchor, so filed text ordered
+    // "CANCELLATION ... NO SHOW ... CHANGES CHARGE USD 200" gave
+    // cancelIdx < changeIdx < charge.index and BOTH fees resolved to the same
+    // 200: the panel printed "Cancellation fee: $200" for a fare whose rules
+    // never stated one. Since the move to filed rules this scraper reads
+    // whole CheckRules sections - ~184 lines for a DEL-BOM fare - so the
+    // distance between an anchor and an unrelated charge is far larger than
+    // it was.
+    const anchors = [changeIdx, cancelIdx].filter((i) => i >= 0).sort((a, b) => a - b);
+    const nearest = (anchor) => {
+      if (anchor < 0 || charges.length === 0) return null;
+      const next = anchors.find((i) => i > anchor);
+      const within = charges
+        .filter((c) => c.index >= anchor && (next === undefined || c.index < next))
+        .sort((a, b) => a.index - b.index)[0];
+      return within || null;
+    };
+
+    // Each fee only from its own mention. The cancellation fee used to fall
+    // back to the change fee, and either one to the first charge anywhere in
+    // the text - the page then printed a change fee as the cost of cancelling.
+    const changeCharge = nearest(changeIdx);
+    const cancelCharge = nearest(cancelIdx);
+
+    // Cutoff window, e.g. "TILL 02 HRS" / "WITHIN 4 HOURS" / "4 HOURS BEFORE".
+    // Null when the rules do not say: this defaulted to 4 hours, which the
+    // page drew as a precise deadline.
+    const cutoffMatch = penaltyText.match(/TILL\s+0?(\d{1,2})\s*HRS?/) ||
+      penaltyText.match(/WITHIN\s+0?(\d{1,2})\s*H(?:OUR|RS?)/) ||
+      penaltyText.match(/0?(\d{1,2})\s*HOURS?\s+(?:BEFORE|PRIOR)/);
+    const cutoffHours = cutoffMatch ? parseInt(cutoffMatch[1], 10) : null;
+
+    const isNonRefundable = /NON[\s-]?REFUND/i.test(penaltyText);
+
+    // Refundability as the fare itself states it (null when it does not).
+    // This read `refundableTaxes`, a tax amount, as a yes/no answer.
+    const refundableFlag = flightOffer._ama?.refundable ?? (isNonRefundable ? false : null);
+
+    cancellation = {
+      hasData: charges.length > 0 || cutoffMatch != null,
+      // Fall back to the fare's own currency, not a fixed one: offers are
+      // priced in the office currency and ARC Pay charges in it.
+      currency: (cancelCharge || changeCharge)?.currency || flightOffer.price?.currency || 'USD',
+      cutoffHours,
+      changeFee: changeCharge?.amount ?? null,
+      cancelFee: cancelCharge?.amount ?? null,
+      refundable: refundableFlag,
+      fareTotal: flightOffer.price ? parseFloat(flightOffer.price.grandTotal || flightOffer.price.total) : null,
+      fareCurrency: flightOffer.price?.currency || null,
+    };
+  }
+
+  return { bags, fareRules: fareRules.slice(0, 8), cancellation };
+};
+
 // Fare rules + extra-bag prices for a chosen flight offer
 router.post('/fare-rules', async (req, res) => {
   try {
@@ -2422,107 +2566,7 @@ router.post('/fare-rules', async (req, res) => {
       });
     }
 
-    const included = priced.included || {};
-
-    // Structured extra-baggage options
-    const bags = Object.values(included.bags || {}).map((b) => ({
-      quantity: b.quantity,
-      // A weight allowance and a piece count are different things; the client
-      // renders whichever it is given.
-      weight: b.weight,
-      weightUnit: b.weightUnit,
-      name: b.name,
-      price: b.price ? { amount: parseFloat(b.price.amount), currency: b.price.currencyCode } : null,
-      segmentIds: b.segmentIds || [],
-    }));
-
-    // Fare-rule notes (free text) — surface penalty/general categories
-    const rulesObj = included['detailed-fare-rules'] || {};
-    const fareRules = [];
-    Object.values(rulesObj).forEach((r) => {
-      const descs = r.fareNotes?.descriptions || [];
-      descs.forEach((d) => {
-        if (d.text) fareRules.push({ title: d.descriptionType || 'INFORMATION', text: d.text });
-      });
-    });
-
-    // ===== Derive a structured cancellation/change policy from the PENALTIES text =====
-    const penaltyText = fareRules
-      .filter((r) => /PENALT|CANCEL|REISSUE|CHANGE|REFUND/i.test((r.title || '') + ' ' + (r.text || '')))
-      .map((r) => r.text)
-      .join(' \n ')
-      .toUpperCase();
-
-    let cancellation = null;
-    if (penaltyText) {
-      // All "CHARGE <CUR> <amount>" occurrences with their position in the text
-      const charges = [];
-      const re = /CHARGE\s+([A-Z]{3})\s+([\d,]+(?:\.\d+)?)/g;
-      let m;
-      while ((m = re.exec(penaltyText)) !== null) {
-        // Not rounded: a 75.50 penalty was shown to the customer as 76.
-        charges.push({ currency: m[1], amount: parseFloat(m[2].replace(/,/g, '')), index: m.index });
-      }
-
-      const changeIdx = penaltyText.search(/CHANGE|REISSUE|REVALIDATION/);
-      const cancelIdx = penaltyText.search(/CANCELLATION|CANCEL\b|REFUND/);
-
-      // A fee belongs to its own mention, and stops at the next one.
-      //
-      // This took the first charge at or after its anchor and never stopped at
-      // the following anchor, so filed text ordered
-      // "CANCELLATION ... NO SHOW ... CHANGES CHARGE USD 200" gave
-      // cancelIdx < changeIdx < charge.index and BOTH fees resolved to the same
-      // 200: the panel printed "Cancellation fee: $200" for a fare whose rules
-      // never stated one. Since the move to filed rules this scraper reads
-      // whole CheckRules sections - ~184 lines for a DEL-BOM fare - so the
-      // distance between an anchor and an unrelated charge is far larger than
-      // it was.
-      const anchors = [changeIdx, cancelIdx].filter((i) => i >= 0).sort((a, b) => a - b);
-      const nearest = (anchor) => {
-        if (anchor < 0 || charges.length === 0) return null;
-        const next = anchors.find((i) => i > anchor);
-        const within = charges
-          .filter((c) => c.index >= anchor && (next === undefined || c.index < next))
-          .sort((a, b) => a.index - b.index)[0];
-        return within || null;
-      };
-
-      // Each fee only from its own mention. The cancellation fee used to fall
-      // back to the change fee, and either one to the first charge anywhere in
-      // the text - the page then printed a change fee as the cost of cancelling.
-      const changeCharge = nearest(changeIdx);
-      const cancelCharge = nearest(cancelIdx);
-
-      // Cutoff window, e.g. "TILL 02 HRS" / "WITHIN 4 HOURS" / "4 HOURS BEFORE".
-      // Null when the rules do not say: this defaulted to 4 hours, which the
-      // page drew as a precise deadline.
-      const cutoffMatch = penaltyText.match(/TILL\s+0?(\d{1,2})\s*HRS?/) ||
-        penaltyText.match(/WITHIN\s+0?(\d{1,2})\s*H(?:OUR|RS?)/) ||
-        penaltyText.match(/0?(\d{1,2})\s*HOURS?\s+(?:BEFORE|PRIOR)/);
-      const cutoffHours = cutoffMatch ? parseInt(cutoffMatch[1], 10) : null;
-
-      const isNonRefundable = /NON[\s-]?REFUND/i.test(penaltyText);
-
-      // Refundability as the fare itself states it (null when it does not).
-      // This read `refundableTaxes`, a tax amount, as a yes/no answer.
-      const refundableFlag = flightOffer._ama?.refundable ?? (isNonRefundable ? false : null);
-
-      cancellation = {
-        hasData: charges.length > 0 || cutoffMatch != null,
-        // Fall back to the fare's own currency, not a fixed one: offers are
-        // priced in the office currency and ARC Pay charges in it.
-        currency: (cancelCharge || changeCharge)?.currency || flightOffer.price?.currency || 'USD',
-        cutoffHours,
-        changeFee: changeCharge?.amount ?? null,
-        cancelFee: cancelCharge?.amount ?? null,
-        refundable: refundableFlag,
-        fareTotal: flightOffer.price ? parseFloat(flightOffer.price.grandTotal || flightOffer.price.total) : null,
-        fareCurrency: flightOffer.price?.currency || null,
-      };
-    }
-
-    res.json({ success: true, bags, fareRules: fareRules.slice(0, 8), cancellation });
+    res.json({ success: true, ...fareRulesFrom(priced, flightOffer) });
   } catch (error) {
     console.error('❌ Fare-rules error:', error);
     // A failure, reported as one. A 200 with empty lists read to every caller

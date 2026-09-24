@@ -175,6 +175,38 @@ const searchFlights = async (params) => {
  * through, plus the `included` block /fare-rules reshapes.
  */
 /**
+ * Refuses an offer this office cannot ticket, before anything is priced.
+ *
+ * Every pricing that tells a customer "this fare is on sale" has to ask this
+ * first: the review page used to rely on the stateless price check alone, so
+ * pricing it statefully without these checks would show a flight as bookable
+ * that checkout then refuses.
+ */
+const refuseUnbookable = (offer, config) => {
+  // An offer found before its carrier was listed, or from a cached search.
+  if (cannotTicket(offer, config.unticketableCarriers)) {
+    throw new AmadeusSoapError({
+      error: 'This airline cannot be booked with us online - please choose another flight',
+      code: 409,
+      technicalError: `validating carrier ${ticketingCarrierOf(offer)} is one this office cannot ticket (AMADEUS_WS_UNTICKETABLE_CARRIERS)`,
+      operation: 'Fare_InformativePricingWithoutPNR',
+    });
+  }
+
+  // One airline's stock carrying another's flight. Nothing before payment can
+  // tell whether this office holds the agreement - sell and price both succeed
+  // and only issuance refuses - so a replayed offer is stopped here too.
+  if (interlineNotAllowed(offer, config.interline)) {
+    throw new AmadeusSoapError({
+      error: 'This itinerary cannot be ticketed as one booking - please choose another flight',
+      code: 409,
+      technicalError: `interline ticketing not confirmed for ${interlinePairsOf(offer).join(', ')} (AMADEUS_WS_INTERLINE_BLOCKED_PAIRS)`,
+      operation: 'Fare_InformativePricingWithoutPNR',
+    });
+  }
+};
+
+/**
  * Filed fare rules for an offer, before any booking exists.
  *
  * Runs informative pricing and Fare_CheckRules in ONE session. CheckRules
@@ -184,8 +216,13 @@ const searchFlights = async (params) => {
  *
  * Falls back to the informative-pricing rule text rather than failing: thin
  * conditions beat none, and this sits on the review page.
+ *
+ * `refuseUnbookable` makes it a price check as well: the review page takes the
+ * customer's price from this session (Amadeus certification review, test case
+ * 7: pricing the same offer statelessly beside it was a duplicate), so it has to
+ * refuse what priceFlightOffer refuses.
  */
-const getFiledFareRules = async (flightOffer, { sections = DEFAULT_RULE_SECTIONS } = {}) => {
+const getFiledFareRules = async (flightOffer, { sections = DEFAULT_RULE_SECTIONS, refuseUnbookable: guard = false } = {}) => {
   const config = getWsConfig();
   const offer = flightOffer?.originalOffer ?? flightOffer;
   const ama = offer?._ama;
@@ -198,6 +235,8 @@ const getFiledFareRules = async (flightOffer, { sections = DEFAULT_RULE_SECTIONS
       operation: 'Fare_CheckRules',
     });
   }
+
+  if (guard) refuseUnbookable(offer, config);
 
   return withSession(async (ctx) => {
     const pricing = await ctx.call('Fare_InformativePricingWithoutPNR', buildInformativePricingBody({
@@ -304,27 +343,7 @@ const priceFlightOffer = async (flightOffer) => {
     });
   }
 
-  // An offer found before its carrier was listed, or from a cached search.
-  if (cannotTicket(offer, config.unticketableCarriers)) {
-    throw new AmadeusSoapError({
-      error: 'This airline cannot be booked with us online - please choose another flight',
-      code: 409,
-      technicalError: `validating carrier ${ticketingCarrierOf(offer)} is one this office cannot ticket (AMADEUS_WS_UNTICKETABLE_CARRIERS)`,
-      operation: 'Fare_InformativePricingWithoutPNR',
-    });
-  }
-
-  // One airline's stock carrying another's flight. Nothing before payment can
-  // tell whether this office holds the agreement - sell and price both succeed
-  // and only issuance refuses - so a replayed offer is stopped here too.
-  if (interlineNotAllowed(offer, config.interline)) {
-    throw new AmadeusSoapError({
-      error: 'This itinerary cannot be ticketed as one booking - please choose another flight',
-      code: 409,
-      technicalError: `interline ticketing not confirmed for ${interlinePairsOf(offer).join(', ')} (AMADEUS_WS_INTERLINE_BLOCKED_PAIRS)`,
-      operation: 'Fare_InformativePricingWithoutPNR',
-    });
-  }
+  refuseUnbookable(offer, config);
 
   const result = await callStateless('Fare_InformativePricingWithoutPNR', buildInformativePricingBody({
     paxRefs: ama.paxRefs,
