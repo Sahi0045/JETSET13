@@ -1,12 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Loader2, Luggage, ChevronDown, FileText, Check } from 'lucide-react';
 import Price from '../../../Components/Price';
-import apiConfig from '@/config/api';
 
-function FlightFareRules({ flightOffer, onBagsChange }) {
-  const [loading, setLoading] = useState(true);
-  const [bags, setBags] = useState([]);
-  const [fareRules, setFareRules] = useState([]);
+/**
+ * `rules` is the review page's one fare check: { status: 'loading' | 'ready' |
+ * 'failed', data: { bags, fareRules } }. This panel used to fetch
+ * /flights/fare-rules itself - another pricing of an offer the page had
+ * already priced.
+ */
+function FlightFareRules({ flightOffer, onBagsChange, rules: fareCheck }) {
+  const loading = Boolean(flightOffer) && (!fareCheck || fareCheck.status === 'loading');
+  const ready = fareCheck?.status === 'ready';
+  const bags = ready ? fareCheck.data?.bags || [] : [];
+  const fareRules = ready ? fareCheck.data?.fareRules || [] : [];
   const [openRule, setOpenRule] = useState(null);
   const [selectedBagIdx, setSelectedBagIdx] = useState([]);
   const selectable = typeof onBagsChange === 'function';
@@ -20,34 +26,6 @@ function FlightFareRules({ flightOffer, onBagsChange }) {
     const total = chosen.reduce((sum, b) => sum + (b.price?.amount || 0), 0);
     onBagsChange?.(chosen, total);
   };
-
-  useEffect(() => {
-    if (!flightOffer) { setLoading(false); return; }
-    let cancelled = false;
-    const controller = new AbortController();
-
-    (async () => {
-      setLoading(true);
-      try {
-        const res = await fetch(apiConfig.endpoints.flights.fareRules, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ flightOffer }),
-          signal: controller.signal,
-        });
-        const data = await res.json();
-        if (cancelled) return;
-        setBags(data.bags || []);
-        setFareRules(data.fareRules || []);
-      } catch (e) {
-        if (!cancelled && e.name !== 'AbortError') { setBags([]); setFareRules([]); }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-
-    return () => { cancelled = true; controller.abort(); };
-  }, [flightOffer]);
 
   if (loading) {
     return (

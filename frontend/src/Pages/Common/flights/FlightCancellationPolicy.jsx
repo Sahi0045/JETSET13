@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Plane, ChevronDown, Loader2 } from 'lucide-react';
-import apiConfig from '@/config/api';
 
 // Segment times are the departure airport's wall clock with no offset
 // ("2026-11-15T10:30:00"). They are held in UTC and formatted in UTC so they
@@ -35,42 +34,21 @@ const cur = (code) => {
   return `${c} `;
 };
 
-function FlightCancellationPolicy({ flightOffer, fromCode, toCode, departureAt }) {
-  const [loading, setLoading] = useState(true);
-  const [c, setC] = useState(null);
-  const [rules, setRules] = useState([]);
-  // The airline could not be reached, as opposed to filing no rules.
-  const [unreachable, setUnreachable] = useState(false);
+/**
+ * `rules` is the review page's one fare check: { status: 'loading' | 'ready' |
+ * 'failed', data: { cancellation, fareRules } }. The panel used to fetch the
+ * rules itself, and so did the baggage panel beside it - two more pricings of
+ * the same offer next to the page's own price check.
+ */
+function FlightCancellationPolicy({ flightOffer, fromCode, toCode, departureAt, rules: fareCheck }) {
   const [showPolicy, setShowPolicy] = useState(false);
-
-  useEffect(() => {
-    if (!flightOffer) { setLoading(false); return; }
-    let cancelled = false;
-    const controller = new AbortController();
-    (async () => {
-      setLoading(true);
-      setUnreachable(false);
-      try {
-        const res = await fetch(apiConfig.endpoints.flights.fareRules, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ flightOffer }),
-          signal: controller.signal,
-        });
-        const data = await res.json();
-        if (cancelled) return;
-        setC(data.cancellation || null);
-        setRules((data.fareRules || []).filter(r => /PENALT|CANCEL|CHANGE|REISSUE|REFUND/i.test((r.title || '') + (r.text || ''))));
-      } catch (e) {
-        // A TimeoutError is not an AbortError: the deadline firing means we do
-        // not KNOW the rules, which is different from the airline filing none.
-        if (!cancelled && e.name !== 'AbortError') { setC(null); setUnreachable(true); }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; controller.abort(); };
-  }, [flightOffer]);
+  const loading = !fareCheck || fareCheck.status === 'loading';
+  // The airline could not be reached, as opposed to filing no rules.
+  const unreachable = fareCheck?.status === 'failed';
+  const c = fareCheck?.status === 'ready' ? fareCheck.data?.cancellation || null : null;
+  const rules = fareCheck?.status === 'ready'
+    ? (fareCheck.data?.fareRules || []).filter(r => /PENALT|CANCEL|CHANGE|REISSUE|REFUND/i.test((r.title || '') + (r.text || '')))
+    : [];
 
   if (!flightOffer) return null;
 

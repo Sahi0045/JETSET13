@@ -104,14 +104,17 @@ describe('the cancellation deadline', () => {
 
   // Labelled "your time", but the times are the departure airport's clock.
   it("says it is on the departure airport's clock, and prints that clock", async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      json: async () => ({
+    // The review page's one fare check hands the panel its rules; the panel no
+    // longer fetches them itself.
+    const rules = {
+      status: 'ready',
+      data: {
         cancellation: { hasData: true, cutoffHours: 24, cancelFee: 150, currency: 'USD', refundable: true },
         fareRules: [],
-      }),
-    }));
+      },
+    };
 
-    render(<FlightCancellationPolicy flightOffer={{ id: '1' }} fromCode="JFK" toCode="LHR" departureAt="2026-11-15T22:40:00" />);
+    render(<FlightCancellationPolicy flightOffer={{ id: '1' }} fromCode="JFK" toCode="LHR" departureAt="2026-11-15T22:40:00" rules={rules} />);
 
     expect(await screen.findByText('Cancel between (JFK local time) :')).toBeTruthy();
     // Departure, and the cutoff 24 hours before it.

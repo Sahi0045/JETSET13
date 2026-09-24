@@ -172,23 +172,31 @@ const CASES = {
     title: 'Book a round trip for 1 ADT in business class',
     slug: '7-Book-RoundTrip-1ADT-Business',
     scenario: 'Book a Master Pricer recommendation for 1 adult in business class, round trip.',
-    comment: 'Search in business class, informative pricing, fare rules, then the booking chain: sell, PNR elements, FOP, price with booking class, TST, commit, queue, ticket, retrieve.',
+    comment: 'Search in business class. Review page: the price and the fare rules from ONE stateful session (Fare_InformativePricingWithoutPNR, then Fare_CheckRules on that pricing). Checkout, before the card is charged: a stateless price check, then the seats confirmed (Air_SellFromRecommendation + Fare_PricePNRWithBookingClass) in a session signed out without committing. After payment: a final stateless price check, then the booking chain: sell, PNR elements, FOP, price with booking class, TST, commit, queue, ticket, retrieve.',
     run: async () => {
       const search = await attempt('search business 1 ADT', () => FlightProvider.searchFlights({
         from: 'JFK', to: 'LHR', departDate: dateIn(35), returnDate: dateIn(42), adults: 1, travelClass: 'BUSINESS',
       }));
       const offer = ticketableOffer(search);
       if (!offer) return { skipped: 'no offer' };
-      await attempt('informative pricing', () => FlightProvider.priceFlightOffer(offer));
-      await attempt('fare rules', () => FlightProvider.getFiledFareRules(offer));
+      // The review page, as /flights/price with withFareRules answers it. It
+      // used to price statelessly beside this session too - the duplicate
+      // Amadeus's review of this case (24 Sep 2026) pointed out.
+      await attempt('review page: price and fare rules in one session', () => FlightProvider.getFiledFareRules(offer, { refuseUnbookable: true }));
+      // Checkout, as flightCheckout.service asks /flights/price with confirmSeats.
+      const checkedOut = await attempt('checkout: price check', () => FlightProvider.priceFlightOffer(offer));
+      await attempt('checkout: seat check', () => FlightProvider.confirmSeats(checkedOut?.data?.flightOffers?.[0] ?? offer));
+      // The order route prices once more and books the offer it priced.
+      const repriced = await attempt('order: price check', () => FlightProvider.priceFlightOffer(offer));
+      const booked = repriced?.data?.flightOffers?.[0] ?? offer;
       const order = await attempt('book', () => FlightProvider.createFlightOrder({
         data: {
           type: 'flight-order',
-          flightOffers: [offer],
+          flightOffers: [booked],
           travelers: [traveller(1, 'JOHN', 'CERTONE', '1990-01-01', 'ADULT')],
           contacts,
         },
-      }, bookingOptions(offer, `CERT7-${Date.now()}`)));
+      }, bookingOptions(booked, `CERT7-${Date.now()}`)));
       if (order?.pnr) await attempt('retrieve', () => FlightProvider.getFlightOrderDetails(order.pnr));
       return { pnr: order?.pnr ?? null, ticketed: order?.ticketed ?? false, tickets: (order?.tickets ?? []).map((t) => t.number) };
     },
