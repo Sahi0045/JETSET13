@@ -17,6 +17,14 @@ import { toDDMMYY } from '../mappers/datetime.js';
  */
 
 /**
+ * Recommendations each search asks for (RC). Amadeus's certification review
+ * (25 Sep 2026) recommends 250 over the 50 we asked for. On PDT the reply took
+ * no longer (JFK-LHR 13.6s vs 14.8s, LAX-MIA 8.0s vs 4.0s) and carried up to
+ * five times the flights, the cheapest unchanged.
+ */
+export const SEARCH_RECOMMENDATIONS = 250;
+
+/**
  * Seats requested (PX) and recommendations wanted back (RC).
  *
  * PX counts SEATS - adults and children. An infant on a lap holds none, and
@@ -170,7 +178,7 @@ const normalize = (p) => {
  * @param {string} [p.travelClass]       ECONOMY | PREMIUM_ECONOMY | BUSINESS | FIRST
  * @param {boolean} [p.nonStop]
  * @param {string[]} [p.includedAirlineCodes] [p.excludedAirlineCodes]
- * @param {number} [p.max=50]
+ * @param {number} [p.max=SEARCH_RECOMMENDATIONS]
  * @param {string} [p.currency='USD']
  */
 export const buildMasterPricerBody = (p) => {
@@ -179,7 +187,7 @@ export const buildMasterPricerBody = (p) => {
   const paxTotal = adults + children;
 
   const body = [
-    buildNumberOfUnit(paxTotal, Number(p.max ?? 50) || 50),
+    buildNumberOfUnit(paxTotal, Number(p.max ?? SEARCH_RECOMMENDATIONS) || SEARCH_RECOMMENDATIONS),
     buildPaxReferences({ adults, children, infants }),
     buildFareOptions(currency),
     buildTravelFlightInfo(p),

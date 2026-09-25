@@ -2113,7 +2113,6 @@ router.post('/search', validate({ body: flightSearchSchema }), async (req, res) 
       adults: parseInt(req.body.adults || travelers) || 1,
       children: parseInt(req.body.children) || 0,
       infants: parseInt(req.body.infants) || 0,
-      max: 50,
       travelClass: req.body.travelClass,
       nonStop: req.body.nonStop === 'true' || req.body.nonStop === true,
       maxPrice: req.body.maxPrice,

@@ -4,7 +4,7 @@ import { isCityCode, resolveToIata, searchLocations as searchAirports } from '..
 import { getWsConfig } from './config.js';
 import { AmadeusSoapError, inspectReply } from './errors.js';
 import { mapMasterPricerReply } from './mappers/offer.js';
-import { buildMasterPricerBody } from './operations/masterPricer.js';
+import { buildMasterPricerBody, SEARCH_RECOMMENDATIONS } from './operations/masterPricer.js';
 import { buildInformativePricingBody } from './operations/informativePricing.js';
 import { DEFAULT_RULE_SECTIONS, buildCheckRulesBody, readCheckRulesReply } from './operations/fareRules.js';
 import { buildFlightInfoBody, readFlightInfoError, readFlightInfoReply } from './operations/flightInfo.js';
@@ -101,7 +101,7 @@ const searchFlights = async (params) => {
     nonStop: params.nonStop === true || params.nonStop === 'true',
     includedAirlineCodes: params.includedAirlineCodes,
     excludedAirlineCodes: params.excludedAirlineCodes,
-    max: Number(params.max ?? 50) || 50,
+    max: Number(params.max ?? SEARCH_RECOMMENDATIONS) || SEARCH_RECOMMENDATIONS,
     currency: config.currency,
   };
 
