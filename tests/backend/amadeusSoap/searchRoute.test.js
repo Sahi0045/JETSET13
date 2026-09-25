@@ -364,3 +364,20 @@ describe('GET /api/flights/health', () => {
     expect(body).not.toContain('WSTEST');
   });
 });
+
+describe('how many flights a search asks for', () => {
+  // Amadeus's certification review (25 Sep 2026) recommends 250
+  // recommendations over the 50 the route asked for.
+  it('asks Amadeus for 250 recommendations', async () => {
+    axios.post.mockReset();
+    axios.post.mockResolvedValue(reply(fixture('mptbs-nonstop-business')));
+    const app = await makeApp();
+
+    await request(app).post('/api/flights/search').send({ from: 'JFK', to: 'LHR', departDate: inDays(61), adults: 2 });
+
+    const [, body] = axios.post.mock.calls[0];
+    const units = [...String(body).matchAll(/<numberOfUnits>(\d+)<\/numberOfUnits><typeOfUnit>(\w+)<\/typeOfUnit>/g)]
+      .map(([, count, type]) => [type, count]);
+    expect(Object.fromEntries(units)).toEqual({ PX: '2', RC: '250' });
+  });
+});

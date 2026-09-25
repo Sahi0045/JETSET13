@@ -159,7 +159,7 @@ const CASES = {
     title: 'Search 2 ADT',
     slug: '2-Search-2ADT',
     scenario: 'Search a round trip for 2 adults (Fare_MasterPricerTravelBoardSearch).',
-    comment: 'Stateless search. JFK-LHR round trip, 2 adults, economy. One Master Pricer query, 50 recommendations requested.',
+    comment: 'Stateless search. JFK-LHR round trip, 2 adults, economy. One Master Pricer query, 250 recommendations requested.',
     run: async () => {
       const search = await attempt('search 2 ADT', () => FlightProvider.searchFlights({
         from: 'JFK', to: 'LHR', departDate: dateIn(35), returnDate: dateIn(42), adults: 2,
