@@ -83,7 +83,7 @@ describe('the review page checks the fare once', () => {
     renderReviewPage(FlightBookingConfirmation, { state: { flightData: reviewFlight(fare()), searchData: { from: 'DEL', to: 'BOM', departDate: '2026-11-15' } } });
 
     // The cancellation panel reads the fee from the one answer...
-    expect((await screen.findAllByText('$150')).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText('US$150')).length).toBeGreaterThan(0);
     // ...and so does the baggage and rules panel.
     expect(screen.getByText(/\+23 KG checked baggage/)).toBeTruthy();
     expect(fetch.priceRequests).toHaveLength(1);
@@ -148,7 +148,7 @@ describe('the check BOOK just made', () => {
       fareCheck: fareCheckFor(offer, handedBody(offer)),
     } });
 
-    expect((await screen.findAllByText('$150')).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText('US$150')).length).toBeGreaterThan(0);
     expect(screen.getByText(/\+23 KG checked baggage/)).toBeTruthy();
     expect(fetch.priceRequests).toHaveLength(0);
     expect(fetch.ruleRequests).toHaveLength(0);

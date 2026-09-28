@@ -56,6 +56,31 @@ export function describeServiceFee({ fixedFeeByType, percentage, percentageFee }
 }
 
 /**
+ * A fee the airline filed in its own currency, in US dollars, or null when
+ * there is nothing honest to show.
+ *
+ * Fare rules state penalties in the currency the airline filed them in - on
+ * PDT, DEL-EWR fares said USD 300 (Delta), INR 14000 (Virgin) and EUR 150
+ * (LOT) - while the fare is charged in dollars. A US-dollar fee is itself; any
+ * other is converted only at a live rate, for the same reason approximateCharge
+ * shows nothing from the hardcoded table.
+ *
+ * @param {number} amount   in `currency`
+ * @param {string} currency the fee's own currency
+ * @param {{ rate?: number, ratesLive?: boolean }} options `rate` is units of `currency` per US dollar
+ * @returns {number | null}
+ */
+export function feeInUsd(amount, currency, { rate, ratesLive } = {}) {
+  const fee = Number(amount);
+  if (!Number.isFinite(fee) || fee < 0 || !currency) return null;
+  if (currency === CHARGE_CURRENCY) return fee;
+  const perDollar = Number(rate);
+  // 1 for another currency is the lookup's default for one it does not know.
+  if (ratesLive !== true || !Number.isFinite(perDollar) || perDollar <= 0 || perDollar === 1) return null;
+  return fee / perDollar;
+}
+
+/**
  * The charge in the visitor's display currency, or null when there is nothing
  * honest to show: they browse in US dollars already, or the rate is not a live
  * one. A hardcoded rate printed beside a charge reads as a quote, so the dollar
