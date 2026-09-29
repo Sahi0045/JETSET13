@@ -23,3 +23,25 @@ export const voidsPayment = (t) => succeeded(t) && VOIDS_OF_MONEY_TAKEN.has(Stri
  */
 export const orderVoided = (order) => String(order?.status ?? '').toUpperCase() === 'CANCELLED'
   || (Array.isArray(order?.transaction) && order.transaction.some(voidsPayment));
+
+/**
+ * How long a call to ARC Pay may take before it is given up as unanswered.
+ *
+ * `getArcPayAuthConfig` carried this, but the calls pass only its `headers`,
+ * so none of them had a limit: a refund ARC never answered held the request
+ * past the booking's cancel claim (120 s) or the desk's refund claim (5 min),
+ * and a second press could then take the claim and send the refund again.
+ * Every flight call that passes it reads a thrown error as "sent, not
+ * answered", never as a refusal.
+ */
+export const ARC_REQUEST_TIMEOUT_MS = 30000;
+
+/**
+ * An ARC transaction id for a money movement that must happen at most once per
+ * order: `refund-cancel-FLT…`. ARC refuses a transaction id already used on
+ * the order, so a second automatic refund for the same reason - a retry, or a
+ * request that took over an expired claim - is refused by the gateway itself
+ * rather than paid twice. At most 40 characters, as ARC allows.
+ */
+export const onceOnlyTransactionId = (operation, reason, orderId) =>
+  `${operation}-${reason}-${String(orderId).replace(/[^A-Za-z0-9_-]/g, '')}`.slice(0, 40);

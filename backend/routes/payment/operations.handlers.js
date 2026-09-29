@@ -34,7 +34,7 @@ import {
 } from '../../../shared/reviewQueue.js';
 import { reconcileBookingPayment } from './checkout.handlers.js';
 import { errorSummary } from '../../utils/errorSummary.js';
-import { orderVoided, voidsPayment } from '../../utils/arcTransactions.js';
+import { orderVoided, voidsPayment, ARC_REQUEST_TIMEOUT_MS, onceOnlyTransactionId } from '../../utils/arcTransactions.js';
 
 const sanitizeRef = (v) => String(v ?? '').replace(/[^A-Za-z0-9_-]/g, '') || '__none__';
 
@@ -474,7 +474,9 @@ async function returnFlightPayment(decision, { arcOrderId, currency, reason }) {
         case 'refund_all': {
             // A void first where the charge has not settled - nothing moves and
             // nothing is lost to the card network - else a refund of what is left.
-            const reversal = await reverseArcPaymentForOrder(arcOrderId, { currency, reason: `Cancellation: ${reason}` });
+            // Once per order: a cancel that took over an expired claim cannot
+            // send the cancellation refund again (onceOnlyTransactionId).
+            const reversal = await reverseArcPaymentForOrder(arcOrderId, { currency, reason: `Cancellation: ${reason}`, once: 'cancel' });
             if (reversal.action === 'VOID') {
                 return { paymentAction: 'VOID', refundAmount: decision.refundAmount, cancellationFee: 0, paymentProcessed: true, refundTransactionId: reversal.transactionId };
             }
@@ -509,7 +511,13 @@ async function returnFlightPayment(decision, { arcOrderId, currency, reason }) {
             // Per ARC Pay: a REFUND on the same order, a new transaction id, the
             // amount to return. No separate charge for the fee - less goes back.
             const authConfig = getArcPayAuthConfig();
-            const refundTxnId = `refund-cancel-${Date.now()}`;
+            // One cancellation refund per order. This was `refund-cancel-<now>`,
+            // new on every attempt, and the cancel claim has no heartbeat: a
+            // cancel slow enough to outlive it let a second cancel take the
+            // booking and send a second refund, and two refunds of "all but the
+            // fee" together gave the fee back. ARC refuses a transaction id it
+            // has already seen on the order.
+            const refundTxnId = onceOnlyTransactionId('refund', 'cancel', arcOrderId);
             const refundUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${arcOrderId}/transaction/${refundTxnId}`;
             console.log('💸 Issuing cancellation REFUND:', decision.refundAmount.toFixed(2), '(fee:', decision.fee, ')');
             // Sent, or about to be, and no answer: ARC Pay may have refunded.
@@ -528,12 +536,20 @@ async function returnFlightPayment(decision, { arcOrderId, currency, reason }) {
                         currency,
                         reference: `Cancel refund (fee: ${decision.fee}): ${reason}`.substring(0, 40)
                     }
-                }, { headers: authConfig.headers, validateStatus: () => true });
+                }, { headers: authConfig.headers, timeout: ARC_REQUEST_TIMEOUT_MS, validateStatus: () => true });
 
                 // Status code alone is not an answer: ARC returns 200 with
                 // result FAILURE for a refund it refused.
                 if (arcSucceeded(refundResponse)) {
                     return { paymentAction: 'PARTIAL_REFUND', refundAmount: decision.refundAmount, cancellationFee: decision.fee, paymentProcessed: true, refundTransactionId: refundTxnId };
+                }
+                // A refusal of a refund an earlier attempt already made - ARC
+                // refuses the reused transaction id - is not "nothing went back".
+                // The order says whether that transaction succeeded.
+                const earlier = arcRefused(refundResponse) ? await arcTransactionSucceeded(arcOrderId, refundTxnId) : null;
+                if (earlier) {
+                    console.warn('↩️ Cancellation refund already on the order; not sent again', { arcOrderId });
+                    return { paymentAction: 'PARTIAL_REFUND', refundAmount: earlier.amount ?? decision.refundAmount, cancellationFee: decision.fee, paymentProcessed: true, refundTransactionId: refundTxnId };
                 }
                 // Nor is anything short of SUCCESS a refusal. A proxy's 504 page,
                 // a 502, or a 200 whose result is PENDING, UNKNOWN or missing was
@@ -1076,11 +1092,37 @@ export async function recordPaymentAfterCancel(booking, { reconcile = reconcileB
  *
  * @returns {Promise<{ reachable: boolean, holdsPayment?: boolean, orderStatus?: string|null, httpStatus?: number|null }>}
  */
+/**
+ * The transaction `transactionId` on ARC order `orderId`, when ARC shows it
+ * succeeded: `{ amount }`. Null when it did not, is not there, or the order
+ * cannot be read. Never throws.
+ *
+ * For a refusal of a once-only transaction id (onceOnlyTransactionId): ARC
+ * refuses an id it has seen on the order, and the earlier attempt under it may
+ * be the one that returned the money.
+ */
+export async function arcTransactionSucceeded(orderId, transactionId) {
+    if (!orderId || !transactionId) return null;
+    try {
+        const orderUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${orderId}`;
+        const resp = await axios.get(orderUrl, { headers: getArcPayAuthConfig().headers, timeout: ARC_REQUEST_TIMEOUT_MS, validateStatus: () => true });
+        if (resp?.status !== 200 || !resp.data) return null;
+        const txns = Array.isArray(resp.data.transaction) ? resp.data.transaction : [];
+        const match = txns.find((t) => t.transaction?.id === transactionId
+            && (t.result === 'SUCCESS' || t.response?.gatewayCode === 'APPROVED'));
+        if (!match) return null;
+        const amount = Number(match.transaction?.amount);
+        return { amount: Number.isFinite(amount) ? amount : null };
+    } catch {
+        return null;
+    }
+}
+
 export async function inspectArcOrder(orderId) {
     if (!orderId) return { reachable: false };
     try {
         const orderUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${orderId}`;
-        const resp = await axios.get(orderUrl, { headers: getArcPayAuthConfig().headers, validateStatus: () => true });
+        const resp = await axios.get(orderUrl, { headers: getArcPayAuthConfig().headers, timeout: ARC_REQUEST_TIMEOUT_MS, validateStatus: () => true });
         if (resp?.status !== 200 || !resp.data) return { reachable: false, httpStatus: resp?.status ?? null };
 
         const txns = Array.isArray(resp.data.transaction) ? resp.data.transaction : [];
@@ -2301,7 +2343,7 @@ async function refundArcAmount(orderId, { amount, currency = 'USD', reason = 'Ad
         const resp = await axios.put(url, {
             apiOperation: 'REFUND',
             transaction: { amount: amount.toFixed(2), currency, reference: String(reason).substring(0, 40) },
-        }, { headers: getArcPayAuthConfig().headers, validateStatus: () => true });
+        }, { headers: getArcPayAuthConfig().headers, timeout: ARC_REQUEST_TIMEOUT_MS, validateStatus: () => true });
         const ok = arcSucceeded(resp);
         if (!ok) console.error('❌ Admin ARC refund not accepted:', resp?.status, arcFailureSummary(resp?.data));
         return { ok, refused: !ok && arcRefused(resp), transactionId, httpStatus: resp?.status ?? null };
@@ -2681,13 +2723,22 @@ export async function settleManualFlightRefund(booking, { mode = 'sync', amount,
 // A FAILED is `refused` only when ARC Pay said no (arcRefused), and
 // `outcomeUnknown` when a VOID or REFUND was sent and its reply was not a
 // verdict: the money may have moved.
-export async function reverseArcPaymentForOrder(orderId, { amount, currency = 'USD', reason = 'Booking could not be completed' } = {}) {
+//
+// `once` names why the order is being reversed ('fail', 'cancel',
+// 'duplicate'): the VOID and REFUND then go under transaction ids made from it
+// and the order (onceOnlyTransactionId), so ARC itself refuses a second
+// reversal for the same reason. Their ids were `void-fail-<now>` and
+// `refund-fail-<now>`, new on every call, and two requests reversing one order
+// at once - a double "Try again", or the customer's order racing the
+// abandoned-checkout job - each sent their own.
+export async function reverseArcPaymentForOrder(orderId, { amount, currency = 'USD', reason = 'Booking could not be completed', once = 'fail' } = {}) {
     if (!orderId) return { reversed: false, action: 'NONE', error: 'no orderId' };
     const authConfig = getArcPayAuthConfig();
+    const arcOptions = { headers: authConfig.headers, timeout: ARC_REQUEST_TIMEOUT_MS, validateStatus: () => true };
     try {
         // RETRIEVE_ORDER to inspect transactions and find what to reverse.
         const orderUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${orderId}`;
-        const orderResp = await axios.get(orderUrl, { headers: authConfig.headers, validateStatus: () => true });
+        const orderResp = await axios.get(orderUrl, arcOptions);
         if (orderResp.status !== 200 || !orderResp.data) {
             return { reversed: false, action: 'NONE', error: `retrieve order failed (${orderResp.status})` };
         }
@@ -2729,16 +2780,21 @@ export async function reverseArcPaymentForOrder(orderId, { amount, currency = 'U
         // transaction, which is not possible once part of it has gone back.
         let voidResp = null;
         if (alreadyRefunded === 0) {
-            const voidTxnId = `void-fail-${Date.now()}`;
+            const voidTxnId = onceOnlyTransactionId('void', once, orderId);
             const voidUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${orderId}/transaction/${voidTxnId}`;
             voidResp = await axios.put(voidUrl, {
                 apiOperation: 'VOID',
                 transaction: { targetTransactionId: targetTxnId, reference: String(reason).substring(0, 40) }
-            }, { headers: authConfig.headers, validateStatus: () => true });
+            }, arcOptions);
             // `|| !voidResp.data?.result` used to sit here - a reply with no result
             // at all counted as a successful void. It does not.
             if (arcSucceeded(voidResp)) {
                 return { reversed: true, action: 'VOID', transactionId: voidTxnId, targetTransactionId: targetTxnId };
+            }
+            // Refused because another request's VOID under this id went
+            // through while this one was reading the order: reversed.
+            if (arcRefused(voidResp) && (await arcTransactionSucceeded(orderId, voidTxnId))) {
+                return { reversed: true, action: 'ALREADY_REVERSED', transactionId: voidTxnId };
             }
             // Nor is it a refusal (arcRefused): a 5xx, or a PENDING, UNKNOWN or
             // missing result, may be a VOID that went through. The REFUND sent
@@ -2768,14 +2824,20 @@ export async function reverseArcPaymentForOrder(orderId, { amount, currency = 'U
             });
         }
         if (refundAmt > 0) {
-            const refundTxnId = `refund-fail-${Date.now()}`;
+            const refundTxnId = onceOnlyTransactionId('refund', once, orderId);
             const refundUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${orderId}/transaction/${refundTxnId}`;
             const refundResp = await axios.put(refundUrl, {
                 apiOperation: 'REFUND',
                 transaction: { amount: refundAmt.toFixed(2), currency, reference: String(reason).substring(0, 40) }
-            }, { headers: authConfig.headers, validateStatus: () => true });
+            }, arcOptions);
             if (arcSucceeded(refundResp)) {
                 return { reversed: true, action: 'REFUND', amount: refundAmt, transactionId: refundTxnId };
+            }
+            // Refused because the same refund already went through under this
+            // id (another request, moments ago): reversed, not "both failed".
+            if (arcRefused(refundResp)) {
+                const earlier = await arcTransactionSucceeded(orderId, refundTxnId);
+                if (earlier) return { reversed: true, action: 'ALREADY_REVERSED', amount: earlier.amount ?? refundAmt, transactionId: refundTxnId };
             }
             if (!arcRefused(refundResp)) {
                 return { reversed: false, action: 'FAILED', outcomeUnknown: true, error: `REFUND sent and not answered: ${arcReplyWithoutVerdict(refundResp)}` };
