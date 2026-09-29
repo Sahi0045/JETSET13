@@ -151,7 +151,7 @@ async function invokeOrchestratedCancel(bookingReference, reason, req, { email }
 // an unsuccessful provider answer, a MOCK booking - answered with no code at
 // all, and a client that offers "Try again" unless it sees a terminal code
 // offered it for a booking that had just been refunded, or failed to be.
-async function refundOnFulfillmentFailure(res, { orderId, bookingReference, amount, currency = 'USD', errorMsg, status = 502, customerMessage, reason, code = 'BOOKING_FAILED' }) {
+export async function refundOnFulfillmentFailure(res, { orderId, bookingReference, amount, currency = 'USD', errorMsg, status = 502, customerMessage, reason, code = 'BOOKING_FAILED' }) {
   console.warn('🚑 Ticket not booked after payment — reversing charge. order:', orderId, '| reason:', errorMsg);
   // Recorded before the gateway is asked, so no other request books this
   // payment while it is on its way back: claimBookingChain and holdChainClaim
@@ -164,6 +164,17 @@ async function refundOnFulfillmentFailure(res, { orderId, bookingReference, amou
   // for the locator, "a reservation nobody can find again". Each is now
   // written only onto the row it was built from (utils/bookingDetailsGuard.js),
   // and a lost race reads again and writes again.
+  //
+  // The marker is also who reverses. Every caller that finds the fare, the
+  // offer or the travellers unusable gets here before the booking chain is
+  // claimed, so two requests for one order - a double "Try again", or the
+  // customer's order racing the abandoned-checkout job or the queue - both got
+  // here and both reversed the payment; the second then wrote "charge not
+  // reversed" over a booking the first had refunded. Only the request whose
+  // marker lands reverses. One that finds a marker answers from it, unless
+  // the reversal it records was left IN_PROGRESS longer than any reversal
+  // takes (its request died), which is taken over.
+  let prior = null;
   try {
     if (supabase && failingRef) {
       for (let attempt = 1; attempt <= 3; attempt += 1) {
@@ -174,18 +185,33 @@ async function refundOnFulfillmentFailure(res, { orderId, bookingReference, amou
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle();
-        if (!failing || failing.booking_details?.fulfillment_failed) break;
-        const { data: written } = await unchangedSince(supabase.from('bookings').update({
+        if (!failing) break;
+        const marker = failing.booking_details?.fulfillment_failed;
+        if (marker && !reversalAbandoned(marker)) {
+          prior = marker;
+          break;
+        }
+        // Pinned to the marker as read - none, or the abandoned one taken over.
+        // unchangedSince does not pin it, so two requests that both read no
+        // marker both wrote theirs, and both went on to reverse.
+        const update = unchangedSince(supabase.from('bookings').update({
           booking_details: {
             ...failing.booking_details,
             fulfillment_failed: { at: new Date().toISOString(), error: errorMsg, reversal: { action: 'IN_PROGRESS' } },
           },
-        }).eq('id', failing.id), failing).select('id');
+        }).eq('id', failing.id), failing);
+        const { data: written } = await (marker
+          ? update.eq('booking_details->fulfillment_failed->>at', marker.at)
+          : update.is('booking_details->fulfillment_failed', null)).select('id');
         if (written?.length) break;
       }
     }
   } catch (e) {
     console.error('⚠️ Could not record the failure before reversing the payment:', e.message);
+  }
+  if (prior) {
+    console.warn('↩️ This payment is already being reversed, or was; not reversing it again. order:', orderId);
+    return res.status(status).json(reversalAnswer(reversalOf(prior), { amount, errorMsg, code, customerMessage, reason }));
   }
   const reversal = await reverseArcPaymentForOrder(orderId, {
     amount,
@@ -245,9 +271,41 @@ async function refundOnFulfillmentFailure(res, { orderId, bookingReference, amou
     console.error('⚠️ Could not update booking after fulfillment failure:', e.message);
   }
 
+  return res.status(status).json(reversalAnswer(reversal, { amount, errorMsg, code, customerMessage, reason }));
+}
+
+/**
+ * How long a reversal may stay IN_PROGRESS before its request is taken to have
+ * died: far longer than one takes - an order read, a VOID and a REFUND, each
+ * given up after ARC_REQUEST_TIMEOUT_MS.
+ */
+export const REVERSAL_CLAIM_TTL_MS = 10 * 60 * 1000;
+
+/** A failure marker whose reversal was started and never finished, long ago. */
+export function reversalAbandoned(marker, now = Date.now()) {
+  if (marker?.reversal?.action !== 'IN_PROGRESS') return false;
+  const at = Date.parse(marker.at);
+  return !Number.isFinite(at) || now - at > REVERSAL_CLAIM_TTL_MS;
+}
+
+/** The reversal a failure marker records, with one still running said as such. */
+function reversalOf(marker) {
+  const recorded = marker?.reversal || {};
+  if (recorded.action === 'IN_PROGRESS') return { reversed: false, action: 'IN_PROGRESS', inProgress: true };
+  return { ...recorded, reversed: recorded.reversed === true };
+}
+
+/**
+ * The answer to a booking that failed after payment, worded by what the
+ * gateway did with the payment - or, for a request that found the reversal
+ * already started, what it is doing.
+ */
+function reversalAnswer(reversal, { amount, errorMsg, code, customerMessage, reason }) {
   const outcome = reversal.reversed
     ? 'Your payment has been reversed and will return to your original payment method.'
-    : 'Your payment could not be reversed automatically. Our team has been alerted and will refund you; if you have not heard from us within 2 business days, call (877) 538-7380.';
+    : reversal.inProgress
+      ? 'Your payment is being returned to your original payment method. If you have not heard from us within 2 business days, call (877) 538-7380.'
+      : 'Your payment could not be reversed automatically. Our team has been alerted and will refund you; if you have not heard from us within 2 business days, call (877) 538-7380.';
   const userMessage = `We could not confirm your flight booking. ${outcome}`;
 
   // `reason` is what went wrong, in the customer's words; the reversal outcome
@@ -257,17 +315,17 @@ async function refundOnFulfillmentFailure(res, { orderId, bookingReference, amou
   // own HTTP status without a second, divergent refund path.
   const shown = customerMessage || (reason ? `${reason} ${outcome}` : userMessage);
 
-  return res.status(status).json({
+  return {
     success: false,
     bookingFailed: true,
     refunded: reversal.reversed,
-    refundAction: reversal.action,                 // VOID | REFUND | ALREADY_REVERSED | NONE | FAILED
+    refundAction: reversal.action,                 // VOID | REFUND | ALREADY_REVERSED | NONE | FAILED | IN_PROGRESS
     refundAmount: reversal.amount ?? amount ?? null,
     error: shown,                                  // FlightCreateOrders surfaces `.error` first
     message: shown,
     ...(code ? { code } : {}),
     technicalError: errorMsg
-  });
+  };
 }
 
 // The shared client, not a second one built here.
@@ -1402,7 +1460,12 @@ function duplicatePaymentAnswer(bookingReference, paymentState = 'held', { first
  * `firstCommitUnknown`: the booking it repeats is a commit the airline never
  * answered, for the customer's wording (duplicatePaymentAnswer).
  *
- * @returns {Promise<{ duplicateOf: string|null, firstCommitUnknown?: boolean } | { unavailable: true }>}
+ * `firstConfirmed`: the booking it repeats holds a record locator the airline
+ * answered - the trip is booked, so this payment can only be a second one. A
+ * first booking still queued, in progress or never answered may yet fail, and
+ * this payment would then be the one to book.
+ *
+ * @returns {Promise<{ duplicateOf: string|null, firstCommitUnknown?: boolean, firstConfirmed?: boolean } | { unavailable: true }>}
  */
 async function findDuplicateBooking(booking, { travellers, offer, claimedAt, now = Date.now() }) {
   const flights = flightsKey(offer);
@@ -1466,7 +1529,11 @@ async function findDuplicateBooking(booking, { travellers, offer, claimedAt, now
       || other.pending_booking_data?.bookingData?.passengerData
       || other.queued_order?.travelers;
     if (flightsKey(theirOffer) === flights && travellerNamesKey(theirTravellers) === names) {
-      return { duplicateOf: row.booking_reference, firstCommitUnknown };
+      return {
+        duplicateOf: row.booking_reference,
+        firstCommitUnknown,
+        firstConfirmed: Boolean(other.pnr) && !firstCommitUnknown,
+      };
     }
   }
   return { duplicateOf: null };
@@ -1491,6 +1558,69 @@ async function holdDuplicatePayment(bookingReference, duplicateOf) {
     },
     gds_chain: { state: 'failed', failedStep: 'duplicate-payment', finishedAt: at },
   });
+}
+
+/**
+ * Give back a second payment for a trip the airline has already booked
+ * (findDuplicateBooking's `firstConfirmed`), after holdDuplicatePayment has
+ * put it on record.
+ *
+ * It used to be held for a person and never refunded, so a customer who paid
+ * on two payment pages stayed charged twice until someone got to it. The same
+ * travellers on the same flights with a record locator already held can only
+ * be paid for once. Reversed once per order (reverseArcPaymentForOrder's
+ * `once`), and what happened is written onto the row the hold wrote: refunded
+ * and cancelled, or still held with why the refund did not go through.
+ *
+ * @returns {Promise<{ reversed: boolean, recorded: boolean, action?: string }>}
+ */
+async function refundDuplicatePayment(bookingReference, { orderId, duplicateOf }) {
+  const reversal = await reverseArcPaymentForOrder(orderId || bookingReference, {
+    reason: `Second payment of ${duplicateOf}`,
+    once: 'duplicate',
+  });
+  console.log('💸 Second payment refund:', reversal.action, '| reversed:', reversal.reversed, '|', bookingReference);
+
+  for (let attempt = 1; supabase && attempt <= 3; attempt += 1) {
+    const { data: row } = await supabase
+      .from('bookings')
+      .select('*')
+      .eq('booking_reference', bookingReference)
+      .maybeSingle();
+    const details = row?.booking_details;
+    if (!details?.needs_review?.duplicate_of) break;
+    const at = new Date().toISOString();
+    const record = {
+      at,
+      action: reversal.action || null,
+      reversed: reversal.reversed === true,
+      ...(reversal.transactionId ? { transactionId: reversal.transactionId } : {}),
+      ...(reversal.amount != null ? { amount: reversal.amount } : {}),
+      ...(reversal.reversed ? {} : { error: reversal.error || null, outcomeUnknown: Boolean(reversal.outcomeUnknown) }),
+    };
+    const { data: written } = await unchangedSince(supabase.from('bookings').update({
+      ...(reversal.reversed ? { status: 'cancelled', payment_status: 'refunded' } : {}),
+      booking_details: {
+        ...details,
+        duplicate_refund: record,
+        needs_review: {
+          ...details.needs_review,
+          reason: reversal.reversed
+            ? `duplicate payment: the same travellers on the same flights are already booked as ${duplicateOf}. `
+              + `Refunded automatically (${reversal.action}); nothing to do.`
+            : `possible duplicate payment: the same travellers on the same flights are already booked as ${duplicateOf}. `
+              + `The automatic refund did not go through (${reversal.outcomeUnknown ? 'sent and not answered - check ARC Pay before refunding' : reversal.error || reversal.action}): refund it by hand.`,
+          ...(reversal.reversed ? { resolved_at: at, resolution: 'second payment refunded automatically' } : {}),
+        },
+      },
+      updated_at: at,
+    }).eq('booking_reference', bookingReference), row).select('booking_reference');
+    if (written?.length) return { reversed: reversal.reversed === true, recorded: true, action: reversal.action };
+  }
+  reportError(new Error('a second payment was reversed but the outcome could not be recorded'), {
+    where: 'refundDuplicatePayment', bookingReference, reversed: reversal.reversed === true,
+  });
+  return { reversed: reversal.reversed === true, recorded: false, action: reversal.action };
 }
 
 /**
@@ -2700,6 +2830,11 @@ router.post('/order', optionalProtect, async (req, res) => {
     // lowercases): read exactly, a 'CANCELLED' row was not cancelled here, and
     // its unrecorded-cancel flag read as settled - "Booking Confirmed!".
     if (String(existing.status || '').toLowerCase() === 'cancelled') {
+      // A second payment for a trip already booked, refunded automatically
+      // (refundDuplicatePayment): said as what it is, not "cancelled".
+      if (existing.booking_details?.needs_review?.duplicate_of) {
+        return res.status(409).json(duplicatePaymentAnswer(existing.booking_reference, paymentStateOf(existing)));
+      }
       // Unless the proven payer paid after the cancel: a checkout cancelled with
       // nothing to refund keeps its payment page open. Their money is put in
       // front of the desk (payment/operations.handlers.js
@@ -3198,10 +3333,12 @@ router.post('/order', optionalProtect, async (req, res) => {
     // One trip, one booking. A second paid checkout for the same travellers on
     // the same flights - a double click, the back button or a second tab could
     // each open a second payment page - was booked like any other: two PNRs,
-    // two charges. It is held for a human instead, and not refunded
-    // automatically, because a family can book one flight twice. Checked after
-    // the claim, so of two such payments racing each other only the later one
-    // is held (findDuplicateBooking).
+    // two charges. It is not booked: refunded at once when the first booking
+    // holds a record locator, and otherwise held for a human, because the
+    // first may yet fail. A family booking one flight twice for different
+    // people is not a duplicate - the names are compared. Checked after the
+    // claim, so of two such payments racing each other only the later one is
+    // held (findDuplicateBooking).
     const duplicate = await findDuplicateBooking(existing, {
       travellers: travelersList,
       offer: firstOffer,
@@ -3244,6 +3381,19 @@ router.post('/order', optionalProtect, async (req, res) => {
           code: 'BOOKING_UNAVAILABLE',
           retryable: true
         });
+      }
+      // The trip is booked with the airline: this payment can only be a second
+      // one, so it goes back now rather than waiting on a person. Anything
+      // short of that - a first booking still queued, in progress or never
+      // answered - stays held, as this payment may yet be the one to book.
+      if (duplicate.firstConfirmed) {
+        const refund = await refundDuplicatePayment(existing.booking_reference, {
+          orderId: arcOrderId,
+          duplicateOf: duplicate.duplicateOf,
+        });
+        if (refund.reversed) {
+          return res.status(409).json(duplicatePaymentAnswer(existing.booking_reference, 'returned'));
+        }
       }
       return res.status(409).json(duplicatePaymentAnswer(existing.booking_reference, 'held', {
         firstCommitUnknown: duplicate.firstCommitUnknown,

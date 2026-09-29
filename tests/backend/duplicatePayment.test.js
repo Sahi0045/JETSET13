@@ -17,14 +17,19 @@ vi.mock('../../backend/routes/payment/arcpay.config.js', async () => {
 });
 
 /**
- * A second payment for one trip is held for a human, not booked.
+ * A second payment for one trip is not booked.
  *
  * The review page opened a new payment page on every Pay click, so a double
  * click, the back button or a second tab could leave a customer with two paid
  * checkouts for the same trip - and POST /order booked both: two PNRs, two
- * charges. Nothing is refunded automatically, because a family can book one
- * flight twice for different people; that is why the travellers' names must
- * match.
+ * charges. A family can book one flight twice for different people, which is
+ * why the travellers' names must match.
+ *
+ * When the first booking holds a record locator the second payment is
+ * refunded at once (see "refunded at once" below). Otherwise - the first still
+ * in progress or queued, or the refund not going through, as when the gateway
+ * cannot be reached, which is every test here that does not script it - it is
+ * held for a human.
  */
 
 const USER = 'user-1';
@@ -142,7 +147,7 @@ afterEach(() => {
 });
 
 describe('a second paid checkout for a trip that is already booked', () => {
-  it('is held for review: not booked, and not refunded', async () => {
+  it('is held for review when its refund does not go through: not booked', async () => {
     const { table, place } = await appWith([bookedFirst(), paidCheckout(SECOND)]);
 
     const res = await place(orderFor(SECOND));
@@ -299,5 +304,89 @@ describe('a guest paying twice', () => {
 
     expect(res.body.code).toBe('DUPLICATE_PAYMENT');
     expect(createFlightOrder).not.toHaveBeenCalled();
+  });
+});
+
+describe('a second payment for a trip the airline has already booked, refunded at once', () => {
+  // Held for a person and never refunded, a customer who paid on two payment
+  // pages stayed charged twice until someone got to it. The first booking
+  // holds a record locator, so this payment can only be a second one.
+  const arcOrder = { status: 200, data: { status: 'CAPTURED', amount: 291, transaction: [{ result: 'SUCCESS', transaction: { id: 'pay-1', type: 'PAYMENT', amount: 291 } }] } };
+
+  beforeEach(() => {
+    if (!axios.put) axios.put = vi.fn();
+    axios.put.mockReset();
+    axios.get.mockReset();
+    axios.get.mockResolvedValue(arcOrder);
+    axios.put.mockResolvedValue({ status: 200, data: { result: 'SUCCESS' } });
+  });
+
+  it('is voided, not booked, and the customer is told it has been refunded', async () => {
+    const { table, place } = await appWith([bookedFirst(), paidCheckout(SECOND)]);
+
+    const res = await place(orderFor(SECOND));
+
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe('DUPLICATE_PAYMENT');
+    expect(res.body.paymentState).toBe('returned');
+    expect(res.body.error).toMatch(/This payment has been refunded/);
+    expect(createFlightOrder).not.toHaveBeenCalled();
+
+    const voids = axios.put.mock.calls.filter(([, body]) => body.apiOperation === 'VOID');
+    expect(voids).toHaveLength(1);
+    expect(voids[0][0]).toMatch(/\/order\/FLTSECOND2\/transaction\/void-duplicate-FLTSECOND2$/);
+
+    const row = table.row(SECOND);
+    expect(row.status).toBe('cancelled');
+    expect(row.payment_status).toBe('refunded');
+    expect(row.booking_details.duplicate_refund).toMatchObject({ action: 'VOID', reversed: true });
+    expect(row.booking_details.needs_review).toMatchObject({ duplicate_of: FIRST, resolution: 'second payment refunded automatically' });
+  });
+
+  it('is not announced as work for anyone once refunded', async () => {
+    const { table, place } = await appWith([bookedFirst(), paidCheckout(SECOND)]);
+    await place(orderFor(SECOND));
+    const { selectUnannounced } = await import('../../backend/jobs/needsReviewAlert.job.js');
+
+    expect(selectUnannounced([table.row(SECOND)])).toHaveLength(0);
+  });
+
+  it('is answered as refunded when the order is sent again, and not refunded twice', async () => {
+    const { place } = await appWith([bookedFirst(), paidCheckout(SECOND)]);
+    await place(orderFor(SECOND));
+    axios.put.mockClear();
+
+    const again = await place(orderFor(SECOND));
+
+    expect(again.status).toBe(409);
+    expect(again.body.code).toBe('DUPLICATE_PAYMENT');
+    expect(again.body.error).toMatch(/This payment has been refunded/);
+    expect(axios.put).not.toHaveBeenCalled();
+  });
+
+  it('stays held, with nothing refunded, while the first booking is still being made', async () => {
+    const queued = paidCheckout(FIRST, { booking_details: { queued_order: orderFor(FIRST), gds_chain: { state: 'queued', startedAt: new Date().toISOString() } } });
+    const { table, place } = await appWith([queued, paidCheckout(SECOND)]);
+
+    const res = await place(orderFor(SECOND));
+
+    expect(res.body.code).toBe('DUPLICATE_PAYMENT');
+    expect(res.body.paymentState).toBe('held');
+    expect(axios.put).not.toHaveBeenCalled();
+    expect(table.row(SECOND).payment_status).toBe('paid');
+  });
+
+  it('stays held, and says why, when the refund is refused', async () => {
+    axios.put.mockResolvedValue({ status: 200, data: { result: 'FAILURE' } });
+    const { table, place } = await appWith([bookedFirst(), paidCheckout(SECOND)]);
+
+    const res = await place(orderFor(SECOND));
+
+    expect(res.body.paymentState).toBe('held');
+    expect(res.body.error).toMatch(/refund this payment/);
+    const row = table.row(SECOND);
+    expect(row.payment_status).toBe('paid');
+    expect(row.booking_details.needs_review.reason).toMatch(/automatic refund did not go through/);
+    expect(row.booking_details.needs_review.resolved_at).toBeUndefined();
   });
 });

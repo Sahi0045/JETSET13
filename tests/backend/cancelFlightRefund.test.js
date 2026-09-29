@@ -419,3 +419,31 @@ describe('the payment-failure alarm', () => {
     expect(selectUnrefunded([cancelled('NOTHING_TO_REFUND')])).toHaveLength(0);
   });
 });
+
+describe('one cancellation refund per order', () => {
+  // The refund went under `refund-cancel-<now>`, new on every attempt, and the
+  // cancel's claim has no heartbeat: a cancel slow enough to outlive it let a
+  // second cancel send a second refund, and two refunds of "all but the fee"
+  // together gave the fee back. ARC refuses an id it has seen on the order.
+  it('is sent under an id made from the order', async () => {
+    cancelFlightOrder.mockResolvedValue(ticketsVoided);
+
+    await cancel(flight(), { settings: { cancellation_fee: 75 } });
+
+    const [url] = axios.put.mock.calls.find(([, body]) => body.apiOperation === 'REFUND');
+    expect(url).toMatch(/\/order\/FLT123\/transaction\/refund-cancel-FLT123$/);
+    expect(axios.put.mock.calls.every(([, , options]) => options.timeout === 30000)).toBe(true);
+  });
+
+  it('reads a refusal of that id as the refund it already made, when the order shows it went through', async () => {
+    cancelFlightOrder.mockResolvedValue(ticketsVoided);
+    axios.put.mockResolvedValue({ status: 400, data: { result: 'ERROR', error: { cause: 'INVALID_REQUEST' } } });
+    axios.get
+      .mockResolvedValueOnce(arcOrder([pay(291)]))
+      .mockResolvedValue(arcOrder([pay(291), { result: 'SUCCESS', transaction: { id: 'refund-cancel-FLT123', type: 'REFUND', amount: 216 } }]));
+
+    const res = await cancel(flight(), { settings: { cancellation_fee: 75 } });
+
+    expect(res.body.cancellation).toMatchObject({ paymentAction: 'PARTIAL_REFUND', refundAmount: 216, cancellationFee: 75 });
+  });
+});

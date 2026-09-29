@@ -5,11 +5,13 @@ import { verifyFlightCharge } from '../../services/flightCheckout.service.js';
 import { isGuestFlightBookingEnabled, isUsableEmail } from '../../services/guestBooking.service.js';
 import { getCaller } from './agents.handlers.js';
 import { safeReturnUrl } from '../../utils/returnUrl.js';
-import { checkoutKey } from '../../utils/tripMatch.js';
+import { createHash } from 'node:crypto';
+import { checkoutKey, flightsKey, travellerNamesKey } from '../../utils/tripMatch.js';
+import { acquireLock, releaseLock } from '../../services/cache.service.js';
 import { unchangedSince } from '../../utils/bookingDetailsGuard.js';
 import { toPnrName } from '../../../shared/passengerName.js';
 import { errorSummary } from '../../utils/errorSummary.js';
-import { orderVoided } from '../../utils/arcTransactions.js';
+import { orderVoided, ARC_REQUEST_TIMEOUT_MS } from '../../utils/arcTransactions.js';
 import { arcFailureSummary } from './payment.helpers.js';
 
 const sanitizeRef = (v) => String(v ?? '').replace(/[^A-Za-z0-9_-]/g, '') || '__none__';
@@ -129,6 +131,62 @@ async function findReusableCheckout({ userId, customerEmail, key, returnOrigin, 
     } catch (lookupError) {
         console.warn('⚠️ Could not look for an open checkout to reuse:', lookupError.message);
         return null;
+    }
+}
+
+/**
+ * How long one checkout holds its trip's lock: longer than a checkout can take
+ * (the fare priced, up to 25 s, then ARC's session, up to 30 s), so it expires
+ * only for a request that died.
+ */
+export const CHECKOUT_LOCK_TTL_SECONDS = 90;
+/** How long a second checkout for the same trip waits for the first. */
+export const CHECKOUT_LOCK_WAIT_MS = 40_000;
+const CHECKOUT_LOCK_POLL_MS = 500;
+
+/**
+ * The lock key for one customer's checkout of one trip: the account, or a
+ * guest's email, and the flights and travellers' names. Null when any part is
+ * missing - nothing is locked, and checkout runs as it always did.
+ *
+ * Coarser than checkoutKey on purpose: two tabs that differ in a phone number
+ * are still one trip opened twice at once.
+ */
+export function checkoutLockKey({ userId, customerEmail, bookingData }) {
+    const customer = userId || String(customerEmail || '').trim().toLowerCase();
+    const flights = flightsKey(bookingData?.originalOffer);
+    const names = travellerNamesKey(bookingData?.passengerData);
+    if (!customer || !flights || !names) return null;
+    const digest = createHash('sha256').update(JSON.stringify([customer, flights, names])).digest('hex');
+    return `lock:flight-checkout:${digest}`;
+}
+
+/**
+ * One checkout at a time for one customer's trip.
+ *
+ * Two tabs, two devices or a retry could each press Pay at once. Both looked
+ * for an open payment page, both found none - the page's row is written only
+ * once ARC has answered, up to a minute later - and both opened one: two live
+ * payment pages, and a customer who finished both was charged twice. The
+ * second request now waits for the first, and then finds its page and is
+ * handed it back (findReusableCheckout).
+ *
+ * `{ token }` when this request holds the lock; `{}` when there is nothing to
+ * lock or no Redis to lock with (checkout goes on as it always did); `busy`
+ * when the first checkout is still running after the wait.
+ */
+async function lockCheckout(key, { waitMs = CHECKOUT_LOCK_WAIT_MS, pollMs = CHECKOUT_LOCK_POLL_MS } = {}) {
+    if (!key) return {};
+    const deadline = Date.now() + waitMs;
+    for (;;) {
+        const lock = await acquireLock(key, CHECKOUT_LOCK_TTL_SECONDS);
+        if (lock.acquired) return { token: lock.token };
+        if (lock.unavailable) {
+            console.warn('⚠️ Checkout lock unavailable; opening the page without it');
+            return {};
+        }
+        if (Date.now() + pollMs > deadline) return { busy: true };
+        await new Promise((resolve) => setTimeout(resolve, pollMs));
     }
 }
 
@@ -432,6 +490,8 @@ export async function handleHostedCheckout(req, res) {
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
+    // This trip's checkout lock, when this request holds it (lockCheckout).
+    let tripLock = null;
     try {
         // Never log the body: it carries the customer's name, email, phone and
         // the traveller details behind bookingData.
@@ -606,6 +666,20 @@ export async function handleHostedCheckout(req, res) {
                     });
                 }
             }
+            // One checkout of this trip at a time: a second one waits here for
+            // the first, and then finds the page it opened below.
+            const lockKey = checkoutLockKey({ userId: signedInUserId, customerEmail, bookingData });
+            const lock = await lockCheckout(lockKey);
+            if (lock.busy) {
+                console.warn('⛔ Checkout refused: this trip is already being checked out', { orderId });
+                return res.status(409).json({
+                    success: false,
+                    code: 'CHECKOUT_IN_PROGRESS',
+                    error: 'A payment page for this trip is already opening in another tab or window. Please use that one, or try again in a minute. Nothing has been charged.',
+                });
+            }
+            if (lock.token) tripLock = { key: lockKey, token: lock.token };
+
             // The page this customer opened moments ago for exactly this trip,
             // looked for before the fare is priced again. A retry priced the
             // fare again - up to 25 seconds - before it found the payment page
@@ -1096,6 +1170,10 @@ export async function handleHostedCheckout(req, res) {
             success: false,
             error: 'Failed to create hosted checkout'
         });
+    } finally {
+        // Held until the page's row is written, so the next checkout of this
+        // trip finds it; let go on every way out.
+        if (tripLock) await releaseLock(tripLock.key, tripLock.token);
     }
 }
 
@@ -1683,7 +1761,7 @@ export async function reconcileBookingPayment(booking, { fresh = false } = {}) {
     try {
         const orderResp = await axios.get(
             `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${arcOrderId}`,
-            { headers: { 'Authorization': authHeader, 'Accept': 'application/json' }, validateStatus: () => true }
+            { headers: { 'Authorization': authHeader, 'Accept': 'application/json' }, timeout: ARC_REQUEST_TIMEOUT_MS, validateStatus: () => true }
         );
         gatewayStatus = orderResp.status;
         if (orderResp.status === 200) orderData = orderResp.data;

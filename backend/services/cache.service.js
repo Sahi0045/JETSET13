@@ -201,6 +201,46 @@ export async function get(key) {
 }
 
 /**
+ * Take a short lock that every server instance sees: SET NX with an expiry, so
+ * a holder that dies lets go by itself.
+ *
+ * `acquired` with the token to release it with; `held` when another request
+ * has it; `unavailable` when there is no Redis to ask, so the caller decides
+ * whether to go on without one.
+ *
+ * @param {string} key
+ * @param {number} ttlSeconds
+ * @returns {Promise<{ acquired: true, token: string } | { held: true } | { unavailable: true }>}
+ */
+export async function acquireLock(key, ttlSeconds) {
+  const client = getRedisClient();
+  if (!client) return { unavailable: true };
+  const token = `${process.pid}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+  try {
+    const answer = await client.set(key, token, 'EX', ttlSeconds, 'NX');
+    return answer === 'OK' ? { acquired: true, token } : { held: true };
+  } catch (err) {
+    console.error(`[Cache] Lock failed for "${key}":`, err.message);
+    return { unavailable: true };
+  }
+}
+
+// Deletes the key only while it still holds this token: a lock that expired and
+// was taken by another request is theirs, not ours to let go.
+const RELEASE_IF_OWNER = "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end";
+
+/** Let go of a lock taken with acquireLock. Never throws. */
+export async function releaseLock(key, token) {
+  const client = getRedisClient();
+  if (!client || !token) return;
+  try {
+    await client.eval(RELEASE_IF_OWNER, 1, key, token);
+  } catch (err) {
+    console.error(`[Cache] Unlock failed for "${key}":`, err.message);
+  }
+}
+
+/**
  * Health check — used in /api/health endpoint.
  * @returns {Promise<{status: string, latencyMs?: number}>}
  */
