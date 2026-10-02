@@ -1,6 +1,7 @@
 import { OPERATIONS } from '../codes.js';
 import { arr, at, atTxt, num, txt } from '../parseXml.js';
 import { each, el, wrap } from '../xml.js';
+import { fareFamilyOption } from './informativePricing.js';
 
 /**
  * The ticketing half of the booking chain: price the PNR, create the TST,
@@ -12,8 +13,8 @@ import { each, el, wrap } from '../xml.js';
  * what the amount already captured by ARC Pay has to be reconciled against.
  */
 
-/** Shared by the pricing messages: RP published fares, FCO currency, VC plating carrier. */
-const pricingOptions = ({ currency, validatingCarrier }) => [
+/** Shared by the pricing messages: RP published fares, FCO currency, VC plating carrier, PFF fare family. */
+const pricingOptions = ({ currency, validatingCarrier, fareFamily }) => [
   // RP published fares, RU unifares. The search asks for both (priceType RP,
   // RU, TAC in Fare_MasterPricerTravelBoardSearch), so pricing has to as well:
   // asking for published fares only would re-price a negotiated fare the
@@ -38,6 +39,10 @@ const pricingOptions = ({ currency, validatingCarrier }) => [
       wrap('carrierInformation', wrap('companyIdentification', el('otherCompany', validatingCarrier))),
     ])
     : '',
+  // The TST is created from this pricing, so it holds whichever family this
+  // prices: unpinned, the cheapest in the booked class, which need not be the
+  // one the customer was quoted and paid for (see fareFamilyOption).
+  fareFamilyOption(fareFamily),
 ].filter(Boolean).join('');
 
 /**
@@ -46,9 +51,9 @@ const pricingOptions = ({ currency, validatingCarrier }) => [
  * Root sequence (Fare_PricePNRWithBookingClass_24_3_1A.xsd):
  *   stakeholder[0..9] -> pricingOptionGroup[1..999]
  */
-export const buildPricePnrBody = ({ currency = 'USD', validatingCarrier } = {}) => {
+export const buildPricePnrBody = ({ currency = 'USD', validatingCarrier, fareFamily } = {}) => {
   const ns = OPERATIONS.Fare_PricePNRWithBookingClass.namespace;
-  return `    <Fare_PricePNRWithBookingClass xmlns="${ns}">${pricingOptions({ currency, validatingCarrier })}</Fare_PricePNRWithBookingClass>`;
+  return `    <Fare_PricePNRWithBookingClass xmlns="${ns}">${pricingOptions({ currency, validatingCarrier, fareFamily })}</Fare_PricePNRWithBookingClass>`;
 };
 
 /** `lastTktDate` as YYYY-MM-DD, or '' when Amadeus did not send one. */

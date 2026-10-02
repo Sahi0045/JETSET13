@@ -244,6 +244,7 @@ const getFiledFareRules = async (flightOffer, { sections = DEFAULT_RULE_SECTIONS
       segments: ama.segments,
       currency: config.currency,
       validatingCarrier: offer.validatingAirlineCodes?.[0],
+      fareFamily: ama.fareFamily,
     }));
 
     const { reply: pricedReply } = soapReply(pricing);
@@ -350,6 +351,7 @@ const priceFlightOffer = async (flightOffer) => {
     segments: ama.segments,
     currency: config.currency,
     validatingCarrier: offer.validatingAirlineCodes?.[0],
+    fareFamily: ama.fareFamily,
   }));
 
   const { reply } = soapReply(result);

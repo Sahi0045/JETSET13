@@ -10,8 +10,9 @@ import { OPERATIONS, STATELESS_OPERATIONS } from '../../../backend/services/amad
  * version that moved is a silent failure, because the endpoint answers a
  * mismatched action with a fault that names neither.
  *
- * Taken from 1ASIWJETJEC_PDT_20260904_170228.wsdl - every soapAction it
- * declares, and nothing else.
+ * Taken from 1ASIWJETJEC_PDT_20261001_202829.wsdl - every soapAction it
+ * declares, and nothing else. That pack is the 20260904 one plus the five
+ * Airline Fare Families operations Amadeus added on 1 Oct 2026.
  */
 const WSDL_ACTIONS = Object.freeze([
   'FARQNQ_07_1_1A',   // Fare_CheckRules
@@ -23,11 +24,16 @@ const WSDL_ACTIONS = Object.freeze([
   'PNRRET_21_1_1A',   // PNR_Retrieve
   'PNRXCL_22_1_1A',   // PNR_Cancel
   'QUQPCQ_03_1_1A',   // Queue_PlacePNR
+  'TARTCQ_13_1_1A',   // Fare_RebookAndCreateTST
   'TAUTCQ_04_1_1A',   // Ticket_CreateTSTFromPricing
   'TFOPCQ_19_2_1A',   // FOP_CreateFormOfPayment
+  'TFQFRQ_18_1_1A',   // Fare_GetFareFamilyDescription
   'TIBNRQ_23_1_1A',   // Fare_InformativeBestPricingWithoutPNR
   'TIPNRQ_24_3_1A',   // Fare_InformativePricingWithoutPNR
+  'TIUNRQ_23_1_1A',   // Fare_PriceUpsellWithoutPNR
+  'TMRXRQ_23_1_1A',   // MiniRule_GetFromRec
   'TPCBRQ_24_3_1A',   // Fare_PricePNRWithBookingClass
+  'TPUPRQ_23_2_1A',   // Fare_PriceUpsellPNR
   'TRCANQ_14_1_1A',   // Ticket_CancelDocument
   'TTKTIQ_15_1_1A',   // DocIssuance_IssueTicket
   'VLSSOQ_04_1_1A',   // Security_SignOut

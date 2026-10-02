@@ -702,7 +702,9 @@ export const runBookingChain = async (p) => {
     const priceReply = await callStep(ctx, {
       step: 'pricePnr',
       operation: 'Fare_PricePNRWithBookingClass',
-      bodyXml: buildPricePnrBody({ currency: config.currency, validatingCarrier }),
+      // The family the customer was quoted, so the TST cannot fall back to a
+      // cheaper one sold in the same class.
+      bodyXml: buildPricePnrBody({ currency: config.currency, validatingCarrier, fareFamily: ama.fareFamily }),
     });
 
     const priced = readPricePnrReply(priceReply);
@@ -1154,7 +1156,7 @@ const confirmFare = async (ctx, { offer, config, flights }) => {
 
   let reply;
   try {
-    reply = replyOf(await ctx.call(operation, buildPricePnrBody({ currency: config.currency, validatingCarrier })));
+    reply = replyOf(await ctx.call(operation, buildPricePnrBody({ currency: config.currency, validatingCarrier, fareFamily: offer._ama.fareFamily })));
   } catch (error) {
     log.warn({ flights, reason: error?.technicalError ?? error?.message }, 'price check: pricing failed; the booking chain prices after payment');
     return null;
