@@ -5,6 +5,7 @@ import { buildFlightOrder, isTicketed, readRecordLocator, readTickets } from './
 import { toDDMMYY } from './mappers/datetime.js';
 import { arr, atTxt } from './parseXml.js';
 import { buildAirSellBody, readAirSellReply } from './operations/airSell.js';
+import { isFareFamilyName } from './operations/informativePricing.js';
 import { buildAddElementsBody, buildCancelBody, buildCommitBody, buildIgnoreBody, buildRetrieveBody } from './operations/pnr.js';
 import {
   buildCreateTstBody,
@@ -546,6 +547,15 @@ export const runBookingChain = async (p) => {
     });
   }
 
+  if (ama.fareFamily != null && !isFareFamilyName(ama.fareFamily)) {
+    throw new BookingChainError({
+      step: 'validate',
+      error: 'This fare can no longer be booked - please search again',
+      code: 409,
+      technicalError: 'offer _ama.fareFamily is not a fare family name',
+    });
+  }
+
   // Before any seat is sold: issuance would refuse this carrier's ticket, and a
   // PNR we cannot ticket only has to be cancelled again (ticketingCarriers.js).
   if (cannotTicket(offer, config.unticketableCarriers)) {
@@ -1064,6 +1074,14 @@ export const confirmSeats = async (flightOffer) => {
       error: 'This fare has expired - please search again',
       code: 409,
       technicalError: `seat check: offer was found on WSAP ${ama.wsap}, this server is ${config.wsap}`,
+      operation: 'Air_SellFromRecommendation',
+    });
+  }
+  if (ama.fareFamily != null && !isFareFamilyName(ama.fareFamily)) {
+    throw new AmadeusSoapError({
+      error: 'This fare can no longer be booked - please search again',
+      code: 409,
+      technicalError: 'seat check: offer _ama.fareFamily is not a fare family name',
       operation: 'Air_SellFromRecommendation',
     });
   }

@@ -85,7 +85,7 @@ describe('the review page checks the fare once', () => {
     // The cancellation panel reads the fee from the one answer...
     expect((await screen.findAllByText('US$150')).length).toBeGreaterThan(0);
     // ...and so does the baggage and rules panel.
-    expect(screen.getByText(/\+23 KG checked baggage/)).toBeTruthy();
+    expect(screen.getByText('23 KG checked baggage')).toBeTruthy();
     expect(fetch.priceRequests).toHaveLength(1);
     expect(fetch.priceRequests[0].withFareRules).toBe(true);
     // No panel prices the offer again.
@@ -149,7 +149,7 @@ describe('the check BOOK just made', () => {
     } });
 
     expect((await screen.findAllByText('US$150')).length).toBeGreaterThan(0);
-    expect(screen.getByText(/\+23 KG checked baggage/)).toBeTruthy();
+    expect(screen.getByText('23 KG checked baggage')).toBeTruthy();
     expect(fetch.priceRequests).toHaveLength(0);
     expect(fetch.ruleRequests).toHaveLength(0);
   });

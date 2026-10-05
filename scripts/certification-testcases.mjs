@@ -263,6 +263,47 @@ const CASES = {
     },
   },
 
+  21: {
+    title: 'Airline Fare Family: 1 ADT, one-way direct flight with AFF',
+    slug: '21-AFF-OneWay-Direct-1ADT',
+    scenario: 'Show the fare families of a direct one-way flight (Fare_PriceUpsellWithoutPNR), describe them (Fare_GetFareFamilyDescription), then book and ticket the family chosen, priced by its fare family name so the TST holds only that family.',
+    comment: 'Search (stateless). Fare options: ONE stateful session - Fare_PriceUpsellWithoutPNR, then Fare_GetFareFamilyDescription for every family it returned - signed out. A family above the cheapest is chosen. Review page: price and fare rules in one session, priced with PFF <family>. Checkout, before the card is charged: a stateless price check with PFF, then the seats confirmed in the family\'s booking class (Air_SellFromRecommendation + Fare_PricePNRWithBookingClass with PFF) in a session signed out without committing. After payment: a final price check with PFF, then the booking chain: sell, PNR elements, FOP, Fare_PricePNRWithBookingClass with PFF <family>, TST, commit, queue, ticket, retrieve.',
+    run: async () => {
+      const search = await attempt('search 1 ADT direct', () => FlightProvider.searchFlights({
+        from: 'FRA', to: 'JFK', departDate: dateIn(40), adults: 1, nonStop: true,
+      }));
+      const offer = ticketableOffer(search);
+      if (!offer) return { skipped: 'no offer' };
+      const upsell = await attempt('fare options: upsell and family description in one session', () => FlightProvider.getBrandedFareUpsell(offer));
+      const families = upsell?.data ?? [];
+      const chosen = families.find((o) => o._ama?.fareFamily === flag('family', 'ECOFLEX')) ?? families[1] ?? families[0];
+      if (!chosen) return { skipped: 'no fare families', reason: upsell?.reason ?? null };
+      await attempt('fare chosen / review page: price and fare rules in one session', () => FlightProvider.getFiledFareRules(chosen, { refuseUnbookable: true }));
+      const checkedOut = await attempt('checkout: price check', () => FlightProvider.priceFlightOffer(chosen));
+      await attempt('checkout: seat check', () => FlightProvider.confirmSeats(checkedOut?.data?.flightOffers?.[0] ?? chosen));
+      const repriced = await attempt('order: price check', () => FlightProvider.priceFlightOffer(chosen));
+      const booked = repriced?.data?.flightOffers?.[0] ?? chosen;
+      const order = await attempt('book', () => FlightProvider.createFlightOrder({
+        data: {
+          type: 'flight-order',
+          flightOffers: [booked],
+          travelers: [traveller(1, 'JOHN', 'CERTAFF', '1990-01-01', 'ADULT')],
+          contacts,
+        },
+      }, bookingOptions(booked, `CERT21-${Date.now()}`)));
+      if (order?.pnr) await attempt('retrieve', () => FlightProvider.getFlightOrderDetails(order.pnr));
+      return {
+        families: families.map((o) => o._ama?.fareFamily),
+        chosenFamily: chosen._ama?.fareFamily ?? null,
+        bookedFamily: booked._ama?.fareFamily ?? null,
+        bookingClass: booked._ama?.segments?.map((s) => s.rbd).join('') ?? null,
+        pnr: order?.pnr ?? null,
+        ticketed: order?.ticketed ?? false,
+        tickets: (order?.tickets ?? []).map((t) => t.number),
+      };
+    },
+  },
+
   24: {
     title: 'Free scenario: cancel a ticketed booking (void + cancel)',
     slug: '24-Cancel-Ticketed-Booking',

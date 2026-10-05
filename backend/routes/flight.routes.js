@@ -2569,6 +2569,8 @@ router.post('/date-prices', async (req, res) => {
  * Shared by /fare-rules (the mobile app) and /price with withFareRules (the
  * web review page), so both panels read the same fare the same way.
  */
+const RULE_BLOCK_HEADINGS = new Set(['CANCELLATIONS', 'CHANGES', 'NO SHOW']);
+
 const fareRulesFrom = (priced, flightOffer) => {
   const included = priced.included || {};
 
@@ -2595,9 +2597,11 @@ const fareRulesFrom = (priced, flightOffer) => {
   });
 
   // ===== Derive a structured cancellation/change policy from the PENALTIES text =====
+  // A filed block's heading is its title, not its text, and the fees below are
+  // tied to the CANCELLATIONS / CHANGES that precedes them.
   const penaltyText = fareRules
     .filter((r) => /PENALT|CANCEL|REISSUE|CHANGE|REFUND/i.test((r.title || '') + ' ' + (r.text || '')))
-    .map((r) => r.text)
+    .map((r) => (RULE_BLOCK_HEADINGS.has(r.title) ? `${r.title}\n${r.text}` : r.text))
     .join(' \n ')
     .toUpperCase();
 

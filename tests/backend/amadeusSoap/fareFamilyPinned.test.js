@@ -70,8 +70,18 @@ describe('the pricing requests', () => {
 
   // The name rides back from the client inside the offer.
   it('refuse a name that is not a fare family name, rather than send it', () => {
-    expect(() => buildPricePnrBody({ fareFamily: 'ECO</attributeDescription><x>' })).toThrow(/fare family/);
-    expect(() => buildInformativePricingBody({ paxRefs, segments, fareFamily: 'eco flex' })).toThrow(/fare family/);
+    expect(() => buildPricePnrBody({ fareFamily: 'ECO</attributeDescription><x>' })).toThrow(/can no longer be booked/);
+    expect(() => buildInformativePricingBody({ paxRefs, segments, fareFamily: 'eco flex' })).toThrow(/can no longer be booked/);
+  });
+
+  // Refused as a fare that cannot be sold (409), not a server error.
+  it('refuse it as a fare that cannot be booked', () => {
+    const error = (() => { try { buildPricePnrBody({ fareFamily: '<x>' }); } catch (e) { return e; } return null; })();
+    expect(error).toMatchObject({ name: 'AmadeusSoapError', code: 409 });
+  });
+
+  it('accept the punctuation family names can carry', () => {
+    expect(buildPricePnrBody({ fareFamily: 'ECO-LIGHT' })).toContain('<attributeDescription>ECO-LIGHT</attributeDescription>');
   });
 });
 
@@ -82,14 +92,34 @@ const load = (name) => {
 };
 
 describe('a pricing reply', () => {
-  it('records the family it priced, for every later pricing to pin', () => {
+  it('records the family it priced, without pinning a fare nobody chose', () => {
     // LH4462/B priced with PFF ECOFLEX on PDT, 1 Oct 2026.
     const { offer, priced } = applyPricingToOffer(load('informative-pricing-ecoflex'), lufthansa());
 
     expect(priced).toBe(true);
     expect(offer.price.total).toBe('2735.89');
-    expect(offer._ama.fareFamily).toBe('ECOFLEX');
+    expect(offer._ama.pricedFareFamily).toBe('ECOFLEX');
+    expect(offer._ama.fareFamily).toBeUndefined();
     expect(offer.travelerPricings[0].fareDetailsBySegment[0].brandedFare).toBe('ECOFLEX');
+  });
+
+  it('keeps the family the customer chose', () => {
+    const { offer } = applyPricingToOffer(load('informative-pricing-ecoflex'), lufthansa('ECOFLEX'));
+
+    expect(offer._ama.fareFamily).toBe('ECOFLEX');
+  });
+
+  // A lap infant's fare can name no family. The pin is what PFF priced, so a
+  // reply that names it on some passengers only must not drop it.
+  it('keeps the chosen family when a passenger group names none', () => {
+    const withoutName = readFileSync(new URL('../../fixtures/amadeus/informative-pricing-ecoflex.xml', import.meta.url), 'utf8')
+      .replace(/<fareFamilyDetails><fareFamilyname>ECOFLEX<\/fareFamilyname><\/fareFamilyDetails>/, '');
+    const { body } = unwrapEnvelope(parseSoap(withoutName));
+
+    const { offer } = applyPricingToOffer(body[Object.keys(body).find((k) => k !== 'Fault')], lufthansa('ECOFLEX'));
+
+    expect(offer._ama.fareFamily).toBe('ECOFLEX');
+    expect(offer._ama.pricedFareFamily).toBeNull();
   });
 
   it('records one family across every segment and leg', () => {
@@ -98,13 +128,11 @@ describe('a pricing reply', () => {
 
     const { offer } = applyPricingToOffer(load('informative-pricing-rt'), search);
 
-    expect(offer._ama.fareFamily).toBe('DISCOUNT');
+    expect(offer._ama.pricedFareFamily).toBe('DISCOUNT');
     expect(offer.travelerPricings[0].fareDetailsBySegment.map((d) => d.brandedFare)).toEqual(['DISCOUNT', 'DISCOUNT', 'DISCOUNT', 'DISCOUNT']);
   });
 
-  // One PFF covers the whole itinerary, so pinning one family on a trip priced
-  // in two would make the airline refuse the leg it does not fit.
-  it('pins nothing when the legs are in different families, or one leg is in none', () => {
+  it('names no single family when the legs are in different families, or one leg is in none', () => {
     const config = { wsap: '1ASIWJETJEC', officeId: 'SCK1S2400', currency: 'USD' };
     const search = mapMasterPricerReply(load('mptbs-roundtrip'), { config, searchSignature: 'test' }).offers[0];
     const xml = readFileSync(new URL('../../fixtures/amadeus/informative-pricing-rt.xml', import.meta.url), 'utf8');
@@ -117,9 +145,9 @@ describe('a pricing reply', () => {
     const oneWithout = xml.replace(/<fareFamilyDetails><fareFamilyname>DISCOUNT<\/fareFamilyname><\/fareFamilyDetails>/, '');
 
     const mixed = applyPricingToOffer(reparse(twoFamilies), search).offer;
-    expect(mixed._ama.fareFamily).toBeNull();
+    expect(mixed._ama.pricedFareFamily).toBeNull();
     expect(mixed.travelerPricings[0].fareDetailsBySegment.map((d) => d.brandedFare)).toEqual(['DISCOUNT', 'DISCOUNT', 'BASIC', 'BASIC']);
-    expect(applyPricingToOffer(reparse(oneWithout), search).offer._ama.fareFamily).toBeNull();
+    expect(applyPricingToOffer(reparse(oneWithout), search).offer._ama.pricedFareFamily).toBeNull();
   });
 });
 

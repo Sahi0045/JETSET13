@@ -1,4 +1,5 @@
 import { OPERATIONS } from '../codes.js';
+import { AmadeusSoapError } from '../errors.js';
 import { each, el, wrap } from '../xml.js';
 
 /**
@@ -79,8 +80,10 @@ export const buildSegmentGroups = (segments) => each(segments, (segment) => wrap
   ]),
 ])));
 
-/** A fare family's short name: an..30 in the reply schemas, letters and digits in practice. */
-const FARE_FAMILY_NAME = /^[A-Z0-9]{1,30}$/;
+/** A fare family's short name: an..30 in the reply schemas. */
+const FARE_FAMILY_NAME = /^[A-Z0-9][A-Z0-9 ._/-]{0,29}$/;
+
+export const isFareFamilyName = (value) => typeof value === 'string' && FARE_FAMILY_NAME.test(value);
 
 /**
  * PFF: price one fare family, named in FF.
@@ -104,7 +107,14 @@ const FARE_FAMILY_NAME = /^[A-Z0-9]{1,30}$/;
  */
 export const fareFamilyOption = (fareFamily) => {
   if (fareFamily === undefined || fareFamily === null || fareFamily === '') return '';
-  if (!FARE_FAMILY_NAME.test(String(fareFamily))) throw new Error('fareFamily is not a fare family name');
+  if (!isFareFamilyName(fareFamily)) {
+    throw new AmadeusSoapError({
+      error: 'This fare can no longer be booked - please search again',
+      code: 409,
+      technicalError: 'fareFamily is not a fare family name',
+      operation: 'Fare_InformativePricingWithoutPNR',
+    });
+  }
   return wrap('pricingOptionGroup', [
     wrap('pricingOptionKey', el('pricingOptionKey', 'PFF')),
     wrap('optionDetail', wrap('criteriaDetails', [

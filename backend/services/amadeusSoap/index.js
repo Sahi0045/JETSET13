@@ -6,7 +6,9 @@ import { AmadeusSoapError, inspectReply } from './errors.js';
 import { mapMasterPricerReply } from './mappers/offer.js';
 import { buildMasterPricerBody, SEARCH_RECOMMENDATIONS } from './operations/masterPricer.js';
 import { buildInformativePricingBody } from './operations/informativePricing.js';
-import { DEFAULT_RULE_SECTIONS, buildCheckRulesBody, readCheckRulesReply } from './operations/fareRules.js';
+import { buildFareFamilyDescriptionBody, buildUpsellBody } from './operations/fareFamilies.js';
+import { describeOption, mapFareFamilyDescriptions, mapUpsellReply } from './mappers/fareFamilies.js';
+import { DEFAULT_RULE_SECTIONS, buildCheckRulesBody, readCheckRulesReply, ruleBlocks } from './operations/fareRules.js';
 import { buildFlightInfoBody, readFlightInfoError, readFlightInfoReply } from './operations/flightInfo.js';
 import { applyPricingToOffer } from './mappers/pricing.js';
 import { attributeTickets } from './mappers/flightOrder.js';
@@ -296,11 +298,7 @@ const getFiledFareRules = async (flightOffer, { sections = DEFAULT_RULE_SECTIONS
         // Filed rules when we got them, the thinner pricing text when we did
         // not, so the shape the route scrapes never changes.
         'detailed-fare-rules': filed.length > 0
-          ? buildFareRulesIncluded(filed.flatMap((section) => section.text
-            .split('\n')
-            .map((line) => line.trim())
-            .filter(Boolean)
-            .map((line) => ({ text: line }))))
+          ? buildFareRulesIncluded(filed.flatMap((section) => ruleBlocks(section.text)))
           : buildFareRulesIncluded(text),
       },
       dictionaries: {},
@@ -422,7 +420,7 @@ const buildFareRulesIncluded = (text = []) => {
   const descriptions = text
     .filter((entry) => entry.text)
     .map((entry) => ({
-      descriptionType: /REFUND|PENALT|CANCEL|CHANGE/i.test(entry.text) ? 'PENALTIES' : 'INFORMATION',
+      descriptionType: entry.title ?? (/REFUND|PENALT|CANCEL|CHANGE/i.test(entry.text) ? 'PENALTIES' : 'INFORMATION'),
       text: entry.text,
     }));
 
@@ -827,7 +825,72 @@ const getFlightStatus = async (carrier, flightNumber, date) => {
 };
 
 const getSeatMaps = async () => notEntitled('Seat map');
-const getBrandedFareUpsell = async () => notEntitled('Branded fare upsell');
+// 16008 UPSELL NOT AVAILABLE FOR THESE CARRIERS: the airline files no fare
+// families (SpiceJet and Hahn Air DEL-BOM on PDT, 5 Oct 2026). Not a failure.
+const UPSELL_NOT_FILED = '16008';
+
+/**
+ * The airline's fare families for an offer, each priced and described, in one
+ * session: Fare_PriceUpsellWithoutPNR, then Fare_GetFareFamilyDescription
+ * (Amadeus's "Upsell after Shopping" flow).
+ *
+ * Advisory, so it never throws. A flight without fare families answers with no
+ * options; a description that fails leaves the options bookable, unlabelled.
+ */
+const getBrandedFareUpsell = async (flightOffer) => {
+  const config = getWsConfig();
+  const offer = flightOffer?.originalOffer ?? flightOffer;
+  const ama = offer?._ama;
+  if (!ama?.segments?.length || !ama?.paxRefs?.length) {
+    return { success: false, data: [], reason: 'not_from_this_provider' };
+  }
+  try {
+    refuseUnbookable(offer, config);
+  } catch (error) {
+    return { success: false, data: [], reason: 'not_bookable', error: error.error };
+  }
+
+  try {
+    return await withSession(async (ctx) => {
+      const { reply } = soapReply(await ctx.call('Fare_PriceUpsellWithoutPNR', buildUpsellBody({
+        paxRefs: ama.paxRefs,
+        segments: ama.segments,
+        currency: config.currency,
+        validatingCarrier: offer.validatingAirlineCodes?.[0],
+      })));
+      const status = inspectReply(reply, 'Fare_PriceUpsellWithoutPNR');
+      if (status.empty || status.error?.amadeusCode === UPSELL_NOT_FILED) return { success: true, data: [], dictionaries: {} };
+      if (status.error) {
+        reportIfAlerting(status.error);
+        throw status.error;
+      }
+
+      const options = mapUpsellReply(reply, offer);
+      if (options.length === 0) return { success: true, data: [], dictionaries: {} };
+
+      const requests = [...new Map(options
+        .map((option) => option.fareFamilyDescriptionRequest)
+        .filter((request) => request?.family && request.carrier && request.origin && request.destination)
+        .map((request) => [`${request.family}|${request.carrier}`, request])).values()];
+      let descriptions = new Map();
+      if (requests.length > 0) {
+        try {
+          const { reply: described } = soapReply(await ctx.call('Fare_GetFareFamilyDescription', buildFareFamilyDescriptionBody(requests)));
+          const describedStatus = inspectReply(described, 'Fare_GetFareFamilyDescription');
+          if (describedStatus.ok) descriptions = mapFareFamilyDescriptions(described, requests);
+          else log.warn({ reason: describedStatus.error?.technicalError ?? 'empty' }, 'fare family description refused');
+        } catch (error) {
+          log.warn({ reason: error?.technicalError ?? error?.message }, 'fare family description failed');
+        }
+      }
+
+      return { success: true, data: options.map((option) => describeOption(option, descriptions)), dictionaries: {} };
+    });
+  } catch (error) {
+    log.warn({ reason: error?.technicalError ?? error?.message }, 'fare family upsell failed');
+    return { success: false, data: [], reason: 'upsell_failed', error: error?.error ?? 'Fare options are temporarily unavailable' };
+  }
+};
 const getFlightAvailabilities = async () => notEntitled('Availability search');
 const getFlightInspirations = async () => notEntitled('Flight inspiration');
 const getFlightPriceAnalysis = async () => notEntitled('Price analysis');

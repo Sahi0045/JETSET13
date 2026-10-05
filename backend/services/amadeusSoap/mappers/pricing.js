@@ -1,4 +1,5 @@
 import { CABIN_BY_DESIGNATOR } from '../codes.js';
+import { familiesBySegment } from './fareFamilies.js';
 import { arr, at, atTxt, num, txt } from '../parseXml.js';
 
 /**
@@ -100,38 +101,14 @@ const mergeCheckedBags = (priced, searched) => {
 };
 
 /**
- * The fare family each segment was priced in, by segment index: index 0 is
- * segmentGroup 1. A fare component names its family and lists the segments it
- * covers as ST references; a carrier that files no families names none.
- */
-const readFareFamilies = (fareInfoGroup) => {
-  const families = new Map();
-  for (const component of arr(fareInfoGroup.fareComponentDetailsGroup)) {
-    const family = atTxt(component, 'fareFamilyDetails.fareFamilyname');
-    if (!family) continue;
-    for (const coupon of arr(component.couponDetailsGroup)) {
-      for (const ref of arr(at(coupon, 'productId.referenceDetails'))) {
-        const segment = Number.parseInt(txt(ref.value), 10);
-        if (txt(ref.type) === 'ST' && segment > 0) families.set(segment - 1, family);
-      }
-    }
-  }
-  return families;
-};
-
-/**
- * The one family every passenger is priced in on every segment, or null.
- *
- * This is what later pricing pins with PFF, so that the TST holds the family
- * quoted here. A mix - a family on one leg and none on the other, or two
- * families - is null: one PFF applies to the whole itinerary and would refuse
- * the leg it does not fit.
+ * The one family every passenger is priced in on every segment, or null when
+ * the itinerary mixes families or a leg names none.
  */
 const singleFareFamily = (perGroup, segmentCount) => {
   const names = new Set();
   for (const group of perGroup) {
     for (let i = 0; i < segmentCount; i += 1) {
-      const family = group.families.get(i);
+      const family = group.families.get(i)?.family;
       if (!family) return null;
       names.add(family);
     }
@@ -194,7 +171,7 @@ export const applyPricingToOffer = (reply, offer) => {
       currency,
       taxes: readTaxes(fareInfoGroup),
       segments: readSegments(fareInfoGroup),
-      families: readFareFamilies(fareInfoGroup),
+      families: familiesBySegment(fareInfoGroup),
       text: readTextData(fareInfoGroup),
     };
   });
@@ -253,7 +230,7 @@ export const applyPricingToOffer = (reply, offer) => {
             fareBasis: priced.fareBasis || detail.fareBasis,
             class: priced.class || detail.class,
             cabin: priced.cabin ?? detail.cabin,
-            brandedFare: group.families.get(i) ?? detail.brandedFare ?? null,
+            brandedFare: group.families.get(i)?.family ?? detail.brandedFare ?? null,
             includedCheckedBags: mergeCheckedBags(priced.includedCheckedBags, detail.includedCheckedBags),
           }
           : detail;
@@ -276,7 +253,7 @@ export const applyPricingToOffer = (reply, offer) => {
   }
   const fees = [...feeCents.values()].map(({ code, cents }) => ({ amount: (cents / 100).toFixed(2), type: 'TAX', code }));
   const segmentCount = offer._ama?.segments?.length ?? Math.max(0, ...perGroup.map((g) => g.segments.length));
-  const fareFamily = singleFareFamily(perGroup, segmentCount);
+  const pricedFareFamily = singleFareFamily(perGroup, segmentCount);
   const penalties = perGroup.flatMap((g) => g.text).filter((t) => /REFUND|PENALT|CHANGE/i.test(t.text));
 
   return {
@@ -296,9 +273,10 @@ export const applyPricingToOffer = (reply, offer) => {
         pricedAt: new Date().toISOString(),
         pricedTotal: total.toFixed(2),
         pricedCurrency: currency,
-        // What was priced, not what was asked for: a family pinned on the way
-        // in comes back named here, or Amadeus refused it.
-        fareFamily,
+        // Only a family the customer chose from the upsell is pinned
+        // (_ama.fareFamily, kept from the offer): Amadeus's flow adds PFF in
+        // the fare family flow, and PFF is proven on Lufthansa only.
+        pricedFareFamily,
       },
     },
     // Kept separate from the offer: the fare-rules endpoint reads these, and

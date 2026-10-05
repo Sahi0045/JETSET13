@@ -126,3 +126,41 @@ export const readCheckRulesReply = (reply) => {
 
   return { sections, error: null };
 };
+
+const RULE_HEADINGS = Object.freeze([
+  [/^CANCELL?ATIONS?$/, 'CANCELLATIONS'],
+  [/^CHANGES?$/, 'CHANGES'],
+  [/^NO[\s-]?SHOWS?$/, 'NO SHOW'],
+]);
+
+/**
+ * A filed rule section as the blocks the airline headed it with: CANCELLATIONS,
+ * CHANGES, NO SHOW. The section's own title line ("PE.PENALTIES") is dropped
+ * and the dashed separators become paragraph breaks.
+ *
+ * @param {string} text
+ * @returns {Array<{title: string, text: string}>}
+ */
+export const ruleBlocks = (text) => {
+  const blocks = [];
+  let current = null;
+  String(text ?? '').split('\n').forEach((raw, index) => {
+    const line = raw.trim();
+    if (!line || (index === 0 && /^[A-Z0-9]{2}\.[A-Z][A-Z /-]*$/.test(line))) return;
+    const heading = RULE_HEADINGS.find(([pattern]) => pattern.test(line));
+    if (heading) {
+      current = { title: heading[1], lines: [] };
+      blocks.push(current);
+      return;
+    }
+    if (!current) {
+      current = { title: 'PENALTIES', lines: [] };
+      blocks.push(current);
+    }
+    current.lines.push(/^-{5,}$/.test(line) ? '' : line);
+  });
+  return blocks
+    .map((block) => ({ title: block.title, text: block.lines.join('\n').replace(/\n{3,}/g, '\n\n').trim() }))
+    .filter((block) => block.text);
+};
+

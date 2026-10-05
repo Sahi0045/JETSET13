@@ -15,20 +15,34 @@ const prettyFare = (opt) => {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 };
 
+// Bags and refunds have their own lines on the card, and a cabin bag is not
+// checked baggage.
+const SHOWN_ELSEWHERE = /BAG|PERSONAL ITEM|REFUND/;
+const PERKS = [
+  [/CHANGE/, 'Date change'],
+  [/SEAT/, 'Seat selection'],
+  [/MEAL|SNACK|CATERING/, 'Meal'],
+  [/WIFI|WI-FI/, 'Wi-Fi'],
+  [/LOUNGE/, 'Lounge access'],
+  [/PRIORITY/, 'Priority boarding'],
+  [/MILEAGE|MILES/, 'Earns miles'],
+];
+
 const freeAmenityLabels = (opt) => {
   const list = Array.isArray(opt.amenities) ? opt.amenities : [];
-  return list
+  const labels = list
     .filter((a) => a && a.isChargeable === false)
-    .map((a) => {
-      const d = (a.description || '').toUpperCase();
-      if (d.includes('BAG')) return 'Checked baggage';
-      if (d.includes('MEAL') || d.includes('SNACK')) return 'Meal';
-      if (d.includes('SEAT')) return 'Seat selection';
-      if (d.includes('REFUND')) return 'Refundable';
-      if (d.includes('CHANGE')) return 'Date change';
-      if (d.includes('WIFI')) return 'Wi-Fi';
-      return (a.description || '').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
-    });
+    .map((a) => (a.description || '').toUpperCase())
+    .filter((d) => d && !SHOWN_ELSEWHERE.test(d))
+    .map((d) => {
+      const known = PERKS.findIndex(([pattern]) => pattern.test(d));
+      return known >= 0
+        ? { rank: known, label: PERKS[known][1] }
+        : { rank: PERKS.length, label: d.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase()) };
+    })
+    .sort((a, b) => a.rank - b.rank)
+    .map((p) => p.label);
+  return [...new Set(labels)];
 };
 
 function FlightFareOptions({ flight, onClose, onSelect }) {
@@ -79,9 +93,16 @@ function FlightFareOptions({ flight, onClose, onSelect }) {
         const data = await res.json();
         if (cancelled) return;
         const basePrice = Math.round(priceNum(flight.price));
-        // Keep the clicked fare first, then upsell options — minus any duplicate of it
-        const upsell = (data.data || []).filter((o) => Math.round(priceNum(o.price)) !== basePrice);
-        const opts = [baseOption, ...upsell].sort((a, b) => priceNum(a.price) - priceNum(b.price));
+        const families = data.data || [];
+        // The clicked fare's own family replaces it, named and described by
+        // the airline, even when the search priced it differently.
+        const clickedIsAFamily = families.some((o) => o.fareBasis && o.fareBasis === flight.fareBasis
+          && o.bookingClass === flight.bookingClass);
+        const upsell = clickedIsAFamily
+          ? families
+          : families.filter((o) => Math.round(priceNum(o.price)) !== basePrice);
+        const opts = [...(clickedIsAFamily ? [] : [baseOption]), ...upsell]
+          .sort((a, b) => priceNum(a.price) - priceNum(b.price));
         setOptions(opts);
       } catch (e) {
         if (cancelled || e.name === 'AbortError') return;

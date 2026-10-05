@@ -49,7 +49,7 @@ const plain = (n) => Number(n).toLocaleString('en-US', { maximumFractionDigits: 
  * reads in dollars at the live rate, with the airline's figure beside it; with
  * no live rate it keeps the airline's figure and names the currency.
  */
-const describeFee = (amount, currency) => {
+export const describeFee = (amount, currency) => {
   const code = String(currency || '').trim().toUpperCase();
   const sym = cur(code);
   if (sym === null || amount == null) return null;
@@ -63,7 +63,7 @@ const describeFee = (amount, currency) => {
   return { main: `about US$${Math.round(usd).toLocaleString('en-US')}`, note: `(${own} set by the airline)`, estimated: true };
 };
 
-const Fee = ({ fee }) => (
+export const Fee = ({ fee }) => (
   <>
     <span>{fee.main}</span>
     {fee.note && <span className="ml-1 text-[11px] font-normal text-gray-500">{fee.note}</span>}
