@@ -1,4 +1,5 @@
 import { CABIN_BY_DESIGNATOR } from '../codes.js';
+import { familiesBySegment } from './fareFamilies.js';
 import { arr, at, atTxt, num, txt } from '../parseXml.js';
 
 /**
@@ -99,6 +100,22 @@ const mergeCheckedBags = (priced, searched) => {
   return { ...priced, weightUnit: searched?.weightUnit ?? 'KG' };
 };
 
+/**
+ * The one family every passenger is priced in on every segment, or null when
+ * the itinerary mixes families or a leg names none.
+ */
+const singleFareFamily = (perGroup, segmentCount) => {
+  const names = new Set();
+  for (const group of perGroup) {
+    for (let i = 0; i < segmentCount; i += 1) {
+      const family = group.families.get(i)?.family;
+      if (!family) return null;
+      names.add(family);
+    }
+  }
+  return names.size === 1 ? [...names][0] : null;
+};
+
 /** Free text carries the penalty wording the fare-rules panel already parses. */
 const readTextData = (fareInfoGroup) => arr(fareInfoGroup.textData).map((entry) => ({
   qualifier: atTxt(entry, 'freeTextQualification.textSubjectQualifier'),
@@ -154,6 +171,7 @@ export const applyPricingToOffer = (reply, offer) => {
       currency,
       taxes: readTaxes(fareInfoGroup),
       segments: readSegments(fareInfoGroup),
+      families: familiesBySegment(fareInfoGroup),
       text: readTextData(fareInfoGroup),
     };
   });
@@ -212,6 +230,7 @@ export const applyPricingToOffer = (reply, offer) => {
             fareBasis: priced.fareBasis || detail.fareBasis,
             class: priced.class || detail.class,
             cabin: priced.cabin ?? detail.cabin,
+            brandedFare: group.families.get(i)?.family ?? detail.brandedFare ?? null,
             includedCheckedBags: mergeCheckedBags(priced.includedCheckedBags, detail.includedCheckedBags),
           }
           : detail;
@@ -233,6 +252,8 @@ export const applyPricingToOffer = (reply, offer) => {
     }
   }
   const fees = [...feeCents.values()].map(({ code, cents }) => ({ amount: (cents / 100).toFixed(2), type: 'TAX', code }));
+  const segmentCount = offer._ama?.segments?.length ?? Math.max(0, ...perGroup.map((g) => g.segments.length));
+  const pricedFareFamily = singleFareFamily(perGroup, segmentCount);
   const penalties = perGroup.flatMap((g) => g.text).filter((t) => /REFUND|PENALT|CHANGE/i.test(t.text));
 
   return {
@@ -252,6 +273,10 @@ export const applyPricingToOffer = (reply, offer) => {
         pricedAt: new Date().toISOString(),
         pricedTotal: total.toFixed(2),
         pricedCurrency: currency,
+        // Only a family the customer chose from the upsell is pinned
+        // (_ama.fareFamily, kept from the offer): Amadeus's flow adds PFF in
+        // the fare family flow, and PFF is proven on Lufthansa only.
+        pricedFareFamily,
       },
     },
     // Kept separate from the offer: the fare-rules endpoint reads these, and

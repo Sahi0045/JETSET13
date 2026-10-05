@@ -1,4 +1,5 @@
 import { OPERATIONS } from '../codes.js';
+import { AmadeusSoapError } from '../errors.js';
 import { each, el, wrap } from '../xml.js';
 
 /**
@@ -24,7 +25,7 @@ const PTC_TO_CODE = Object.freeze({ ADULT: 'ADT', CHILD: 'CHD', HELD_INFANT: 'IN
  * of this type, and how many segments each is being priced over. Amadeus uses
  * it to line the groups up against segmentGroup, so it has to match exactly.
  */
-const buildPassengerGroups = (paxRefs, segmentCount) => {
+export const buildPassengerGroups = (paxRefs, segmentCount) => {
   const byType = new Map();
   for (const pax of paxRefs) {
     const code = PTC_TO_CODE[pax.ptc] ?? pax.ptc ?? 'ADT';
@@ -64,7 +65,7 @@ const buildPassengerGroups = (paxRefs, segmentCount) => {
  * `offPointDetails`; copying that spelling here fails validation with an error
  * that does not name the element.
  */
-const buildSegmentGroups = (segments) => each(segments, (segment) => wrap('segmentGroup', wrap('segmentInformation', [
+export const buildSegmentGroups = (segments) => each(segments, (segment) => wrap('segmentGroup', wrap('segmentInformation', [
   wrap('flightDate', [
     el('departureDate', segment.departureDate),
     el('departureTime', segment.departureTime),
@@ -79,15 +80,60 @@ const buildSegmentGroups = (segments) => each(segments, (segment) => wrap('segme
   ]),
 ])));
 
+/** A fare family's short name: an..30 in the reply schemas. */
+const FARE_FAMILY_NAME = /^[A-Z0-9][A-Z0-9 ._/-]{0,29}$/;
+
+export const isFareFamilyName = (value) => typeof value === 'string' && FARE_FAMILY_NAME.test(value);
+
+/**
+ * PFF: price one fare family, named in FF.
+ *
+ * An airline can sell more than one family in the same booking class, so the
+ * class alone does not say which fare was chosen: on PDT (1 Oct 2026) Lufthansa
+ * FRA-JFK class B priced ECOLIGHT at 2375.89 and ECOFLEX at 2735.89. Unpinned,
+ * pricing takes the cheapest. Amadeus's Airline Fare Families certification
+ * requires the pricing that creates the TST to name the chosen family.
+ *
+ * Verified on PDT the same day. The name alone in attributeType answers 911
+ * FARE FAMILY IS MISSING, carrierInformation beside it answers INVALID
+ * ATTRIBUTE FOR OPTION: PFF, and a family the class does not sell answers 911
+ * NO FARE FOUND FOR REQUESTED FARE FAMILY.
+ *
+ * The name comes back from the client inside the offer, so anything that is not
+ * a family name is refused rather than sent.
+ *
+ * @param {string} [fareFamily]
+ * @returns {string} the pricingOptionGroup, or '' when no family is pinned
+ */
+export const fareFamilyOption = (fareFamily) => {
+  if (fareFamily === undefined || fareFamily === null || fareFamily === '') return '';
+  if (!isFareFamilyName(fareFamily)) {
+    throw new AmadeusSoapError({
+      error: 'This fare can no longer be booked - please search again',
+      code: 409,
+      technicalError: 'fareFamily is not a fare family name',
+      operation: 'Fare_InformativePricingWithoutPNR',
+    });
+  }
+  return wrap('pricingOptionGroup', [
+    wrap('pricingOptionKey', el('pricingOptionKey', 'PFF')),
+    wrap('optionDetail', wrap('criteriaDetails', [
+      el('attributeType', 'FF'),
+      el('attributeDescription', fareFamily),
+    ])),
+  ]);
+};
+
 /**
  * @param {object} p
  * @param {Array<{ref:string, ptc:string}>} p.paxRefs   from offer._ama.paxRefs
  * @param {Array} p.segments                             from offer._ama.segments
  * @param {string} [p.currency='USD']
  * @param {string} [p.validatingCarrier]                 pins the plating carrier
+ * @param {string} [p.fareFamily]                        pins the fare family (PFF)
  */
 export const buildInformativePricingBody = (p) => {
-  const { paxRefs, segments, currency = 'USD', validatingCarrier } = p;
+  const { paxRefs, segments, currency = 'USD', validatingCarrier, fareFamily } = p;
 
   if (!segments?.length) throw new Error('segments are required to price an offer');
   if (!paxRefs?.length) throw new Error('paxRefs are required to price an offer');
@@ -120,6 +166,7 @@ export const buildInformativePricingBody = (p) => {
         wrap('carrierInformation', wrap('companyIdentification', el('otherCompany', validatingCarrier))),
       ])
       : '',
+    fareFamilyOption(fareFamily),
   ].filter(Boolean).join('');
 
   const ns = OPERATIONS.Fare_InformativePricingWithoutPNR.namespace;

@@ -40,6 +40,15 @@ const SUFFIXES = Object.freeze({
   PNR_Cancel: 'PNRXCL_22_1_1A',
   Ticket_CancelDocument: 'TRCANQ_14_1_1A',
   Security_SignOut: 'VLSSOQ_04_1_1A',
+  // Airline Fare Families, added to the WSAP on 1 Oct 2026 (WSDL pack
+  // 1ASIWJETJEC_PDT_20261001_202829) for the certification's AFF test case.
+  // Amadeus's "Upsell after Shopping" flow runs the upsell and the family
+  // description in one stateful session, so neither is in the stateless set.
+  Fare_PriceUpsellWithoutPNR: 'TIUNRQ_23_1_1A',
+  Fare_GetFareFamilyDescription: 'TFQFRQ_18_1_1A',
+  MiniRule_GetFromRec: 'TMRXRQ_23_1_1A',
+  Fare_PriceUpsellPNR: 'TPUPRQ_23_2_1A',
+  Fare_RebookAndCreateTST: 'TARTCQ_13_1_1A',
 });
 
 export const OPERATIONS = Object.freeze(

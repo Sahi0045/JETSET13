@@ -5,6 +5,7 @@ import { buildFlightOrder, isTicketed, readRecordLocator, readTickets } from './
 import { toDDMMYY } from './mappers/datetime.js';
 import { arr, atTxt } from './parseXml.js';
 import { buildAirSellBody, readAirSellReply } from './operations/airSell.js';
+import { isFareFamilyName } from './operations/informativePricing.js';
 import { buildAddElementsBody, buildCancelBody, buildCommitBody, buildIgnoreBody, buildRetrieveBody } from './operations/pnr.js';
 import {
   buildCreateTstBody,
@@ -546,6 +547,15 @@ export const runBookingChain = async (p) => {
     });
   }
 
+  if (ama.fareFamily != null && !isFareFamilyName(ama.fareFamily)) {
+    throw new BookingChainError({
+      step: 'validate',
+      error: 'This fare can no longer be booked - please search again',
+      code: 409,
+      technicalError: 'offer _ama.fareFamily is not a fare family name',
+    });
+  }
+
   // Before any seat is sold: issuance would refuse this carrier's ticket, and a
   // PNR we cannot ticket only has to be cancelled again (ticketingCarriers.js).
   if (cannotTicket(offer, config.unticketableCarriers)) {
@@ -702,7 +712,9 @@ export const runBookingChain = async (p) => {
     const priceReply = await callStep(ctx, {
       step: 'pricePnr',
       operation: 'Fare_PricePNRWithBookingClass',
-      bodyXml: buildPricePnrBody({ currency: config.currency, validatingCarrier }),
+      // The family the customer was quoted, so the TST cannot fall back to a
+      // cheaper one sold in the same class.
+      bodyXml: buildPricePnrBody({ currency: config.currency, validatingCarrier, fareFamily: ama.fareFamily }),
     });
 
     const priced = readPricePnrReply(priceReply);
@@ -1065,6 +1077,14 @@ export const confirmSeats = async (flightOffer) => {
       operation: 'Air_SellFromRecommendation',
     });
   }
+  if (ama.fareFamily != null && !isFareFamilyName(ama.fareFamily)) {
+    throw new AmadeusSoapError({
+      error: 'This fare can no longer be booked - please search again',
+      code: 409,
+      technicalError: 'seat check: offer _ama.fareFamily is not a fare family name',
+      operation: 'Air_SellFromRecommendation',
+    });
+  }
 
   // Seats held, from the fare's own passenger types: a lap infant holds none.
   const seats = seatCount((offer.travelerPricings ?? []).map((t) => ({ ptc: t.travelerType }))) || 1;
@@ -1154,7 +1174,7 @@ const confirmFare = async (ctx, { offer, config, flights }) => {
 
   let reply;
   try {
-    reply = replyOf(await ctx.call(operation, buildPricePnrBody({ currency: config.currency, validatingCarrier })));
+    reply = replyOf(await ctx.call(operation, buildPricePnrBody({ currency: config.currency, validatingCarrier, fareFamily: offer._ama.fareFamily })));
   } catch (error) {
     log.warn({ flights, reason: error?.technicalError ?? error?.message }, 'price check: pricing failed; the booking chain prices after payment');
     return null;
