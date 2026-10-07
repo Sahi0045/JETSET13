@@ -80,14 +80,14 @@ function StopsLabel({ leg, cityMap = {} }) {
   const wait = one ? (layoverLabel(one.minutes) || one.text || '') : '';
 
   return (
-    <span className="inline-flex max-w-full items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-bold text-amber-700">
+    <span className="inline-flex max-w-full min-w-0 flex-wrap items-center justify-center gap-x-1 gap-y-0.5 rounded-2xl bg-amber-50 px-2.5 py-1 text-[11px] font-bold text-amber-700">
       <span className="whitespace-nowrap">{leg.stops} {leg.stops === 1 ? 'stop' : 'stops'} ·</span>
       {one ? (
-        <span className="truncate font-semibold text-amber-800/90">
-          {one.city}{wait ? ` · ${wait} wait` : ''}
+        <span className="font-semibold text-amber-800/90">
+          {one.city}{wait && <> <span className="whitespace-nowrap">· {wait} wait</span></>}
         </span>
       ) : layovers.length > 1 ? (
-        <span className="truncate font-semibold text-amber-800/90">
+        <span className="font-semibold text-amber-800/90">
           {layovers.map((l) => l.airport).filter(Boolean).join(', ')}
         </span>
       ) : null}
@@ -112,9 +112,9 @@ function Leg({ leg, label, operators = [], cityMap = {} }) {
       )}
       <div className="flex items-center justify-between gap-2 sm:gap-4">
         {/* Departure */}
-        <div className="text-left">
+        <div className="shrink-0 text-left">
           <div className="font-grotesk text-2xl sm:text-[28px] font-semibold text-ink leading-none tracking-tight">{leg.departure?.time || 'N/A'}</div>
-          <div className="text-[11px] text-gray-500 mt-1">{legDateLabel(leg.departure?.rawDate)}</div>
+          <div className="whitespace-nowrap text-[11px] text-gray-500 mt-1">{legDateLabel(leg.departure?.rawDate)}</div>
           <div className="text-xs text-gray-500 mt-0.5">
             <span className="font-semibold text-gray-700">{leg.departure?.airport}</span>
             {leg.departure?.terminal && <span className="ml-1 text-[10px]">T{leg.departure.terminal}</span>}
@@ -123,7 +123,7 @@ function Leg({ leg, label, operators = [], cityMap = {} }) {
         </div>
 
         {/* Middle */}
-        <div className="flex-1 flex flex-col items-center px-1">
+        <div className="flex-1 min-w-0 flex flex-col items-center px-1">
           <div className="text-[13px] font-bold text-ink mb-1.5 flex items-center gap-1.5">
             <Clock className="h-3.5 w-3.5 text-gray-400" />
             {formatDuration(leg.duration)}
@@ -141,18 +141,18 @@ function Leg({ leg, label, operators = [], cityMap = {} }) {
             </span>
             <Plane className="h-3 w-3 text-gray-400 rotate-90 flex-shrink-0" />
           </div>
-          <div className="mt-2 flex justify-center text-center"><StopsLabel leg={leg} cityMap={cityMap} /></div>
+          <div className="mt-2 flex w-full justify-center text-center"><StopsLabel leg={leg} cityMap={cityMap} /></div>
         </div>
 
         {/* Arrival */}
-        <div className="text-right">
+        <div className="shrink-0 text-right">
           <div className="font-grotesk text-2xl sm:text-[28px] font-semibold text-ink leading-none tracking-tight">
             {leg.arrival?.time || 'N/A'}
             {dayOffset && (
               <sup className="ml-0.5 text-[10px] font-semibold text-amber-600" title="Arrives on a different day">{dayOffset}</sup>
             )}
           </div>
-          <div className="text-[11px] text-gray-500 mt-1">{legDateLabel(leg.arrival?.rawDate)}</div>
+          <div className="whitespace-nowrap text-[11px] text-gray-500 mt-1">{legDateLabel(leg.arrival?.rawDate)}</div>
           <div className="text-xs text-gray-500 mt-0.5">
             <span className="font-semibold text-gray-700">{leg.arrival?.airport}</span>
             {leg.arrival?.terminal && <span className="ml-1 text-[10px]">T{leg.arrival.terminal}</span>}
