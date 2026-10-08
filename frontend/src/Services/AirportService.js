@@ -216,6 +216,39 @@ export const getCityNameByCode = (code) => {
     return airport?.name || code;
 };
 
+const cityNameCache = new Map();
+
+/**
+ * City names, from the airport API, for IATA codes the built-in list lacks.
+ * Codes it cannot place are left out, so callers keep showing the code.
+ * @param {string[]} codes - IATA codes
+ * @returns {Promise<Object>} - Map of code to city name
+ */
+export const resolveCityNames = async (codes = []) => {
+    const wanted = [...new Set(codes.map((code) => String(code || '').trim().toUpperCase()))]
+        .filter((code) => /^[A-Z]{3}$/.test(code) && !getAirportByCode(code));
+
+    await Promise.all(wanted.filter((code) => !cityNameCache.has(code)).map(async (code) => {
+        try {
+            // No countryCode: the API filters by it, and the airport may be abroad.
+            const response = await fetch(`${getApiUrl()}/airports/search`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                body: JSON.stringify({ keyword: code, limit: 5 })
+            });
+            const result = response.ok ? await response.json() : null;
+            const places = Array.isArray(result?.data) ? result.data : [];
+            const place = places.find((p) => String(p.code).toUpperCase() === code)
+                || places.find((p) => String(p.cityCode).toUpperCase() === code);
+            if (place?.cityName || place?.name) cityNameCache.set(code, place.cityName || place.name);
+        } catch {
+            // The code stays on screen.
+        }
+    }));
+
+    return Object.fromEntries(wanted.filter((code) => cityNameCache.has(code)).map((code) => [code, cityNameCache.get(code)]));
+};
+
 /**
  * Build city code map from airports
  * @returns {Object} - Map of city names to codes
@@ -247,6 +280,7 @@ export const buildCityDetailsMap = () => {
  */
 export const clearCache = () => {
     cache.searches.clear();
+    cityNameCache.clear();
     cache.nearbyAirports = null;
     cache.lastFetch = null;
 };
@@ -259,6 +293,7 @@ const AirportService = {
     getDefaultDepartureAirport,
     getAirportByCode,
     getCityNameByCode,
+    resolveCityNames,
     buildCityCodeMap,
     buildCityDetailsMap,
     clearCache,
