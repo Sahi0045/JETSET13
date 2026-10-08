@@ -34,20 +34,16 @@ describe('the cutover checklist', () => {
   });
 
   /**
-   * The WSAP is not just a credential. It is stamped onto every offer and
-   * compared by the booking chain's cross-environment guard. Left pinned to the
-   * test WSAP while the endpoint moves, that guard compares PDT to PDT, agrees,
-   * and lets a cached PDT offer be sold on the production node.
+   * Amadeus issued production (8 Oct 2026) under the same WSAP and office as
+   * PDT. Flagging them sent the real production values to the checklist as test
+   * values; the cross-environment guard reads the endpoint's node instead.
    */
-  it('catches the WSAP left pinned to the test one', () => {
-    const wsap = cutoverRisks({ AMADEUS_WS_WSAP: '1ASIWJETJEC' }).find((r) => r.setting === 'AMADEUS_WS_WSAP');
+  it('does not flag the WSAP or office, which production shares with PDT', () => {
+    const settings = cutoverRisks({ AMADEUS_WS_WSAP: '1ASIWJETJEC', AMADEUS_WS_OFFICE_ID: 'SCK1S2400' })
+      .map((r) => r.setting);
 
-    expect(wsap?.kind).toBe('PDT');
-  });
-
-  it('catches the PDT office id', () => {
-    expect(cutoverRisks({ AMADEUS_WS_OFFICE_ID: 'SCK1S2400' }).find((r) => r.setting === 'AMADEUS_WS_OFFICE_ID')?.kind)
-      .toBe('PDT');
+    expect(settings).not.toContain('AMADEUS_WS_WSAP');
+    expect(settings).not.toContain('AMADEUS_WS_OFFICE_ID');
   });
 
   /**
@@ -73,9 +69,9 @@ describe('the cutover checklist', () => {
 
   it('is empty once every setting has been moved to production', () => {
     expect(cutoverRisks({
-      AMADEUS_WS_ENDPOINT: 'https://nodeD1.production.webservices.amadeus.com/1ASIWPRODXX',
-      AMADEUS_WS_WSAP: '1ASIWPRODXX',
-      AMADEUS_WS_OFFICE_ID: 'NYC1S2100',
+      AMADEUS_WS_ENDPOINT: 'https://nodeD2.production.webservices.amadeus.com/1ASIWJETJEC',
+      AMADEUS_WS_WSAP: '1ASIWJETJEC',
+      AMADEUS_WS_OFFICE_ID: 'SCK1S2400',
       AMADEUS_WS_UNTICKETABLE_CARRIERS: '',
       AMADEUS_WS_INTERLINE_BLOCKED_PAIRS: '',
       AMADEUS_WS_QUEUE_NUMBER: 'Q8',

@@ -39,18 +39,20 @@ const reportIfAlerting = (error) => {
   if (error instanceof AmadeusSoapError && error.alert) {
     reportError(error, {
       service: 'amadeus-ws',
-      // Which WSAP produced it. Without this a PDT fault and a production fault
-      // are indistinguishable in triage, and after cutover both exist at once.
-      wsap: safeWsap(),
+      // Which environment produced it. Without this a PDT fault and a production
+      // fault are indistinguishable in triage, and after cutover both exist at
+      // once. The WSAP name is shared by both, so the node is what tells them apart.
+      wsap: safeConfigValue('wsap'),
+      node: safeConfigValue('node'),
       operation: error.operation,
       amadeusCode: error.amadeusCode,
     });
   }
 };
 
-/** The configured WSAP, or null - reading config must never break reporting. */
-const safeWsap = () => {
-  try { return getWsConfig().wsap ?? null; } catch { return null; }
+/** A config value, or null - reading config must never break reporting. */
+const safeConfigValue = (key) => {
+  try { return getWsConfig()[key] ?? null; } catch { return null; }
 };
 
 const soapReply = (result) => {
@@ -738,6 +740,7 @@ const createFlightOrder = async (orderData, options = {}) => {
     tickets: attributeTickets(result.tickets, result.order?.travelers, travelers),
     gds: {
       wsap: getWsConfig().wsap,
+      node: getWsConfig().node,
       officeId: getWsConfig().officeId,
       sessionId: result.sessionId,
       ticketed: result.ticketed,
