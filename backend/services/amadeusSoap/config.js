@@ -78,6 +78,9 @@ const readWsConfig = (env = process.env) => {
 
   return Object.freeze({
     endpoint: env.AMADEUS_WS_ENDPOINT.trim(),
+    // PDT and production share the WSAP name 1ASIWJETJEC and the office; only
+    // the node host tells an offer's environment apart.
+    node: nodeOf(env.AMADEUS_WS_ENDPOINT),
     wsap: (env.AMADEUS_WS_WSAP || '').trim() || env.AMADEUS_WS_ENDPOINT.trim().split('/').pop(),
     username: env.AMADEUS_WS_USERNAME.trim(),
     password: env.AMADEUS_WS_PASSWORD,
@@ -219,6 +222,10 @@ const readWsConfig = (env = process.env) => {
   });
 };
 
+const nodeOf = (endpoint) => {
+  try { return new URL(String(endpoint).trim()).host.toLowerCase(); } catch { return ''; }
+};
+
 /** Memoised for the process. Tests get a fresh read via vi.resetModules(). */
 export const getWsConfig = (env = process.env) => {
   if (!cached) cached = readWsConfig(env);
@@ -311,14 +318,10 @@ export const cutoverRisks = (env = process.env) => {
   check('AMADEUS_WS_DUTY_CODE',
     'defaults to SU; a duty code the production office does not grant looks like an Amadeus outage');
 
-  // The WSAP is not just a credential - it is the label stamped on every offer
-  // and compared by the chain's cross-environment guard. Left pinned to the
-  // test WSAP while the endpoint moves, that guard compares PDT to PDT, agrees,
-  // and lets a cached PDT offer be sold on the production node.
-  check('AMADEUS_WS_WSAP',
-    'the offer stamp and the chain\'s cross-environment guard both read it', ['1ASIWJETJEC']);
-  check('AMADEUS_WS_OFFICE_ID',
-    'every sell, price and issuance runs under this office and its authorisations', ['SCK1S2400']);
+  // Not checked: AMADEUS_WS_WSAP and AMADEUS_WS_OFFICE_ID. Amadeus issued
+  // production under the same WSAP (1ASIWJETJEC) and office (SCK1S2400) as PDT,
+  // so those values are correct on both, and the cross-environment guard reads
+  // the endpoint's node instead.
 
   const endpoint = String(env.AMADEUS_WS_ENDPOINT || '');
   if (/\btest\b/i.test(endpoint)) {

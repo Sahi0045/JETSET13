@@ -467,6 +467,7 @@ const mapCombination = (recommendation, flightRef, combination, ctx) => {
     travelerPricings,
     _ama: {
       wsap: config.wsap,
+      node: config.node,
       officeId: config.officeId,
       currency,
       recommendationId: itemNumber,

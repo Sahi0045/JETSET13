@@ -522,6 +522,14 @@ const issueInFreshSessions = async (booked, {
  * @param {number} [p.verifiedChargeTotal] what checkout verified and charged for this fare
  * @param {Function} [p.onCommitted]  awaited with {pnr, order} the moment a PNR exists
  */
+// PDT and production share the WSAP name, so the node is what separates them.
+// An offer without a node stamp predates it and is bounded by the age limit.
+const otherEnvironment = (ama, config) => {
+  if (ama.wsap && ama.wsap !== config.wsap) return `WSAP ${ama.wsap}, this server is ${config.wsap}`;
+  if (ama.node && String(ama.node).toLowerCase() !== config.node) return `node ${ama.node}, this server is ${config.node}`;
+  return null;
+};
+
 export const runBookingChain = async (p) => {
   const config = getWsConfig();
   const { offer, contact = {}, bookingReference, expectedTotal, paidAmount, verifiedChargeTotal, onCommitted, beforeCommit } = p;
@@ -536,14 +544,15 @@ export const runBookingChain = async (p) => {
     });
   }
 
-  // A PDT offer must never be sold against a production WSAP, or the reverse:
-  // the recommendation refers to inventory in one system only.
-  if (ama.wsap && ama.wsap !== config.wsap) {
+  // A PDT offer must never be sold against production, or the reverse: the
+  // recommendation refers to inventory in one system only.
+  const foundElsewhere = otherEnvironment(ama, config);
+  if (foundElsewhere) {
     throw new BookingChainError({
       step: 'validate',
       error: 'This fare has expired - please search again',
       code: 409,
-      technicalError: `offer was found on WSAP ${ama.wsap}, this server is ${config.wsap}`,
+      technicalError: `offer was found on ${foundElsewhere}`,
     });
   }
 
@@ -1069,11 +1078,12 @@ export const confirmSeats = async (flightOffer) => {
       operation: 'Air_SellFromRecommendation',
     });
   }
-  if (ama.wsap && ama.wsap !== config.wsap) {
+  const foundElsewhere = otherEnvironment(ama, config);
+  if (foundElsewhere) {
     throw new AmadeusSoapError({
       error: 'This fare has expired - please search again',
       code: 409,
-      technicalError: `seat check: offer was found on WSAP ${ama.wsap}, this server is ${config.wsap}`,
+      technicalError: `seat check: offer was found on ${foundElsewhere}`,
       operation: 'Air_SellFromRecommendation',
     });
   }
