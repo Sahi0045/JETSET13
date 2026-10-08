@@ -75,6 +75,13 @@ const queueOk = envelope('Queue_PlacePNRReply', '<dummy/>', SESSION);
 const issueRefused = envelope('DocIssuance_IssueTicketReply',
   '<processingStatus><statusCode>X</statusCode></processingStatus><errorGroup><errorOrWarningCodeDetails><errorDetails><errorCode>2161</errorCode></errorDetails></errorOrWarningCodeDetails>'
   + '<errorWarningDescription><freeText>PROHIBITED TICKETING CARRIER - RE-ENTER TICKETING CARRIER</freeText></errorWarningDescription></errorGroup>', SESSION);
+// A refusal for now, not for good: the link to the airline was down. The order
+// route holds this one for a person; a refusal for good (2161) it cancels and
+// refunds (refusedTicketCancelledAndRefunded.test.js).
+const issueFailedForNow = envelope('DocIssuance_IssueTicketReply',
+  '<processingStatus><statusCode>X</statusCode></processingStatus><errorGroup><errorOrWarningCodeDetails><errorDetails><errorCode>0</errorCode></errorDetails></errorOrWarningCodeDetails>'
+  + '<errorWarningDescription><freeText>CZ ETKT: COMMUNICATIONS LINE UNAVAILABLE</freeText></errorWarningDescription></errorGroup>', SESSION);
+const forNow = (script) => script.map(([action, answer]) => [action, answer === issueRefused ? issueFailedForNow : answer]);
 const signOutOk = envelope('Security_SignOutReply', '<dummy/>');
 
 const offer = () => ({
@@ -314,7 +321,7 @@ describe('the chain\'s error carries the change it accepted', () => {
 
 describe('the order route holding that booking', () => {
   it('keeps the schedule change under the held flag, where the desk and Slack look for it', async () => {
-    const { res, row } = await heldBy(refusedInSession());
+    const { res, row } = await heldBy(forNow(refusedInSession()));
 
     // The route took the committed branch: the airline holds ABC123, a person finishes it.
     expect(res.status).toBe(202);
@@ -326,7 +333,7 @@ describe('the order route holding that booking', () => {
       reason: 'chain failed after commit at issueTicket',
       ticketed: false,
       at: expect.any(String),
-      amadeus: { operation: 'DocIssuance_IssueTicket', code: '2161', message: expect.stringContaining('PROHIBITED TICKETING CARRIER') },
+      amadeus: { operation: 'DocIssuance_IssueTicket', code: '0', message: expect.stringContaining('COMMUNICATIONS LINE UNAVAILABLE') },
       previous: { reason: 'schedule_changed_by_airline', statuses: ['TK'], at: expect.any(String) },
     });
     expect(flagsInForce(row).map((flag) => flag.reason)).toEqual(['chain failed after commit at issueTicket', 'schedule_changed_by_airline']);
@@ -337,7 +344,7 @@ describe('the order route holding that booking', () => {
   });
 
   it('held from a new session: the same', async () => {
-    const { res, row } = await heldBy(refusedInNewSession());
+    const { res, row } = await heldBy(forNow(refusedInNewSession()));
     expect(res.status).toBe(202);
     expect(row.booking_details.needs_review).toMatchObject({
       reason: 'chain failed after commit at issueTicket',
@@ -346,7 +353,7 @@ describe('the order route holding that booking', () => {
   });
 
   it('before anyone tickets it: Slack names the retiming on the held booking\'s line; the desk lists the hold', async () => {
-    const { row } = await heldBy(refusedInSession());
+    const { row } = await heldBy(forNow(refusedInSession()));
     const { buildMessage, selectUnannounced } = await alarm();
     const picked = selectUnannounced([row]);
     expect(picked).toHaveLength(1);
@@ -360,7 +367,7 @@ describe('the order route holding that booking', () => {
   });
 
   it('once a person has ticketed it: the retiming is what is left, on the desk and in Slack', async () => {
-    const { table } = await heldBy(refusedInSession());
+    const { table } = await heldBy(forNow(refusedInSession()));
     const ticketed = await ticketedBySync(table);
 
     expect(ticketed.booking_details.gds.ticketed).toBe(true);
@@ -376,7 +383,7 @@ describe('the order route holding that booking', () => {
   });
 
   it('announced while held: not announced again once ticketed, since that post named the retiming', async () => {
-    const { table } = await heldBy(refusedInSession());
+    const { table } = await heldBy(forNow(refusedInSession()));
     const row = table.row(REF);
     row.booking_details.needs_review.alerted_at = new Date().toISOString();
     const ticketed = await ticketedBySync(table);
@@ -402,13 +409,13 @@ describe('the order route holding that booking', () => {
   });
 
   it('no change at commit: the held flag is written as before, with nothing under it', async () => {
-    const { res, row } = await heldBy(refusedUnchanged());
+    const { res, row } = await heldBy(forNow(refusedUnchanged()));
     expect(res.status).toBe(202);
     expect(row.booking_details.needs_review).toEqual({
       reason: 'chain failed after commit at issueTicket',
       ticketed: false,
       at: expect.any(String),
-      amadeus: { operation: 'DocIssuance_IssueTicket', code: '2161', message: expect.stringContaining('PROHIBITED TICKETING CARRIER') },
+      amadeus: { operation: 'DocIssuance_IssueTicket', code: '0', message: expect.stringContaining('COMMUNICATIONS LINE UNAVAILABLE') },
     });
     expect(scheduleChangeOf(row)).toBeNull();
     const { buildMessage, selectUnannounced } = await alarm();

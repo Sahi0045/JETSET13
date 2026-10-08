@@ -85,6 +85,13 @@ const queueOk = envelope('Queue_PlacePNRReply', '<dummy/>', SESSION);
 const issueRefused = envelope('DocIssuance_IssueTicketReply',
   '<processingStatus><statusCode>X</statusCode></processingStatus><errorGroup><errorOrWarningCodeDetails><errorDetails><errorCode>2161</errorCode></errorDetails></errorOrWarningCodeDetails>'
   + '<errorWarningDescription><freeText>PROHIBITED TICKETING CARRIER - RE-ENTER TICKETING CARRIER</freeText></errorWarningDescription></errorGroup>', SESSION);
+// A refusal for now, not for good: the link to the airline was down. The order
+// route holds this one for a person; a refusal for good (2161) it cancels and
+// refunds (refusedTicketCancelledAndRefunded.test.js).
+const issueFailedForNow = envelope('DocIssuance_IssueTicketReply',
+  '<processingStatus><statusCode>X</statusCode></processingStatus><errorGroup><errorOrWarningCodeDetails><errorDetails><errorCode>0</errorCode></errorDetails></errorOrWarningCodeDetails>'
+  + '<errorWarningDescription><freeText>CZ ETKT: COMMUNICATIONS LINE UNAVAILABLE</freeText></errorWarningDescription></errorGroup>', SESSION);
+const forNow = (script) => script.map(([action, answer]) => [action, answer === issueRefused ? issueFailedForNow : answer]);
 const signOutOk = envelope('Security_SignOutReply', '<dummy/>');
 
 const offer = () => ({
@@ -305,7 +312,7 @@ afterEach(() => {
  */
 describe('verifier: the desk and a held booking the airline retimed', () => {
   it('the desk names the retiming while the booking is still unticketed', async () => {
-    const { row } = await heldBy(refusedInSession());
+    const { row } = await heldBy(forNow(refusedInSession()));
     expect(scheduleChangeOf(row)).toMatchObject({ statuses: ['TK'] });
     // The desk's only line for this booking (BookingsList / SupportQueue render
     // attentionLabel + reason).
@@ -313,7 +320,7 @@ describe('verifier: the desk and a held booking the airline retimed', () => {
   });
 
   it('ticketed by hand and marked handled from the desk before the alarm ran: the retiming still reaches someone', async () => {
-    const { app, table } = await heldBy(refusedInSession());
+    const { app, table } = await heldBy(forNow(refusedInSession()));
     const before = table.row(REF);
     const shownOnDesk = attentionOf(before).reason;
 

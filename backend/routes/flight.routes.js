@@ -8,12 +8,13 @@ import { validate } from '../middleware/validate.js';
 import { z } from 'zod';
 import { protect, admin, bookingStaff, optionalProtect } from '../middleware/auth.middleware.js';
 import { resolveBookingUserId } from '../utils/bookingOwner.js';
-import { handleCancelBookingAction, recordPaymentAfterCancel, reverseArcPaymentForOrder, settleManualFlightRefund } from './payment/operations.handlers.js';
+import { SYSTEM_CANCEL, handleCancelBookingAction, recordPaymentAfterCancel, reverseArcPaymentForOrder, settleManualFlightRefund } from './payment/operations.handlers.js';
 import { emailMatchesBooking, isBookingOwner } from '../utils/bookingAccess.js';
 import { reconcileBookingPayment } from './payment/checkout.handlers.js';
 import { reportError } from '../services/monitoring.js';
 import { withBookingPriority } from '../services/amadeusSoap/semaphore.js';
 import { describeWsConfig, getWsConfig } from '../services/amadeusSoap/config.js';
+import { isStandingTicketRefusal } from '../services/amadeusSoap/codes.js';
 import { recordCouponUse } from '../services/coupon.service.js';
 import { isFareRefusal } from '../services/flightCheckout.service.js';
 import { crossesBorder, touchesUnitedStates } from '../utils/itinerary.js';
@@ -120,7 +121,7 @@ router.use(
 //
 // `email` is a guest's proof: the address the booking was made with. Only the
 // Manage Booking cancel passes one; the handler checks it.
-async function invokeOrchestratedCancel(bookingReference, reason, req, { email } = {}) {
+async function invokeOrchestratedCancel(bookingReference, reason, req, { email, system = false } = {}) {
   let payload = null;
   let statusCode = 200;
   const fakeRes = {
@@ -133,6 +134,7 @@ async function invokeOrchestratedCancel(bookingReference, reason, req, { email }
     user: req?.user,
     headers: req?.headers || {},
     cookies: req?.cookies || {},
+    ...(system ? { [SYSTEM_CANCEL]: true } : {}),
   }, fakeRes);
   return { statusCode, payload };
 }
@@ -539,6 +541,73 @@ export async function flagForReview({
   }
 
   return patched;
+}
+
+/**
+ * Cancel and refund a booking whose ticket the airline refused for good
+ * (isStandingTicketRefusal), through the cancel flow, which refunds in full only
+ * when the airline shows no ticket. Returns the answer for the order request,
+ * or null when the cancel refused before doing anything and the booking is to
+ * be held for a person as before.
+ */
+async function releaseRefusedTicket(bookingReference, providerError, req) {
+  const { pnr } = providerError || {};
+  if (providerError?.step !== 'issueTicket' || providerError.committed !== true || providerError.ticketed === true
+    || providerError.issuance || !pnr || !isStandingTicketRefusal(providerError)) {
+    return null;
+  }
+
+  // The cancel flow refuses a booking whose chain still reads committed.
+  await patchBookingDetails(bookingReference, (details) => (details.gds_chain?.state === 'committed'
+    ? { gds_chain: { ...details.gds_chain, state: 'finished', finishedAt: new Date().toISOString() } }
+    : {}));
+
+  const refusal = [providerError.amadeusCode, providerError.technicalError].filter(Boolean).join(' ');
+  const { statusCode, payload } = await invokeOrchestratedCancel(
+    bookingReference, `Ticket refused by the airline: ${refusal}`, req, { system: true });
+  console.warn('🎫 Ticket refused for good; cancel flow answered', { bookingReference, pnr, refusal, statusCode, paymentAction: payload?.cancellation?.paymentAction });
+  reportError(providerError, { service: 'amadeus-ws', flow: 'booking', step: providerError.step, pnr, bookingReference, released: statusCode === 200 });
+
+  if (statusCode === 200 && payload?.success) {
+    const paymentAction = payload.cancellation?.paymentAction ?? null;
+    const message = `The airline did not allow this ticket to be issued, so we cancelled your reservation. ${payload.message || ''}`.trim();
+    return {
+      status: 502,
+      body: {
+        success: false,
+        bookingFailed: true,
+        code: 'BOOKING_FAILED',
+        refunded: ['VOID', 'FULL_REFUND'].includes(paymentAction),
+        refundAction: paymentAction,
+        bookingReference,
+        pnr,
+        error: message,
+        message,
+      },
+    };
+  }
+
+  // The cancel flow acted and flagged the booking itself - the airline kept the
+  // reservation (needsReview), or it cancelled and could not save the outcome
+  // (cancellation). Its flag is the accurate one, so the booking is not flagged
+  // again below. Any other failure gives no proof it flagged anything, and the
+  // booking is held as before.
+  if (payload?.needsReview === true || payload?.cancellation) {
+    return {
+      status: 202,
+      body: {
+        success: true,
+        data: { id: pnr, pnr, status: 'PENDING_CONFIRMATION' },
+        pnr,
+        orderId: pnr,
+        bookingReference,
+        needsReview: true,
+        message: 'The airline did not allow this ticket to be issued. Our team has been alerted and will cancel '
+          + 'the reservation and refund you - please call (877) 538-7380 if it is urgent.',
+      },
+    };
+  }
+  return null;
 }
 
 /**
@@ -3664,6 +3733,9 @@ router.post('/order', optionalProtect, async (req, res) => {
       // and if it was ticketed, with a ticket the airline will still honour.
       // These need a human, not an automatic reversal.
       if (providerError?.committed) {
+        const refused = await releaseRefusedTicket(req.body.bookingReference, providerError, req);
+        if (refused) return res.status(refused.status).json(refused.body);
+
         await flagForReview({
           bookingReference: req.body.bookingReference,
           pnr: providerError.pnr,
