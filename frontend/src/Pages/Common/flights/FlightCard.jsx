@@ -119,7 +119,7 @@ function Leg({ leg, label, operators = [], cityMap = {} }) {
             <span className="font-semibold text-gray-700">{leg.departure?.airport}</span>
             {leg.departure?.terminal && <span className="ml-1 text-[10px]">T{leg.departure.terminal}</span>}
           </div>
-          <div className="text-[11px] text-gray-400 truncate max-w-[90px]">{leg.departure?.cityName || ''}</div>
+          <div className="text-[11px] text-gray-400 truncate max-w-[90px]">{cityMap[leg.departure?.airport] || leg.departure?.cityName || ''}</div>
         </div>
 
         {/* Middle */}
@@ -157,7 +157,7 @@ function Leg({ leg, label, operators = [], cityMap = {} }) {
             <span className="font-semibold text-gray-700">{leg.arrival?.airport}</span>
             {leg.arrival?.terminal && <span className="ml-1 text-[10px]">T{leg.arrival.terminal}</span>}
           </div>
-          <div className="text-[11px] text-gray-400 truncate max-w-[90px] ml-auto">{leg.arrival?.cityName || ''}</div>
+          <div className="text-[11px] text-gray-400 truncate max-w-[90px] ml-auto">{cityMap[leg.arrival?.airport] || leg.arrival?.cityName || ''}</div>
         </div>
       </div>
     </div>

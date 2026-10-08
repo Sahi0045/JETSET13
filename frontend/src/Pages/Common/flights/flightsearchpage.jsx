@@ -13,8 +13,8 @@ import {
   sourceCities,
   specialFares
 } from "./data.js";
-import { allAirports } from "./airports.js";
 import AirportService from "../../../Services/AirportService";
+import useCityNames, { airportCodesOf } from "../../../hooks/useCityNames";
 import { getTodayDate } from "../../../utils/dateUtils";
 import { parseCheckedBagLabel } from "../../../utils/baggage";
 
@@ -33,6 +33,15 @@ import FlightFareCalendar from './FlightFareCalendar';
 import { sortFlights } from './flightSort';
 import { buildSearchPayload, fieldCode, searchFromQuery, searchKeyOf, searchToQuery } from './searchQuery';
 import { airportClockLabel, buildDateStrip, filtersWithin, legDateLabel, matchesFilters, minutesBetweenAirportTimes, priceStep, searchFailureMessage, shiftDateStrip, withDepartureDate } from './searchResults';
+
+// The IATA code in "New Delhi (DEL)", or a bare code as typed.
+const extractRouteCode = (str) => {
+  if (!str) return '';
+  const match = str.match?.(/\(([A-Z]{3})\)$/);
+  if (match) return match[1];
+  if (/^[A-Z]{3}$/.test(String(str).trim())) return String(str).trim();
+  return str;
+};
 
 function FlightSearchPage() {
   const location = useLocation();
@@ -273,11 +282,13 @@ function FlightSearchPage() {
   // This map is only used as a fallback cache and gets populated dynamically from search results
   const [dynamicAirlineMap, setDynamicAirlineMap] = useState({});
 
-  // City code to name mapping - Generated from comprehensive airports database
-  const cityMap = useMemo(() => allAirports.reduce((acc, airport) => {
-    acc[airport.code] = airport.name;
-    return acc;
-  }, {}), []);
+  // City code to name mapping: the built-in airport list, plus names looked up
+  // for the route and result airports it lacks.
+  const cityMap = useCityNames([
+    searchParams.fromCode || extractRouteCode(searchParams.from),
+    searchParams.toCode || extractRouteCode(searchParams.to),
+    ...flights.flatMap(airportCodesOf),
+  ]);
 
   // No static mappings needed - all airports are handled dynamically from airports.js
 
@@ -989,13 +1000,6 @@ function FlightSearchPage() {
   const { currentItems, totalPages, totalItems, startIndex, endIndex } = getPaginatedData();
 
   // Resolve readable origin/destination city names for the results header
-  const extractRouteCode = (str) => {
-    if (!str) return '';
-    const match = str.match?.(/\(([A-Z]{3})\)$/);
-    if (match) return match[1];
-    if (/^[A-Z]{3}$/.test(String(str).trim())) return String(str).trim();
-    return str;
-  };
   const fromCode = searchParams.fromCode || extractRouteCode(searchParams.from);
   const toCode = searchParams.toCode || extractRouteCode(searchParams.to);
   const fromCityName = cityMap[fromCode] || String(searchParams.from || '').replace(/\s*\([A-Z]{3}\)$/, '') || fromCode;

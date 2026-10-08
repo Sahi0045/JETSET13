@@ -43,6 +43,7 @@ import { placeSavedTraveller, removeSavedTraveller, toSavedTraveller } from '../
 import { useSaveTravellers, useSavedTravellers } from '../../../hooks/queries/useSavedTravellers';
 import TravellerGroupEditor from './TravellerGroupEditor';
 import FlightFareGoneAlternatives from './FlightFareGoneAlternatives';
+import useCityNames, { airportCodesOf } from '../../../hooks/useCityNames';
 import "./booking-confirmation.css";
 
 // Passport / travel-document fields only matter on international routes. Map each
@@ -247,11 +248,16 @@ function FlightBookingConfirmation() {
       : current));
   }, [locatedCallingCode]);
 
+  const cityNames = useCityNames([
+    ...airportCodesOf(reviewState?.flightData),
+    bookingDetails?.flight?.departureCode,
+    bookingDetails?.flight?.arrivalCode,
+  ]);
+
   // Helper to get city name from airport code
   const getCityName = (code) => {
     if (!code) return '';
-    const airport = allAirports.find(a => a.code === code);
-    return airport ? airport.name : code;
+    return cityNames[String(code).toUpperCase()] || code;
   };
 
   // Shared with the search card and the fare selector, which each grew their
@@ -1589,7 +1595,7 @@ function FlightBookingConfirmation() {
               <div className="segment-route flex-1 flex items-stretch gap-3">
                 {/* Departure */}
                 <div className="route-endpoint departure flex flex-col items-start min-w-[100px] md:min-w-[120px]">
-                  <div className="text-xs text-gray-500">{seg.departure.cityName || getCityName(seg.departure.airport)}</div>
+                  <div className="text-xs text-gray-500">{cityNames[seg.departure.airport] || seg.departure.cityName || seg.departure.airport}</div>
                   <div className="text-2xl font-bold text-[#055B75]">{depTime}</div>
                   <div className="text-xs text-gray-500">{depDate}</div>
                   <div className="text-[11px] text-gray-400 mt-0.5">
@@ -1626,7 +1632,7 @@ function FlightBookingConfirmation() {
 
                 {/* Arrival */}
                 <div className="route-endpoint arrival flex flex-col items-end min-w-[100px] md:min-w-[120px] text-right">
-                  <div className="text-xs text-gray-500">{seg.arrival.cityName || getCityName(seg.arrival.airport)}</div>
+                  <div className="text-xs text-gray-500">{cityNames[seg.arrival.airport] || seg.arrival.cityName || seg.arrival.airport}</div>
                   <div className="text-2xl font-bold text-[#055B75]">{arrTime}</div>
                   <div className="text-xs text-gray-500">{arrDate}</div>
                   <div className="text-[11px] text-gray-400 mt-0.5">
