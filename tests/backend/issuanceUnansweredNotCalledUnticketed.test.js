@@ -31,8 +31,10 @@ vi.mock('../../backend/routes/payment/arcpay.config.js', async () => {
  * Now the chain says the issuance went unanswered, the route records it
  * beside `ticketed: false` (not in place of it: the flag's `ticketed` is read
  * as "the ticket WAS issued" by openTicketedFlagOf), and the alarm gives the
- * booking its own section. A refusal Amadeus did send (2161) is an answer and
- * keeps today's flag and wording. issuanceUnansweredCancelHeldForReview.test.js
+ * booking its own section. A refusal Amadeus did send is an answer and keeps
+ * today's flag and wording: one that is only for now, such as a lost link to the
+ * airline, below. One for good (2161) is cancelled and refunded instead
+ * (refusedTicketCancelledAndRefunded.test.js). issuanceUnansweredCancelHeldForReview.test.js
  * follows the same flag into a cancel.
  */
 
@@ -63,6 +65,10 @@ const queueOk = env('Queue_PlacePNRReply', '<dummy/>');
 const issueRefused2161 = env('DocIssuance_IssueTicketReply',
   '<processingStatus><statusCode>X</statusCode></processingStatus><errorGroup><errorOrWarningCodeDetails><errorDetails><errorCode>2161</errorCode></errorDetails></errorOrWarningCodeDetails>'
   + '<errorWarningDescription><freeText>PROHIBITED TICKETING CARRIER - RE-ENTER TICKETING CARRIER</freeText></errorWarningDescription></errorGroup>');
+// A refusal for now, not for good: the link to the airline was down (issuanceRefusals.test.js).
+const issueFailedForNow = env('DocIssuance_IssueTicketReply',
+  '<processingStatus><statusCode>X</statusCode></processingStatus><errorGroup><errorOrWarningCodeDetails><errorDetails><errorCode>0</errorCode></errorDetails></errorOrWarningCodeDetails>'
+  + '<errorWarningDescription><freeText>CZ ETKT: COMMUNICATIONS LINE UNAVAILABLE</freeText></errorWarningDescription></errorGroup>');
 const signOutOk = env('Security_SignOutReply', '<dummy/>');
 
 const timedOut = () => Object.assign(new Error('timeout of 25000ms exceeded'), { code: 'ECONNABORTED' });
@@ -341,8 +347,8 @@ describe('the order route records it beside "not ticketed"', () => {
     expect(send.mock.calls[0][0].heldForReview).toBe(true);
   });
 
-  it('a 2161 refusal writes the flag exactly as before: no issuance on it', async () => {
-    const { res, row } = await heldBy(issuedInSession(issueRefused2161));
+  it('a refusal for now writes the flag exactly as before: no issuance on it', async () => {
+    const { res, row } = await heldBy(issuedInSession(issueFailedForNow));
     expect(res.status).toBe(202);
     expect(row.status).toBe('pending_ticketing');
     expect(row.booking_details.gds.ticketed).toBe(false);
@@ -352,8 +358,8 @@ describe('the order route records it beside "not ticketed"', () => {
       at: expect.any(String),
       amadeus: {
         operation: 'DocIssuance_IssueTicket',
-        code: '2161',
-        message: expect.stringContaining('PROHIBITED TICKETING CARRIER'),
+        code: '0',
+        message: expect.stringContaining('COMMUNICATIONS LINE UNAVAILABLE'),
       },
     });
   });
@@ -379,8 +385,8 @@ describe('what staff are told in Slack before ticket sync reads the PNR', () => 
     expect(text).not.toMatch(/ticketed: NO/);
   });
 
-  it('a 2161 refusal keeps "paid but not ticketed" and its wording', async () => {
-    const { row } = await heldBy(issuedInSession(issueRefused2161));
+  it('a refusal for now keeps "paid but not ticketed" and its wording', async () => {
+    const { row } = await heldBy(issuedInSession(issueFailedForNow));
     const text = await alarmText(row);
     expect(text).toMatch(/^:rotating_light: \*1 booking paid but not ticketed\*/);
     expect(text).toContain('The customer has paid and no ticket was issued. Each one needs a human: ticket it, or refund it.');
@@ -390,7 +396,7 @@ describe('what staff are told in Slack before ticket sync reads the PNR', () => 
 
   it('both in one post: each under its own heading', async () => {
     const unanswered = (await heldBy(issuedInSession(timedOut()))).row;
-    const refused = { ...(await heldBy(issuedInSession(issueRefused2161))).row, booking_reference: 'FLTREFUSED1' };
+    const refused = { ...(await heldBy(issuedInSession(issueFailedForNow))).row, booking_reference: 'FLTREFUSED1' };
     const alarm = await import('../../backend/jobs/needsReviewAlert.job.js');
     const text = alarm.buildMessage(alarm.selectUnannounced([unanswered, refused]));
     const [unansweredSection, refusedSection] = [text.indexOf('ticket issuance not answered'), text.indexOf('paid but not ticketed')];

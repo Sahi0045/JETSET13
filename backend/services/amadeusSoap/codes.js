@@ -142,3 +142,14 @@ export const ERROR_CATALOGUE = Object.freeze([
 ]);
 
 export const DEFAULT_ERROR = Object.freeze({ code: 502, error: 'Flight service temporarily unavailable' });
+
+const STANDING_TICKET_REFUSAL_TEXT = /PROHIBITED TICKETING CARRIER|\bETKT\b.*(NOT AUTHORI[SZ]ED|NOT VALID THIS MARKET|NO INTERLINE BETWEEN CARRIERS|INVALID AIRLINE DESIGNATOR)/i;
+
+/**
+ * An issuance refusal that waiting or retrying cannot change: the office may
+ * not ticket this carrier, in this market, or this interline. Not 9125 NEED
+ * AIRLINE R/LOC (the airline is only not ready yet), not a link failure such as
+ * COMMUNICATIONS LINE UNAVAILABLE, and not a void's bare NOT AUTHORISED.
+ */
+export const isStandingTicketRefusal = (error) => String(error?.amadeusCode ?? '') === '2161'
+  || STANDING_TICKET_REFUSAL_TEXT.test(String(error?.technicalError ?? ''));

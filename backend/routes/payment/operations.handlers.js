@@ -133,7 +133,7 @@ export async function handleCancelBookingAction(req, res) {
         // tests' fixtures had the column, which is how it shipped.
         const caller = await getCaller(req);
         const isStaff = [caller?.role, req.user?.role].some(isBookingStaff);
-        if (!isStaff) {
+        if (!isStaff && req[SYSTEM_CANCEL] !== true) {
             const sessionUserId = resolveBookingUserId(req);
             const owned = hasBookingOwner(booking);
             const allowed = owned ? isBookingOwner(sessionUserId, booking) : emailIsBookers(email, booking);
@@ -214,6 +214,13 @@ const refuse = (res, status, code, text, extra = {}) => res.status(status).json(
 });
 
 const CANCEL_IN_PROGRESS_TEXT = 'This booking is already being cancelled. Refresh in a minute to see what happened to your payment.';
+/**
+ * Marks a cancel the server asks for itself (the order route, for a ticket the
+ * airline refused). A Symbol, so no request body, header or query can carry it:
+ * only in-process callers that set it on the request object they build.
+ */
+export const SYSTEM_CANCEL = Symbol('cancel requested by the server');
+
 const STILL_BOOKING_TEXT = 'This booking is still being confirmed with the airline, so it cannot be cancelled yet. '
     + 'Nothing has been cancelled or refunded. Please try again in a few minutes.';
 
