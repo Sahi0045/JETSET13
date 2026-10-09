@@ -108,6 +108,15 @@ describe('the airline fee table', () => {
     expect(screen.getByText('Not allowed')).toBeTruthy();
   });
 
+  it('shows a free change as no airline fee, still with the fare difference', () => {
+    const flex = { ...penalties, change: { ...penalties.change, before: cell(true, 0) } };
+    render(<FlightFareRules flightOffer={offer} rules={ready({ bags: [], fareRules: [], penalties: flex })} />);
+
+    expect(screen.getByText('No airline fee')).toBeTruthy();
+    expect(screen.queryByText('US$0')).toBeNull();
+    expect(screen.getAllByText('+ fare difference')).toHaveLength(2);
+  });
+
   it('shows no fee table without one', () => {
     render(<FlightFareRules flightOffer={offer} rules={ready({ bags: [], fareRules: [{ title: 'CANCELLATIONS', text: 'ANY TIME\nTICKET IS NON-REFUNDABLE.' }], penalties: null })} />);
 

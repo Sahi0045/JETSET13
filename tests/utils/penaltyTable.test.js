@@ -38,6 +38,13 @@ describe('penaltyRows', () => {
     expect(rows[0].cancel).toEqual({ tone: 'unknown', text: 'See fare rules', amount: null });
   });
 
+  // Lufthansa Economy Flex files a fee of 0 for a refund or change before
+  // departure (PDT, 10 Oct 2026): free, not "US$0".
+  it('calls a filed fee of nothing no airline fee', () => {
+    const rows = penaltyRows({ ...lufthansa, refund: { ...lufthansa.refund, before: cell(true, 0) } });
+    expect(rows[0].cancel).toEqual({ tone: 'allowed', text: 'No airline fee', amount: 0 });
+  });
+
   it('is null without a table', () => {
     expect(penaltyRows(null)).toBeNull();
   });

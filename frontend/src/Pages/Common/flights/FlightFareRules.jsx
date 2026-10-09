@@ -170,15 +170,11 @@ function FlightFareRules({ flightOffer, onBagsChange, rules: fareCheck }) {
                 <tr key={row.key} className="align-top">
                   <th scope="row" className="px-3 py-2 text-left font-semibold text-gray-800 border-t border-gray-100">{row.label}</th>
                   {[row.cancel, row.change].map((cell, i) => {
-                    const fee = cell.amount !== null ? describeFee(cell.amount, penalties.currency || 'USD') : null;
+                    const fee = cell.amount > 0 ? describeFee(cell.amount, penalties.currency || 'USD') : null;
                     return (
                       <td key={i} className={`px-3 py-2 border-t border-gray-100 ${cell.tone === 'notAllowed' ? 'font-semibold text-red-700' : 'text-gray-800'}`}>
-                        {fee ? (
-                          <>
-                            <span className="font-semibold"><Fee fee={fee} /></span>
-                            {i === 1 && <span className="block text-gray-500">+ fare difference</span>}
-                          </>
-                        ) : cell.text}
+                        {fee ? <span className="font-semibold"><Fee fee={fee} /></span> : cell.text}
+                        {i === 1 && cell.amount !== null && <span className="block text-gray-500">+ fare difference</span>}
                       </td>
                     );
                   })}

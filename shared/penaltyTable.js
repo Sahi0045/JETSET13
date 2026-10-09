@@ -13,7 +13,9 @@ export const PENALTY_SITUATIONS = Object.freeze([
 const describeCell = (cell, refusal) => {
   if (!cell || cell.allowed === null || cell.allowed === undefined) return { tone: 'unknown', text: 'See fare rules', amount: null };
   if (cell.allowed === false) return { tone: 'notAllowed', text: refusal, amount: null };
-  if (Number.isFinite(cell.amount) && !cell.varies) return { tone: 'allowed', text: 'Allowed', amount: cell.amount };
+  if (Number.isFinite(cell.amount) && !cell.varies) {
+    return { tone: 'allowed', text: cell.amount === 0 ? 'No airline fee' : 'Allowed', amount: cell.amount };
+  }
   return { tone: 'allowed', text: 'Allowed, fee applies', amount: null };
 };
 
