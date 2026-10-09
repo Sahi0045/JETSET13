@@ -3185,7 +3185,7 @@ router.post('/order', optionalProtect, async (req, res) => {
     console.log('📋 Flight order creation request received');
     console.log('Request body keys:', Object.keys(req.body));
 
-    const { travelers, contactInfo, totalAmount, amount, fareBreakdown, passengerDetails } = req.body;
+    const { travelers, contactInfo, totalAmount, amount, passengerDetails } = req.body;
 
     // From the session first, the body only as a fallback. Taking it from the
     // body alone is why confirmed bookings ended up with no user_id and never
@@ -3994,7 +3994,7 @@ router.post('/order', optionalProtect, async (req, res) => {
       priceBase: recordedMoney(chargedFare.base, bookedOffer?.price?.base),
       priceGrandTotal: recordedMoney(chargedFare.total, bookedOffer?.price?.grandTotal || bookedOffer?.price?.total),
       priceFees: bookedOffer?.price?.fees || [],
-      fareBreakdown: fareBreakdown || null,
+      fareBreakdown: fareBreakdownOf(verifiedCharge),
       // Who was booked: the verified travellers, not the request's list.
       passengerDetails: (verifiedTravellers.length > 0 ? verifiedTravellers : passengerDetails) || amadeusTravelers.map((t) => ({
         id: t.id,
@@ -4688,6 +4688,31 @@ function chargeBreakdownOf(charge) {
     total,
     currency: 'USD',
     couponCode: charge.coupon?.code || null,
+  };
+}
+
+/**
+ * The receipt figures a booking record keeps (`fare_breakdown`), from what
+ * checkout verified and charged. It was the request body's breakdown, stored
+ * as sent, so a client could write any base fare, fee or total onto it.
+ * `totalAmount` is before any coupon, as the review page's breakdown has it.
+ */
+export function fareBreakdownOf(charge) {
+  const cents = (value) => Math.round(Number(value) * 100) / 100;
+  const total = Number(charge?.total);
+  const fare = Number(charge?.fare ?? charge?.pricedFare?.total);
+  if (!charge || !Number.isFinite(total) || !Number.isFinite(fare)) return null;
+  const discount = Number.isFinite(Number(charge.discount)) ? cents(charge.discount) : 0;
+  const serviceFee = Number.isFinite(Number(charge.serviceFee)) ? cents(charge.serviceFee) : cents(total + discount - fare);
+  const base = Number(charge.pricedFare?.base);
+  const baseFare = Number.isFinite(base) && base > 0 && base <= fare ? cents(base) : cents(fare);
+  return {
+    baseFare,
+    totalTax: cents(fare - baseFare),
+    serviceFee,
+    discount,
+    totalAmount: cents(fare + serviceFee),
+    currency: 'USD',
   };
 }
 

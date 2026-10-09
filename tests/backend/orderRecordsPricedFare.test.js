@@ -159,6 +159,21 @@ describe('the booking record after the airline priced the fare', () => {
     expect(details.price_fees).toEqual([{ amount: '185.50', type: 'TAX', code: 'US' }]);
   });
 
+  // The breakdown was the request body's, stored as sent: a client could write
+  // any base fare, fee or total onto the booking's receipt figures.
+  it('records the breakdown checkout verified, not the one the request sends', async () => {
+    const { app, table } = await appWith([checkoutRow()]);
+
+    await request(app).post('/api/flights/order').send({
+      ...order,
+      fareBreakdown: { baseFare: 1, totalTax: 0, serviceFee: 0, totalAmount: 1, currency: 'USD' },
+    });
+
+    expect(table.row(REF).booking_details.fare_breakdown).toEqual({
+      baseFare: 120, totalTax: 185.5, serviceFee: 1, discount: 0, totalAmount: 306.5, currency: 'USD',
+    });
+  });
+
   it('records the cabin, baggage and offer the airline priced', async () => {
     const { app, table } = await appWith([checkoutRow()]);
 
