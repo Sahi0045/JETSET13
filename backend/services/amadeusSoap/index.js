@@ -9,6 +9,8 @@ import { buildInformativePricingBody } from './operations/informativePricing.js'
 import { buildFareFamilyDescriptionBody, buildUpsellBody } from './operations/fareFamilies.js';
 import { describeOption, mapFareFamilyDescriptions, mapUpsellReply } from './mappers/fareFamilies.js';
 import { DEFAULT_RULE_SECTIONS, buildCheckRulesBody, readCheckRulesReply, ruleBlocks } from './operations/fareRules.js';
+import { buildMiniRulesBody } from './operations/miniRules.js';
+import { mapMiniRules } from './mappers/miniRules.js';
 import { buildFlightInfoBody, readFlightInfoError, readFlightInfoReply } from './operations/flightInfo.js';
 import { applyPricingToOffer } from './mappers/pricing.js';
 import { attributeTickets } from './mappers/flightOrder.js';
@@ -288,6 +290,20 @@ const getFiledFareRules = async (flightOffer, { sections = DEFAULT_RULE_SECTIONS
       }
     }
 
+    let penalties = null;
+    try {
+      const miniRules = await ctx.call('MiniRule_GetFromRec', buildMiniRulesBody());
+      const { reply: rulesReply } = soapReply(miniRules);
+      const inspected = inspectReply(rulesReply, 'MiniRule_GetFromRec');
+      if (inspected.error) {
+        log.warn({ reason: inspected.error.technicalError }, 'MiniRule_GetFromRec refused');
+      } else {
+        penalties = mapMiniRules(rulesReply);
+      }
+    } catch (cause) {
+      log.warn({ reason: cause?.technicalError ?? cause?.message }, 'MiniRule_GetFromRec failed');
+    }
+
     return {
       success: true,
       data: {
@@ -305,6 +321,7 @@ const getFiledFareRules = async (flightOffer, { sections = DEFAULT_RULE_SECTIONS
       },
       dictionaries: {},
       filedSections: filed.map((s) => s.code).filter(Boolean),
+      penalties,
     };
   });
 };
