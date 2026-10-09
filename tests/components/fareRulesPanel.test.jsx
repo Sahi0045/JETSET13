@@ -86,3 +86,31 @@ describe('the rules', () => {
     expect(screen.getByText('Refund permitted within ticket validity.')).toBeTruthy();
   });
 });
+
+describe('the airline fee table', () => {
+  const cell = (allowed, amount = null) => ({ allowed, amount, varies: false });
+  const penalties = {
+    currency: 'USD',
+    bookBy: '2026-11-04',
+    change: { before: cell(true, 338), noShowBefore: cell(true, 338), after: cell(false), noShowAfter: cell(false) },
+    refund: { before: cell(false), noShowBefore: cell(false), after: cell(false), noShowAfter: cell(false) },
+  };
+
+  it('shows cancel and change-date fees by situation when the fare check carries them', () => {
+    render(<FlightFareRules flightOffer={offer} rules={ready({ bags: [], fareRules: [], penalties })} />);
+
+    expect(screen.getByText('Cancel or change: airline fees')).toBeTruthy();
+    expect(screen.getByText('Before departure')).toBeTruthy();
+    expect(screen.getByText('If you miss the flight')).toBeTruthy();
+    expect(screen.getByText('After departure')).toBeTruthy();
+    expect(screen.getAllByText('Not refundable')).toHaveLength(3);
+    expect(screen.getAllByText('US$338')).toHaveLength(2);
+    expect(screen.getByText('Not allowed')).toBeTruthy();
+  });
+
+  it('shows no fee table without one', () => {
+    render(<FlightFareRules flightOffer={offer} rules={ready({ bags: [], fareRules: [{ title: 'CANCELLATIONS', text: 'ANY TIME\nTICKET IS NON-REFUNDABLE.' }], penalties: null })} />);
+
+    expect(screen.queryByText('Cancel or change: airline fees')).toBeNull();
+  });
+});
