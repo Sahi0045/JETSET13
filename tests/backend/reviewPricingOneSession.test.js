@@ -165,7 +165,7 @@ describe('/fare-rules is unchanged for the mobile app', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
-    expect(Object.keys(res.body).sort()).toEqual(['bags', 'cancellation', 'fareRules', 'success']);
+    expect(Object.keys(res.body).sort()).toEqual(['bags', 'cancellation', 'fareRules', 'penalties', 'success']);
     expect(res.body.cancellation.refundable).toBe(false);
   });
 });

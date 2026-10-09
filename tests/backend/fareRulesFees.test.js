@@ -52,3 +52,32 @@ describe('fees in headed rule blocks', () => {
     expect(res.body.fareRules.map((r) => r.title)).toEqual(['CANCELLATIONS', 'CHANGES']);
   });
 });
+
+describe('the airline fee table', () => {
+  const penalties = {
+    currency: 'USD',
+    bookBy: '2026-11-04',
+    change: { before: { allowed: true, amount: 338, varies: false } },
+    refund: { before: { allowed: false, amount: null, varies: false } },
+  };
+  const withPenalties = (table) => ({ ...filed([{ descriptionType: 'CANCELLATIONS', text: 'ANY TIME\nTICKET IS NON-REFUNDABLE.' }]), penalties: table });
+
+  it('comes with the price check', async () => {
+    const server = await app(withPenalties(penalties));
+    const res = await request(server).post('/api/flights/price').send({ flightOffer: offer, withFareRules: true });
+    expect(res.status).toBe(200);
+    expect(res.body.fareRules.penalties).toEqual(penalties);
+  });
+
+  it('comes with the fare rules', async () => {
+    const server = await app(withPenalties(penalties));
+    const res = await request(server).post('/api/flights/fare-rules').send({ flightOffer: offer });
+    expect(res.body.penalties).toEqual(penalties);
+  });
+
+  it('is null when MiniRules gave none', async () => {
+    const server = await app(withPenalties(null));
+    const res = await request(server).post('/api/flights/price').send({ flightOffer: offer, withFareRules: true });
+    expect(res.body.fareRules.penalties).toBeNull();
+  });
+});

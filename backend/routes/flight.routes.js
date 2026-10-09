@@ -2743,7 +2743,7 @@ const fareRulesFrom = (priced, flightOffer) => {
     };
   }
 
-  return { bags, fareRules: fareRules.slice(0, 8), cancellation };
+  return { bags, fareRules: fareRules.slice(0, 8), cancellation, penalties: priced?.penalties ?? null };
 };
 
 // Fare rules + extra-bag prices for a chosen flight offer
