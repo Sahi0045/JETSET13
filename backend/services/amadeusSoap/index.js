@@ -923,7 +923,6 @@ const getMostBookedDestinations = async () => ({ ...notEntitled('Travel analytic
 const getMostTraveledDestinations = getMostBookedDestinations;
 const getBusiestTravelPeriod = getMostBookedDestinations;
 
-/** A booked trip's fee table: the MiniRules of the fare stored on its PNR. Read-only. */
 const getBookedFeeTable = async (recordLocator) => withSession(async (ctx) => {
   const retrieved = await ctx.call('PNR_Retrieve', buildRetrieveBody(recordLocator), { timeoutMs: BOOKED_FEE_TABLE_TIMEOUT_MS });
   if (!inspectReply(soapReply(retrieved).reply, 'PNR_Retrieve').ok) return null;

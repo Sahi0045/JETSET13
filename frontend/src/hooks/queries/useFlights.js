@@ -50,7 +50,6 @@ export function useFlightBooking(bookingId, options = {}) {
   });
 }
 
-/** A booked trip's airline fee table, or null when it cannot be read. Never throws. */
 export async function fetchBookedFeeRules(bookingId, email) {
   const res = await fetch(getApiUrl(`flights/bookings/${encodeURIComponent(bookingId)}/fee-rules`), {
     credentials: 'include',
@@ -61,12 +60,14 @@ export async function fetchBookedFeeRules(bookingId, email) {
   return data?.success ? data.penalties ?? null : null;
 }
 
+export const bookedFeeRulesStaleTime = (query) => (query.state.data ? 30 * 60 * 1000 : 0);
+
 export function useBookedFeeRules(bookingId, options = {}) {
   const { email, ...queryOptions } = options;
   return useQuery({
     queryKey: ['flights', 'booking', bookingId, 'fee-rules', email || null],
     queryFn: () => fetchBookedFeeRules(bookingId, email),
-    staleTime: 30 * 60 * 1000,
+    staleTime: bookedFeeRulesStaleTime,
     retry: false,
     ...queryOptions,
     enabled: (queryOptions.enabled ?? true) && !!bookingId,

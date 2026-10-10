@@ -3,7 +3,6 @@ import { FileText } from 'lucide-react';
 import { describeFee, Fee } from './FlightCancellationPolicy';
 import { penaltyRows } from '../../../../../shared/penaltyTable';
 
-/** The airline's cancel and change-date fees, per adult. Nothing without a table. */
 export default function AirlineFeeTable({ penalties }) {
   const feeRows = penaltyRows(penalties);
   if (!feeRows) return null;

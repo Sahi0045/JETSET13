@@ -75,8 +75,16 @@ function ManageBooking() {
   const refreshFailed = Boolean(queryError && (passedData || fetchedBooking));
 
   const [activeTab, setActiveTab] = useState('details');
-  // Asked only when the tab is open: each answer is an Amadeus session.
-  const feeRules = useBookedFeeRules(bookingId, { email: submittedEmail, enabled: activeTab === 'rules' });
+  // The Cancel Booking button's own test, below. The fee table is asked only
+  // when the tab is open and the booking can be cancelled: each answer is an
+  // Amadeus session.
+  const canCancelOnline = Boolean(bookingData) && bookingData?.status?.toUpperCase() !== 'CANCELLED'
+    && ticketState(bookingData) !== 'cancelled' && (daysUntilDate(bookingData?.departureDate) ?? 0) >= 0
+    && !isCommitUnknown(bookingData);
+  const feeRules = useBookedFeeRules(bookingId, {
+    email: submittedEmail,
+    enabled: activeTab === 'rules' && canCancelOnline && Boolean(bookingData?.pnr),
+  });
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [cancelReason, setCancelReason] = useState('Change of plans');
@@ -673,7 +681,7 @@ function ManageBooking() {
 
           {/* Tabs */}
           <div className="border-b border-gray-200 mb-6">
-            <nav className="flex space-x-8">
+            <nav className="flex gap-6 sm:gap-8 overflow-x-auto whitespace-nowrap">
               {[
                 { id: 'details', label: 'Flight Details', icon: Plane },
                 { id: 'passenger', label: 'Passenger Info', icon: User },
@@ -948,7 +956,7 @@ function ManageBooking() {
             )}
 
             {activeTab === 'rules' && bookingData && (
-              <BookingCancelRules booking={bookingData} feeRules={feeRules} />
+              <BookingCancelRules booking={bookingData} feeRules={feeRules} canCancel={canCancelOnline} />
             )}
           </div>
 

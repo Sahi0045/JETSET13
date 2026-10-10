@@ -29,7 +29,7 @@ export const airlineRuleWords = (penalties, fee) => {
 const whose = (airline) => (airline ? `${airline}'s` : "the airline's");
 const capitalised = (text) => text.charAt(0).toUpperCase() + text.slice(1);
 
-export function ifYouCancel({ ticketState, ticketsVoided = false, penalties = null, airline = '', fee }) {
+export function ifYouCancel({ ticketState, ticketsVoided = false, ticketComing = true, penalties = null, airline = '', fee }) {
   if (ticketState === 'cancelled') return [];
   const rules = airlineRuleWords(penalties, fee);
   if (ticketState === 'issued' || ticketState === 'pending') {
@@ -44,6 +44,6 @@ export function ifYouCancel({ ticketState, ticketsVoided = false, penalties = nu
   }
   return [
     'No ticket has been issued yet, so no cancellation fee applies and what you paid is returned.',
-    ...(rules ? [`Once the ticket is issued, ${whose(airline)} rules apply: ${rules}.`] : []),
+    ...(rules && ticketComing ? [`Once the ticket is issued, ${whose(airline)} rules apply: ${rules}.`] : []),
   ];
 }

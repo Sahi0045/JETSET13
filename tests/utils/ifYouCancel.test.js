@@ -52,6 +52,16 @@ describe('ifYouCancel', () => {
   });
 });
 
+describe('ifYouCancel, when no ticket is coming', () => {
+  // A reservation the airline left without a confirmed seat, or one whose
+  // cancellation is pending, will never be ticketed.
+  it('does not promise the airline rules "once the ticket is issued"', () => {
+    expect(ifYouCancel({ ticketState: 'none', ticketComing: false, penalties: lufthansa, airline: 'Lufthansa', fee: usd })).toEqual([
+      'No ticket has been issued yet, so no cancellation fee applies and what you paid is returned.',
+    ]);
+  });
+});
+
 describe('airlineRuleWords', () => {
   it('words a refund with a fee and a refused change', () => {
     expect(airlineRuleWords({ refund: { before: cell(true, 150) }, change: { before: cell(false, 0) } }, usd))
