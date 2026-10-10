@@ -8,7 +8,10 @@ const mockUseFlightBooking = vi.fn();
 
 vi.mock('../../frontend/src/Pages/Common/Navbar', () => ({ default: () => null }));
 vi.mock('../../frontend/src/Pages/Common/Footer', () => ({ default: () => null }));
-vi.mock('../../frontend/src/hooks/queries', () => ({ useFlightBooking: (...args) => mockUseFlightBooking(...args) }));
+vi.mock('../../frontend/src/hooks/queries', () => ({
+  useFlightBooking: (...args) => mockUseFlightBooking(...args),
+  useBookedFeeRules: () => ({ isLoading: false, data: null }),
+}));
 vi.mock('../../frontend/src/contexts/SupabaseAuthContext', () => ({
   useSupabaseAuth: () => ({
     user: { id: '0b7c1f2e-3d4a-4b5c-8d6e-7f8091a2b3c4', email: 'jane@example.com' }, isAuthenticated: true, session: null, loading: false,
