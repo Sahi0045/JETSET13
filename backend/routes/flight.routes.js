@@ -38,6 +38,7 @@ import { errorSummary } from '../utils/errorSummary.js';
 import { flightSearchLimiter, guestBookingLimiter } from '../middleware/security.js';
 import { liveChainState } from '../utils/bookingChainClaim.js';
 import { isUsableEmail } from '../services/guestBooking.service.js';
+import { readBookedFeeTable } from '../services/bookedFeeTable.service.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -4633,8 +4634,6 @@ router.get('/bookings/:bookingRef', optionalProtect, guestBookingLimiter, async 
   }
 });
 
-const BOOKED_FEE_TABLE_TTL_SECONDS = 6 * 60 * 60;
-
 // The airline's cancel and change-date fees for a booked trip, read from its
 // PNR. Opened exactly as the booking itself is (loadOwnedBooking).
 router.get('/bookings/:bookingRef/fee-rules', optionalProtect, guestBookingLimiter, async (req, res) => {
@@ -4653,19 +4652,7 @@ router.get('/bookings/:bookingRef/fee-rules', optionalProtect, guestBookingLimit
     if (booking.travel_type !== 'flight' || !pnr || String(booking.status).toLowerCase() === 'cancelled') {
       return res.json({ success: true, penalties: null });
     }
-
-    const key = `flight:booked-fee-table:${booking.booking_reference}`;
-    const cached = await cacheGet(key);
-    if (cached) return res.json({ success: true, penalties: cached });
-
-    let penalties = null;
-    try {
-      penalties = await FlightProvider.getBookedFeeTable(pnr);
-    } catch (cause) {
-      console.warn('Booked fee table unavailable:', cause?.technicalError || cause?.message);
-    }
-    if (penalties) await cacheSet(key, penalties, BOOKED_FEE_TABLE_TTL_SECONDS);
-    return res.json({ success: true, penalties });
+    return res.json({ success: true, penalties: await readBookedFeeTable(booking) });
   } catch (error) {
     console.error('❌ Booked fee table error:', error);
     return res.status(500).json({ success: false, error: 'Failed to read the fare rules' });
