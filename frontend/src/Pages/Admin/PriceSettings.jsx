@@ -16,7 +16,8 @@ const PriceSettings = () => {
     hotel_service_fee_percentage: 5.0,
     package_markup_percentage: 10.0,
     service_fee_percentage: 2.5,
-    cancellation_fee: 50.00
+    cancellation_fee: 50.00,
+    flight_cancellation_fee: 50.00
   });
   
   const [loading, setLoading] = useState(true);
@@ -101,7 +102,8 @@ const PriceSettings = () => {
       hotel_service_fee_percentage: 5.0,
       package_markup_percentage: 10.0,
       service_fee_percentage: 2.5,
-      cancellation_fee: 50.00
+      cancellation_fee: 50.00,
+      flight_cancellation_fee: 50.00
     });
     setMessage({ type: 'info', text: 'Settings reset to defaults. Click Save to apply.' });
   };
@@ -261,6 +263,13 @@ const PriceSettings = () => {
                   onChange={(value) => handleInputChange('flight_taxes_fees_percentage', value)}
                   suffix="%"
                   description="Percentage of base fare added for variable taxes and fees"
+                />
+                <InputField
+                  label="Cancellation Fee"
+                  value={settings.flight_cancellation_fee}
+                  onChange={(value) => handleInputChange('flight_cancellation_fee', value)}
+                  suffix="USD"
+                  description="Kept when a customer cancels a flight after the first 24 hours, on top of the airline's own penalty"
                 />
               </div>
               <div style={{

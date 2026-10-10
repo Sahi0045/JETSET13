@@ -26,7 +26,7 @@ import { emailIsBookers, hasBookingOwner, isBookingOwner } from '../../utils/boo
 import { liveChainState } from '../../utils/bookingChainClaim.js';
 import { canReachAmadeus } from '../../utils/amadeusReach.js';
 import { unchangedSince } from '../../utils/bookingDetailsGuard.js';
-import { DEFAULT_PRICE_SETTINGS } from '../../config/priceDefaults.js';
+import { DEFAULT_PRICE_SETTINGS, flightCancellationFeeFrom } from '../../config/priceDefaults.js';
 import { cancellationMessage, refundOutcome } from '../../../shared/cancellationOutcome.js';
 import {
     COMMIT_UNKNOWN_REVIEW_REASON, ISSUANCE_UNKNOWN, commitUnknownOf, decidedFeeOf, flagInForce, needsAirlineRefundClaim, notHeldAnswerOf,
@@ -258,6 +258,19 @@ async function readCancellationFee() {
         return cancellationFeeFrom(priceSettings?.settings);
     } catch (error) {
         console.warn('Could not fetch cancellation fee, using default:', error.message);
+        return DEFAULT_PRICE_SETTINGS.cancellation_fee;
+    }
+}
+
+export async function readFlightCancellationFee() {
+    try {
+        const { data: priceSettings } = await supabase
+            .from('price_settings')
+            .select('settings')
+            .single();
+        return flightCancellationFeeFrom(priceSettings?.settings);
+    } catch (error) {
+        console.warn('Could not fetch the flight cancellation fee, using default:', error.message);
         return DEFAULT_PRICE_SETTINGS.cancellation_fee;
     }
 }
@@ -798,7 +811,7 @@ async function cancelFlightBooking(res, booking, { reason, email }) {
         rowTicketed: recordedTicket || issuanceUnknown,
         issuanceUnknownOnly: issuanceUnknown && !recordedTicket,
         refundable: details.refundable,
-        fee: await readCancellationFee(),
+        fee: await readFlightCancellationFee(),
         rowPaid: booking.payment_status === 'paid',
     });
     const currency = payment.capturedCurrency || details.currency || 'USD';

@@ -6,7 +6,7 @@ const router = express.Router();
 
 // Default price settings - one copy, shared with checkout's charge verification
 // so the page's quote and the server's check merge the stored row identically.
-import { DEFAULT_PRICE_SETTINGS as DEFAULT_SETTINGS } from '../config/priceDefaults.js';
+import { DEFAULT_PRICE_SETTINGS as DEFAULT_SETTINGS, flightCancellationFeeFrom } from '../config/priceDefaults.js';
 
 // Get current price settings
 router.get('/price-settings', async (req, res) => {
@@ -60,6 +60,7 @@ router.get('/price-settings', async (req, res) => {
 
     // Merge database settings with defaults (in case new fields are added)
     const mergedSettings = { ...DEFAULT_SETTINGS, ...settings.settings };
+    mergedSettings.flight_cancellation_fee = flightCancellationFeeFrom(settings.settings);
 
     res.json({
       success: true,
@@ -214,7 +215,8 @@ const getServiceDefaults = (service, allSettings = DEFAULT_SETTINGS) => {
     case 'flights':
       return {
         taxes_fees: allSettings.flight_taxes_fees ?? 25.00,
-        taxes_fees_percentage: allSettings.flight_taxes_fees_percentage ?? 5.0
+        taxes_fees_percentage: allSettings.flight_taxes_fees_percentage ?? 5.0,
+        cancellation_fee: flightCancellationFeeFrom(allSettings)
       };
 
     case 'cruises':

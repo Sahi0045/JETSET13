@@ -79,10 +79,10 @@ vi.mock('../../backend/services/flightProvider.js', () => ({
 
 const handlers = () => import('../../backend/routes/payment/operations.handlers.js');
 
-const cancel = async (row, { settings, payment } = {}) => {
+const cancel = async (row, { settings, payment, user = null } = {}) => {
   database = databaseFor({ row, settings, payment });
   const { handleCancelBookingAction } = await handlers();
-  const req = createRequest({ method: 'POST', body: { bookingReference: row.booking_reference, reason: 'test', email: 'traveler@example.com' } });
+  const req = createRequest({ method: 'POST', user, body: { bookingReference: row.booking_reference, reason: 'test', email: 'traveler@example.com' } });
   const res = createResponse();
   await handleCancelBookingAction(req, res);
   return res;
@@ -251,6 +251,15 @@ describe('cancelling a flight', () => {
 
     expect(res.body.cancellation).toMatchObject({ paymentAction: 'VOID', cancellationFee: 0, refundAmount: 291 });
     expect(closing().payment_status).toBe('refunded');
+  });
+
+  it('keeps the flight cancellation fee, not the general one, on a flight', async () => {
+    cancelFlightOrder.mockResolvedValue(ticketsVoided);
+
+    const res = await cancel(flight(), { settings: { cancellation_fee: 75, flight_cancellation_fee: 20 }, user: { id: 'staff-1', role: 'admin' } });
+
+    expect(sent('REFUND')[0].transaction.amount).toBe('271.00');
+    expect(res.body.cancellation).toMatchObject({ paymentAction: 'PARTIAL_REFUND', cancellationFee: 20, refundAmount: 271 });
   });
 
   it('keeps the fee the admin set', async () => {
