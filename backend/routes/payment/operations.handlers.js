@@ -416,7 +416,7 @@ async function releaseCancellation(booking, claim, patch = {}) {
  * @returns {{ action: 'nothing_held'|'review'|'refund_all'|'refund_less_fee'|'fee_covers',
  *             fee: number, refundAmount: number, reason: string }}
  */
-export function decideFlightRefund({ heldAmount, paidInFull, everCaptured, hasReservation, gds, rowTicketed, issuanceUnknownOnly = false, refundable, fee, rowPaid = false }) {
+export function decideFlightRefund({ heldAmount, paidInFull, everCaptured, hasReservation, gds, rowTicketed, issuanceUnknownOnly = false, refundable, fee, rowPaid = false, customer = null }) {
     const heldCents = Math.round((Number(heldAmount) || 0) * 100);
     const review = (reason) => ({ action: 'review', fee: 0, refundAmount: 0, reason });
 
@@ -455,16 +455,21 @@ export function decideFlightRefund({ heldAmount, paidInFull, everCaptured, hasRe
     }
 
     if (!ticketed) {
+        if (customer && hasReservation) {
+            return keepServiceFee(heldCents, customer, 'not_ticketed', 'reservation released before any ticket was issued');
+        }
         return {
             action: 'refund_all',
             fee: 0,
             refundAmount: heldCents / 100,
             reason: hasReservation ? 'reservation released before any ticket was issued' : 'never booked with the airline',
+            ...(customer ? { policy: 'never_booked', serviceFeeKept: 0 } : {}),
         };
     }
 
     const unvoided = Array.isArray(gds.requiresAirlineRefund) && gds.requiresAirlineRefund.length > 0;
     if (!unvoided && !gds.voided) return review('tickets were issued, but none was voided and none is listed for an airline refund');
+    if (customer) return customerTicketedDecision({ heldCents, unvoided, customer, review });
     if (unvoided && refundable !== true) {
         return review(refundable === false
             ? 'non-refundable fare with tickets past their void window: what the airline returns depends on its fare rules'
@@ -480,6 +485,44 @@ export function decideFlightRefund({ heldAmount, paidInFull, everCaptured, hasRe
     const refundCents = heldCents - feeCents;
     if (refundCents <= 0) return { action: 'fee_covers', fee: heldCents / 100, refundAmount: 0, reason: `${basis}; the fee covers the payment` };
     return { action: 'refund_less_fee', fee: feeCents / 100, refundAmount: refundCents / 100, reason: basis };
+}
+
+const dollars = (amount) => (Number(amount) || 0).toFixed(2);
+
+function keepServiceFee(heldCents, customer, policy, basis) {
+    const keptCents = Math.round((Number(customer.serviceFeeKept) || 0) * 100);
+    if (keptCents <= 0) return { action: 'refund_all', fee: 0, refundAmount: heldCents / 100, reason: basis, policy, serviceFeeKept: 0 };
+    if (keptCents >= heldCents) {
+        return { action: 'fee_covers', fee: heldCents / 100, refundAmount: 0, reason: `${basis}; the service fee covers the payment`, policy, serviceFeeKept: heldCents / 100 };
+    }
+    return { action: 'refund_less_fee', fee: keptCents / 100, refundAmount: (heldCents - keptCents) / 100, reason: `${basis}; the service fee is kept`, policy, serviceFeeKept: keptCents / 100 };
+}
+
+/**
+ * A customer's ticketed cancel. Only the free 24 hours with every ticket voided
+ * refunds by itself; everything after that goes to our team, because what the
+ * airline returns depends on rules we cannot settle automatically. The reasons
+ * are what the desk works from.
+ */
+function customerTicketedDecision({ heldCents, unvoided, customer, review }) {
+    const kept = Math.min(Math.max(0, Number(customer.serviceFeeKept) || 0), heldCents / 100);
+    const airlinePrice = dollars(heldCents / 100 - kept);
+    const held = (policy, reason) => ({ ...review(reason), policy, serviceFeeKept: kept });
+    if (customer.freeWindow) {
+        if (!unvoided) return keepServiceFee(heldCents, customer, 'free_window', 'cancelled within 24 hours of booking and the tickets were voided');
+        return held('not_voided', `cancelled within 24 hours of booking, but the tickets could not be voided: claim the refund from the airline and return it less the ${dollars(kept)} service fee`);
+    }
+    const tickets = unvoided ? 'claim the refund from the airline' : 'the tickets were voided, so nothing is owed to the airline';
+    const rule = customer.fareRule || {};
+    if (rule.refundable === false) {
+        return held('non_refundable', `non-refundable fare cancelled after 24 hours: the fare is not returned; return any unused taxes (${tickets})`);
+    }
+    if (rule.refundable === true) {
+        const penalty = rule.penalty === null || rule.penalty === undefined ? 'not stated' : [dollars(rule.penalty), rule.currency, 'per adult'].filter(Boolean).join(' ');
+        return held('refundable', `refundable fare cancelled after 24 hours: return ${airlinePrice} (the airline price) less the airline's penalty (${penalty}) `
+            + `and the ${dollars(customer.cancellationFee)} cancellation fee; the ${dollars(kept)} service fee is kept (${tickets})`);
+    }
+    return held('rules_unknown', `fare cancelled after 24 hours and its rules could not be read: check them with the airline before refunding (${tickets})`);
 }
 
 /** Carry out a refund decision at ARC. Never moves more than the decision says. */
