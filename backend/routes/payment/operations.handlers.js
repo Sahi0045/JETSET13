@@ -28,7 +28,7 @@ import { canReachAmadeus } from '../../utils/amadeusReach.js';
 import { unchangedSince } from '../../utils/bookingDetailsGuard.js';
 import { DEFAULT_PRICE_SETTINGS, flightCancellationFeeFrom } from '../../config/priceDefaults.js';
 import { cancellationMessage, refundOutcome } from '../../../shared/cancellationOutcome.js';
-import { fareRuleOf, isWithinFreeWindow, serviceFeeKeptOf } from '../../../shared/flightCancelPolicy.js';
+import { customerCancelTerms, fareRuleOf, isWithinFreeWindow, serviceFeeKeptOf } from '../../../shared/flightCancelPolicy.js';
 import { readBookedFeeTable } from '../../services/bookedFeeTable.service.js';
 import {
     COMMIT_UNKNOWN_REVIEW_REASON, ISSUANCE_UNKNOWN, commitUnknownOf, decidedFeeOf, flagInForce, needsAirlineRefundClaim, notHeldAnswerOf,
@@ -264,9 +264,9 @@ async function readCancellationFee() {
     }
 }
 
-export async function readFlightCancellationFee() {
+export async function readFlightCancellationFee(client = supabase) {
     try {
-        const { data: priceSettings } = await supabase
+        const { data: priceSettings } = await client
             .from('price_settings')
             .select('settings')
             .single();
@@ -662,6 +662,31 @@ const unionTickets = (earlier = [], later = []) => {
  * flagUnrecordedCancellation's.
  */
 const keepingPrevious = (details) => (details?.needs_review ? { previous: details.needs_review } : {});
+
+/**
+ * What a customer's cancel would return now, by the rule the cancel applies
+ * (decideFlightRefund's customer branch), before anything is cancelled. The
+ * gateway is not asked: the figures are what checkout charged.
+ */
+export async function quoteCustomerCancel(booking, { now = new Date(), client = supabase } = {}) {
+    const details = booking.booking_details || {};
+    const pnr = details.pnr || details.amadeus_order_id || null;
+    const tickets = Array.isArray(details.tickets) ? details.tickets : [];
+    const voidedTickets = Array.isArray(details.voided_tickets) ? details.voided_tickets : [];
+    const ticketed = details.gds?.ticketed === true || tickets.length > 0 || voidedTickets.length > 0
+        || Boolean(ticketNumbersMissingOf(booking));
+    const freeWindow = isWithinFreeWindow(booking.created_at, now);
+    const fareRule = pnr && ticketed && !freeWindow ? fareRuleOf(await readBookedFeeTable(booking)) : null;
+    return customerCancelTerms({
+        charge: details.verified_charge,
+        paidAt: booking.created_at,
+        now,
+        hasReservation: Boolean(pnr),
+        ticketed,
+        fareRule,
+        cancellationFee: await readFlightCancellationFee(client),
+    });
+}
 
 /**
  * Cancel a flight: take the booking, learn what the gateway holds, release the

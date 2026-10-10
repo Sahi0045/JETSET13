@@ -8,7 +8,7 @@ import { validate } from '../middleware/validate.js';
 import { z } from 'zod';
 import { protect, admin, bookingStaff, optionalProtect } from '../middleware/auth.middleware.js';
 import { resolveBookingUserId } from '../utils/bookingOwner.js';
-import { SYSTEM_CANCEL, handleCancelBookingAction, recordPaymentAfterCancel, reverseArcPaymentForOrder, settleManualFlightRefund } from './payment/operations.handlers.js';
+import { SYSTEM_CANCEL, handleCancelBookingAction, quoteCustomerCancel, recordPaymentAfterCancel, reverseArcPaymentForOrder, settleManualFlightRefund } from './payment/operations.handlers.js';
 import { emailMatchesBooking, isBookingOwner } from '../utils/bookingAccess.js';
 import { reconcileBookingPayment } from './payment/checkout.handlers.js';
 import { reportError } from '../services/monitoring.js';
@@ -4656,6 +4656,29 @@ router.get('/bookings/:bookingRef/fee-rules', optionalProtect, guestBookingLimit
   } catch (error) {
     console.error('❌ Booked fee table error:', error);
     return res.status(500).json({ success: false, error: 'Failed to read the fare rules' });
+  }
+});
+
+// What a cancel would return, before the customer confirms it. Opened exactly
+// as the booking itself is (loadOwnedBooking).
+router.get('/bookings/:bookingRef/cancel-quote', optionalProtect, guestBookingLimiter, async (req, res) => {
+  try {
+    if (!supabase) {
+      return res.status(503).json({ success: false, error: 'Database not configured' });
+    }
+    const { booking, notFound } = await loadOwnedBooking(req.params.bookingRef, req.user, {
+      email: req.get('x-booking-email')
+    });
+    if (notFound || !booking) {
+      return res.status(404).json({ success: false, error: 'Booking not found' });
+    }
+    if (booking.travel_type !== 'flight' || String(booking.status).toLowerCase() === 'cancelled') {
+      return res.json({ success: true, quote: null });
+    }
+    return res.json({ success: true, quote: await quoteCustomerCancel(booking, { client: supabase }) });
+  } catch (error) {
+    console.error('❌ Cancel quote error:', error);
+    return res.status(500).json({ success: false, error: 'Failed to work out the refund' });
   }
 });
 
