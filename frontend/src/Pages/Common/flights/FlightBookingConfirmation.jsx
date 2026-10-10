@@ -21,6 +21,7 @@ import PricingService from '../../../Services/PricingService';
 import { useGuestFlightBooking, usePriceConfig } from '../../../hooks/queries';
 import CouponInput from '../../../components/CouponInput';
 import FlightFareRules from './FlightFareRules';
+import CancellationPolicyNote from './CancellationPolicyNote';
 import { formatCalendarDate } from '../../../utils/dateUtils';
 import { clearStaleStoredBookings } from '../../../utils/bookingStorage';
 import { formatCheckedBag } from '../../../utils/baggage';
@@ -2305,6 +2306,7 @@ function FlightBookingConfirmation() {
                     flightOffer={reviewState.flightData.originalOffer}
                     rules={fareRulesCheck}
                   />
+                  <CancellationPolicyNote cancellationFee={priceConfig?.flight_cancellation_fee ?? priceConfig?.cancellation_fee} />
                 </div>
               </div>
             )}
@@ -2402,7 +2404,7 @@ function FlightBookingConfirmation() {
                     <span className="mt-2 h-1.5 w-1.5 rounded-full bg-[#65B3CF] flex-shrink-0" />
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-bold text-gray-800">Service Fee</div>
-                      <div className="text-xs text-gray-400 mt-0.5">Jetsetters convenience fee</div>
+                      <div className="text-xs text-gray-400 mt-0.5">Jetsetters convenience fee · not refundable</div>
                       <ul className="mt-1 space-y-0.5 text-xs text-gray-500" data-service-fee-lines="">
                         {describeServiceFee(calculatedFare).map((line) => (
                           <li key={line}>{line}</li>
