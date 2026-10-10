@@ -83,3 +83,31 @@ describe('the cancel dialog', () => {
     expect(buttons[buttons.length - 1].disabled).toBe(false);
   });
 });
+
+describe('the refund breakdown after a customer cancel', () => {
+  const cancelled = (cancellation) => ({ ...booking, status: 'cancelled', payment_status: 'partially_refunded', cancellation });
+
+  it('calls a kept service fee a service fee', () => {
+    mockUseFlightBooking.mockReturnValue({
+      data: cancelled({
+        paymentAction: 'PARTIAL_REFUND', refundAmount: 287.5, cancellationFee: 12.5, currency: 'USD',
+        policy: 'free_window', terms: { serviceFeeKept: 12.5, airlinePrice: 287.5 },
+      }),
+      isLoading: false, error: null, refetch: vi.fn(),
+    });
+    renderPage();
+
+    expect(screen.getByText('Service fee (not refundable)')).toBeTruthy();
+    expect(screen.queryByText('Cancellation Fee')).toBeNull();
+  });
+
+  it('keeps the cancellation fee label for a staff cancel', () => {
+    mockUseFlightBooking.mockReturnValue({
+      data: cancelled({ paymentAction: 'PARTIAL_REFUND', refundAmount: 250, cancellationFee: 50, currency: 'USD' }),
+      isLoading: false, error: null, refetch: vi.fn(),
+    });
+    renderPage();
+
+    expect(screen.getByText('Cancellation Fee')).toBeTruthy();
+  });
+});

@@ -16,7 +16,7 @@ import { bookingItineraries } from '../../../../../shared/bookingItineraries';
 import { formatUsd } from '../../../utils/bookingCharge';
 import { canDownloadDocument, isCommitUnknown, isPaid, ticketState } from '../../../utils/eTicket';
 import { attentionMessage, bookingStatusBadge, cancellationMessage, refundStatus } from '../../../utils/bookingStatus';
-import { refundOutcome } from '../../../../../shared/cancellationOutcome';
+import { refundOutcome, serviceFeeKeptBy } from '../../../../../shared/cancellationOutcome';
 import ArcPayService from '../../../Services/ArcPayService';
 import { useBookedFeeRules, useCancelQuote, useFlightBooking } from '../../../hooks/queries';
 import { useQueryClient } from '@tanstack/react-query';
@@ -569,7 +569,7 @@ function ManageBooking() {
                     {/* Only a fee the cancellation actually kept. It used to be
                         labelled "Standard" beside every booking, including the
                         ones that pay no fee. */}
-                    <span className="text-slate-600 font-medium">Cancellation Fee</span>
+                    <span className="text-slate-600 font-medium">{serviceFeeKeptBy(cancelData) > 0 ? 'Service fee (not refundable)' : 'Cancellation Fee'}</span>
                     <span className="text-rose-600 font-semibold">
                       -${Number(cancelData.cancellationFee || 0).toFixed(2)}
                     </span>
