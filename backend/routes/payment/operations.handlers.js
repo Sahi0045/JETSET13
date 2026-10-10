@@ -197,7 +197,7 @@ export async function handleCancelBookingAction(req, res) {
                     cancelEndpoint: `/api/flights/order/${encodeURIComponent(booking.booking_reference)}/cancel`,
                 });
             }
-            return await cancelFlightBooking(res, booking, { reason, email, customer: !isStaff && req[SYSTEM_CANCEL] !== true });
+            return await cancelFlightBooking(res, booking, { reason, email, customer: !isStaff && req[SYSTEM_CANCEL] !== true, system: req[SYSTEM_CANCEL] === true });
         }
         return await cancelOtherBooking(res, booking, { reason, email });
     } catch (error) {
@@ -663,6 +663,12 @@ const unionTickets = (earlier = [], later = []) => {
  */
 const keepingPrevious = (details) => (details?.needs_review ? { previous: details.needs_review } : {});
 
+/** The earlier of two times, as a Date; null when neither reads. */
+function earliestTime(...values) {
+    const times = values.map((value) => (value instanceof Date ? value.getTime() : Date.parse(value ?? ''))).filter(Number.isFinite);
+    return times.length ? new Date(Math.min(...times)) : null;
+}
+
 /**
  * What a customer's cancel would return now, by the rule the cancel applies
  * (decideFlightRefund's customer branch), before anything is cancelled. The
@@ -670,17 +676,18 @@ const keepingPrevious = (details) => (details?.needs_review ? { previous: detail
  */
 export async function quoteCustomerCancel(booking, { now = new Date(), client = supabase } = {}) {
     const details = booking.booking_details || {};
+    const askedAt = earliestTime(details.customer_cancel_requested_at, now);
     const pnr = details.pnr || details.amadeus_order_id || null;
     const tickets = Array.isArray(details.tickets) ? details.tickets : [];
     const voidedTickets = Array.isArray(details.voided_tickets) ? details.voided_tickets : [];
     const ticketed = details.gds?.ticketed === true || tickets.length > 0 || voidedTickets.length > 0
         || Boolean(ticketNumbersMissingOf(booking));
-    const freeWindow = isWithinFreeWindow(booking.created_at, now);
+    const freeWindow = isWithinFreeWindow(booking.created_at, askedAt);
     const fareRule = pnr && ticketed && !freeWindow ? fareRuleOf(await readBookedFeeTable(booking)) : null;
     return customerCancelTerms({
         charge: details.verified_charge,
         paidAt: booking.created_at,
-        now,
+        now: askedAt,
         hasReservation: Boolean(pnr),
         ticketed,
         fareRule,
@@ -693,11 +700,17 @@ export async function quoteCustomerCancel(booking, { now = new Date(), client = 
  * seats, then return what the tickets and the fare say is owed - in that order,
  * and once.
  */
-async function cancelFlightBooking(res, booking, { reason, email, customer = false }) {
-    // The 24 hours are judged when the customer asked: an airline call that
-    // runs past the mark must not take the free window away.
+async function cancelFlightBooking(res, booking, { reason, email, customer = false, system = false }) {
+    // The 24 hours are judged when the customer first asked: an airline call
+    // that runs past the mark, or a cancel that failed and was retried or
+    // finished by our team, must not take the free window away.
     const requestedAt = new Date();
     const details = booking.booking_details || {};
+    const customerAskedAt = details.customer_cancel_requested_at || null;
+    const customerRule = customer || (!system && Boolean(customerAskedAt));
+    const noteRequest = (current) => (customer
+        ? { customer_cancel_requested_at: earliestTime(current?.customer_cancel_requested_at, requestedAt).toISOString() }
+        : {});
     const bookingReference = booking.booking_reference;
 
     // 1. Nothing else may hold the booking.
@@ -760,7 +773,7 @@ async function cancelFlightBooking(res, booking, { reason, email, customer = fal
     if (neverPaid) {
         payment = { paid: false, heldAmount: 0, everCaptured: false };
     } else if (payment.gatewayUnavailable) {
-        await releaseCancellation(booking, claim);
+        await releaseCancellation(booking, claim, noteRequest);
         return refuse(res, 503, 'PAYMENT_GATEWAY_UNAVAILABLE',
             'We could not reach our payment provider to confirm what was paid, so nothing has been cancelled yet. '
             + 'Please try again in a few minutes.',
@@ -771,8 +784,8 @@ async function cancelFlightBooking(res, booking, { reason, email, customer = fal
     // (TST) the airline's rules are read from.
     const flightFee = await readFlightCancellationFee();
     let customerTerms = null;
-    if (customer) {
-        const freeWindow = isWithinFreeWindow(booking.created_at, requestedAt);
+    if (customerRule) {
+        const freeWindow = isWithinFreeWindow(booking.created_at, earliestTime(customerAskedAt, customer ? requestedAt : null));
         customerTerms = {
             freeWindow,
             serviceFeeKept: serviceFeeKeptOf(details.verified_charge),
@@ -838,6 +851,7 @@ async function cancelFlightBooking(res, booking, { reason, email, customer = fal
             await releaseCancellation(booking, claim, (current) => {
                 const voidedSoFar = unionTickets(current?.voided_tickets, voidedNow);
                 return {
+                    ...noteRequest(current),
                     ...(voidedSoFar.length ? { voided_tickets: voidedSoFar } : {}),
                     needs_review: {
                         reason,
