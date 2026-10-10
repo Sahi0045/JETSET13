@@ -13,7 +13,7 @@ import {
   figureBlock, routeStrip, statusPill, segmentCard, fareBreakdown, actionRow,
   stepList, stayCard, dataGrid, progressSteps, humanDuration, BRAND,
 } from '../emailTemplate.js';
-import { REFUND_STUCK_ACTIONS, REFUND_DONE_ACTIONS, refundOutcome } from '../../../shared/cancellationOutcome.js';
+import { REFUND_STUCK_ACTIONS, REFUND_DONE_ACTIONS, customerReviewSentence, refundOutcome, serviceFeeKeptBy } from '../../../shared/cancellationOutcome.js';
 import { clockTime, itinerariesFromOffer, layoverBetween, legLabel } from '../../../shared/bookingItineraries.js';
 
 const money = (amount, currency = 'USD') =>
@@ -861,6 +861,9 @@ export function generateCancellationTemplate(data) {
   const icon = ({ flight: '✈️', hotel: '🏨', cruise: '🚢', package: '🎒' }[String(bookingType).toLowerCase()]) || '🌍';
   const fmt = (a) => money(a, currency);
   const outcome = refundOutcome({ paymentAction, refundAmount });
+  const serviceFee = serviceFeeKeptBy(data);
+  const keptRow = serviceFee > 0 ? ['Service fee (not refundable)', fmt(serviceFee)] : ['Cancellation fee', fmt(cancellationFee)];
+  const policySentence = customerReviewSentence(data);
 
   const byOutcome = {
     refunded: {
@@ -868,7 +871,7 @@ export function generateCancellationTemplate(data) {
       figure: { label: 'Refund due', value: fmt(refundAmount) },
       body: `
       ${fareBreakdown(
-        [['Cancellation fee', fmt(cancellationFee)]],
+        [keptRow],
         { total: fmt(refundAmount), currency, label: 'Refund to original payment method', title: 'Refund breakdown' },
       )}
       ${highlightBox('Refunds reach the original payment method in 5-10 business days. Your bank decides the exact date, not us - if it has not landed after 10 working days, call and we will chase it.', {})}`,
@@ -878,7 +881,7 @@ export function generateCancellationTemplate(data) {
       figure: { label: 'Refund due', value: fmt(0), note: 'cancellation fee covers the fare' },
       body: `
       ${fareBreakdown(
-        [['Cancellation fee', fmt(cancellationFee)]],
+        [keptRow],
         { total: fmt(0), currency, label: 'Refund to original payment method', title: 'Refund breakdown' },
       )}
       ${highlightBox('No refund is due: the cancellation fee is equal to or more than the amount paid, so nothing is returned to your card.', {})}`,
@@ -897,7 +900,9 @@ export function generateCancellationTemplate(data) {
       preheader: 'refund being reviewed',
       figure: { label: 'Refund', value: 'Being reviewed by our team', note: statusPill('Under review', 'warning') },
       body: `
-      ${highlightBox('Our team needs to review the refund for this booking, for example because the fare rules decide what the airline returns. They will email you within 2 business days to confirm what is returned to your card. If you have not heard from us by then, call (877) 538-7380 and quote your booking reference.', {})}`,
+      ${highlightBox(policySentence
+    ? `${policySentence} If you have not heard from us by then, call (877) 538-7380 and quote your booking reference.`
+    : 'Our team needs to review the refund for this booking, for example because the fare rules decide what the airline returns. They will email you within 2 business days to confirm what is returned to your card. If you have not heard from us by then, call (877) 538-7380 and quote your booking reference.', {})}`,
     },
     nothing_held: {
       preheader: 'nothing to refund',
