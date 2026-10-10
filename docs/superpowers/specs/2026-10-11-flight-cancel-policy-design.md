@@ -33,8 +33,9 @@ when the customer pressed Cancel (the request), not when the airline answered.
 
 - **Service fee kept** = `verified_charge.serviceFee` less `verified_charge.discount`,
   never below 0. A coupon comes off the service fee first, so nobody gets back
-  more than they paid. No `verified_charge` (bookings before September) means
-  the fee is not known: a refund that would keep it goes to review.
+  more than they paid. No `verified_charge` (bookings made before checkout
+  recorded it, September 2026) means the fee is not known, and nothing is kept:
+  those refunds stay what they are today.
 - **Airline price** = what the gateway holds less the service fee kept.
 - Automatic refunds never use the fare's refundable flag. Only the review
   reason and the customer's wording depend on it.
@@ -84,8 +85,8 @@ Dependency-free (browser, Vercel, Lightsail, app all load it).
 - `customerCancelTerms({ charge, paidAt, now, hasReservation, ticketed, fareRule, cancellationFee })`
   -> `{ policy, automatic, paid, serviceFeeKept, airlinePrice, refundAmount, penalty, penaltyCurrency, cancellationFee, freeUntil }`
   - `policy`: `never_booked | not_ticketed | free_window | refundable | non_refundable | rules_unknown`
-  - `automatic`: refunded the moment the cancel goes through (first three
-    policies, and only when the service fee is known)
+  - `automatic`: refunded the moment the cancel goes through (the first three
+    policies)
   - `refundAmount`: exact for automatic policies, null otherwise (a penalty per
     adult across mixed travellers is not guessed)
 - `cancelTermsLines(terms, { money, time })` -> the sentences for the cancel
@@ -102,7 +103,7 @@ Wording (exact):
 - refundable: "This fare is refundable. You get back {airlinePrice} less the airline's cancellation penalty{ of {penalty} per adult} and our {cancellationFee} cancellation fee. The {serviceFeeKept} service fee is not refundable. Our team confirms the amount with the airline and emails you within 2 business days."
 - non_refundable: "This fare is non-refundable, so the fare is not returned. Our team checks with the airline for any unused taxes and emails you within 2 business days."
 - rules_unknown: "We could not read this fare's rules just now. Our team checks them with the airline and emails you within 2 business days to confirm what is returned."
-- unknown service fee: the not_ticketed/free_window sentence becomes "Our team confirms the amount and emails you within 2 business days."
+- no service fee kept (0, or not recorded): the not_ticketed/free_window sentence ends at "You get back {airlinePrice}."
 
 Review page (`cancelPolicyLines`):
 
@@ -120,8 +121,8 @@ Review page (`cancelPolicyLines`):
   - ticketed, all voided, free window -> keep service fee, policy `free_window`
   - ticketed, unvoided, free window -> review, policy `not_voided`
   - ticketed, outside -> review, policy `refundable | non_refundable | rules_unknown`
-  - keep service fee: null -> review (policy kept, reason "the service fee charged is not recorded");
-    0 -> `refund_all`; otherwise `refund_less_fee` with `fee` = service fee kept.
+  - keep service fee: null or 0 -> `refund_all`; otherwise `refund_less_fee`
+    with `fee` = service fee kept.
   - Returns `policy` and `serviceFeeKept` beside today's fields. Review reasons
     name the amounts for the desk (airline price, penalty, fee, whether the
     tickets were voided or must be claimed).
