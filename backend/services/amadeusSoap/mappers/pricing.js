@@ -1,5 +1,6 @@
 import { CABIN_BY_DESIGNATOR } from '../codes.js';
 import { familiesBySegment } from './fareFamilies.js';
+import { readRefundable } from './offer.js';
 import { arr, at, atTxt, num, txt } from '../parseXml.js';
 
 /**
@@ -270,6 +271,10 @@ export const applyPricingToOffer = (reply, offer) => {
       travelerPricings,
       _ama: {
         ...offer._ama,
+        // From the airline's pricing, never the offer it was given: checkout
+        // and the order route price the offer the browser sent, and bookings
+        // record this flag.
+        refundable: readRefundable(penalties.map((t) => t.text).join(' ')),
         pricedAt: new Date().toISOString(),
         pricedTotal: total.toFixed(2),
         pricedCurrency: currency,
