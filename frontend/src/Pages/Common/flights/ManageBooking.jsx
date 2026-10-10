@@ -104,6 +104,7 @@ function ManageBooking() {
   const handleCancelBooking = () => {
     cancelTriggerRef.current = document.activeElement;
     setShowCancelModal(true);
+    cancelQuote.refetch();
   };
 
   const closeCancelDialog = () => {

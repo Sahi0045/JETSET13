@@ -46,7 +46,7 @@ export default function BookingCancelRules({ booking, feeRules, quote, canCancel
       <section>
         <h3 className="text-lg font-semibold mb-3">If you cancel</h3>
         <div className="space-y-2 text-sm text-gray-700">
-          {quote?.isLoading ? <QuoteLoading /> : lines.map((line) => <p key={line}>{line}</p>)}
+          {quote?.isLoading || quote?.isFetching ? <QuoteLoading /> : lines.map((line) => <p key={line}>{line}</p>)}
         </div>
       </section>
       {booking?.pnr ? (

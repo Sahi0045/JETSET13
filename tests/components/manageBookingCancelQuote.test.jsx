@@ -52,7 +52,7 @@ const lastEnabled = () => mockUseCancelQuote.mock.calls.at(-1)?.[1]?.enabled;
 beforeEach(() => {
   mockUseFlightBooking.mockReturnValue({ data: booking, isLoading: false, error: null, refetch: vi.fn() });
   mockUseCancelQuote.mockReset();
-  mockUseCancelQuote.mockReturnValue({ isLoading: false, data: quote });
+  mockUseCancelQuote.mockReturnValue({ isLoading: false, data: quote, refetch: vi.fn() });
 });
 
 describe('the cancel dialog', () => {
@@ -65,6 +65,16 @@ describe('the cancel dialog', () => {
     expect(lastEnabled()).toBe(true);
   });
 
+  it('asks for a fresh quote each time the dialog opens', () => {
+    const refetch = vi.fn();
+    mockUseCancelQuote.mockReturnValue({ isLoading: false, data: quote, refetch });
+    renderPage();
+
+    fireEvent.click(screen.getAllByRole('button', { name: /Cancel Booking/ })[0]);
+
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
   it('says what the cancel returns before the customer confirms', () => {
     renderPage();
     fireEvent.click(screen.getAllByRole('button', { name: /Cancel Booking/ })[0]);
@@ -74,7 +84,7 @@ describe('the cancel dialog', () => {
   });
 
   it('says it could not work the refund out, and still lets the customer cancel', () => {
-    mockUseCancelQuote.mockReturnValue({ isLoading: false, isError: true, data: undefined });
+    mockUseCancelQuote.mockReturnValue({ isLoading: false, isError: true, data: undefined, refetch: vi.fn() });
     renderPage();
     fireEvent.click(screen.getAllByRole('button', { name: /Cancel Booking/ })[0]);
 

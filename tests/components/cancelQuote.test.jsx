@@ -19,6 +19,12 @@ describe('CancelQuote', () => {
     expect(screen.getByText(/Working out what you would get back/)).toBeTruthy();
   });
 
+  it('does not show an old quote while a fresh one is on its way', () => {
+    render(<CancelQuote query={{ isLoading: false, isFetching: true, data: quote }} />);
+    expect(screen.getByText(/Working out what you would get back/)).toBeTruthy();
+    expect(screen.queryByText(/You get back/)).toBeNull();
+  });
+
   it('gives the amount the cancel returns', () => {
     render(<CancelQuote query={{ isLoading: false, data: quote }} />);
     expect(screen.getByText('No ticket has been issued yet. You get back $287.50; the $12.50 service fee is not refundable.')).toBeTruthy();
