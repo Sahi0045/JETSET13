@@ -1,7 +1,9 @@
+import { cancelTermsLines } from './flightCancelPolicy.js';
+
 /**
  * "If you cancel", in plain words, for Manage Booking and the app's booking
- * detail: what cancelling does now, by ticket state, in the cancel dialog's
- * words, and the airline's rules for the fare when its fee table is known.
+ * detail: what cancelling returns now, from the server's quote, and the
+ * airline's rules for the fare when its fee table is known.
  */
 
 const refundWords = (cell, fee) => {
@@ -29,21 +31,21 @@ export const airlineRuleWords = (penalties, fee) => {
 const whose = (airline) => (airline ? `${airline}'s` : "the airline's");
 const capitalised = (text) => text.charAt(0).toUpperCase() + text.slice(1);
 
-export function ifYouCancel({ ticketState, ticketsVoided = false, ticketComing = true, penalties = null, airline = '', fee }) {
-  if (ticketState === 'cancelled') return [];
+export const QUOTE_UNAVAILABLE = 'We could not work out your refund just now. You will see what happens to your payment as soon as the cancellation completes.';
+
+/**
+ * `quote` is the server's cancel quote (shared/flightCancelPolicy.js
+ * customerCancelTerms); without one nothing is promised.
+ */
+export function ifYouCancel({ quote = null, ticketComing = true, penalties = null, airline = '', fee, money, time }) {
   const rules = airlineRuleWords(penalties, fee);
-  if (ticketState === 'issued' || ticketState === 'pending') {
-    return [
-      'Your ticket has been issued, so a cancellation fee may apply.',
-      ...(rules ? [`${capitalised(whose(airline))} rules for this fare: ${rules}.`] : []),
-      "What is refunded depends on your fare's rules; some fares need our team to review the refund first.",
-    ];
+  if (!quote?.policy) {
+    return [QUOTE_UNAVAILABLE, ...(rules ? [`${capitalised(whose(airline))} rules for this fare: ${rules}.`] : [])];
   }
-  if (ticketsVoided) {
-    return ['Your ticket has been voided, so a cancellation fee may apply.', 'Some refunds need our team to review them first.'];
+  const lines = cancelTermsLines(quote, { ...(money ? { money } : {}), ...(time ? { time } : {}) });
+  if (!rules || quote.policy === 'never_booked') return lines;
+  if (quote.policy === 'not_ticketed') {
+    return ticketComing ? [...lines, `Once the ticket is issued, ${whose(airline)} rules apply: ${rules}.`] : lines;
   }
-  return [
-    'No ticket has been issued yet, so no cancellation fee applies and what you paid is returned.',
-    ...(rules && ticketComing ? [`Once the ticket is issued, ${whose(airline)} rules apply: ${rules}.`] : []),
-  ];
+  return [...lines, `${capitalised(whose(airline))} rules for this fare: ${rules}.`];
 }
