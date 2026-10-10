@@ -18,7 +18,8 @@ const lufthansa = () => bodyOf(readFileSync(new URL('../../fixtures/amadeus/mini
 
 const money = (qualifier, amount, currency = 'USD') => `<monetaryDetails><typeQualifier>${qualifier}</typeQualifier><amount>${amount}</amount><currency>${currency}</currency></monetaryDetails>`;
 const indicator = (code, value) => `<statusInformation><indicator>${code}</indicator><action>${value}</action></statusInformation>`;
-const category = (number, { indicators = '', amounts = '' } = {}) => `<mnrRulesInfoGrp><mnrCatInfo><descriptionInfo><number>${number}</number></descriptionInfo></mnrCatInfo>${amounts ? `<mnrMonInfoGrp><monetaryInfo>${amounts}</monetaryInfo></mnrMonInfoGrp>` : ''}${indicators ? `<mnrRestriAppInfoGrp><mnrRestriAppInfo>${indicators}</mnrRestriAppInfo></mnrRestriAppInfoGrp>` : ''}</mnrRulesInfoGrp>`;
+const components = (...numbers) => numbers.map((n) => `<fareComponentInfo><fareComponentRef><referenceDetails><type>FC</type><value>${n}</value></referenceDetails></fareComponentRef></fareComponentInfo>`).join('');
+const category = (number, { indicators = '', amounts = '', fc = null } = {}) => `<mnrRulesInfoGrp><mnrCatInfo><descriptionInfo><number>${number}</number></descriptionInfo></mnrCatInfo>${fc ? `<mnrFCInfoGrp><refInfo><referenceDetails><type>FC</type><value>${fc}</value></referenceDetails></refInfo></mnrFCInfoGrp>` : ''}${amounts ? `<mnrMonInfoGrp><monetaryInfo>${amounts}</monetaryInfo></mnrMonInfoGrp>` : ''}${indicators ? `<mnrRestriAppInfoGrp><mnrRestriAppInfo>${indicators}</mnrRestriAppInfo></mnrRestriAppInfoGrp>` : ''}</mnrRulesInfoGrp>`;
 const record = (paxType, pax, groups) => `<mnrByPricingRecord><pricingRecordId><referenceType>FRN</referenceType><uniqueReference>1</uniqueReference></pricingRecordId><paxRef><passengerReference><type>${paxType}</type><value>${pax}</value></passengerReference></paxRef>${groups}</mnrByPricingRecord>`;
 const replyOf = (...records) => bodyOf(`<?xml version="1.0"?><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Header/><soap:Body><MiniRule_GetFromRecReply xmlns="http://xml.amadeus.com/TMRXRR_23_1_1A"><responseDetails><statusCode>O</statusCode></responseDetails>${records.join('')}</MiniRule_GetFromRecReply></soap:Body></soap:Envelope>`);
 
@@ -77,6 +78,56 @@ describe('mapMiniRules', () => {
   it('gives an allowed situation with no amounts no figure', () => {
     const reply = replyOf(record('PA', 1, category(31, { indicators: indicator('BDA', 1) })));
     expect(mapMiniRules(reply).change.before).toEqual({ allowed: true, amount: null, varies: false });
+  });
+
+  // amount is optional in TMRXRR: an empty one is not a fee of nothing.
+  it('never reads a missing amount as no fee', () => {
+    const reply = replyOf(record('PA', 1, category(33, {
+      indicators: indicator('BDA', 1),
+      amounts: '<monetaryDetails><typeQualifier>BDM</typeQualifier><currency>USD</currency></monetaryDetails>',
+    })));
+    expect(mapMiniRules(reply).refund.before).toEqual({ allowed: true, amount: null, varies: false });
+  });
+
+  it('never takes a figure without its currency', () => {
+    const reply = replyOf(record('PA', 1, category(31, {
+      indicators: indicator('BDA', 1),
+      amounts: '<monetaryDetails><typeQualifier>BDM</typeQualifier><amount>100.00</amount></monetaryDetails>',
+    })));
+    expect(mapMiniRules(reply).change.before).toEqual({ allowed: true, amount: null, varies: false });
+  });
+
+  it('does not agree two figures in different currencies', () => {
+    const reply = replyOf(record('PA', 1, category(31, {
+      indicators: indicator('BDA', 1),
+      amounts: money('BDM', '100.00', 'EUR') + money('BDX', '100.00', 'USD'),
+    })));
+    expect(mapMiniRules(reply).change.before).toEqual({ allowed: true, amount: null, varies: true });
+  });
+
+  it('gives no figure when one fare component allows the situation and files no amount', () => {
+    const reply = replyOf(record('PA', 1, components(1, 2)
+      + category(33, { fc: 1, indicators: indicator('BDA', 1), amounts: money('BDM', '0.00') })
+      + category(33, { fc: 2, indicators: indicator('BDA', 1) })));
+    expect(mapMiniRules(reply).refund.before).toEqual({ allowed: true, amount: null, varies: false });
+  });
+
+  it('does not know a situation when a fare component files no rule for it', () => {
+    const reply = replyOf(record('PA', 1, components(1, 2)
+      + category(31, { fc: 1, indicators: indicator('BDA', 1), amounts: money('BDM', '338.00') })
+      + category(33, { fc: 1, indicators: indicator('BDA', 0) })
+      + category(33, { fc: 2, indicators: indicator('BDA', 0) })));
+    expect(mapMiniRules(reply).change.before).toEqual({ allowed: null, amount: null, varies: false });
+  });
+
+  it('keeps a refusal when another fare component files no rule', () => {
+    const reply = replyOf(record('PA', 1, components(1, 2)
+      + category(33, { fc: 1, indicators: indicator('BDA', 0) })));
+    expect(mapMiniRules(reply).refund.before.allowed).toBe(false);
+  });
+
+  it('is null when the adult record says nothing about cancelling or changing', () => {
+    expect(mapMiniRules(replyOf(record('PA', 1, category(6))))).toBeNull();
   });
 
   it('is null for a reply with no pricing record', () => {

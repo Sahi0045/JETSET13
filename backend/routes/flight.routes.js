@@ -2743,7 +2743,21 @@ const fareRulesFrom = (priced, flightOffer) => {
     };
   }
 
-  return { bags, fareRules: fareRules.slice(0, 8), cancellation, penalties: priced?.penalties ?? null };
+  return { bags, fareRules: fareRules.slice(0, 8), cancellation, penalties: uncontradicted(priced?.penalties ?? null, cancellation) };
+};
+
+// MiniRules writes 0.00 as filler, so a charge the filed rules name outranks a
+// 0 there: that cell gets no figure rather than "No airline fee".
+const uncontradicted = (penalties, cancellation) => {
+  if (!penalties) return null;
+  const clearZeros = (cells, isCharged) => (isCharged
+    ? Object.fromEntries(Object.entries(cells ?? {}).map(([name, cell]) => [name, cell?.amount === 0 ? { ...cell, amount: null } : cell]))
+    : cells);
+  return {
+    ...penalties,
+    change: clearZeros(penalties.change, cancellation?.changeFee > 0),
+    refund: clearZeros(penalties.refund, cancellation?.cancelFee > 0),
+  };
 };
 
 // Fare rules + extra-bag prices for a chosen flight offer

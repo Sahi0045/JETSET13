@@ -84,6 +84,15 @@ describe('getFiledFareRules with MiniRules', () => {
     expect(result.penalties.change.before).toEqual({ allowed: true, amount: 338, varies: false });
   });
 
+  // The results page gives up on the fare check after 15 s; an advisory call
+  // must not spend the session's whole 25 s budget.
+  it('gives MiniRules a short timeout', async () => {
+    replies(inSession(fixture('informative-pricing-ecoflex.xml'), 1), inSession(fixture('minirules-lh-ecolight.xml'), 2));
+    await (await provider()).getFiledFareRules(lufthansa(), { sections: [] });
+    const miniRules = axios.post.mock.calls.find(([, , cfg]) => String(cfg?.headers?.SOAPAction).endsWith('TMRXRQ_23_1_1A'));
+    expect(miniRules[2].timeout).toBeLessThanOrEqual(5000);
+  });
+
   it('keeps the price when MiniRules is refused', async () => {
     replies(inSession(fixture('informative-pricing-ecoflex.xml'), 1), noAgreement);
     const result = await (await provider()).getFiledFareRules(lufthansa(), { sections: [] });

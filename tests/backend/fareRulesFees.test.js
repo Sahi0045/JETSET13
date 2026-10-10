@@ -75,6 +75,31 @@ describe('the airline fee table', () => {
     expect(res.body.penalties).toEqual(penalties);
   });
 
+  // MiniRules files 0.00 as filler; the filed rule text naming a charge is the
+  // stronger word, so the table gives no figure rather than "No airline fee".
+  it('never calls a fee nothing when the filed rules name a charge', async () => {
+    const free = { allowed: true, amount: 0, varies: false };
+    const server = await app({
+      ...filed([
+        { descriptionType: 'CANCELLATIONS', text: 'BEFORE DEPARTURE\nCHARGE USD 200.00 FOR CANCEL/REFUND.' },
+        { descriptionType: 'CHANGES', text: 'ANY TIME\nCHARGE USD 70.00 FOR REISSUE.' },
+      ]),
+      penalties: { currency: 'USD', bookBy: null, change: { before: free, after: free }, refund: { before: free, noShowBefore: free } },
+    });
+    const res = await request(server).post('/api/flights/fare-rules').send({ flightOffer: offer });
+    const unknownFee = { allowed: true, amount: null, varies: false };
+    expect(res.body.penalties.refund).toEqual({ before: unknownFee, noShowBefore: unknownFee });
+    expect(res.body.penalties.change).toEqual({ before: unknownFee, after: unknownFee });
+  });
+
+  it('keeps a fee of nothing the filed rules do not contradict', async () => {
+    const free = { allowed: true, amount: 0, varies: false };
+    const table = { currency: 'USD', bookBy: null, change: { before: free }, refund: { before: free } };
+    const server = await app({ ...filed([{ descriptionType: 'CANCELLATIONS', text: 'ANY TIME\nFREE OF CHARGE.' }]), penalties: table });
+    const res = await request(server).post('/api/flights/fare-rules').send({ flightOffer: offer });
+    expect(res.body.penalties).toEqual(table);
+  });
+
   it('is null when MiniRules gave none', async () => {
     const server = await app(withPenalties(null));
     const res = await request(server).post('/api/flights/price').send({ flightOffer: offer, withFareRules: true });
