@@ -9,6 +9,8 @@ import { buildInformativePricingBody } from './operations/informativePricing.js'
 import { buildFareFamilyDescriptionBody, buildUpsellBody } from './operations/fareFamilies.js';
 import { describeOption, mapFareFamilyDescriptions, mapUpsellReply } from './mappers/fareFamilies.js';
 import { DEFAULT_RULE_SECTIONS, buildCheckRulesBody, readCheckRulesReply, ruleBlocks } from './operations/fareRules.js';
+import { buildMiniRulesBody } from './operations/miniRules.js';
+import { mapMiniRules } from './mappers/miniRules.js';
 import { buildFlightInfoBody, readFlightInfoError, readFlightInfoReply } from './operations/flightInfo.js';
 import { applyPricingToOffer } from './mappers/pricing.js';
 import { attributeTickets } from './mappers/flightOrder.js';
@@ -22,6 +24,9 @@ import { travellerGroupProblem } from '../../../shared/travellerGroup.js';
 import { SCHEDULE_CHANGED_REVIEW_REASON } from '../../../shared/reviewQueue.js';
 
 const log = logger.child({ svc: 'amadeus-ws' });
+// MiniRules is advisory and answered in ~0.2 s on PDT; the results page gives
+// up on the whole fare check at 15 s.
+const MINI_RULES_TIMEOUT_MS = 4000;
 
 /**
  * Flight provider backed by Amadeus Enterprise Web Services.
@@ -288,6 +293,20 @@ const getFiledFareRules = async (flightOffer, { sections = DEFAULT_RULE_SECTIONS
       }
     }
 
+    let penalties = null;
+    try {
+      const miniRules = await ctx.call('MiniRule_GetFromRec', buildMiniRulesBody(), { timeoutMs: MINI_RULES_TIMEOUT_MS });
+      const { reply: rulesReply } = soapReply(miniRules);
+      const inspected = inspectReply(rulesReply, 'MiniRule_GetFromRec');
+      if (inspected.error) {
+        log.warn({ reason: inspected.error.technicalError }, 'MiniRule_GetFromRec refused');
+      } else {
+        penalties = mapMiniRules(rulesReply);
+      }
+    } catch (cause) {
+      log.warn({ reason: cause?.technicalError ?? cause?.message }, 'MiniRule_GetFromRec failed');
+    }
+
     return {
       success: true,
       data: {
@@ -305,6 +324,7 @@ const getFiledFareRules = async (flightOffer, { sections = DEFAULT_RULE_SECTIONS
       },
       dictionaries: {},
       filedSections: filed.map((s) => s.code).filter(Boolean),
+      penalties,
     };
   });
 };
