@@ -205,7 +205,11 @@ describe('the cancel\'s refund, answered by something that is not ARC Pay\'s ver
 
   it('the customer\'s own cancel, answered by a proxy 504 page: the admin panel\'s amount goes back once', async () => {
     script([{ lands: true, reply: { status: 504, data: '<html><body>504 Gateway Time-out</body></html>' } }]);
-    const d = await desk();
+    // Within its 24 hours, so the customer's cancel keeps the 50 service fee
+    // and decides 40, as the admin cancels above decide with the 50 fee.
+    const row = ticketed();
+    row.booking_details.verified_charge = { fare: 40, serviceFee: 50, discount: 0, total: 90 };
+    const d = await desk(row);
     const { handleCancelBookingAction } = await import('../../backend/routes/payment/operations.handlers.js');
     const res = createResponse();
     await handleCancelBookingAction(createRequest({

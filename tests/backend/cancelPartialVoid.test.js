@@ -59,10 +59,10 @@ vi.mock('../../backend/services/flightProvider.js', () => ({
   providerStatus: () => ({ enabled: true, bookingEnabled: true }),
 }));
 
-const cancel = async () => {
+const cancel = async ({ user = null } = {}) => {
   const { handleCancelBookingAction } = await import('../../backend/routes/payment/operations.handlers.js');
   const res = createResponse();
-  await handleCancelBookingAction(createRequest({ method: 'POST', body: { bookingReference: REF, reason: 'Change of plans', email: 'traveler@example.com' } }), res);
+  await handleCancelBookingAction(createRequest({ method: 'POST', user, body: { bookingReference: REF, reason: 'Change of plans', email: 'traveler@example.com' } }), res);
   return res;
 };
 
@@ -161,11 +161,22 @@ describe('a later cancel of a booking whose tickets were partly voided', () => {
     table = fakeBookingsTable([flight({ voided_tickets: [VOIDED, NOT_VOIDED] })], { tables: { price_settings: [], payments: [] } });
     cancelFlightOrder.mockResolvedValueOnce({ success: true, hadTickets: true, voided: false, requiresAirlineRefund: [VOIDED, NOT_VOIDED] });
 
-    const res = await cancel();
+    const res = await cancel({ user: { id: 'staff-1', role: 'admin' } });
 
     expect(res.body.cancellation.requiresAirlineRefund).toEqual([]);
     expect(res.body.cancellation.ticketsVoided).toBe(true);
     expect(res.body.cancellation.paymentAction).not.toBe('REFUND_UNDER_REVIEW');
     expect(table.row(REF).booking_details.needs_review?.tickets).toBeUndefined();
+  });
+
+  it('counts tickets voided earlier as voided for a customer within 24 hours too', async () => {
+    table = fakeBookingsTable([flight({ voided_tickets: [VOIDED, NOT_VOIDED] }, { created_at: new Date().toISOString() })], { tables: { price_settings: [], payments: [] } });
+    cancelFlightOrder.mockResolvedValueOnce({ success: true, hadTickets: true, voided: false, requiresAirlineRefund: [VOIDED, NOT_VOIDED] });
+
+    const res = await cancel();
+
+    expect(res.body.cancellation.requiresAirlineRefund).toEqual([]);
+    expect(res.body.cancellation).toMatchObject({ ticketsVoided: true, policy: 'free_window' });
+    expect(res.body.cancellation.paymentAction).not.toBe('REFUND_UNDER_REVIEW');
   });
 });

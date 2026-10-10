@@ -28,6 +28,8 @@ import { canReachAmadeus } from '../../utils/amadeusReach.js';
 import { unchangedSince } from '../../utils/bookingDetailsGuard.js';
 import { DEFAULT_PRICE_SETTINGS, flightCancellationFeeFrom } from '../../config/priceDefaults.js';
 import { cancellationMessage, refundOutcome } from '../../../shared/cancellationOutcome.js';
+import { fareRuleOf, isWithinFreeWindow, serviceFeeKeptOf } from '../../../shared/flightCancelPolicy.js';
+import { readBookedFeeTable } from '../../services/bookedFeeTable.service.js';
 import {
     COMMIT_UNKNOWN_REVIEW_REASON, ISSUANCE_UNKNOWN, commitUnknownOf, decidedFeeOf, flagInForce, needsAirlineRefundClaim, notHeldAnswerOf,
     refundOwedOf, ticketNumbersMissingOf,
@@ -195,7 +197,7 @@ export async function handleCancelBookingAction(req, res) {
                     cancelEndpoint: `/api/flights/order/${encodeURIComponent(booking.booking_reference)}/cancel`,
                 });
             }
-            return await cancelFlightBooking(res, booking, { reason, email });
+            return await cancelFlightBooking(res, booking, { reason, email, customer: !isStaff && req[SYSTEM_CANCEL] !== true });
         }
         return await cancelOtherBooking(res, booking, { reason, email });
     } catch (error) {
@@ -666,7 +668,10 @@ const keepingPrevious = (details) => (details?.needs_review ? { previous: detail
  * seats, then return what the tickets and the fare say is owed - in that order,
  * and once.
  */
-async function cancelFlightBooking(res, booking, { reason, email }) {
+async function cancelFlightBooking(res, booking, { reason, email, customer = false }) {
+    // The 24 hours are judged when the customer asked: an airline call that
+    // runs past the mark must not take the free window away.
+    const requestedAt = new Date();
     const details = booking.booking_details || {};
     const bookingReference = booking.booking_reference;
 
@@ -735,6 +740,20 @@ async function cancelFlightBooking(res, booking, { reason, email }) {
             'We could not reach our payment provider to confirm what was paid, so nothing has been cancelled yet. '
             + 'Please try again in a few minutes.',
             { bookingReference, retryable: true });
+    }
+
+    // Read before the seats go: cancelling the PNR removes the fare record
+    // (TST) the airline's rules are read from.
+    const flightFee = await readFlightCancellationFee();
+    let customerTerms = null;
+    if (customer) {
+        const freeWindow = isWithinFreeWindow(booking.created_at, requestedAt);
+        customerTerms = {
+            freeWindow,
+            serviceFeeKept: serviceFeeKeptOf(details.verified_charge),
+            fareRule: pnr && !freeWindow ? fareRuleOf(await readBookedFeeTable(booking)) : null,
+            cancellationFee: flightFee,
+        };
     }
 
     // 3. Release the seats, before any money moves.
@@ -854,8 +873,9 @@ async function cancelFlightBooking(res, booking, { reason, email }) {
         rowTicketed: recordedTicket || issuanceUnknown,
         issuanceUnknownOnly: issuanceUnknown && !recordedTicket,
         refundable: details.refundable,
-        fee: await readFlightCancellationFee(),
+        fee: flightFee,
         rowPaid: booking.payment_status === 'paid',
+        customer: customerTerms,
     });
     const currency = payment.capturedCurrency || details.currency || 'USD';
     const returned = await returnFlightPayment(decision, {
@@ -887,6 +907,18 @@ async function cancelFlightBooking(res, booking, { reason, email }) {
         cancellationFee: returned.cancellationFee,
         currency,
         needsReview: reviewReasons.length > 0,
+        ...(customerTerms && decision.policy
+            ? {
+                policy: decision.policy,
+                terms: {
+                    serviceFeeKept: decision.serviceFeeKept ?? 0,
+                    airlinePrice: roundCents(Math.max(0, (Number(payment.heldAmount) || 0) - (decision.serviceFeeKept ?? 0))),
+                    cancellationFee: flightFee,
+                    penalty: customerTerms.fareRule?.penalty ?? null,
+                    penaltyCurrency: customerTerms.fareRule?.currency ?? null,
+                },
+            }
+            : {}),
         ...(returned.reversalOutcomeUnknown ? { reversalOutcomeUnknown: true } : {}),
         ...(returned.refundTransactionId ? { refundTransactionId: returned.refundTransactionId } : {}),
         ...(returned.errorDetails !== undefined ? { errorDetails: returned.errorDetails } : {}),
@@ -926,6 +958,7 @@ async function cancelFlightBooking(res, booking, { reason, email }) {
                     ticketsVoided: cancellationResult.ticketsVoided,
                     // Why this amount, for the support desk.
                     basis: decision.reason,
+                    ...(cancellationResult.policy ? { policy: cancellationResult.policy, terms: cancellationResult.terms } : {}),
                     // A reversal sent with no answer back, not a hold: whoever
                     // picks this up checks ARC Pay before refunding anything.
                     //
@@ -1567,6 +1600,7 @@ async function sendCancellationEmail(booking, email, cancellationResult) {
             // the cancel decided - the figure the desk fills in - not what ARC
             // holds, which includes the fee the cancel keeps.
             ...(decided ? { decidedRefund: decided.owed } : {}),
+            ...(cancellationResult.policy ? { policy: cancellationResult.policy, terms: cancellationResult.terms } : {}),
             currency: cancellationResult.currency || 'USD'
         };
 

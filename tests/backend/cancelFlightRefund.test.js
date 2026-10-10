@@ -79,6 +79,10 @@ vi.mock('../../backend/services/flightProvider.js', () => ({
 
 const handlers = () => import('../../backend/routes/payment/operations.handlers.js');
 
+// The rules these tests pin are staff cancels' since the customer policy
+// (customerCancelPolicy.test.js): the money moves through the same code.
+const STAFF = { id: 'staff-1', role: 'admin' };
+
 const cancel = async (row, { settings, payment, user = null } = {}) => {
   database = databaseFor({ row, settings, payment });
   const { handleCancelBookingAction } = await handlers();
@@ -204,7 +208,7 @@ describe('cancelling a flight', () => {
   it('refunds what the gateway captured, never the row\'s total_amount', async () => {
     cancelFlightOrder.mockResolvedValue(ticketsVoided);
 
-    const res = await cancel(flight({}, { total_amount: 250 }));
+    const res = await cancel(flight({}, { total_amount: 250 }), { user: STAFF });
 
     expect(res.statusCode).toBe(200);
     expect(sent('REFUND')).toHaveLength(1);
@@ -247,7 +251,7 @@ describe('cancelling a flight', () => {
   it('honours an admin fee of 0 on a ticketed booking', async () => {
     cancelFlightOrder.mockResolvedValue(ticketsVoided);
 
-    const res = await cancel(flight(), { settings: { cancellation_fee: 0 } });
+    const res = await cancel(flight(), { settings: { cancellation_fee: 0 }, user: STAFF });
 
     expect(res.body.cancellation).toMatchObject({ paymentAction: 'VOID', cancellationFee: 0, refundAmount: 291 });
     expect(closing().payment_status).toBe('refunded');
@@ -265,7 +269,7 @@ describe('cancelling a flight', () => {
   it('keeps the fee the admin set', async () => {
     cancelFlightOrder.mockResolvedValue(ticketsVoided);
 
-    const res = await cancel(flight(), { settings: { cancellation_fee: 75 } });
+    const res = await cancel(flight(), { settings: { cancellation_fee: 75 }, user: STAFF });
 
     expect(sent('REFUND')[0].transaction.amount).toBe('216.00');
     expect(res.body.cancellation).toMatchObject({ paymentAction: 'PARTIAL_REFUND', cancellationFee: 75, refundAmount: 216 });
@@ -275,7 +279,7 @@ describe('cancelling a flight', () => {
   it('refunds nothing automatically on a non-refundable fare past its void window, and says a person will', async () => {
     cancelFlightOrder.mockResolvedValue(pastVoidWindow);
 
-    const res = await cancel(flight({ refundable: false, tickets: [{ number: '057-2412345678', travelerId: '1' }], gds: { ticketed: true } }));
+    const res = await cancel(flight({ refundable: false, tickets: [{ number: '057-2412345678', travelerId: '1' }], gds: { ticketed: true } }), { user: STAFF });
 
     expect(res.statusCode).toBe(200);
     expect(axios.put).not.toHaveBeenCalled();
@@ -292,7 +296,7 @@ describe('cancelling a flight', () => {
   it('refunds a refundable fare past its void window less the fee, and flags the airline claim', async () => {
     cancelFlightOrder.mockResolvedValue(pastVoidWindow);
 
-    const res = await cancel(flight({ refundable: true, gds: { ticketed: true } }));
+    const res = await cancel(flight({ refundable: true, gds: { ticketed: true } }), { user: STAFF });
 
     expect(res.body.cancellation).toMatchObject({ paymentAction: 'PARTIAL_REFUND', refundAmount: 241, cancellationFee: 50 });
     expect(closing().payment_status).toBe('partially_refunded');
@@ -362,7 +366,7 @@ describe('cancelling a flight', () => {
     cancelFlightOrder.mockResolvedValue(ticketsVoided);
     axios.put.mockResolvedValue({ status: 200, data: { result: 'FAILURE' } });
 
-    const res = await cancel(flight());
+    const res = await cancel(flight(), { user: STAFF });
 
     expect(res.body.cancellation.paymentAction).toBe('REFUND_FAILED');
     expect(res.body.message).toMatch(/did not go through/);
@@ -437,7 +441,7 @@ describe('one cancellation refund per order', () => {
   it('is sent under an id made from the order', async () => {
     cancelFlightOrder.mockResolvedValue(ticketsVoided);
 
-    await cancel(flight(), { settings: { cancellation_fee: 75 } });
+    await cancel(flight(), { settings: { cancellation_fee: 75 }, user: STAFF });
 
     const [url] = axios.put.mock.calls.find(([, body]) => body.apiOperation === 'REFUND');
     expect(url).toMatch(/\/order\/FLT123\/transaction\/refund-cancel-FLT123$/);
@@ -451,7 +455,7 @@ describe('one cancellation refund per order', () => {
       .mockResolvedValueOnce(arcOrder([pay(291)]))
       .mockResolvedValue(arcOrder([pay(291), { result: 'SUCCESS', transaction: { id: 'refund-cancel-FLT123', type: 'REFUND', amount: 216 } }]));
 
-    const res = await cancel(flight(), { settings: { cancellation_fee: 75 } });
+    const res = await cancel(flight(), { settings: { cancellation_fee: 75 }, user: STAFF });
 
     expect(res.body.cancellation).toMatchObject({ paymentAction: 'PARTIAL_REFUND', refundAmount: 216, cancellationFee: 75 });
   });

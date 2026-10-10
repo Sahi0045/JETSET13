@@ -7,6 +7,11 @@ import { fakeBookingsTable } from './helpers/fakeBookings.js';
 import { shownQueryFor } from './helpers/deskShown.js';
 import { attentionLabel, attentionOf } from '../../shared/reviewQueue.js';
 
+// A customer's ticketed cancel after 24 hours is our team's call
+// (customerCancelPolicy.test.js); the tests that pin the refund itself cancel as staff.
+let caller = null;
+beforeEach(() => { caller = null; });
+
 /**
  * A refund ARC Pay refused on a cancel that also left tickets to claim from
  * the airline.
@@ -90,7 +95,7 @@ beforeEach(() => {
 const cancelled = async () => {
   const { handleCancelBookingAction } = await import('../../backend/routes/payment/operations.handlers.js');
   const res = createResponse();
-  await handleCancelBookingAction(createRequest({ method: 'POST', body: { bookingReference: 'FLT123', reason: 'test', email: 'traveler@example.com' } }), res);
+  await handleCancelBookingAction(createRequest({ method: 'POST', user: caller, body: { bookingReference: 'FLT123', reason: 'test', email: 'traveler@example.com' } }), res);
   const written = database.updates.find((update) => update.status === 'cancelled');
   return { res, row: { ...booking(), ...written, id: 'b-claim', created_at: '2026-09-22T09:00:00Z' } };
 };
@@ -112,6 +117,7 @@ const deskOver = async (rows) => {
 
 describe('a refused refund under an airline-claim flag', () => {
   it('is what the cancel records: REFUND_FAILED, the fee, and a claim flag naming only the tickets', async () => {
+    caller = { id: 'staff-1', role: 'admin' };
     const { res, row } = await cancelled();
     expect(res.body.cancellation).toMatchObject({ paymentAction: 'REFUND_FAILED', cancellationFee: 50 });
     expect(row.booking_details.needs_review).toMatchObject({
@@ -120,6 +126,7 @@ describe('a refused refund under an airline-claim flag', () => {
   });
 
   it('tells the desk the customer refund was refused, and what is owed, beside the claim', async () => {
+    caller = { id: 'staff-1', role: 'admin' };
     const { row } = await cancelled();
     const attention = attentionOf(row);
     expect(attention.reason, 'the desk is never told the customer refund was refused').toMatch(/the refund did not go through \(REFUND_FAILED\)/);
@@ -129,6 +136,7 @@ describe('a refused refund under an airline-claim flag', () => {
   });
 
   it('stays on Needs attention once the airline claim is marked handled, until the refund is', async () => {
+    caller = { id: 'staff-1', role: 'admin' };
     const { row } = await cancelled();
     const desk = await deskOver([row]);
 

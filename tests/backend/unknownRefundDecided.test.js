@@ -4,6 +4,11 @@ import { createRequest, createResponse } from './helpers/express.helpers.js';
 import { generateAdminCancellationTemplate } from '../../backend/services/email/templates.js';
 import { refundOwedOf } from '../../shared/reviewQueue.js';
 
+// A customer's ticketed cancel after 24 hours is our team's call
+// (customerCancelPolicy.test.js); the tests that pin the refund itself cancel as staff.
+let caller = null;
+beforeEach(() => { caller = null; });
+
 /**
  * A cancel whose refund was sent to ARC Pay and never answered
  * (REFUND_UNDER_REVIEW with reversalOutcomeUnknown), on a booking whose
@@ -86,7 +91,7 @@ beforeEach(() => {
 const cancel = async () => {
   const { handleCancelBookingAction } = await import('../../backend/routes/payment/operations.handlers.js');
   const res = createResponse();
-  await handleCancelBookingAction(createRequest({ method: 'POST', body: { bookingReference: 'FLT123', reason: 'test', email: 'traveler@example.com' } }), res);
+  await handleCancelBookingAction(createRequest({ method: 'POST', user: caller, body: { bookingReference: 'FLT123', reason: 'test', email: 'traveler@example.com' } }), res);
   return res;
 };
 
@@ -102,6 +107,7 @@ const officeText = () => textOf(generateAdminCancellationTemplate(sendCancellati
 
 describe('an unanswered cancel refund that meant to keep a 50 fee', () => {
   it('the office email says what the cancel decided: 241 back, the 50 fee kept', async () => {
+    caller = { id: 'staff-1', role: 'admin' };
     const res = await cancel();
     expect(res.body.cancellation).toMatchObject({ paymentAction: 'REFUND_UNDER_REVIEW', reversalOutcomeUnknown: true, cancellationFee: 50 });
 
@@ -117,11 +123,13 @@ describe('an unanswered cancel refund that meant to keep a 50 fee', () => {
   });
 
   it('the desk offers what the cancel decided, not the whole payment', async () => {
+    caller = { id: 'staff-1', role: 'admin' };
     await cancel();
     expect(refundOwedOf(rowAfterCancel())).toMatchObject({ owed: 241, paid: 291, fee: 50 });
   });
 
   it('the Slack alarm names what the cancel decided beside "check ARC Pay"', async () => {
+    caller = { id: 'staff-1', role: 'admin' };
     await cancel();
     const { buildMessage } = await import('../../backend/jobs/paymentFailureAlert.job.js');
     const message = buildMessage([rowAfterCancel()]);
