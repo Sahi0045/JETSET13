@@ -3997,7 +3997,10 @@ router.post('/order', optionalProtect, async (req, res) => {
       operatingAirlineName: firstSegment.operating?.carrierCode || null,
       lastTicketingDate: firstOffer?.lastTicketingDate || null,
       numberOfBookableSeats: firstOffer?.numberOfBookableSeats || null,
-      refundable: bookedOffer?._ama?.refundable ?? null,
+      // Never from the offer the browser sent (`firstOffer`, used when the
+      // airline could not price it again): this flag decided automatic refunds.
+      refundable: [repriced ? pricedOffer?._ama?.refundable : undefined, verifiedCharge?.pricedFare?.refundable]
+        .find((value) => typeof value === 'boolean') ?? null,
       baggageDetails: {
         checked: fareDetails?.includedCheckedBags || null,
         cabin: fareDetails?.includedCabinBags || null

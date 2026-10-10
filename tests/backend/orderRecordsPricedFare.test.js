@@ -172,3 +172,51 @@ describe('the booking record after the airline priced the fare', () => {
     expect(details.itineraries[0].segments[0].cabin).toBe('PREMIUM_ECONOMY');
   });
 });
+
+describe('whether the booked fare is refundable', () => {
+  const pricingAnswers = (answer) => {
+    vi.doMock('../../backend/services/flightProvider.js', () => ({
+      default: {
+        priceFlightOffer: vi.fn(async () => answer),
+        createFlightOrder: vi.fn(async (_orderData, options) => {
+          await options.onCommitted({ pnr: 'PRCD42', tstRefs: ['1'], priced: { total: 305.5, currency: 'USD' } });
+          return { success: true, pnr: 'PRCD42', orderId: 'PRCD42', ticketed: false, tickets: [], mode: 'LIVE_GDS_BOOKING' };
+        }),
+      },
+      providerStatus: () => ({ bookingEnabled: true, wsap: '1ASIWTEST' }),
+    }));
+  };
+  const rowWith = ({ browserSays, checkoutSays }) => {
+    const row = checkoutRow();
+    row.booking_details.pending_booking_data.bookingData.originalOffer = { ...searched, price: priced.price, _ama: { ...searched._ama, refundable: browserSays } };
+    row.booking_details.verified_charge.pricedFare = { ...row.booking_details.verified_charge.pricedFare, ...(checkoutSays === undefined ? {} : { refundable: checkoutSays }) };
+    return row;
+  };
+
+  it('is what checkout priced when the airline could not price it again, not what the browser sent', async () => {
+    pricingAnswers({ success: false });
+    const { app, table } = await appWith([rowWith({ browserSays: true, checkoutSays: false })]);
+
+    await request(app).post('/api/flights/order').send(order);
+
+    expect(table.row(REF).booking_details.refundable).toBe(false);
+  });
+
+  it('is unknown when neither pricing said, whatever the browser sent', async () => {
+    pricingAnswers({ success: false });
+    const { app, table } = await appWith([rowWith({ browserSays: true, checkoutSays: undefined })]);
+
+    await request(app).post('/api/flights/order').send(order);
+
+    expect(table.row(REF).booking_details.refundable).toBeNull();
+  });
+
+  it('is what the airline said when it priced the fare again', async () => {
+    pricingAnswers({ success: true, data: { flightOffers: [{ ...priced, _ama: { ...priced._ama, refundable: true } }] } });
+    const { app, table } = await appWith([rowWith({ browserSays: false, checkoutSays: false })]);
+
+    await request(app).post('/api/flights/order').send(order);
+
+    expect(table.row(REF).booking_details.refundable).toBe(true);
+  });
+});
