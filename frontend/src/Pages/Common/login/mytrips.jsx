@@ -23,6 +23,8 @@ import Footer from '../Footer'
 import { useSupabaseAuth } from '../../../contexts/SupabaseAuthContext'
 import ArcPayService from '../../../Services/ArcPayService'
 import CancelOutcomeDialog from './CancelOutcomeDialog'
+import CancelQuote from '../flights/CancelQuote'
+import { fetchCancelQuote } from '../../../hooks/queries/useFlights'
 
 // ----- Icon helpers (react-icons replace emoji) -----
 /**
@@ -125,6 +127,22 @@ const Spinner = ({ label }) => (
     </div>
   </div>
 )
+
+function TripCancelQuote({ reference }) {
+  const [query, setQuery] = useState({ isLoading: true, data: undefined })
+  useEffect(() => {
+    let live = true
+    fetchCancelQuote(reference)
+      .then((data) => { if (live) setQuery({ isLoading: false, data }) })
+      .catch(() => { if (live) setQuery({ isLoading: false, isError: true, data: undefined }) })
+    return () => { live = false }
+  }, [reference])
+  return (
+    <div className="basis-full space-y-1 text-sm text-gray-700">
+      <CancelQuote query={query} />
+    </div>
+  )
+}
 
 export default function TravelDashboard() {
   const navigate = useNavigate()
@@ -1049,6 +1067,9 @@ export default function TravelDashboard() {
             <>
               {showCancelConfirm === booking.id ? (
                 <div className="flex items-center gap-2 flex-wrap">
+                  {(booking.type || '').toLowerCase() === 'flight' && (booking.bookingReference || booking.booking_reference || booking.orderId) && (
+                    <TripCancelQuote reference={booking.bookingReference || booking.booking_reference || booking.orderId} />
+                  )}
                   <span className="text-sm text-red-600 font-medium">Cancel this booking?</span>
                   <button
                     disabled={cancellingBookingId === booking.id}

@@ -156,6 +156,8 @@ describe('My Trips, when the cancel is not carried through', () => {
     const reads = { bookings: 0 };
     let cancelled = false;
     vi.stubGlobal('fetch', vi.fn(async (url) => {
+      // The cancel confirm asks for a quote first; it cancels nothing.
+      if (String(url).includes('/cancel-quote')) return reply(200, { success: true, quote: null });
       if (String(url).includes('/cancel')) { cancelled = true; return reply(...answer); }
       if (String(url).includes('flights/bookings')) {
         reads.bookings += 1;

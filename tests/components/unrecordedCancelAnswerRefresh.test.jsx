@@ -156,6 +156,8 @@ describe('My Trips', () => {
   const renderMyTrips = (later) => {
     bookingReads = 0;
     vi.stubGlobal('fetch', vi.fn(async (url) => {
+      // The cancel confirm asks for a quote under flights/bookings too; it is not a read of the list.
+      if (String(url).includes('/cancel-quote')) return { ok: true, status: 200, json: async () => ({ success: true, quote: null }) };
       const isBookings = String(url).includes('flights/bookings');
       if (isBookings) bookingReads += 1;
       const answered = mockCancelFlightBooking.mock.calls.length > 0;
