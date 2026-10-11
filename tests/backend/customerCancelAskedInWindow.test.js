@@ -77,6 +77,7 @@ const refusedAtHour15 = async () => {
 beforeEach(() => {
   vi.resetModules();
   vi.useFakeTimers({ toFake: ['Date'] });
+  vi.stubEnv('AMADEUS_WS_OFFICE_TIME_ZONE', 'America/New_York');
   table = fakeBookingsTable([row()], { tables: { price_settings: [{ settings: { cancellation_fee: 50 } }], payments: [] } });
   cancelFlightOrder.mockReset();
   if (!axios.put) axios.put = vi.fn();

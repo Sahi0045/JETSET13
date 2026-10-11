@@ -27,19 +27,19 @@ afterEach(() => {
 });
 
 describe('GET /api/flights/cancel-policy', () => {
-  it('gives the end of the office day in New York by default', async () => {
+  it('gives the end of the office day in Pacific time by default', async () => {
     const res = await request(await app()).get('/api/flights/cancel-policy');
 
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ success: true, freeUntil: '2026-10-13T04:00:00.000Z', timeZone: 'America/New_York' });
+    expect(res.body).toEqual({ success: true, freeUntil: '2026-10-13T07:00:00.000Z', timeZone: 'America/Los_Angeles' });
   });
 
   it('follows the office time zone that is set', async () => {
-    vi.stubEnv('AMADEUS_WS_OFFICE_TIME_ZONE', 'America/Los_Angeles');
+    vi.stubEnv('AMADEUS_WS_OFFICE_TIME_ZONE', 'America/New_York');
 
     const res = await request(await app()).get('/api/flights/cancel-policy');
 
-    expect(res.body).toMatchObject({ freeUntil: '2026-10-13T07:00:00.000Z', timeZone: 'America/Los_Angeles' });
+    expect(res.body).toMatchObject({ freeUntil: '2026-10-13T04:00:00.000Z', timeZone: 'America/New_York' });
   });
 
   it('gives no deadline for an office time zone it cannot read', async () => {
