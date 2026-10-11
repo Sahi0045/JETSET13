@@ -65,6 +65,13 @@ let cached = null;
  * @returns {Readonly<object>} frozen config
  * @throws {Error} listing every missing required variable
  */
+/**
+ * The ticketing office's time zone: it decides the same-day void window and the
+ * free cancellation window. Readable without Amadeus credentials, because every
+ * customer cancel reads it, including one with no airline reservation.
+ */
+export const officeTimeZoneOf = (env = process.env) => (env.AMADEUS_WS_OFFICE_TIME_ZONE || 'America/New_York').trim();
+
 const readWsConfig = (env = process.env) => {
   const missing = Object.keys(REQUIRED).filter((name) => !env[name] || String(env[name]).trim() === '');
   if (missing.length > 0) {
@@ -117,7 +124,7 @@ const readWsConfig = (env = process.env) => {
     // yesterday's: on PDT at 00:2x UTC on 16 Sep 2026 a ticket issued minutes
     // earlier was reported as needing an airline refund instead of being
     // voided. Set this to the production office's zone at cutover.
-    officeTimeZone: (env.AMADEUS_WS_OFFICE_TIME_ZONE || 'America/New_York').trim(),
+    officeTimeZone: officeTimeZoneOf(env),
     queueNumber: (env.AMADEUS_WS_QUEUE_NUMBER || '50').trim(),
     queueOffice: (env.AMADEUS_WS_QUEUE_OFFICE || env.AMADEUS_WS_OFFICE_ID).trim(),
     // The category within that queue - the "C0" in queue 90 C0, which Amadeus

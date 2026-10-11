@@ -30,7 +30,7 @@ import { DEFAULT_PRICE_SETTINGS, flightCancellationFeeFrom } from '../../config/
 import { cancellationMessage, refundOutcome } from '../../../shared/cancellationOutcome.js';
 import { customerCancelTerms, fareRuleOf, isWithinFreeWindow, serviceFeeKeptOf } from '../../../shared/flightCancelPolicy.js';
 import { readBookedFeeTable } from '../../services/bookedFeeTable.service.js';
-import { getWsConfig } from '../../services/amadeusSoap/config.js';
+import { officeTimeZoneOf } from '../../services/amadeusSoap/config.js';
 import {
     COMMIT_UNKNOWN_REVIEW_REASON, ISSUANCE_UNKNOWN, commitUnknownOf, decidedFeeOf, flagInForce, needsAirlineRefundClaim, notHeldAnswerOf,
     refundOwedOf, ticketNumbersMissingOf,
@@ -686,7 +686,7 @@ export async function quoteCustomerCancel(booking, { now = new Date(), client = 
     const voidedTickets = Array.isArray(details.voided_tickets) ? details.voided_tickets : [];
     const ticketed = details.gds?.ticketed === true || tickets.length > 0 || voidedTickets.length > 0
         || Boolean(ticketNumbersMissingOf(booking));
-    const timeZone = getWsConfig().officeTimeZone;
+    const timeZone = officeTimeZoneOf();
     const freeWindow = isWithinFreeWindow(booking.created_at, askedAt, timeZone);
     const fareRule = pnr && ticketed && !freeWindow ? fareRuleOf(await readBookedFeeTable(booking)) : null;
     return customerCancelTerms({
@@ -791,7 +791,7 @@ async function cancelFlightBooking(res, booking, { reason, email, customer = fal
     const flightFee = await readFlightCancellationFee();
     let customerTerms = null;
     if (customerRule) {
-        const freeWindow = isWithinFreeWindow(booking.created_at, earliestTime(customerAskedAt, customer ? requestedAt : null), getWsConfig().officeTimeZone);
+        const freeWindow = isWithinFreeWindow(booking.created_at, earliestTime(customerAskedAt, customer ? requestedAt : null), officeTimeZoneOf());
         customerTerms = {
             freeWindow,
             serviceFeeKept: serviceFeeKeptOf(details.verified_charge),

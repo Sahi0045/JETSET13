@@ -13,7 +13,7 @@ import { emailMatchesBooking, isBookingOwner } from '../utils/bookingAccess.js';
 import { reconcileBookingPayment } from './payment/checkout.handlers.js';
 import { reportError } from '../services/monitoring.js';
 import { withBookingPriority } from '../services/amadeusSoap/semaphore.js';
-import { describeWsConfig, getWsConfig } from '../services/amadeusSoap/config.js';
+import { describeWsConfig, getWsConfig, officeTimeZoneOf } from '../services/amadeusSoap/config.js';
 import { isStandingTicketRefusal } from '../services/amadeusSoap/codes.js';
 import { recordCouponUse } from '../services/coupon.service.js';
 import { isFareRefusal } from '../services/flightCheckout.service.js';
@@ -4663,7 +4663,7 @@ router.get('/bookings/:bookingRef/fee-rules', optionalProtect, guestBookingLimit
 // When a booking made now stops being free to cancel, for the review page:
 // the end of the ticketing office's day, the zone the cancel's void uses.
 router.get('/cancel-policy', (req, res) => {
-  const timeZone = getWsConfig().officeTimeZone;
+  const timeZone = officeTimeZoneOf();
   res.json({ success: true, freeUntil: freeUntilOf(new Date(), timeZone), timeZone });
 });
 
