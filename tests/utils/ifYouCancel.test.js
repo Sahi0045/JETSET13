@@ -21,10 +21,9 @@ describe('ifYouCancel', () => {
     ]);
   });
 
-  it('says what a cancel returns within 24 hours, and the airline rules for the fare', () => {
+  it('says what a cancel returns before the free cancellation deadline, and the airline rules for the fare', () => {
     expect(words({ quote: quote('free_window') })).toEqual([
-      'You are within 24 hours of booking (until Oct 12, 10:00 AM). You get back $287.50; the $12.50 service fee is not refundable.',
-      'If the airline no longer lets us void the ticket, our team claims the refund from the airline and returns what it gives back, less the service fee.',
+      'Free cancellation until Oct 12, 10:00 AM. You get back $287.50; the $12.50 service fee is not refundable.',
       "Lufthansa's rules for this fare: not refundable; a date change costs US$336 per adult plus any fare difference.",
     ]);
   });
@@ -48,7 +47,7 @@ describe('ifYouCancel', () => {
 
   it('leaves out airline rules it does not have, and names no airline it does not know', () => {
     expect(words({ quote: quote('not_ticketed'), penalties: null })).toHaveLength(1);
-    expect(words({ quote: quote('free_window'), airline: '' })[2])
+    expect(words({ quote: quote('free_window'), airline: '' })[1])
       .toBe("The airline's rules for this fare: not refundable; a date change costs US$336 per adult plus any fare difference.");
   });
 });

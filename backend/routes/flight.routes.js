@@ -39,6 +39,7 @@ import { flightSearchLimiter, guestBookingLimiter } from '../middleware/security
 import { liveChainState } from '../utils/bookingChainClaim.js';
 import { isUsableEmail } from '../services/guestBooking.service.js';
 import { readBookedFeeTable } from '../services/bookedFeeTable.service.js';
+import { freeUntilOf } from '../../shared/flightCancelPolicy.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -4657,6 +4658,13 @@ router.get('/bookings/:bookingRef/fee-rules', optionalProtect, guestBookingLimit
     console.error('❌ Booked fee table error:', error);
     return res.status(500).json({ success: false, error: 'Failed to read the fare rules' });
   }
+});
+
+// When a booking made now stops being free to cancel, for the review page:
+// the end of the ticketing office's day, the zone the cancel's void uses.
+router.get('/cancel-policy', (req, res) => {
+  const timeZone = getWsConfig().officeTimeZone;
+  res.json({ success: true, freeUntil: freeUntilOf(new Date(), timeZone), timeZone });
 });
 
 // What a cancel would return, before the customer confirms it. Opened exactly
