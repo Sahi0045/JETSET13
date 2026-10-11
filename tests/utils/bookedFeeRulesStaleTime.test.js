@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bookedFeeRulesStaleTime } from '../../frontend/src/hooks/queries/useFlights.js';
+import { bookedFeeRulesStaleTime } from '../../frontend/src/utils/bookedFeeRules.js';
 
 // One Amadeus timeout must not leave "not available" on the page for half an hour.
 describe("a booked trip's fee table answer", () => {

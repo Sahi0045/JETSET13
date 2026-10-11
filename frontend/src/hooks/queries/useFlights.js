@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '../../lib/queryKeys';
 import { getApiUrl } from '../../utils/apiHelper';
 import { authHeaders } from '../../utils/authHeaders';
+import { bookedFeeRulesStaleTime } from '../../utils/bookedFeeRules';
 
 /**
  * Open one booking. `email` lets a guest open their own. Exported for the
@@ -59,8 +60,6 @@ export async function fetchBookedFeeRules(bookingId, email) {
   const data = await res.json().catch(() => null);
   return data?.success ? data.penalties ?? null : null;
 }
-
-export const bookedFeeRulesStaleTime = (query) => (query.state.data ? 30 * 60 * 1000 : 0);
 
 export function useBookedFeeRules(bookingId, options = {}) {
   const { email, ...queryOptions } = options;
