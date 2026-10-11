@@ -339,6 +339,14 @@ export const cutoverRisks = (env = process.env) => {
     onDefault.push({ setting: 'AMADEUS_WS_ENDPOINT', kind: 'PDT', risk: 'still points at the Amadeus TEST node' });
   }
 
+  if (isTrue(env.AMADEUS_WS_BOOKING_ENABLED, false) && !String(env.FLIGHTS_INTERNAL_SECRET || '').trim()) {
+    onDefault.push({
+      setting: 'FLIGHTS_INTERNAL_SECRET',
+      kind: 'MISSING',
+      risk: 'checkout cannot confirm seats before payment without it (it must match the Vercel value); a refused fare is found after the charge',
+    });
+  }
+
   return onDefault;
 };
 

@@ -639,6 +639,16 @@ describe('priceOfferForCheckout tells a refused fare from an outage', () => {
       await price();
       expect(axios.post).toHaveBeenCalledWith('https://api.test/api/flights/price', { flightOffer: { id: '1' }, confirmSeats: true }, expect.any(Object));
     });
+
+    // The route sells seats only for a request carrying the secret both hosts
+    // share; without it, checkout would price but never confirm the seats.
+    it("sends the hosts' shared secret with the request", async () => {
+      vi.stubEnv('FLIGHTS_INTERNAL_SECRET', 'shared-between-hosts');
+      axios.post.mockResolvedValue({ status: 200, data: { success: true, data: { flightOffers: [{ price: { total: '400.00' } }] }, meta: { international: true } } });
+      await price();
+      const [, , options] = axios.post.mock.calls[0];
+      expect(options.headers).toEqual({ 'x-jetsetters-internal': 'shared-between-hosts' });
+    });
   });
 
   describe('directly (Lightsail)', () => {
