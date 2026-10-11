@@ -112,7 +112,7 @@ describe('a customer cancel', () => {
     expect(closing().booking_details.cancellation).toMatchObject({ policy: 'not_ticketed', terms: { serviceFeeKept: 12.5, airlinePrice: 287.5 } });
   });
 
-  it('returns the airline price on tickets voided within 24 hours, without reading the fare rules', async () => {
+  it('returns the airline price on tickets voided before the void deadline, without reading the fare rules', async () => {
     cancelFlightOrder.mockResolvedValue(ticketsVoided);
 
     const res = await cancel(flight({ createdAt: hoursAgo(2), details: ticketed }));
@@ -122,7 +122,7 @@ describe('a customer cancel', () => {
     expect(getBookedFeeTable).not.toHaveBeenCalled();
   });
 
-  it('refunds nothing automatically on a non-refundable fare after 24 hours, and reads the rules before cancelling', async () => {
+  it('refunds nothing automatically on a non-refundable fare after the free window, and reads the rules before cancelling', async () => {
     cancelFlightOrder.mockResolvedValue(ticketsVoided);
 
     const res = await cancel(flight({ createdAt: hoursAgo(30), details: ticketed }));
@@ -132,7 +132,7 @@ describe('a customer cancel', () => {
     expect(res.body.cancellation).toMatchObject({ paymentAction: 'REFUND_UNDER_REVIEW', refundAmount: 0, policy: 'non_refundable' });
     const record = closing().booking_details;
     expect(record.cancellation).toMatchObject({ policy: 'non_refundable', terms: { serviceFeeKept: 12.5 } });
-    expect(record.needs_review.reason).toMatch(/non-refundable fare cancelled after 24 hours/);
+    expect(record.needs_review.reason).toMatch(/non-refundable fare cancelled after the free cancellation time/);
   });
 
   it('records the penalty and the flight fee on a refundable fare after 24 hours', async () => {
@@ -158,15 +158,28 @@ describe('a customer cancel', () => {
     expect(res.body.cancellation).toMatchObject({ paymentAction: 'REFUND_UNDER_REVIEW', policy: 'rules_unknown' });
   });
 
-  it('judges the 24 hours when the customer asked, not when the airline answered', async () => {
+  it('judges the free window when the customer asked, not when the airline answered', async () => {
+    // Asked at 11:59:50 PM New York time; the airline answers after midnight.
+    const asked = Date.parse('2026-10-12T03:59:50.000Z');
+    vi.setSystemTime(asked);
     cancelFlightOrder.mockImplementation(async () => {
-      vi.setSystemTime(NOW + 20 * 1000);
+      vi.setSystemTime(asked + 20 * 1000);
       return ticketsVoided;
     });
 
-    const res = await cancel(flight({ createdAt: new Date(NOW - (24 * 60 * 60 - 10) * 1000).toISOString(), details: ticketed }));
+    const res = await cancel(flight({ createdAt: '2026-10-12T03:30:00.000Z', details: ticketed }));
 
     expect(res.body.cancellation).toMatchObject({ refundAmount: 287.5, policy: 'free_window' });
+  });
+
+  it('applies the fare rules once the office day has ended, though 24 hours have not passed', async () => {
+    // Booked at 6 PM New York time yesterday; asked at 8 AM: 14 hours later.
+    cancelFlightOrder.mockResolvedValue(ticketsVoided);
+
+    const res = await cancel(flight({ createdAt: hoursAgo(14), details: ticketed }));
+
+    expect(axios.put).not.toHaveBeenCalled();
+    expect(res.body.cancellation).toMatchObject({ paymentAction: 'REFUND_UNDER_REVIEW', policy: 'non_refundable' });
   });
 });
 

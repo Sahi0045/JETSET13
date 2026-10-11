@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { decideFlightRefund } from '../../backend/routes/payment/operations.handlers.js';
 
 /**
- * What a customer's own cancel returns: the airline price within 24 hours or
- * before the ticket is issued, with the service fee kept; after that our team
+ * What a customer's own cancel returns: the airline price inside the free
+ * window (until the ticket stops being voidable) or before the ticket is issued, with the service fee kept; after that our team
  * settles it by the fare's rules. Staff and server cancels keep their rules.
  */
 
@@ -39,21 +39,22 @@ describe('a customer cancel', () => {
     expect(decide({ customer: { ...inWindow, serviceFeeKept: null } })).toMatchObject({ action: 'refund_all', refundAmount: 300 });
   });
 
-  it('returns the airline price on tickets voided within 24 hours', () => {
+  it('returns the airline price on tickets voided inside the free window', () => {
     expect(decide({ gds: ticketsVoided, customer: inWindow })).toMatchObject({
       action: 'refund_less_fee', fee: 12.5, refundAmount: 287.5, policy: 'free_window', serviceFeeKept: 12.5,
     });
   });
 
-  it('leaves a ticket that could not be voided within 24 hours to our team', () => {
+  it('leaves a ticket the airline would not void inside the free window to our team, who refund the promised airline price', () => {
     const decision = decide({ gds: pastVoidWindow, customer: inWindow });
     expect(decision).toMatchObject({ action: 'review', refundAmount: 0, policy: 'not_voided', serviceFeeKept: 12.5 });
-    expect(decision.reason).toMatch(/within 24 hours/);
+    expect(decision.reason).toMatch(/free cancellation time/);
+    expect(decision.reason).toMatch(/refund 287\.50/);
+    expect(decision.reason).toMatch(/keep the 12\.50 service fee/);
     expect(decision.reason).toMatch(/claim the refund from the airline/);
-    expect(decision.reason).toMatch(/12\.50 service fee/);
   });
 
-  it('refunds nothing automatically on a non-refundable fare after 24 hours, voided or not', () => {
+  it('refunds nothing automatically on a non-refundable fare after the free window, voided or not', () => {
     const voided = decide({ gds: ticketsVoided, customer: after({ refundable: false, penalty: null, currency: null }) });
     expect(voided).toMatchObject({ action: 'review', refundAmount: 0, policy: 'non_refundable' });
     expect(voided.reason).toMatch(/non-refundable/);
@@ -65,7 +66,7 @@ describe('a customer cancel', () => {
     expect(claimed.reason).toMatch(/claim/);
   });
 
-  it('names the airline price, the penalty and our fee on a refundable fare after 24 hours', () => {
+  it('names the airline price, the penalty and our fee on a refundable fare after the free window', () => {
     const decision = decide({ gds: pastVoidWindow, refundable: true, customer: after({ refundable: true, penalty: 150, currency: 'USD' }) });
     expect(decision).toMatchObject({ action: 'review', refundAmount: 0, policy: 'refundable' });
     expect(decision.reason).toMatch(/287\.50/);

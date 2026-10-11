@@ -40,5 +40,6 @@ describe('the review page', () => {
     expect(screen.getByText('Jetsetters convenience fee · not refundable')).toBeTruthy();
     expect(screen.getByText('Cancellation policy')).toBeTruthy();
     expect(screen.getByText(/our \$40\.00 cancellation fee/)).toBeTruthy();
+    expect(screen.getByText(/^Book now and you can cancel free until /)).toBeTruthy();
   });
 });

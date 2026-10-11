@@ -25,6 +25,7 @@ const auth = { user: signedInUser, loading: false, renewServerSession: async () 
 const location = { country: 'US', callingCode: '+1', currency: 'USD' };
 const priceConfigQuery = { data: priceConfig, error: null, refetch: () => {} };
 const guestSwitch = { isSuccess: true, data: false, isPending: false };
+const cancelPolicyQuery = { data: { freeUntil: '2026-10-13T04:00:00.000Z', timeZone: 'America/New_York' } };
 const savedTravellers = { data: null };
 const saveTravellers = { mutate: () => {} };
 
@@ -33,7 +34,7 @@ export const pageMocks = {
   footer: { default: () => null },
   pageWrapper: { default: (Component) => Component },
   auth: { useSupabaseAuth: () => auth },
-  queries: { useGuestFlightBooking: () => guestSwitch, usePriceConfig: () => priceConfigQuery },
+  queries: { useGuestFlightBooking: () => guestSwitch, usePriceConfig: () => priceConfigQuery, useCancelPolicy: () => cancelPolicyQuery },
   savedTravellers: { useSavedTravellers: () => savedTravellers, useSaveTravellers: () => saveTravellers },
   location: { useLocationContext: () => location },
   nothing: { default: () => null },

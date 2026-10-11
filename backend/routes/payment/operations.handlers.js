@@ -30,6 +30,7 @@ import { DEFAULT_PRICE_SETTINGS, flightCancellationFeeFrom } from '../../config/
 import { cancellationMessage, refundOutcome } from '../../../shared/cancellationOutcome.js';
 import { customerCancelTerms, fareRuleOf, isWithinFreeWindow, serviceFeeKeptOf } from '../../../shared/flightCancelPolicy.js';
 import { readBookedFeeTable } from '../../services/bookedFeeTable.service.js';
+import { officeTimeZoneOf } from '../../services/amadeusSoap/config.js';
 import {
     COMMIT_UNKNOWN_REVIEW_REASON, ISSUANCE_UNKNOWN, commitUnknownOf, decidedFeeOf, flagInForce, needsAirlineRefundClaim, notHeldAnswerOf,
     refundOwedOf, ticketNumbersMissingOf,
@@ -501,7 +502,7 @@ function keepServiceFee(heldCents, customer, policy, basis) {
 }
 
 /**
- * A customer's ticketed cancel. Only the free 24 hours with every ticket voided
+ * A customer's ticketed cancel. Only the free window with every ticket voided
  * refunds by itself; everything after that goes to our team, because what the
  * airline returns depends on rules we cannot settle automatically. The reasons
  * are what the desk works from.
@@ -511,20 +512,23 @@ function customerTicketedDecision({ heldCents, unvoided, customer, review }) {
     const airlinePrice = dollars(heldCents / 100 - kept);
     const held = (policy, reason) => ({ ...review(reason), policy, serviceFeeKept: kept });
     if (customer.freeWindow) {
-        if (!unvoided) return keepServiceFee(heldCents, customer, 'free_window', 'cancelled within 24 hours of booking and the tickets were voided');
-        return held('not_voided', `cancelled within 24 hours of booking, but the tickets could not be voided: claim the refund from the airline and return it less the ${dollars(kept)} service fee`);
+        if (!unvoided) return keepServiceFee(heldCents, customer, 'free_window', 'cancelled within the free cancellation time and the tickets were voided');
+        // Promised before the cancel: the customer is owed the airline price
+        // whatever the airline gives back for a ticket it would not void.
+        return held('not_voided', `cancelled within the free cancellation time, but the tickets could not be voided: refund ${airlinePrice} `
+            + `(the airline price the customer was promised) and keep the ${dollars(kept)} service fee; claim the refund from the airline`);
     }
     const tickets = unvoided ? 'claim the refund from the airline' : 'the tickets were voided, so nothing is owed to the airline';
     const rule = customer.fareRule || {};
     if (rule.refundable === false) {
-        return held('non_refundable', `non-refundable fare cancelled after 24 hours: the fare is not returned; return any unused taxes (${tickets})`);
+        return held('non_refundable', `non-refundable fare cancelled after the free cancellation time: the fare is not returned; return any unused taxes (${tickets})`);
     }
     if (rule.refundable === true) {
         const penalty = rule.penalty === null || rule.penalty === undefined ? 'not stated' : [dollars(rule.penalty), rule.currency, 'per adult'].filter(Boolean).join(' ');
-        return held('refundable', `refundable fare cancelled after 24 hours: return ${airlinePrice} (the airline price) less the airline's penalty (${penalty}) `
+        return held('refundable', `refundable fare cancelled after the free cancellation time: return ${airlinePrice} (the airline price) less the airline's penalty (${penalty}) `
             + `and the ${dollars(customer.cancellationFee)} cancellation fee; the ${dollars(kept)} service fee is kept (${tickets})`);
     }
-    return held('rules_unknown', `fare cancelled after 24 hours and its rules could not be read: check them with the airline before refunding (${tickets})`);
+    return held('rules_unknown', `fare cancelled after the free cancellation time and its rules could not be read: check them with the airline before refunding (${tickets})`);
 }
 
 /** Carry out a refund decision at ARC. Never moves more than the decision says. */
@@ -682,12 +686,14 @@ export async function quoteCustomerCancel(booking, { now = new Date(), client = 
     const voidedTickets = Array.isArray(details.voided_tickets) ? details.voided_tickets : [];
     const ticketed = details.gds?.ticketed === true || tickets.length > 0 || voidedTickets.length > 0
         || Boolean(ticketNumbersMissingOf(booking));
-    const freeWindow = isWithinFreeWindow(booking.created_at, askedAt);
+    const timeZone = officeTimeZoneOf();
+    const freeWindow = isWithinFreeWindow(booking.created_at, askedAt, timeZone);
     const fareRule = pnr && ticketed && !freeWindow ? fareRuleOf(await readBookedFeeTable(booking)) : null;
     return customerCancelTerms({
         charge: details.verified_charge,
         paidAt: booking.created_at,
         now: askedAt,
+        timeZone,
         hasReservation: Boolean(pnr),
         ticketed,
         fareRule,
@@ -701,7 +707,7 @@ export async function quoteCustomerCancel(booking, { now = new Date(), client = 
  * and once.
  */
 async function cancelFlightBooking(res, booking, { reason, email, customer = false, system = false }) {
-    // The 24 hours are judged when the customer first asked: an airline call
+    // The free window is judged when the customer first asked: an airline call
     // that runs past the mark, or a cancel that failed and was retried or
     // finished by our team, must not take the free window away.
     const requestedAt = new Date();
@@ -785,7 +791,7 @@ async function cancelFlightBooking(res, booking, { reason, email, customer = fal
     const flightFee = await readFlightCancellationFee();
     let customerTerms = null;
     if (customerRule) {
-        const freeWindow = isWithinFreeWindow(booking.created_at, earliestTime(customerAskedAt, customer ? requestedAt : null));
+        const freeWindow = isWithinFreeWindow(booking.created_at, earliestTime(customerAskedAt, customer ? requestedAt : null), officeTimeZoneOf());
         customerTerms = {
             freeWindow,
             serviceFeeKept: serviceFeeKeptOf(details.verified_charge),

@@ -42,8 +42,8 @@ describe('the message after a customer cancel', () => {
       + 'Our team checks them with the airline and emails you within 2 business days to confirm what is returned.',
     );
     expect(cancellationMessage({ cancellation: reviewed('not_voided') })).toBe(
-      'Your booking is cancelled. The airline no longer let us void the ticket, so our team claims the refund from the airline '
-      + 'and returns what it gives back, less the $12.50 service fee. We will email you within 2 business days.',
+      'Your booking is cancelled. You cancelled within the free cancellation time, so you get back $287.50; the $12.50 service fee is not refundable. '
+      + 'The airline could not void the ticket, so our team processes this refund and emails you within 2 business days.',
     );
   });
 

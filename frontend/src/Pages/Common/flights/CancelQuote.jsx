@@ -12,7 +12,7 @@ export function QuoteLoading() {
 }
 
 export default function CancelQuote({ query }) {
-  // The 24 hours and the ticket can change while a page stays open: a quote
+  // The free window and the ticket can change while a page stays open: a quote
   // being asked again is not shown in its old words.
   if (query?.isLoading || query?.isFetching) return <QuoteLoading />;
   const lines = cancelTermsLines(query?.data);

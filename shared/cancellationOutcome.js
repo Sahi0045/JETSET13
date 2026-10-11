@@ -69,9 +69,10 @@ export function customerReviewSentence(cancellation) {
   if (!CUSTOMER_REVIEW_POLICIES.includes(cancellation?.policy) || cancellation.reversalOutcomeUnknown) return null;
   const terms = cancellation.terms || {};
   if (cancellation.policy === 'not_voided') {
-    const kept = Number(terms.serviceFeeKept) > 0 ? `, less the ${money(terms.serviceFeeKept, 'USD')} service fee` : '';
-    return 'The airline no longer let us void the ticket, so our team claims the refund from the airline '
-      + `and returns what it gives back${kept}. We will email you within 2 business days.`;
+    const back = Number.isFinite(Number(terms.airlinePrice)) ? money(terms.airlinePrice, 'USD') : 'the airline price';
+    const kept = Number(terms.serviceFeeKept) > 0 ? `; the ${money(terms.serviceFeeKept, 'USD')} service fee is not refundable` : '';
+    return `You cancelled within the free cancellation time, so you get back ${back}${kept}. `
+      + 'The airline could not void the ticket, so our team processes this refund and emails you within 2 business days.';
   }
   return cancelTermsLines({ ...terms, policy: cancellation.policy }, { money }).join(' ');
 }

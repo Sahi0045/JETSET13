@@ -18,7 +18,7 @@ import ArcPayService from "../../../Services/ArcPayService";
 import { useLocationContext } from '../../../Context/LocationContext';
 import { allAirports } from './airports';
 import PricingService from '../../../Services/PricingService';
-import { useGuestFlightBooking, usePriceConfig } from '../../../hooks/queries';
+import { useCancelPolicy, useGuestFlightBooking, usePriceConfig } from '../../../hooks/queries';
 import CouponInput from '../../../components/CouponInput';
 import FlightFareRules from './FlightFareRules';
 import CancellationPolicyNote from './CancellationPolicyNote';
@@ -129,6 +129,7 @@ function FlightBookingConfirmation() {
   // nobody requested, a bag never added to the booking, and insurance that did
   // not exist. They stay off the page until each is a real, fulfilled product.
   const { data: priceConfig, error: priceConfigError, refetch: refetchPriceConfig } = usePriceConfig('all');
+  const { data: cancelPolicy } = useCancelPolicy();
   const [appliedCoupon, setAppliedCoupon] = useState(null); // { couponId, code, discountAmount, finalTotal }
   // Why a coupon was not applied here, and a count that remounts the coupon
   // box so it stops showing a coupon this page refused as applied.
@@ -2306,7 +2307,7 @@ function FlightBookingConfirmation() {
                     flightOffer={reviewState.flightData.originalOffer}
                     rules={fareRulesCheck}
                   />
-                  <CancellationPolicyNote cancellationFee={priceConfig?.flight_cancellation_fee ?? priceConfig?.cancellation_fee} />
+                  <CancellationPolicyNote cancellationFee={priceConfig?.flight_cancellation_fee ?? priceConfig?.cancellation_fee} freeUntil={cancelPolicy?.freeUntil} />
                 </div>
               </div>
             )}

@@ -180,3 +180,21 @@ build passing. No integration tests (they write to the shared production DB).
 
 Automatic refunds after 24 hours (the desk decides), airline-initiated changes
 (staff), hotel and cruise fees, a paid "free cancellation" add-on.
+
+## Addendum, 2026-10-11: the free window ends at the void deadline
+
+Production runs with auto-ticketing, so the ticket is issued at booking. A ticket
+can be voided only until the ticketing office's day ends, so a 24-hour free
+window promised the airline price on cancels the airline would refund only under
+the fare rules. The owner chose to end the free window at the void deadline.
+
+- `freeUntil` = the earlier of the office's next midnight and 24 hours, in
+  `AMADEUS_WS_OFFICE_TIME_ZONE` (the zone the cancel's void uses; default New
+  York, to be confirmed with Amadeus). A zone or time that cannot be read closes
+  the window, so a doubt goes to our team.
+- After the deadline the fare rules apply, inside 24 hours too.
+- A void the airline refuses inside the window (`not_voided`) is still the
+  promised airline price: the desk refunds it and claims from the airline.
+- Customers see the exact deadline: "Free cancellation until <time>" in the
+  quote, and "Book now and you can cancel free until <time>" on the review page
+  (`GET /api/flights/cancel-policy`).

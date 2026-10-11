@@ -61,6 +61,22 @@ export async function fetchBookedFeeRules(bookingId, email) {
   return data?.success ? data.penalties ?? null : null;
 }
 
+export async function fetchCancelPolicy() {
+  const res = await fetch(getApiUrl('flights/cancel-policy'), { credentials: 'include' });
+  const data = await res.json().catch(() => null);
+  if (!res.ok || !data?.success) throw new Error(data?.error || `Cancel policy failed (${res.status})`);
+  return { freeUntil: data.freeUntil ?? null, timeZone: data.timeZone ?? null };
+}
+
+export function useCancelPolicy() {
+  return useQuery({
+    queryKey: ['flights', 'cancel-policy'],
+    queryFn: fetchCancelPolicy,
+    staleTime: 60 * 1000,
+    retry: false,
+  });
+}
+
 export async function fetchCancelQuote(bookingId, email) {
   const res = await fetch(getApiUrl(`flights/bookings/${encodeURIComponent(bookingId)}/cancel-quote`), {
     credentials: 'include',
