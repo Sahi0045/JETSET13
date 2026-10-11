@@ -111,25 +111,42 @@ describe('an airline refund still to be claimed', () => {
     expect(mixed).toMatch(/1 cancelled booking with a refund to claim from the airline/);
   });
 
-  it('is what a cancel of a ticket past its void window leaves for the alarm', async () => {
-    table = fakeBookingsTable([{
-      id: 'bk-c1',
-      booking_reference: 'FLTCLAIM1',
-      travel_type: 'flight',
-      status: 'confirmed',
-      payment_status: 'paid',
-      total_amount: 291,
-      user_id: null,
-      created_at: new Date().toISOString(),
-      booking_details: {
-        pnr: 'ABC123',
-        order_id: 'FLTCLAIM1',
-        customer_email: 'booker@example.com',
-        refundable: true,
-        gds: { ticketed: true },
-        tickets: [{ number: '057-1234567890' }],
-      },
-    }], { tables: { price_settings: [{ settings: { cancellation_fee: 50 } }] } });
+  const claimBooking = () => fakeBookingsTable([{
+    id: 'bk-c1',
+    booking_reference: 'FLTCLAIM1',
+    travel_type: 'flight',
+    status: 'confirmed',
+    payment_status: 'paid',
+    total_amount: 291,
+    user_id: null,
+    created_at: new Date().toISOString(),
+    booking_details: {
+      pnr: 'ABC123',
+      order_id: 'FLTCLAIM1',
+      customer_email: 'booker@example.com',
+      refundable: true,
+      gds: { ticketed: true },
+      tickets: [{ number: '057-1234567890' }],
+    },
+  }], { tables: { price_settings: [{ settings: { cancellation_fee: 50 } }] } });
+
+  it('is what a staff cancel of a ticket past its void window leaves for the alarm', async () => {
+    table = claimBooking();
+    cancelFlightOrder.mockResolvedValue({ success: true, hadTickets: true, voided: false, requiresAirlineRefund: ['0571234567890'] });
+
+    const { handleCancelBookingAction } = await import('../../backend/routes/payment/operations.handlers.js');
+    const res = createResponse();
+    await handleCancelBookingAction(createRequest({ method: 'POST', user: { id: 'staff-1', role: 'admin' }, body: { bookingReference: 'FLTCLAIM1', email: 'booker@example.com' } }), res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.cancellation.paymentAction).toBe('PARTIAL_REFUND');
+    const row = table.row('FLTCLAIM1');
+    expect(row.status).toBe('cancelled');
+    expect(selectUnannounced([row])).toHaveLength(1);
+  });
+
+  it('is what a customer cancel within 24 hours of a ticket that could not be voided leaves for the alarm', async () => {
+    table = claimBooking();
     cancelFlightOrder.mockResolvedValue({ success: true, hadTickets: true, voided: false, requiresAirlineRefund: ['0571234567890'] });
 
     const { handleCancelBookingAction } = await import('../../backend/routes/payment/operations.handlers.js');
@@ -137,7 +154,7 @@ describe('an airline refund still to be claimed', () => {
     await handleCancelBookingAction(createRequest({ method: 'POST', body: { bookingReference: 'FLTCLAIM1', email: 'booker@example.com' } }), res);
 
     expect(res.statusCode).toBe(200);
-    expect(res.body.cancellation.paymentAction).toBe('PARTIAL_REFUND');
+    expect(res.body.cancellation).toMatchObject({ paymentAction: 'REFUND_UNDER_REVIEW', policy: 'not_voided' });
     const row = table.row('FLTCLAIM1');
     expect(row.status).toBe('cancelled');
     expect(selectUnannounced([row])).toHaveLength(1);

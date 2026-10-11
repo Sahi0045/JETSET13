@@ -26,8 +26,11 @@ import { emailIsBookers, hasBookingOwner, isBookingOwner } from '../../utils/boo
 import { liveChainState } from '../../utils/bookingChainClaim.js';
 import { canReachAmadeus } from '../../utils/amadeusReach.js';
 import { unchangedSince } from '../../utils/bookingDetailsGuard.js';
-import { DEFAULT_PRICE_SETTINGS } from '../../config/priceDefaults.js';
+import { DEFAULT_PRICE_SETTINGS, flightCancellationFeeFrom } from '../../config/priceDefaults.js';
 import { cancellationMessage, refundOutcome } from '../../../shared/cancellationOutcome.js';
+import { customerCancelTerms, fareRuleOf, isWithinFreeWindow, serviceFeeKeptOf } from '../../../shared/flightCancelPolicy.js';
+import { readBookedFeeTable } from '../../services/bookedFeeTable.service.js';
+import { officeTimeZoneOf } from '../../services/amadeusSoap/config.js';
 import {
     COMMIT_UNKNOWN_REVIEW_REASON, ISSUANCE_UNKNOWN, commitUnknownOf, decidedFeeOf, flagInForce, needsAirlineRefundClaim, notHeldAnswerOf,
     refundOwedOf, ticketNumbersMissingOf,
@@ -195,7 +198,7 @@ export async function handleCancelBookingAction(req, res) {
                     cancelEndpoint: `/api/flights/order/${encodeURIComponent(booking.booking_reference)}/cancel`,
                 });
             }
-            return await cancelFlightBooking(res, booking, { reason, email });
+            return await cancelFlightBooking(res, booking, { reason, email, customer: !isStaff && req[SYSTEM_CANCEL] !== true, system: req[SYSTEM_CANCEL] === true });
         }
         return await cancelOtherBooking(res, booking, { reason, email });
     } catch (error) {
@@ -258,6 +261,19 @@ async function readCancellationFee() {
         return cancellationFeeFrom(priceSettings?.settings);
     } catch (error) {
         console.warn('Could not fetch cancellation fee, using default:', error.message);
+        return DEFAULT_PRICE_SETTINGS.cancellation_fee;
+    }
+}
+
+export async function readFlightCancellationFee(client = supabase) {
+    try {
+        const { data: priceSettings } = await client
+            .from('price_settings')
+            .select('settings')
+            .single();
+        return flightCancellationFeeFrom(priceSettings?.settings);
+    } catch (error) {
+        console.warn('Could not fetch the flight cancellation fee, using default:', error.message);
         return DEFAULT_PRICE_SETTINGS.cancellation_fee;
     }
 }
@@ -403,7 +419,7 @@ async function releaseCancellation(booking, claim, patch = {}) {
  * @returns {{ action: 'nothing_held'|'review'|'refund_all'|'refund_less_fee'|'fee_covers',
  *             fee: number, refundAmount: number, reason: string }}
  */
-export function decideFlightRefund({ heldAmount, paidInFull, everCaptured, hasReservation, gds, rowTicketed, issuanceUnknownOnly = false, refundable, fee, rowPaid = false }) {
+export function decideFlightRefund({ heldAmount, paidInFull, everCaptured, hasReservation, gds, rowTicketed, issuanceUnknownOnly = false, refundable, fee, rowPaid = false, customer = null }) {
     const heldCents = Math.round((Number(heldAmount) || 0) * 100);
     const review = (reason) => ({ action: 'review', fee: 0, refundAmount: 0, reason });
 
@@ -442,16 +458,21 @@ export function decideFlightRefund({ heldAmount, paidInFull, everCaptured, hasRe
     }
 
     if (!ticketed) {
+        if (customer && hasReservation) {
+            return keepServiceFee(heldCents, customer, 'not_ticketed', 'reservation released before any ticket was issued');
+        }
         return {
             action: 'refund_all',
             fee: 0,
             refundAmount: heldCents / 100,
             reason: hasReservation ? 'reservation released before any ticket was issued' : 'never booked with the airline',
+            ...(customer ? { policy: 'never_booked', serviceFeeKept: 0 } : {}),
         };
     }
 
     const unvoided = Array.isArray(gds.requiresAirlineRefund) && gds.requiresAirlineRefund.length > 0;
     if (!unvoided && !gds.voided) return review('tickets were issued, but none was voided and none is listed for an airline refund');
+    if (customer) return customerTicketedDecision({ heldCents, unvoided, customer, review });
     if (unvoided && refundable !== true) {
         return review(refundable === false
             ? 'non-refundable fare with tickets past their void window: what the airline returns depends on its fare rules'
@@ -467,6 +488,47 @@ export function decideFlightRefund({ heldAmount, paidInFull, everCaptured, hasRe
     const refundCents = heldCents - feeCents;
     if (refundCents <= 0) return { action: 'fee_covers', fee: heldCents / 100, refundAmount: 0, reason: `${basis}; the fee covers the payment` };
     return { action: 'refund_less_fee', fee: feeCents / 100, refundAmount: refundCents / 100, reason: basis };
+}
+
+const dollars = (amount) => (Number(amount) || 0).toFixed(2);
+
+function keepServiceFee(heldCents, customer, policy, basis) {
+    const keptCents = Math.round((Number(customer.serviceFeeKept) || 0) * 100);
+    if (keptCents <= 0) return { action: 'refund_all', fee: 0, refundAmount: heldCents / 100, reason: basis, policy, serviceFeeKept: 0 };
+    if (keptCents >= heldCents) {
+        return { action: 'fee_covers', fee: heldCents / 100, refundAmount: 0, reason: `${basis}; the service fee covers the payment`, policy, serviceFeeKept: heldCents / 100 };
+    }
+    return { action: 'refund_less_fee', fee: keptCents / 100, refundAmount: (heldCents - keptCents) / 100, reason: `${basis}; the service fee is kept`, policy, serviceFeeKept: keptCents / 100 };
+}
+
+/**
+ * A customer's ticketed cancel. Only the free window with every ticket voided
+ * refunds by itself; everything after that goes to our team, because what the
+ * airline returns depends on rules we cannot settle automatically. The reasons
+ * are what the desk works from.
+ */
+function customerTicketedDecision({ heldCents, unvoided, customer, review }) {
+    const kept = Math.min(Math.max(0, Number(customer.serviceFeeKept) || 0), heldCents / 100);
+    const airlinePrice = dollars(heldCents / 100 - kept);
+    const held = (policy, reason) => ({ ...review(reason), policy, serviceFeeKept: kept });
+    if (customer.freeWindow) {
+        if (!unvoided) return keepServiceFee(heldCents, customer, 'free_window', 'cancelled within the free cancellation time and the tickets were voided');
+        // Promised before the cancel: the customer is owed the airline price
+        // whatever the airline gives back for a ticket it would not void.
+        return held('not_voided', `cancelled within the free cancellation time, but the tickets could not be voided: refund ${airlinePrice} `
+            + `(the airline price the customer was promised) and keep the ${dollars(kept)} service fee; claim the refund from the airline`);
+    }
+    const tickets = unvoided ? 'claim the refund from the airline' : 'the tickets were voided, so nothing is owed to the airline';
+    const rule = customer.fareRule || {};
+    if (rule.refundable === false) {
+        return held('non_refundable', `non-refundable fare cancelled after the free cancellation time: the fare is not returned; return any unused taxes (${tickets})`);
+    }
+    if (rule.refundable === true) {
+        const penalty = rule.penalty === null || rule.penalty === undefined ? 'not stated' : [dollars(rule.penalty), rule.currency, 'per adult'].filter(Boolean).join(' ');
+        return held('refundable', `refundable fare cancelled after the free cancellation time: return ${airlinePrice} (the airline price) less the airline's penalty (${penalty}) `
+            + `and the ${dollars(customer.cancellationFee)} cancellation fee; the ${dollars(kept)} service fee is kept (${tickets})`);
+    }
+    return held('rules_unknown', `fare cancelled after the free cancellation time and its rules could not be read: check them with the airline before refunding (${tickets})`);
 }
 
 /** Carry out a refund decision at ARC. Never moves more than the decision says. */
@@ -605,13 +667,56 @@ const unionTickets = (earlier = [], later = []) => {
  */
 const keepingPrevious = (details) => (details?.needs_review ? { previous: details.needs_review } : {});
 
+/** The earlier of two times, as a Date; null when neither reads. */
+function earliestTime(...values) {
+    const times = values.map((value) => (value instanceof Date ? value.getTime() : Date.parse(value ?? ''))).filter(Number.isFinite);
+    return times.length ? new Date(Math.min(...times)) : null;
+}
+
+/**
+ * What a customer's cancel would return now, by the rule the cancel applies
+ * (decideFlightRefund's customer branch), before anything is cancelled. The
+ * gateway is not asked: the figures are what checkout charged.
+ */
+export async function quoteCustomerCancel(booking, { now = new Date(), client = supabase } = {}) {
+    const details = booking.booking_details || {};
+    const askedAt = earliestTime(details.customer_cancel_requested_at, now);
+    const pnr = details.pnr || details.amadeus_order_id || null;
+    const tickets = Array.isArray(details.tickets) ? details.tickets : [];
+    const voidedTickets = Array.isArray(details.voided_tickets) ? details.voided_tickets : [];
+    const ticketed = details.gds?.ticketed === true || tickets.length > 0 || voidedTickets.length > 0
+        || Boolean(ticketNumbersMissingOf(booking));
+    const timeZone = officeTimeZoneOf();
+    const freeWindow = isWithinFreeWindow(booking.created_at, askedAt, timeZone);
+    const fareRule = pnr && ticketed && !freeWindow ? fareRuleOf(await readBookedFeeTable(booking)) : null;
+    return customerCancelTerms({
+        charge: details.verified_charge,
+        paidAt: booking.created_at,
+        now: askedAt,
+        timeZone,
+        hasReservation: Boolean(pnr),
+        ticketed,
+        fareRule,
+        cancellationFee: await readFlightCancellationFee(client),
+    });
+}
+
 /**
  * Cancel a flight: take the booking, learn what the gateway holds, release the
  * seats, then return what the tickets and the fare say is owed - in that order,
  * and once.
  */
-async function cancelFlightBooking(res, booking, { reason, email }) {
+async function cancelFlightBooking(res, booking, { reason, email, customer = false, system = false }) {
+    // The free window is judged when the customer first asked: an airline call
+    // that runs past the mark, or a cancel that failed and was retried or
+    // finished by our team, must not take the free window away.
+    const requestedAt = new Date();
     const details = booking.booking_details || {};
+    const customerAskedAt = details.customer_cancel_requested_at || null;
+    const customerRule = customer || (!system && Boolean(customerAskedAt));
+    const noteRequest = (current) => (customer
+        ? { customer_cancel_requested_at: earliestTime(current?.customer_cancel_requested_at, requestedAt).toISOString() }
+        : {});
     const bookingReference = booking.booking_reference;
 
     // 1. Nothing else may hold the booking.
@@ -674,11 +779,25 @@ async function cancelFlightBooking(res, booking, { reason, email }) {
     if (neverPaid) {
         payment = { paid: false, heldAmount: 0, everCaptured: false };
     } else if (payment.gatewayUnavailable) {
-        await releaseCancellation(booking, claim);
+        await releaseCancellation(booking, claim, noteRequest);
         return refuse(res, 503, 'PAYMENT_GATEWAY_UNAVAILABLE',
             'We could not reach our payment provider to confirm what was paid, so nothing has been cancelled yet. '
             + 'Please try again in a few minutes.',
             { bookingReference, retryable: true });
+    }
+
+    // Read before the seats go: cancelling the PNR removes the fare record
+    // (TST) the airline's rules are read from.
+    const flightFee = await readFlightCancellationFee();
+    let customerTerms = null;
+    if (customerRule) {
+        const freeWindow = isWithinFreeWindow(booking.created_at, earliestTime(customerAskedAt, customer ? requestedAt : null), officeTimeZoneOf());
+        customerTerms = {
+            freeWindow,
+            serviceFeeKept: serviceFeeKeptOf(details.verified_charge),
+            fareRule: pnr && !freeWindow ? fareRuleOf(await readBookedFeeTable(booking)) : null,
+            cancellationFee: flightFee,
+        };
     }
 
     // 3. Release the seats, before any money moves.
@@ -738,6 +857,7 @@ async function cancelFlightBooking(res, booking, { reason, email }) {
             await releaseCancellation(booking, claim, (current) => {
                 const voidedSoFar = unionTickets(current?.voided_tickets, voidedNow);
                 return {
+                    ...noteRequest(current),
                     ...(voidedSoFar.length ? { voided_tickets: voidedSoFar } : {}),
                     needs_review: {
                         reason,
@@ -798,8 +918,9 @@ async function cancelFlightBooking(res, booking, { reason, email }) {
         rowTicketed: recordedTicket || issuanceUnknown,
         issuanceUnknownOnly: issuanceUnknown && !recordedTicket,
         refundable: details.refundable,
-        fee: await readCancellationFee(),
+        fee: flightFee,
         rowPaid: booking.payment_status === 'paid',
+        customer: customerTerms,
     });
     const currency = payment.capturedCurrency || details.currency || 'USD';
     const returned = await returnFlightPayment(decision, {
@@ -831,6 +952,18 @@ async function cancelFlightBooking(res, booking, { reason, email }) {
         cancellationFee: returned.cancellationFee,
         currency,
         needsReview: reviewReasons.length > 0,
+        ...(customerTerms && decision.policy
+            ? {
+                policy: decision.policy,
+                terms: {
+                    serviceFeeKept: decision.serviceFeeKept ?? 0,
+                    airlinePrice: roundCents(Math.max(0, (Number(payment.heldAmount) || 0) - (decision.serviceFeeKept ?? 0))),
+                    cancellationFee: flightFee,
+                    penalty: customerTerms.fareRule?.penalty ?? null,
+                    penaltyCurrency: customerTerms.fareRule?.currency ?? null,
+                },
+            }
+            : {}),
         ...(returned.reversalOutcomeUnknown ? { reversalOutcomeUnknown: true } : {}),
         ...(returned.refundTransactionId ? { refundTransactionId: returned.refundTransactionId } : {}),
         ...(returned.errorDetails !== undefined ? { errorDetails: returned.errorDetails } : {}),
@@ -870,6 +1003,7 @@ async function cancelFlightBooking(res, booking, { reason, email }) {
                     ticketsVoided: cancellationResult.ticketsVoided,
                     // Why this amount, for the support desk.
                     basis: decision.reason,
+                    ...(cancellationResult.policy ? { policy: cancellationResult.policy, terms: cancellationResult.terms } : {}),
                     // A reversal sent with no answer back, not a hold: whoever
                     // picks this up checks ARC Pay before refunding anything.
                     //
@@ -1511,6 +1645,7 @@ async function sendCancellationEmail(booking, email, cancellationResult) {
             // the cancel decided - the figure the desk fills in - not what ARC
             // holds, which includes the fee the cancel keeps.
             ...(decided ? { decidedRefund: decided.owed } : {}),
+            ...(cancellationResult.policy ? { policy: cancellationResult.policy, terms: cancellationResult.terms } : {}),
             currency: cancellationResult.currency || 'USD'
         };
 

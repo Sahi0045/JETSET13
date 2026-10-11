@@ -8,12 +8,12 @@ import { validate } from '../middleware/validate.js';
 import { z } from 'zod';
 import { protect, admin, bookingStaff, optionalProtect } from '../middleware/auth.middleware.js';
 import { resolveBookingUserId } from '../utils/bookingOwner.js';
-import { SYSTEM_CANCEL, handleCancelBookingAction, recordPaymentAfterCancel, reverseArcPaymentForOrder, settleManualFlightRefund } from './payment/operations.handlers.js';
+import { SYSTEM_CANCEL, handleCancelBookingAction, quoteCustomerCancel, recordPaymentAfterCancel, reverseArcPaymentForOrder, settleManualFlightRefund } from './payment/operations.handlers.js';
 import { emailMatchesBooking, isBookingOwner } from '../utils/bookingAccess.js';
 import { reconcileBookingPayment } from './payment/checkout.handlers.js';
 import { reportError } from '../services/monitoring.js';
 import { withBookingPriority } from '../services/amadeusSoap/semaphore.js';
-import { describeWsConfig, getWsConfig } from '../services/amadeusSoap/config.js';
+import { describeWsConfig, getWsConfig, officeTimeZoneOf } from '../services/amadeusSoap/config.js';
 import { isStandingTicketRefusal } from '../services/amadeusSoap/codes.js';
 import { recordCouponUse } from '../services/coupon.service.js';
 import { isFareRefusal } from '../services/flightCheckout.service.js';
@@ -38,6 +38,8 @@ import { errorSummary } from '../utils/errorSummary.js';
 import { flightSearchLimiter, guestBookingLimiter } from '../middleware/security.js';
 import { liveChainState } from '../utils/bookingChainClaim.js';
 import { isUsableEmail } from '../services/guestBooking.service.js';
+import { readBookedFeeTable } from '../services/bookedFeeTable.service.js';
+import { freeUntilOf } from '../../shared/flightCancelPolicy.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -2743,7 +2745,21 @@ const fareRulesFrom = (priced, flightOffer) => {
     };
   }
 
-  return { bags, fareRules: fareRules.slice(0, 8), cancellation };
+  return { bags, fareRules: fareRules.slice(0, 8), cancellation, penalties: uncontradicted(priced?.penalties ?? null, cancellation) };
+};
+
+// MiniRules writes 0.00 as filler, so a charge the filed rules name outranks a
+// 0 there: that cell gets no figure rather than "No airline fee".
+const uncontradicted = (penalties, cancellation) => {
+  if (!penalties) return null;
+  const clearZeros = (cells, isCharged) => (isCharged
+    ? Object.fromEntries(Object.entries(cells ?? {}).map(([name, cell]) => [name, cell?.amount === 0 ? { ...cell, amount: null } : cell]))
+    : cells);
+  return {
+    ...penalties,
+    change: clearZeros(penalties.change, cancellation?.changeFee > 0),
+    refund: clearZeros(penalties.refund, cancellation?.cancelFee > 0),
+  };
 };
 
 // Fare rules + extra-bag prices for a chosen flight offer
@@ -3983,7 +3999,10 @@ router.post('/order', optionalProtect, async (req, res) => {
       operatingAirlineName: firstSegment.operating?.carrierCode || null,
       lastTicketingDate: firstOffer?.lastTicketingDate || null,
       numberOfBookableSeats: firstOffer?.numberOfBookableSeats || null,
-      refundable: bookedOffer?._ama?.refundable ?? null,
+      // Never from the offer the browser sent (`firstOffer`, used when the
+      // airline could not price it again): this flag decided automatic refunds.
+      refundable: [repriced ? pricedOffer?._ama?.refundable : undefined, verifiedCharge?.pricedFare?.refundable]
+        .find((value) => typeof value === 'boolean') ?? null,
       baggageDetails: {
         checked: fareDetails?.includedCheckedBags || null,
         cabin: fareDetails?.includedCabinBags || null
@@ -4613,6 +4632,61 @@ router.get('/bookings/:bookingRef', optionalProtect, guestBookingLimiter, async 
       success: false,
       error: 'Failed to retrieve booking'
     });
+  }
+});
+
+// The airline's cancel and change-date fees for a booked trip, read from its
+// PNR. Opened exactly as the booking itself is (loadOwnedBooking).
+router.get('/bookings/:bookingRef/fee-rules', optionalProtect, guestBookingLimiter, async (req, res) => {
+  try {
+    if (!supabase) {
+      return res.status(503).json({ success: false, error: 'Database not configured' });
+    }
+    const { booking, notFound } = await loadOwnedBooking(req.params.bookingRef, req.user, {
+      email: req.get('x-booking-email')
+    });
+    if (notFound || !booking) {
+      return res.status(404).json({ success: false, error: 'Booking not found' });
+    }
+
+    const pnr = booking.booking_details?.pnr;
+    if (booking.travel_type !== 'flight' || !pnr || String(booking.status).toLowerCase() === 'cancelled') {
+      return res.json({ success: true, penalties: null });
+    }
+    return res.json({ success: true, penalties: await readBookedFeeTable(booking) });
+  } catch (error) {
+    console.error('❌ Booked fee table error:', error);
+    return res.status(500).json({ success: false, error: 'Failed to read the fare rules' });
+  }
+});
+
+// When a booking made now stops being free to cancel, for the review page:
+// the end of the ticketing office's day, the zone the cancel's void uses.
+router.get('/cancel-policy', (req, res) => {
+  const timeZone = officeTimeZoneOf();
+  res.json({ success: true, freeUntil: freeUntilOf(new Date(), timeZone), timeZone });
+});
+
+// What a cancel would return, before the customer confirms it. Opened exactly
+// as the booking itself is (loadOwnedBooking).
+router.get('/bookings/:bookingRef/cancel-quote', optionalProtect, guestBookingLimiter, async (req, res) => {
+  try {
+    if (!supabase) {
+      return res.status(503).json({ success: false, error: 'Database not configured' });
+    }
+    const { booking, notFound } = await loadOwnedBooking(req.params.bookingRef, req.user, {
+      email: req.get('x-booking-email')
+    });
+    if (notFound || !booking) {
+      return res.status(404).json({ success: false, error: 'Booking not found' });
+    }
+    if (booking.travel_type !== 'flight' || String(booking.status).toLowerCase() === 'cancelled') {
+      return res.json({ success: true, quote: null });
+    }
+    return res.json({ success: true, quote: await quoteCustomerCancel(booking, { client: supabase }) });
+  } catch (error) {
+    console.error('❌ Cancel quote error:', error);
+    return res.status(500).json({ success: false, error: 'Failed to work out the refund' });
   }
 });
 

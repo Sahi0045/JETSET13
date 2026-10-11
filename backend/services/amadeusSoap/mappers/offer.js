@@ -208,7 +208,7 @@ const readPricingMessages = (paxFareProduct) => {
  * - all put a green Refundable badge on the card. A penalty is not a refund, so
  * only explicit refund wording counts, and any refusal wins over it.
  */
-const readRefundable = (penalty) => {
+export const readRefundable = (penalty) => {
   if (!penalty) return null;
   if (/NON[\s-]?REFUNDABLE|NOT\s+REFUNDABLE|\bNO\s+REFUNDS?\b|\bREFUNDS?\s+NOT\s+(ALLOWED|PERMITTED)/i.test(penalty)) {
     return false;

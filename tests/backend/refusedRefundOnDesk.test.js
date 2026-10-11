@@ -8,6 +8,11 @@ import { shownQueryFor } from './helpers/deskShown.js';
 import { attentionLabel, attentionOf } from '../../shared/reviewQueue.js';
 import { buildMessage, selectUnrefunded } from '../../backend/jobs/paymentFailureAlert.job.js';
 
+// A customer's ticketed cancel after 24 hours is our team's call
+// (customerCancelPolicy.test.js); the tests that pin the refund itself cancel as staff.
+let caller = null;
+beforeEach(() => { caller = null; });
+
 /**
  * A cancel whose automatic refund ARC Pay refused (REFUND_FAILED), carried
  * through the real cancel handler, then read by the two rules that decide who
@@ -80,7 +85,7 @@ vi.mock('../../backend/middleware/auth.middleware.js', async () => {
 const runCancel = async () => {
   supabaseDouble = supabaseFor(booking());
   const { handleCancelBookingAction } = await import('../../backend/routes/payment/operations.handlers.js');
-  const req = createRequest({ method: 'POST', body: { bookingReference: 'FLT123', reason: 'test', email: 'traveler@example.com' } });
+  const req = createRequest({ method: 'POST', user: caller, body: { bookingReference: 'FLT123', reason: 'test', email: 'traveler@example.com' } });
   const res = createResponse();
   await handleCancelBookingAction(req, res);
   return res;
@@ -110,6 +115,7 @@ describe.each([
   ['a reservation released before any ticket (refund all)', { success: true, hadTickets: false, voided: false, requiresAirlineRefund: [] }],
 ])('a cancelled flight whose refund ARC Pay refused: %s', (_label, gds) => {
   it('is announced by the failed-refund alarm and listed on the desk queue', async () => {
+    caller = { id: 'staff-1', role: 'admin' };
     cancelFlightOrder.mockResolvedValue(gds);
     const res = await runCancel();
     expect(res.body.cancellation.paymentAction).toBe('REFUND_FAILED');

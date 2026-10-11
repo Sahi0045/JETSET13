@@ -3,6 +3,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRequest, createResponse } from './helpers/express.helpers.js';
 import { generateAdminCancellationTemplate, generateCancellationTemplate } from '../../backend/services/email/templates.js';
 
+// A customer's ticketed cancel after 24 hours is our team's call
+// (customerCancelPolicy.test.js); the tests that pin the refund itself cancel as staff.
+let caller = null;
+beforeEach(() => { caller = null; });
+
 /**
  * The office's cancellation email for a cancel whose refund was SENT to ARC Pay
  * and never answered (reversalOutcomeUnknown, since the 23 Sep audit).
@@ -77,7 +82,7 @@ beforeEach(() => {
 const cancel = async () => {
   const { handleCancelBookingAction } = await import('../../backend/routes/payment/operations.handlers.js');
   const res = createResponse();
-  await handleCancelBookingAction(createRequest({ method: 'POST', body: { bookingReference: 'FLT123', reason: 'test', email: 'traveler@example.com' } }), res);
+  await handleCancelBookingAction(createRequest({ method: 'POST', user: caller, body: { bookingReference: 'FLT123', reason: 'test', email: 'traveler@example.com' } }), res);
   return res;
 };
 
@@ -86,6 +91,7 @@ const textOf = (html) => html.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').r
 
 describe('the office email for a refund ARC Pay never answered', () => {
   it('does not tell the office the refund was not processed', async () => {
+    caller = { id: 'staff-1', role: 'admin' };
     const res = await cancel();
 
     expect(res.body.cancellation).toMatchObject({ paymentAction: 'REFUND_UNDER_REVIEW', reversalOutcomeUnknown: true });
@@ -99,6 +105,7 @@ describe('the office email for a refund ARC Pay never answered', () => {
   });
 
   it('says the outcome is unknown and to check ARC Pay first, with no figures that say nothing went back', async () => {
+    caller = { id: 'staff-1', role: 'admin' };
     await cancel();
     const [sent] = sendCancellationNotificationEmails.mock.calls[0];
     const text = textOf(generateAdminCancellationTemplate(sent));

@@ -3,6 +3,8 @@ import { Loader2, Luggage, ChevronDown, FileText, Check } from 'lucide-react';
 import Price from '../../../Components/Price';
 import { readableRuleText, summarizeRule } from '../../../utils/fareRuleSummary';
 import { describeFee, Fee } from './FlightCancellationPolicy';
+import { penaltyRows } from '../../../../../shared/penaltyTable';
+import AirlineFeeTable from './AirlineFeeTable';
 
 /**
  * `rules` is the review page's one fare check: { status: 'loading' | 'ready' |
@@ -50,6 +52,8 @@ function FlightFareRules({ flightOffer, onBagsChange, rules: fareCheck }) {
   const ready = fareCheck?.status === 'ready';
   const bags = ready ? fareCheck.data?.bags || [] : [];
   const fareRules = ready ? fareCheck.data?.fareRules || [] : [];
+  const penalties = ready ? fareCheck.data?.penalties || null : null;
+  const feeRows = penaltyRows(penalties);
   const [openRule, setOpenRule] = useState(null);
   const [selectedBagIdx, setSelectedBagIdx] = useState([]);
   const selectable = typeof onBagsChange === 'function';
@@ -72,7 +76,7 @@ function FlightFareRules({ flightOffer, onBagsChange, rules: fareCheck }) {
     );
   }
 
-  if (bags.length === 0 && fareRules.length === 0) {
+  if (bags.length === 0 && fareRules.length === 0 && !feeRows) {
     return <p className="text-sm text-gray-400 italic py-2">Fare rules unavailable for this fare.</p>;
   }
 
@@ -145,6 +149,8 @@ function FlightFareRules({ flightOffer, onBagsChange, rules: fareCheck }) {
           </div>
         </div>
       )}
+
+      {feeRows && <AirlineFeeTable penalties={penalties} />}
 
       {/* Cancellation / change rules */}
       {fareRules.length > 0 && (

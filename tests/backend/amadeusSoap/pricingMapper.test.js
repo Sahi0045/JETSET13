@@ -111,3 +111,21 @@ describe('degradation', () => {
     expect(JSON.stringify(offer)).toBe(before);
   });
 });
+
+// Checkout and the order route price the offer the browser sent, and the
+// booking records this flag; it decided automatic refunds on staff cancels.
+describe('whether the priced fare is refundable', () => {
+  const tampered = (fixture, value) => {
+    const offer = offerFrom(fixture);
+    return { ...offer, _ama: { ...offer._ama, refundable: value } };
+  };
+
+  it('is what the airline\'s pricing says, whatever the offer sent says', () => {
+    expect(applyPricingToOffer(load('informative-pricing'), tampered('mptbs-oneway-jfk-lhr', true)).offer._ama.refundable).toBe(false);
+    expect(applyPricingToOffer(load('informative-pricing'), tampered('mptbs-oneway-jfk-lhr', 'banana')).offer._ama.refundable).toBe(false);
+  });
+
+  it('is unknown when the pricing does not say, never the offer sent', () => {
+    expect(applyPricingToOffer(load('informative-pricing-ecoflex'), tampered('mptbs-oneway-jfk-lhr', true)).offer._ama.refundable).toBeNull();
+  });
+});

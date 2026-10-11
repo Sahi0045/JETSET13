@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { daysUntilDate, formatCalendarDate, formatIsoDuration } from '../../../utils/dateUtils';
 import {
-  ArrowLeft, Plane, User, CreditCard,
+  ArrowLeft, Plane, User, CreditCard, FileText,
   AlertCircle, AlertTriangle, CheckCircle, Info, Phone, Mail, Edit3,
   Download, X
 } from 'lucide-react';
@@ -10,13 +10,15 @@ import Navbar from '../Navbar';
 import Footer from '../Footer';
 import FlightETicket from './FlightETicket';
 import BookingItinerary from './BookingItinerary';
+import BookingCancelRules from './BookingCancelRules';
+import CancelQuote from './CancelQuote';
 import { bookingItineraries } from '../../../../../shared/bookingItineraries';
 import { formatUsd } from '../../../utils/bookingCharge';
-import { canDownloadDocument, isCommitUnknown, isPaid, ticketState, ticketsVoided } from '../../../utils/eTicket';
+import { canDownloadDocument, isCommitUnknown, isPaid, ticketState } from '../../../utils/eTicket';
 import { attentionMessage, bookingStatusBadge, cancellationMessage, refundStatus } from '../../../utils/bookingStatus';
-import { refundOutcome } from '../../../../../shared/cancellationOutcome';
+import { refundOutcome, serviceFeeKeptBy } from '../../../../../shared/cancellationOutcome';
 import ArcPayService from '../../../Services/ArcPayService';
-import { useFlightBooking } from '../../../hooks/queries';
+import { useBookedFeeRules, useCancelQuote, useFlightBooking } from '../../../hooks/queries';
 import { useQueryClient } from '@tanstack/react-query';
 
 function ManageBooking() {
@@ -74,7 +76,21 @@ function ManageBooking() {
   const refreshFailed = Boolean(queryError && (passedData || fetchedBooking));
 
   const [activeTab, setActiveTab] = useState('details');
+  // The Cancel Booking button's own test, below. The fee table is asked only
+  // when the tab is open and the booking can be cancelled: each answer is an
+  // Amadeus session.
+  const canCancelOnline = Boolean(bookingData) && bookingData?.status?.toUpperCase() !== 'CANCELLED'
+    && ticketState(bookingData) !== 'cancelled' && (daysUntilDate(bookingData?.departureDate) ?? 0) >= 0
+    && !isCommitUnknown(bookingData);
+  const feeRules = useBookedFeeRules(bookingId, {
+    email: submittedEmail,
+    enabled: activeTab === 'rules' && canCancelOnline && Boolean(bookingData?.pnr),
+  });
   const [showCancelModal, setShowCancelModal] = useState(false);
+  const cancelQuote = useCancelQuote(bookingId, {
+    email: submittedEmail,
+    enabled: canCancelOnline && (showCancelModal || activeTab === 'rules'),
+  });
   const [cancelling, setCancelling] = useState(false);
   const [cancelReason, setCancelReason] = useState('Change of plans');
 
@@ -88,6 +104,7 @@ function ManageBooking() {
   const handleCancelBooking = () => {
     cancelTriggerRef.current = document.activeElement;
     setShowCancelModal(true);
+    cancelQuote.refetch();
   };
 
   const closeCancelDialog = () => {
@@ -553,7 +570,7 @@ function ManageBooking() {
                     {/* Only a fee the cancellation actually kept. It used to be
                         labelled "Standard" beside every booking, including the
                         ones that pay no fee. */}
-                    <span className="text-slate-600 font-medium">Cancellation Fee</span>
+                    <span className="text-slate-600 font-medium">{serviceFeeKeptBy(cancelData) > 0 ? 'Service fee (not refundable)' : 'Cancellation Fee'}</span>
                     <span className="text-rose-600 font-semibold">
                       -${Number(cancelData.cancellationFee || 0).toFixed(2)}
                     </span>
@@ -670,11 +687,12 @@ function ManageBooking() {
 
           {/* Tabs */}
           <div className="border-b border-gray-200 mb-6">
-            <nav className="flex space-x-8">
+            <nav className="flex gap-6 sm:gap-8 overflow-x-auto whitespace-nowrap">
               {[
                 { id: 'details', label: 'Flight Details', icon: Plane },
                 { id: 'passenger', label: 'Passenger Info', icon: User },
                 { id: 'payment', label: 'Payment', icon: CreditCard },
+                { id: 'rules', label: 'Cancel & change', icon: FileText },
               ].map((tab) => (
                 <button
                   key={tab.id}
@@ -942,6 +960,10 @@ function ManageBooking() {
                 </div>
               </div>
             )}
+
+            {activeTab === 'rules' && bookingData && (
+              <BookingCancelRules booking={bookingData} feeRules={feeRules} quote={cancelQuote} canCancel={canCancelOnline} />
+            )}
           </div>
 
           {/* Contact Support */}
@@ -989,24 +1011,9 @@ function ManageBooking() {
                       every booking and 5-7 days, while the result screen and
                       the email said 5-10 - and a booking never ticketed pays
                       no fee at all. */}
-                  {['issued', 'pending'].includes(ticketState(bookingData)) ? (
-                    <>
-                      <p>• Your ticket has been issued, so a cancellation fee may apply.</p>
-                      <p>• What is refunded depends on your fare's rules; some fares need our team to review the refund first.</p>
-                    </>
-                  ) : ticketsVoided(bookingData) ? (
-                    // Voided by an earlier cancel the airline refused. "No
-                    // ticket has been issued yet, so no cancellation fee
-                    // applies" was false: a voided ticket is refunded less the
-                    // fee (decideFlightRefund), or reviewed by our team.
-                    <>
-                      <p>• Your ticket has been voided, so a cancellation fee may apply.</p>
-                      <p>• Some refunds need our team to review them first.</p>
-                    </>
-                  ) : (
-                    <p>• No ticket has been issued yet, so no cancellation fee applies and what you paid is returned.</p>
-                  )}
-                  <p>• You will see what happens to your payment as soon as the cancellation completes.</p>
+                  <div className="space-y-1">
+                    <CancelQuote query={cancelQuote} />
+                  </div>
                 </div>
               </div>
             </div>

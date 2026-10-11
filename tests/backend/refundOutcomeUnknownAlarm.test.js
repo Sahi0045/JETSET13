@@ -2,6 +2,11 @@ import axios from 'axios';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRequest, createResponse } from './helpers/express.helpers.js';
 
+// A customer's ticketed cancel after 24 hours is our team's call
+// (customerCancelPolicy.test.js); the tests that pin the refund itself cancel as staff.
+let caller = null;
+beforeEach(() => { caller = null; });
+
 /**
  * A refund whose answer never came back is not a refund held on purpose.
  *
@@ -69,7 +74,7 @@ vi.mock('../../backend/services/flightProvider.js', () => ({
 const cancel = async (row) => {
   database = databaseFor({ row });
   const { handleCancelBookingAction } = await import('../../backend/routes/payment/operations.handlers.js');
-  const req = createRequest({ method: 'POST', body: { bookingReference: row.booking_reference, reason: 'test', email: 'traveler@example.com' } });
+  const req = createRequest({ method: 'POST', user: caller, body: { bookingReference: row.booking_reference, reason: 'test', email: 'traveler@example.com' } });
   const res = createResponse();
   await handleCancelBookingAction(req, res);
   return res;
@@ -127,6 +132,7 @@ describe('a reversal sent to ARC Pay whose answer never came back', () => {
   });
 
   it('the refund less the fee threw mid-request: the same', async () => {
+    caller = { id: 'staff-1', role: 'admin' };
     cancelFlightOrder.mockResolvedValue(ticketsVoided);
     axios.put.mockRejectedValue(new Error('socket hang up'));
     const row = flight();

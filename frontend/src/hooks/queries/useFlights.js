@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '../../lib/queryKeys';
 import { getApiUrl } from '../../utils/apiHelper';
 import { authHeaders } from '../../utils/authHeaders';
+import { bookedFeeRulesStaleTime } from '../../utils/bookedFeeRules';
 
 /**
  * Open one booking. `email` lets a guest open their own. Exported for the
@@ -45,6 +46,66 @@ export function useFlightBooking(bookingId, options = {}) {
     queryKey: ['flights', 'booking', bookingId, email || null],
     queryFn: () => fetchFlightBooking(bookingId, email),
     retry: shouldRetryBookingLookup,
+    ...queryOptions,
+    enabled: (queryOptions.enabled ?? true) && !!bookingId,
+  });
+}
+
+export async function fetchBookedFeeRules(bookingId, email) {
+  const res = await fetch(getApiUrl(`flights/bookings/${encodeURIComponent(bookingId)}/fee-rules`), {
+    credentials: 'include',
+    headers: await authHeaders(email ? { 'x-booking-email': email } : {}),
+  });
+  if (!res.ok) return null;
+  const data = await res.json().catch(() => null);
+  return data?.success ? data.penalties ?? null : null;
+}
+
+export async function fetchCancelPolicy() {
+  const res = await fetch(getApiUrl('flights/cancel-policy'), { credentials: 'include' });
+  const data = await res.json().catch(() => null);
+  if (!res.ok || !data?.success) throw new Error(data?.error || `Cancel policy failed (${res.status})`);
+  return { freeUntil: data.freeUntil ?? null, timeZone: data.timeZone ?? null };
+}
+
+export function useCancelPolicy() {
+  return useQuery({
+    queryKey: ['flights', 'cancel-policy'],
+    queryFn: fetchCancelPolicy,
+    staleTime: 60 * 1000,
+    retry: false,
+  });
+}
+
+export async function fetchCancelQuote(bookingId, email) {
+  const res = await fetch(getApiUrl(`flights/bookings/${encodeURIComponent(bookingId)}/cancel-quote`), {
+    credentials: 'include',
+    headers: await authHeaders(email ? { 'x-booking-email': email } : {}),
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok || !data?.success) throw new Error(data?.error || `Cancel quote failed (${res.status})`);
+  return data.quote ?? null;
+}
+
+export function useCancelQuote(bookingId, options = {}) {
+  const { email, ...queryOptions } = options;
+  return useQuery({
+    queryKey: ['flights', 'booking', bookingId, 'cancel-quote', email || null],
+    queryFn: () => fetchCancelQuote(bookingId, email),
+    staleTime: 0,
+    retry: false,
+    ...queryOptions,
+    enabled: (queryOptions.enabled ?? true) && !!bookingId,
+  });
+}
+
+export function useBookedFeeRules(bookingId, options = {}) {
+  const { email, ...queryOptions } = options;
+  return useQuery({
+    queryKey: ['flights', 'booking', bookingId, 'fee-rules', email || null],
+    queryFn: () => fetchBookedFeeRules(bookingId, email),
+    staleTime: bookedFeeRulesStaleTime,
+    retry: false,
     ...queryOptions,
     enabled: (queryOptions.enabled ?? true) && !!bookingId,
   });

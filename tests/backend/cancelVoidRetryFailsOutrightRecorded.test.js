@@ -101,10 +101,14 @@ const ticketed = () => ({
   },
 });
 
+// Who cancels. A customer's cancel after 24 hours leaves the refund to our
+// team (customerCancelPolicy.test.js), so the fence on the refund is staff's.
+let caller = null;
+
 const cancel = async () => {
   const { handleCancelBookingAction } = await import('../../backend/routes/payment/operations.handlers.js');
   const res = createResponse();
-  await handleCancelBookingAction(createRequest({ method: 'POST', body: { bookingReference: REF, reason: 'Change of plans', email: 'jane@example.com' } }), res);
+  await handleCancelBookingAction(createRequest({ method: 'POST', user: caller, body: { bookingReference: REF, reason: 'Change of plans', email: 'jane@example.com' } }), res);
   return res;
 };
 
@@ -119,6 +123,7 @@ beforeEach(() => {
   vi.stubEnv('AMADEUS_WS_OFFICE_TIME_ZONE', OFFICE_ZONE);
   vi.stubEnv('AMADEUS_WS_VOID_RETRY_DELAY_MS', '0');
   vi.resetModules();
+  caller = null;
   axios.post.mockReset();
   if (!axios.put) axios.put = vi.fn();
   axios.put.mockReset();
@@ -188,6 +193,7 @@ describe('fence: what the partial void does not change', () => {
   });
 
   it('the later cancel refunds the fare less the fee once, as before', async () => {
+    caller = { id: 'staff-1', role: 'admin' };
     await cancelToday();
     await cancelTomorrow();
     const { cancellation } = table.row(REF).booking_details;

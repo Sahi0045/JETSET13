@@ -8,7 +8,11 @@ const mockUseFlightBooking = vi.fn();
 
 vi.mock('../../frontend/src/Pages/Common/Navbar', () => ({ default: () => null }));
 vi.mock('../../frontend/src/Pages/Common/Footer', () => ({ default: () => null }));
-vi.mock('../../frontend/src/hooks/queries', () => ({ useFlightBooking: (...args) => mockUseFlightBooking(...args) }));
+vi.mock('../../frontend/src/hooks/queries', () => ({
+  useFlightBooking: (...args) => mockUseFlightBooking(...args),
+  useBookedFeeRules: () => ({ isLoading: false, data: null }),
+  useCancelQuote: () => ({ isLoading: false, data: null, refetch: () => {} }),
+}));
 vi.mock('../../frontend/src/contexts/SupabaseAuthContext', () => ({
   useSupabaseAuth: () => ({
     user: { id: '0b7c1f2e-3d4a-4b5c-8d6e-7f8091a2b3c4', email: 'jane@example.com' }, isAuthenticated: true, session: null, loading: false,
@@ -152,6 +156,8 @@ describe('My Trips, when the cancel is not carried through', () => {
     const reads = { bookings: 0 };
     let cancelled = false;
     vi.stubGlobal('fetch', vi.fn(async (url) => {
+      // The cancel confirm asks for a quote first; it cancels nothing.
+      if (String(url).includes('/cancel-quote')) return reply(200, { success: true, quote: null });
       if (String(url).includes('/cancel')) { cancelled = true; return reply(...answer); }
       if (String(url).includes('flights/bookings')) {
         reads.bookings += 1;

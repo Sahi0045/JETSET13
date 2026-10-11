@@ -65,6 +65,17 @@ let cached = null;
  * @returns {Readonly<object>} frozen config
  * @throws {Error} listing every missing required variable
  */
+/**
+ * The ticketing office's time zone: it decides the same-day void window and the
+ * free cancellation window. Readable without Amadeus credentials, because every
+ * customer cancel reads it, including one with no airline reservation.
+ *
+ * Office SCK1S2400 keeps Pacific time: on PDT, at 06:30 UTC on 11 Oct 2026, a
+ * ticket it issued was dated 10 Oct and could still be voided. A New York
+ * default skipped that void and promised free cancels after it had closed.
+ */
+export const officeTimeZoneOf = (env = process.env) => (env.AMADEUS_WS_OFFICE_TIME_ZONE || 'America/Los_Angeles').trim();
+
 const readWsConfig = (env = process.env) => {
   const missing = Object.keys(REQUIRED).filter((name) => !env[name] || String(env[name]).trim() === '');
   if (missing.length > 0) {
@@ -117,7 +128,7 @@ const readWsConfig = (env = process.env) => {
     // yesterday's: on PDT at 00:2x UTC on 16 Sep 2026 a ticket issued minutes
     // earlier was reported as needing an airline refund instead of being
     // voided. Set this to the production office's zone at cutover.
-    officeTimeZone: (env.AMADEUS_WS_OFFICE_TIME_ZONE || 'America/New_York').trim(),
+    officeTimeZone: officeTimeZoneOf(env),
     queueNumber: (env.AMADEUS_WS_QUEUE_NUMBER || '50').trim(),
     queueOffice: (env.AMADEUS_WS_QUEUE_OFFICE || env.AMADEUS_WS_OFFICE_ID).trim(),
     // The category within that queue - the "C0" in queue 90 C0, which Amadeus
@@ -308,7 +319,7 @@ export const cutoverRisks = (env = process.env) => {
   check('AMADEUS_WS_QUEUE_CATEGORY',
     'the C0 in "queue 90 C0" is PDT-shaped; a production queue may use another category');
   check('AMADEUS_WS_OFFICE_TIME_ZONE',
-    'defaults to America/New_York; it decides the same-day void window');
+    'defaults to America/Los_Angeles (office SCK1S2400 keeps Pacific time); it decides the same-day void window');
   check('AMADEUS_WS_FOP_CODE',
     'defaults to CASH, correct on PDT and never confirmed against production');
   check('AMADEUS_WS_MARKET_IATA_CODE',

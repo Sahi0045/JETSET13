@@ -11,6 +11,8 @@
  * reservation, and the email said 5-10 days. One outcome now has one sentence.
  */
 
+import { CUSTOMER_REVIEW_POLICIES, cancelTermsLines } from './flightCancelPolicy.js';
+
 /** A refund or void was attempted and did not go through. */
 export const REFUND_STUCK_ACTIONS = Object.freeze(['REFUND_FAILED', 'VOID_FAILED', 'VOID_MISSING_TXN_ID', 'MANUAL_PROCESS_REQUIRED']);
 
@@ -51,6 +53,30 @@ const money = (amount, currency) => {
   }
 };
 
+const KEEPS_SERVICE_FEE = Object.freeze(['not_ticketed', 'free_window']);
+
+/** The service fee a customer's cancel kept, or 0 when it kept none or was not a customer's. */
+export const serviceFeeKeptBy = (cancellation) => (KEEPS_SERVICE_FEE.includes(cancellation?.policy)
+  ? Number(cancellation?.terms?.serviceFeeKept) || 0
+  : 0);
+
+/**
+ * Why a customer's cancel left the refund to our team, or null. Only for a
+ * review the policy decided: a refund sent and never answered is reviewed too,
+ * and must not be told it was a policy.
+ */
+export function customerReviewSentence(cancellation) {
+  if (!CUSTOMER_REVIEW_POLICIES.includes(cancellation?.policy) || cancellation.reversalOutcomeUnknown) return null;
+  const terms = cancellation.terms || {};
+  if (cancellation.policy === 'not_voided') {
+    const back = Number.isFinite(Number(terms.airlinePrice)) ? money(terms.airlinePrice, 'USD') : 'the airline price';
+    const kept = Number(terms.serviceFeeKept) > 0 ? `; the ${money(terms.serviceFeeKept, 'USD')} service fee is not refundable` : '';
+    return `You cancelled within the free cancellation time, so you get back ${back}${kept}. `
+      + 'The airline could not void the ticket, so our team processes this refund and emails you within 2 business days.';
+  }
+  return cancelTermsLines({ ...terms, policy: cancellation.policy }, { money }).join(' ');
+}
+
 /**
  * What to tell the customer after a cancellation, from what happened to the money.
  *
@@ -67,18 +93,25 @@ export function cancellationMessage(result) {
     case 'stuck':
       return 'Your booking is cancelled, but the automatic refund did not go through. Nothing has been returned to your card yet. '
         + `Our team has been alerted and will refund you; call ${SUPPORT_PHONE} if you have not heard from us within 2 business days.`;
-    case 'review':
+    case 'review': {
+      const sentence = customerReviewSentence(cancellation);
+      if (sentence) return `Your booking is cancelled. ${sentence}`;
       // Says nothing about whether money has moved: a review also covers a
       // refund whose answer never came back.
       return 'Your booking is cancelled. Our team needs to review the refund for this booking and will email you within 2 business days '
         + `to confirm what is returned to your card. Call ${SUPPORT_PHONE} if you have not heard from us by then.`;
+    }
     case 'nothing_held':
       return 'Your booking is cancelled. No payment is being held for this booking, so there is nothing to refund.';
     case 'fee_covers':
-      return 'Your booking is cancelled. The cancellation fee covers the amount paid, so no refund is due.';
+      return serviceFeeKeptBy(cancellation) > 0
+        ? 'Your booking is cancelled. The service fee covers the amount paid, so no refund is due.'
+        : 'Your booking is cancelled. The cancellation fee covers the amount paid, so no refund is due.';
     case 'refunded':
       if (amount > 0) {
-        const kept = fee > 0 ? ` (a ${money(fee, currency)} cancellation fee was kept)` : '';
+        const serviceFee = serviceFeeKeptBy(cancellation);
+        const kept = serviceFee > 0 ? ` (the ${money(serviceFee, currency)} service fee is not refundable)`
+          : fee > 0 ? ` (a ${money(fee, currency)} cancellation fee was kept)` : '';
         return `Your booking is cancelled. A refund of ${money(amount, currency)} is on its way to your original payment method${kept}. `
           + 'It usually reaches your card within 5-10 business days.';
       }
