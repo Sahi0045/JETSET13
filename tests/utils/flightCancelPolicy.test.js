@@ -10,7 +10,11 @@ import {
   serviceFeeKeptOf,
 } from '../../shared/flightCancelPolicy.js';
 
-const PAID_AT = '2026-10-11T10:00:00.000Z';
+// 10:30 AM in New York, 8:00 PM in India. The ticketing office's day ends at
+// midnight New York time: 13.5 hours later.
+const TZ = 'America/New_York';
+const PAID_AT = '2026-10-12T14:30:00.000Z';
+const VOID_DEADLINE = '2026-10-13T04:00:00.000Z';
 const at = (hours) => new Date(Date.parse(PAID_AT) + hours * 60 * 60 * 1000);
 const charge = { fare: 287.5, serviceFee: 12.5, discount: 0, total: 300 };
 const cell = (allowed, amount = null) => ({ allowed, amount, varies: false });
@@ -34,22 +38,40 @@ describe('serviceFeeKeptOf', () => {
   });
 });
 
-describe('the 24 hours', () => {
-  it('ends 24 hours after the booking', () => {
+describe('the free cancellation window', () => {
+  it("ends when the ticketing office's day ends, the last moment a ticket can be voided", () => {
     expect(FREE_CANCEL_HOURS).toBe(24);
-    expect(freeUntilOf(PAID_AT)).toBe('2026-10-12T10:00:00.000Z');
-    expect(freeUntilOf(new Date(PAID_AT))).toBe('2026-10-12T10:00:00.000Z');
+    expect(freeUntilOf(PAID_AT, TZ)).toBe(VOID_DEADLINE);
+    expect(freeUntilOf(new Date(PAID_AT), TZ)).toBe(VOID_DEADLINE);
   });
 
-  it('is open until the last second and closed at 24 hours', () => {
-    expect(isWithinFreeWindow(PAID_AT, at(23.999))).toBe(true);
-    expect(isWithinFreeWindow(PAID_AT, at(24))).toBe(false);
+  it("is short for a booking made late in the office's day", () => {
+    expect(freeUntilOf('2026-10-13T03:30:00.000Z', TZ)).toBe(VOID_DEADLINE);
   });
 
-  it('is closed for a booking with no readable time', () => {
-    expect(freeUntilOf(undefined)).toBeNull();
-    expect(isWithinFreeWindow('not a date', at(1))).toBe(false);
-    expect(isWithinFreeWindow(undefined, at(1))).toBe(false);
+  it("follows the office's clock across the change from summer time", () => {
+    expect(freeUntilOf('2026-10-31T16:00:00.000Z', TZ)).toBe('2026-11-01T04:00:00.000Z');
+    expect(freeUntilOf('2026-11-01T15:00:00.000Z', TZ)).toBe('2026-11-02T05:00:00.000Z');
+    expect(freeUntilOf('2026-11-03T15:00:00.000Z', TZ)).toBe('2026-11-04T05:00:00.000Z');
+  });
+
+  it('follows whichever office time zone is set', () => {
+    expect(freeUntilOf(PAID_AT, 'Asia/Kolkata')).toBe('2026-10-12T18:30:00.000Z');
+    expect(freeUntilOf(PAID_AT, 'America/Los_Angeles')).toBe('2026-10-13T07:00:00.000Z');
+  });
+
+  it('is open until the deadline and closed from it, though 24 hours have not passed', () => {
+    expect(isWithinFreeWindow(PAID_AT, new Date(Date.parse(VOID_DEADLINE) - 1000), TZ)).toBe(true);
+    expect(isWithinFreeWindow(PAID_AT, VOID_DEADLINE, TZ)).toBe(false);
+    expect(isWithinFreeWindow(PAID_AT, at(14), TZ)).toBe(false);
+  });
+
+  it('is closed when the booking time or the office time zone cannot be read', () => {
+    expect(freeUntilOf(undefined, TZ)).toBeNull();
+    expect(freeUntilOf(PAID_AT, undefined)).toBeNull();
+    expect(freeUntilOf(PAID_AT, 'Not/AZone')).toBeNull();
+    expect(isWithinFreeWindow('not a date', at(1), TZ)).toBe(false);
+    expect(isWithinFreeWindow(PAID_AT, at(1), undefined)).toBe(false);
   });
 });
 
@@ -74,7 +96,7 @@ describe('fareRuleOf', () => {
 
 describe('customerCancelTerms', () => {
   const terms = (over = {}) => customerCancelTerms({
-    charge, paidAt: PAID_AT, now: at(2), hasReservation: true, ticketed: true, fareRule: null, cancellationFee: 50, ...over,
+    charge, paidAt: PAID_AT, now: at(2), timeZone: TZ, hasReservation: true, ticketed: true, fareRule: null, cancellationFee: 50, ...over,
   });
 
   it('returns everything for a booking the airline never had', () => {
@@ -89,19 +111,30 @@ describe('customerCancelTerms', () => {
     });
   });
 
-  it('returns the airline price on a ticket cancelled within 24 hours', () => {
+  it('returns the airline price on a ticket cancelled before the void deadline', () => {
     expect(terms()).toMatchObject({
-      policy: 'free_window', automatic: true, airlinePrice: 287.5, refundAmount: 287.5, freeUntil: '2026-10-12T10:00:00.000Z',
+      policy: 'free_window', automatic: true, airlinePrice: 287.5, refundAmount: 287.5, freeUntil: VOID_DEADLINE,
     });
   });
 
-  it('leaves a non-refundable ticket after 24 hours to our team', () => {
+  it('applies the fare rules once the void deadline has passed, inside 24 hours too', () => {
+    expect(terms({ now: at(14), fareRule: { refundable: false, penalty: null, currency: null } })).toMatchObject({
+      policy: 'non_refundable', automatic: false, refundAmount: null,
+    });
+    expect(terms({ now: at(14) })).toMatchObject({ policy: 'rules_unknown', automatic: false });
+  });
+
+  it('treats an office time zone it cannot read as past the deadline', () => {
+    expect(terms({ timeZone: undefined, fareRule: null })).toMatchObject({ policy: 'rules_unknown', automatic: false, freeUntil: null });
+  });
+
+  it('leaves a non-refundable ticket after the deadline to our team', () => {
     expect(terms({ now: at(30), fareRule: { refundable: false, penalty: null, currency: null } })).toMatchObject({
       policy: 'non_refundable', automatic: false, refundAmount: null, cancellationFee: null,
     });
   });
 
-  it('names the airline penalty and our fee on a refundable ticket after 24 hours', () => {
+  it('names the airline penalty and our fee on a refundable ticket after the deadline', () => {
     expect(terms({ now: at(30), fareRule: { refundable: true, penalty: 150, currency: 'USD' } })).toMatchObject({
       policy: 'refundable', automatic: false, refundAmount: null, penalty: 150, penaltyCurrency: 'USD', cancellationFee: 50, airlinePrice: 287.5,
     });
@@ -123,7 +156,7 @@ describe('customerCancelTerms', () => {
 describe('cancelTermsLines', () => {
   const lines = (over) => cancelTermsLines({
     paid: 300, serviceFeeKept: 12.5, airlinePrice: 287.5, penalty: null, penaltyCurrency: null, cancellationFee: null,
-    freeUntil: '2026-10-12T10:00:00.000Z', ...over,
+    freeUntil: VOID_DEADLINE, ...over,
   }, { money, time });
 
   it('says everything comes back for a booking never confirmed', () => {
@@ -136,17 +169,15 @@ describe('cancelTermsLines', () => {
     ]);
   });
 
-  it('gives the amount and the deadline within 24 hours', () => {
+  it('gives the amount and the free cancellation deadline', () => {
     expect(lines({ policy: 'free_window' })).toEqual([
-      'You are within 24 hours of booking (until <2026-10-12T10:00:00.000Z>). You get back USD 287.50; the USD 12.50 service fee is not refundable.',
-      'If the airline no longer lets us void the ticket, our team claims the refund from the airline and returns what it gives back, less the service fee.',
+      'Free cancellation until <2026-10-13T04:00:00.000Z>. You get back USD 287.50; the USD 12.50 service fee is not refundable.',
     ]);
   });
 
   it('says nothing about a service fee when none is kept', () => {
     expect(lines({ policy: 'free_window', serviceFeeKept: 0, airlinePrice: 300 })).toEqual([
-      'You are within 24 hours of booking (until <2026-10-12T10:00:00.000Z>). You get back USD 300.00.',
-      'If the airline no longer lets us void the ticket, our team claims the refund from the airline and returns what it gives back.',
+      'Free cancellation until <2026-10-13T04:00:00.000Z>. You get back USD 300.00.',
     ]);
   });
 
@@ -189,17 +220,23 @@ describe('cancelTermsLines', () => {
 });
 
 describe('cancelPolicyLines', () => {
-  it('states the policy with the flight cancellation fee', () => {
-    expect(cancelPolicyLines({ cancellationFee: 50, money })).toEqual([
-      'Cancel within 24 hours of booking and you get back the airline price. The service fee is not refundable.',
-      "After 24 hours the airline's fare rules apply: a refundable fare returns the airline price less the airline's penalty and our USD 50.00 cancellation fee; a non-refundable fare returns only unused taxes.",
+  it('states the policy with the deadline for a booking made now and the flight cancellation fee', () => {
+    expect(cancelPolicyLines({ cancellationFee: 50, freeUntil: VOID_DEADLINE, money, time })).toEqual([
+      'Book now and you can cancel free until <2026-10-13T04:00:00.000Z>: you get back the airline price. The service fee is not refundable.',
+      "After that the airline's fare rules apply: a refundable fare returns the airline price less the airline's penalty and our USD 50.00 cancellation fee; a non-refundable fare returns only unused taxes.",
       'If the airline cancels or changes your flight, you get back everything you paid.',
     ]);
   });
 
+  it('names the end of the booking day when the deadline is not known yet', () => {
+    expect(cancelPolicyLines({ cancellationFee: 50, money })[0]).toBe(
+      'You can cancel free until 11:59 PM on the day you book (our ticketing office\'s time): you get back the airline price. The service fee is not refundable.',
+    );
+  });
+
   it('leaves out a fee of 0', () => {
     expect(cancelPolicyLines({ cancellationFee: 0, money })[1]).toBe(
-      "After 24 hours the airline's fare rules apply: a refundable fare returns the airline price less the airline's penalty; a non-refundable fare returns only unused taxes.",
+      "After that the airline's fare rules apply: a refundable fare returns the airline price less the airline's penalty; a non-refundable fare returns only unused taxes.",
     );
   });
 });
