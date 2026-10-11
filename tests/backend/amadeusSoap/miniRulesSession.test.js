@@ -74,6 +74,10 @@ describe('MiniRule_GetFromRec request', () => {
   it('asks for every pricing record of the session', () => {
     expect(buildMiniRulesBody()).toBe('<MiniRule_GetFromRec xmlns="http://xml.amadeus.com/TMRXRQ_23_1_1A"><groupRecords><recordID><referenceType>FRN</referenceType><uniqueReference>ALL</uniqueReference></recordID></groupRecords></MiniRule_GetFromRec>');
   });
+
+  it('asks for the fare stored on a booking', () => {
+    expect(buildMiniRulesBody({ record: 'TST' })).toBe('<MiniRule_GetFromRec xmlns="http://xml.amadeus.com/TMRXRQ_23_1_1A"><groupRecords><recordID><referenceType>TST</referenceType><uniqueReference>ALL</uniqueReference></recordID></groupRecords></MiniRule_GetFromRec>');
+  });
 });
 
 describe('getFiledFareRules with MiniRules', () => {

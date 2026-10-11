@@ -12,6 +12,7 @@ vi.mock('../../frontend/src/Pages/Common/Footer', () => ({ default: () => null }
 vi.mock('../../frontend/src/Pages/Common/flights/FlightETicket', () => ({ default: React.forwardRef(() => null) }));
 vi.mock('../../frontend/src/hooks/queries', () => ({
   useFlightBooking: (...args) => mockUseFlightBooking(...args),
+  useBookedFeeRules: () => ({ isLoading: false, data: null }),
 }));
 vi.mock('../../frontend/src/Services/ArcPayService', () => ({
   default: { cancelFlightBooking: (...args) => mockCancelFlightBooking(...args), cancelBooking: vi.fn() },

@@ -4630,6 +4630,45 @@ router.get('/bookings/:bookingRef', optionalProtect, guestBookingLimiter, async 
   }
 });
 
+const BOOKED_FEE_TABLE_TTL_SECONDS = 6 * 60 * 60;
+
+// The airline's cancel and change-date fees for a booked trip, read from its
+// PNR. Opened exactly as the booking itself is (loadOwnedBooking).
+router.get('/bookings/:bookingRef/fee-rules', optionalProtect, guestBookingLimiter, async (req, res) => {
+  try {
+    if (!supabase) {
+      return res.status(503).json({ success: false, error: 'Database not configured' });
+    }
+    const { booking, notFound } = await loadOwnedBooking(req.params.bookingRef, req.user, {
+      email: req.get('x-booking-email')
+    });
+    if (notFound || !booking) {
+      return res.status(404).json({ success: false, error: 'Booking not found' });
+    }
+
+    const pnr = booking.booking_details?.pnr;
+    if (booking.travel_type !== 'flight' || !pnr || String(booking.status).toLowerCase() === 'cancelled') {
+      return res.json({ success: true, penalties: null });
+    }
+
+    const key = `flight:booked-fee-table:${booking.booking_reference}`;
+    const cached = await cacheGet(key);
+    if (cached) return res.json({ success: true, penalties: cached });
+
+    let penalties = null;
+    try {
+      penalties = await FlightProvider.getBookedFeeTable(pnr);
+    } catch (cause) {
+      console.warn('Booked fee table unavailable:', cause?.technicalError || cause?.message);
+    }
+    if (penalties) await cacheSet(key, penalties, BOOKED_FEE_TABLE_TTL_SECONDS);
+    return res.json({ success: true, penalties });
+  } catch (error) {
+    console.error('❌ Booked fee table error:', error);
+    return res.status(500).json({ success: false, error: 'Failed to read the fare rules' });
+  }
+});
+
 /**
  * A passport number as a customer-facing response carries it: the last three
  * characters, the rest masked. Enough to tell which passport a booking was

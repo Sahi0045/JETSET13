@@ -10,6 +10,7 @@ vi.mock('../../frontend/src/Pages/Common/Navbar', () => ({ default: () => null }
 vi.mock('../../frontend/src/Pages/Common/Footer', () => ({ default: () => null }));
 vi.mock('../../frontend/src/hooks/queries', () => ({
   useFlightBooking: (...args) => mockUseFlightBooking(...args),
+  useBookedFeeRules: () => ({ isLoading: false, data: null }),
 }));
 vi.mock('../../frontend/src/Services/ArcPayService', () => ({ default: { cancelBooking: vi.fn() } }));
 

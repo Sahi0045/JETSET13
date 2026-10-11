@@ -10,6 +10,7 @@ import { buildFareFamilyDescriptionBody, buildUpsellBody } from './operations/fa
 import { describeOption, mapFareFamilyDescriptions, mapUpsellReply } from './mappers/fareFamilies.js';
 import { DEFAULT_RULE_SECTIONS, buildCheckRulesBody, readCheckRulesReply, ruleBlocks } from './operations/fareRules.js';
 import { buildMiniRulesBody } from './operations/miniRules.js';
+import { buildRetrieveBody } from './operations/pnr.js';
 import { mapMiniRules } from './mappers/miniRules.js';
 import { buildFlightInfoBody, readFlightInfoError, readFlightInfoReply } from './operations/flightInfo.js';
 import { applyPricingToOffer } from './mappers/pricing.js';
@@ -27,6 +28,7 @@ const log = logger.child({ svc: 'amadeus-ws' });
 // MiniRules is advisory and answered in ~0.2 s on PDT; the results page gives
 // up on the whole fare check at 15 s.
 const MINI_RULES_TIMEOUT_MS = 4000;
+const BOOKED_FEE_TABLE_TIMEOUT_MS = 8000;
 
 /**
  * Flight provider backed by Amadeus Enterprise Web Services.
@@ -921,6 +923,22 @@ const getMostBookedDestinations = async () => ({ ...notEntitled('Travel analytic
 const getMostTraveledDestinations = getMostBookedDestinations;
 const getBusiestTravelPeriod = getMostBookedDestinations;
 
+const getBookedFeeTable = async (recordLocator) => withSession(async (ctx) => {
+  const retrieved = await ctx.call('PNR_Retrieve', buildRetrieveBody(recordLocator), { timeoutMs: BOOKED_FEE_TABLE_TIMEOUT_MS });
+  if (!inspectReply(soapReply(retrieved).reply, 'PNR_Retrieve').ok) return null;
+
+  const rules = await ctx.call('MiniRule_GetFromRec', buildMiniRulesBody({ record: 'TST' }), { timeoutMs: BOOKED_FEE_TABLE_TIMEOUT_MS });
+  const { reply } = soapReply(rules);
+  const inspected = inspectReply(reply, 'MiniRule_GetFromRec');
+  if (!inspected.ok) {
+    log.warn({ reason: inspected.error?.technicalError ?? 'empty' }, 'MiniRule_GetFromRec refused for a booked record');
+    return null;
+  }
+  const penalties = mapMiniRules(reply);
+  // On a booking, cat 5's last day is the ticketing deadline, not a day to book by.
+  return penalties ? { ...penalties, bookBy: null } : null;
+});
+
 export default {
   searchFlights,
   searchLocations,
@@ -938,6 +956,7 @@ export default {
   priceFlightOffer,
   confirmSeats,
   getFiledFareRules,
+  getBookedFeeTable,
   getCalendarPrices,
   getCheapestFlightDates,
 

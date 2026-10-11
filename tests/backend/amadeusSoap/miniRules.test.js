@@ -134,3 +134,16 @@ describe('mapMiniRules', () => {
     expect(mapMiniRules(replyOf())).toBeNull();
   });
 });
+
+// PDT, 10 Oct 2026: PNR 2OY43E (Lufthansa Economy Light, held, since
+// cancelled), its rules asked by the TST stored on it.
+describe('mapMiniRules on a booked record', () => {
+  const booked = () => bodyOf(readFileSync(new URL('../../fixtures/amadeus/minirules-booked-tst.xml', import.meta.url), 'utf8'));
+
+  it('reads the stored fare as it reads a priced one', () => {
+    const table = mapMiniRules(booked());
+    expect(table.change.before).toEqual({ allowed: true, amount: 336, varies: false });
+    expect(table.change.after).toEqual({ allowed: false, amount: 0, varies: false });
+    expect(table.refund.before).toEqual({ allowed: false, amount: 0, varies: false });
+  });
+});

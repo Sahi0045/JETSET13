@@ -12,6 +12,7 @@ vi.mock('../../frontend/src/Pages/Common/Navbar', () => ({ default: () => null }
 vi.mock('../../frontend/src/Pages/Common/Footer', () => ({ default: () => null }));
 vi.mock('../../frontend/src/hooks/queries', () => ({
   useFlightBooking: (...args) => mockUseFlightBooking(...args),
+  useBookedFeeRules: () => ({ isLoading: false, data: null }),
 }));
 
 const { default: FlightETicket } = await import('../../frontend/src/Pages/Common/flights/FlightETicket.jsx');

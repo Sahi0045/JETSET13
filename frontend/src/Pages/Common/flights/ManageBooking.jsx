@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { daysUntilDate, formatCalendarDate, formatIsoDuration } from '../../../utils/dateUtils';
 import {
-  ArrowLeft, Plane, User, CreditCard,
+  ArrowLeft, Plane, User, CreditCard, FileText,
   AlertCircle, AlertTriangle, CheckCircle, Info, Phone, Mail, Edit3,
   Download, X
 } from 'lucide-react';
@@ -10,13 +10,14 @@ import Navbar from '../Navbar';
 import Footer from '../Footer';
 import FlightETicket from './FlightETicket';
 import BookingItinerary from './BookingItinerary';
+import BookingCancelRules from './BookingCancelRules';
 import { bookingItineraries } from '../../../../../shared/bookingItineraries';
 import { formatUsd } from '../../../utils/bookingCharge';
 import { canDownloadDocument, isCommitUnknown, isPaid, ticketState, ticketsVoided } from '../../../utils/eTicket';
 import { attentionMessage, bookingStatusBadge, cancellationMessage, refundStatus } from '../../../utils/bookingStatus';
 import { refundOutcome } from '../../../../../shared/cancellationOutcome';
 import ArcPayService from '../../../Services/ArcPayService';
-import { useFlightBooking } from '../../../hooks/queries';
+import { useBookedFeeRules, useFlightBooking } from '../../../hooks/queries';
 import { useQueryClient } from '@tanstack/react-query';
 
 function ManageBooking() {
@@ -74,6 +75,16 @@ function ManageBooking() {
   const refreshFailed = Boolean(queryError && (passedData || fetchedBooking));
 
   const [activeTab, setActiveTab] = useState('details');
+  // The Cancel Booking button's own test, below. The fee table is asked only
+  // when the tab is open and the booking can be cancelled: each answer is an
+  // Amadeus session.
+  const canCancelOnline = Boolean(bookingData) && bookingData?.status?.toUpperCase() !== 'CANCELLED'
+    && ticketState(bookingData) !== 'cancelled' && (daysUntilDate(bookingData?.departureDate) ?? 0) >= 0
+    && !isCommitUnknown(bookingData);
+  const feeRules = useBookedFeeRules(bookingId, {
+    email: submittedEmail,
+    enabled: activeTab === 'rules' && canCancelOnline && Boolean(bookingData?.pnr),
+  });
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [cancelReason, setCancelReason] = useState('Change of plans');
@@ -670,11 +681,12 @@ function ManageBooking() {
 
           {/* Tabs */}
           <div className="border-b border-gray-200 mb-6">
-            <nav className="flex space-x-8">
+            <nav className="flex gap-6 sm:gap-8 overflow-x-auto whitespace-nowrap">
               {[
                 { id: 'details', label: 'Flight Details', icon: Plane },
                 { id: 'passenger', label: 'Passenger Info', icon: User },
                 { id: 'payment', label: 'Payment', icon: CreditCard },
+                { id: 'rules', label: 'Cancel & change', icon: FileText },
               ].map((tab) => (
                 <button
                   key={tab.id}
@@ -941,6 +953,10 @@ function ManageBooking() {
                   )}
                 </div>
               </div>
+            )}
+
+            {activeTab === 'rules' && bookingData && (
+              <BookingCancelRules booking={bookingData} feeRules={feeRules} canCancel={canCancelOnline} />
             )}
           </div>
 
