@@ -103,6 +103,7 @@ beforeEach(() => {
   vi.stubEnv('AMADEUS_WS_USERNAME', 'WSTEST');
   vi.stubEnv('AMADEUS_WS_PASSWORD', 'pw');
   vi.stubEnv('AMADEUS_WS_OFFICE_ID', 'SCK1S2400');
+  vi.stubEnv('AMADEUS_WS_OFFICE_TIME_ZONE', 'America/New_York');
   vi.stubEnv('AMADEUS_WS_VOID_RETRY_DELAY_MS', '0');
   vi.resetModules();
   axios.post.mockReset();

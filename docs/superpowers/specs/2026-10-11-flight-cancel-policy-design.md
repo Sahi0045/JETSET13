@@ -189,9 +189,10 @@ window promised the airline price on cancels the airline would refund only under
 the fare rules. The owner chose to end the free window at the void deadline.
 
 - `freeUntil` = the earlier of the office's next midnight and 24 hours, in
-  `AMADEUS_WS_OFFICE_TIME_ZONE` (the zone the cancel's void uses; default New
-  York, to be confirmed with Amadeus). A zone or time that cannot be read closes
-  the window, so a doubt goes to our team.
+  `AMADEUS_WS_OFFICE_TIME_ZONE` (the zone the cancel's void uses; default
+  America/Los_Angeles). Office SCK1S2400 keeps Pacific time: on PDT on 11 Oct
+  2026 a ticket issued at 06:30 UTC was dated 10 Oct and still voided. A zone or
+  time that cannot be read closes the window, so a doubt goes to our team.
 - After the deadline the fare rules apply, inside 24 hours too.
 - A void the airline refuses inside the window (`not_voided`) is still the
   promised airline price: the desk refunds it and claims from the airline.

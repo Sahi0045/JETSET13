@@ -8,8 +8,13 @@ import { getWsConfig, officeTimeZoneOf } from '../../backend/services/amadeusSoa
  */
 describe('officeTimeZoneOf', () => {
   it('reads the zone without Amadeus credentials', () => {
-    expect(officeTimeZoneOf({})).toBe('America/New_York');
-    expect(officeTimeZoneOf({ AMADEUS_WS_OFFICE_TIME_ZONE: ' America/Los_Angeles ' })).toBe('America/Los_Angeles');
+    expect(officeTimeZoneOf({ AMADEUS_WS_OFFICE_TIME_ZONE: ' America/New_York ' })).toBe('America/New_York');
+  });
+
+  // Office SCK1S2400 dates and voids tickets on Pacific time: on PDT, 11 Oct
+  // 2026 06:30 UTC, a ticket was dated 10 Oct and could still be voided.
+  it("is Pacific time when none is set, the office's own day", () => {
+    expect(officeTimeZoneOf({})).toBe('America/Los_Angeles');
   });
 
   it('is the zone the Amadeus config uses', () => {

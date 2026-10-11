@@ -69,8 +69,12 @@ let cached = null;
  * The ticketing office's time zone: it decides the same-day void window and the
  * free cancellation window. Readable without Amadeus credentials, because every
  * customer cancel reads it, including one with no airline reservation.
+ *
+ * Office SCK1S2400 keeps Pacific time: on PDT, at 06:30 UTC on 11 Oct 2026, a
+ * ticket it issued was dated 10 Oct and could still be voided. A New York
+ * default skipped that void and promised free cancels after it had closed.
  */
-export const officeTimeZoneOf = (env = process.env) => (env.AMADEUS_WS_OFFICE_TIME_ZONE || 'America/New_York').trim();
+export const officeTimeZoneOf = (env = process.env) => (env.AMADEUS_WS_OFFICE_TIME_ZONE || 'America/Los_Angeles').trim();
 
 const readWsConfig = (env = process.env) => {
   const missing = Object.keys(REQUIRED).filter((name) => !env[name] || String(env[name]).trim() === '');
@@ -315,7 +319,7 @@ export const cutoverRisks = (env = process.env) => {
   check('AMADEUS_WS_QUEUE_CATEGORY',
     'the C0 in "queue 90 C0" is PDT-shaped; a production queue may use another category');
   check('AMADEUS_WS_OFFICE_TIME_ZONE',
-    'defaults to America/New_York; it decides the same-day void window');
+    'defaults to America/Los_Angeles (office SCK1S2400 keeps Pacific time); it decides the same-day void window');
   check('AMADEUS_WS_FOP_CODE',
     'defaults to CASH, correct on PDT and never confirmed against production');
   check('AMADEUS_WS_MARKET_IATA_CODE',
