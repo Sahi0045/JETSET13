@@ -4,7 +4,7 @@ import { createRequest, createResponse } from './helpers/express.helpers.js';
 import { fakeBookingsTable } from './helpers/fakeBookings.js';
 
 /**
- * A customer who asked to cancel inside the 24 hours keeps them when the cancel
+ * A customer who asked to cancel inside the free window keeps it when the cancel
  * could not finish then: the airline refused the cancel, or the payment
  * gateway could not be reached. Their retry later, or our team finishing it,
  * is judged from when they first asked.
@@ -66,9 +66,9 @@ const captured = { status: 200, data: { status: 'CAPTURED', amount: 300, currenc
 const voided = { success: true, hadTickets: true, voided: true, requiresAirlineRefund: [] };
 const refunds = () => axios.put.mock.calls.map(([, body]) => body).filter((body) => body.apiOperation === 'REFUND');
 
-/** At hour 23 the airline refuses the cancel: nothing is cancelled or refunded. */
-const refusedAtHour23 = async () => {
-  vi.setSystemTime(atHour(23));
+/** At hour 15 (11 PM New York) the airline refuses the cancel: nothing is cancelled or refunded. */
+const refusedAtHour15 = async () => {
+  vi.setSystemTime(atHour(15));
   cancelFlightOrder.mockRejectedValueOnce(Object.assign(new Error('PNR_Cancel refused'), { technicalError: 'refused' }));
   const first = await cancel();
   expect(first.statusCode).toBe(502);
@@ -90,10 +90,10 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe('a customer who asked inside the 24 hours', () => {
+describe('a customer who asked inside the free window', () => {
   it('keeps them on a retry after the airline refused the first cancel', async () => {
-    await refusedAtHour23();
-    expect(table.row(REF).booking_details.customer_cancel_requested_at).toBe(new Date(atHour(23)).toISOString());
+    await refusedAtHour15();
+    expect(table.row(REF).booking_details.customer_cancel_requested_at).toBe(new Date(atHour(15)).toISOString());
 
     vi.setSystemTime(atHour(25));
     cancelFlightOrder.mockResolvedValueOnce(voided);
@@ -104,7 +104,7 @@ describe('a customer who asked inside the 24 hours', () => {
   });
 
   it('keeps them on a retry after the payment gateway could not be reached', async () => {
-    vi.setSystemTime(atHour(23));
+    vi.setSystemTime(atHour(15));
     axios.get.mockResolvedValueOnce({ status: 500, data: {} });
     const first = await cancel();
     expect(first.statusCode).toBe(503);
@@ -117,7 +117,7 @@ describe('a customer who asked inside the 24 hours', () => {
   });
 
   it('keeps them when our team finishes the cancel', async () => {
-    await refusedAtHour23();
+    await refusedAtHour15();
 
     vi.setSystemTime(atHour(30));
     cancelFlightOrder.mockResolvedValueOnce(voided);
@@ -127,7 +127,7 @@ describe('a customer who asked inside the 24 hours', () => {
   });
 
   it('is not what a cancel the server asks for itself goes by', async () => {
-    await refusedAtHour23();
+    await refusedAtHour15();
 
     vi.setSystemTime(atHour(30));
     cancelFlightOrder.mockResolvedValueOnce(voided);
@@ -138,7 +138,7 @@ describe('a customer who asked inside the 24 hours', () => {
   });
 
   it('is what the quote goes by', async () => {
-    await refusedAtHour23();
+    await refusedAtHour15();
 
     vi.setSystemTime(atHour(30));
     const { quoteCustomerCancel } = await handlers();
@@ -148,9 +148,9 @@ describe('a customer who asked inside the 24 hours', () => {
   });
 });
 
-describe('a customer who first asked after the 24 hours', () => {
-  it('is judged from that first request', async () => {
-    vi.setSystemTime(atHour(26));
+describe('a customer who first asked after the free window', () => {
+  it('is judged from that first request, though 24 hours had not passed', async () => {
+    vi.setSystemTime(atHour(17));
     cancelFlightOrder.mockRejectedValueOnce(Object.assign(new Error('PNR_Cancel refused'), { technicalError: 'refused' }));
     await cancel();
 

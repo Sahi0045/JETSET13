@@ -1,13 +1,15 @@
 import express from 'express';
 import request from 'supertest';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * What cancelling would return, shown before the customer confirms: worked out
  * by the same rule the cancel uses, for whoever may open the booking.
  */
 
-const hoursAgo = (hours) => new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+// Noon in New York, so "an hour ago" is the same office day.
+const NOW = Date.parse('2026-10-11T16:00:00.000Z');
+const hoursAgo = (hours) => new Date(NOW - hours * 60 * 60 * 1000).toISOString();
 const nonRefundable = { currency: 'USD', change: { before: { allowed: false } }, refund: { before: { allowed: false, amount: 0 } } };
 const refundable = { currency: 'USD', change: { before: { allowed: true, amount: 0 } }, refund: { before: { allowed: true, amount: 150 } } };
 
@@ -59,7 +61,13 @@ const ask = (app, email = 'riya@example.com') => request(app)
   .get('/api/flights/bookings/FLTQUOTE1/cancel-quote')
   .set('x-booking-email', email);
 
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(NOW);
+});
+
 afterEach(() => {
+  vi.useRealTimers();
   vi.doUnmock('../../backend/services/flightProvider.js');
 });
 
@@ -84,7 +92,7 @@ describe('the cancel quote', () => {
     expect(getBookedFeeTable).not.toHaveBeenCalled();
   });
 
-  it('returns the airline price within 24 hours without asking Amadeus', async () => {
+  it('returns the airline price before the void deadline without asking Amadeus', async () => {
     const res = await ask(await makeApp(row({}, ticketed)));
 
     expect(res.body.quote).toMatchObject({ policy: 'free_window', refundAmount: 287.5 });
@@ -92,7 +100,7 @@ describe('the cancel quote', () => {
     expect(getBookedFeeTable).not.toHaveBeenCalled();
   });
 
-  it('reads the fare rules for a ticket after 24 hours', async () => {
+  it('reads the fare rules for a ticket after the void deadline', async () => {
     const res = await ask(await makeApp(row({ created_at: hoursAgo(30) }, ticketed)));
 
     expect(res.body.quote).toMatchObject({ policy: 'non_refundable', automatic: false, refundAmount: null });
