@@ -53,7 +53,16 @@ router.all('/', async (req, res, next) => {
                 if (!booking_type || total_amount == null) {
                     return res.status(400).json({ success: false, message: 'booking_type and total_amount are required' });
                 }
-                const validBookingTypes = ['flight', 'hotel', 'cruise', 'package'];
+                // The quote is paid at the total sent here. A flight is paid
+                // through checkout, which prices the fare with the airline.
+                if (booking_type === 'flight') {
+                    return res.status(400).json({
+                        success: false,
+                        code: 'FLIGHT_CHECKOUT_REQUIRED',
+                        message: 'Flights are booked and paid through flight checkout. Please book this flight from its search results.',
+                    });
+                }
+                const validBookingTypes = ['hotel', 'cruise', 'package'];
                 if (!validBookingTypes.includes(booking_type)) {
                     return res.status(400).json({ success: false, message: `Invalid booking_type. Must be one of: ${validBookingTypes.join(', ')}` });
                 }
