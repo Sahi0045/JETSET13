@@ -61,6 +61,28 @@ export async function fetchBookedFeeRules(bookingId, email) {
   return data?.success ? data.penalties ?? null : null;
 }
 
+export async function fetchCancelQuote(bookingId, email) {
+  const res = await fetch(getApiUrl(`flights/bookings/${encodeURIComponent(bookingId)}/cancel-quote`), {
+    credentials: 'include',
+    headers: await authHeaders(email ? { 'x-booking-email': email } : {}),
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok || !data?.success) throw new Error(data?.error || `Cancel quote failed (${res.status})`);
+  return data.quote ?? null;
+}
+
+export function useCancelQuote(bookingId, options = {}) {
+  const { email, ...queryOptions } = options;
+  return useQuery({
+    queryKey: ['flights', 'booking', bookingId, 'cancel-quote', email || null],
+    queryFn: () => fetchCancelQuote(bookingId, email),
+    staleTime: 0,
+    retry: false,
+    ...queryOptions,
+    enabled: (queryOptions.enabled ?? true) && !!bookingId,
+  });
+}
+
 export function useBookedFeeRules(bookingId, options = {}) {
   const { email, ...queryOptions } = options;
   return useQuery({

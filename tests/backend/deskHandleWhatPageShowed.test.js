@@ -5,6 +5,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRequest, createResponse } from './helpers/express.helpers.js';
 import { fakeBookingsTable } from './helpers/fakeBookings.js';
 
+// A customer's ticketed cancel after 24 hours is our team's call
+// (customerCancelPolicy.test.js); the tests that pin the refund itself cancel as staff.
+let caller = null;
+beforeEach(() => { caller = null; });
+
 /**
  * "Mark as handled" records what the desk page showed, or nothing.
  *
@@ -94,7 +99,7 @@ beforeEach(() => {
 const cancelled = async () => {
   const { handleCancelBookingAction } = await import('../../backend/routes/payment/operations.handlers.js');
   const res = createResponse();
-  await handleCancelBookingAction(createRequest({ method: 'POST', body: { bookingReference: 'FLT123', reason: 'test', email: 'traveler@example.com' } }), res);
+  await handleCancelBookingAction(createRequest({ method: 'POST', user: caller, body: { bookingReference: 'FLT123', reason: 'test', email: 'traveler@example.com' } }), res);
   const written = database.updates.find((update) => update.status === 'cancelled');
   return { ...booking(), ...written, id: 'b-claim', created_at: '2026-09-22T09:00:00Z' };
 };
@@ -121,6 +126,7 @@ const deskOver = async (rows) => {
 
 describe('a second member on a page loaded before the first press', () => {
   it('is refused, and the refused customer refund stays on Needs attention', async () => {
+    caller = { id: 'staff-1', role: 'admin' };
     const desk = await deskOver([await cancelled()]);
 
     // Both loaded the list while it read "Refund to claim from the airline".

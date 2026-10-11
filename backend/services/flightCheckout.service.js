@@ -323,6 +323,7 @@ export async function verifyFlightCharge({
     total: Number.isFinite(fareTotal) ? roundMoney(fareTotal) : null,
     base: Number.isFinite(Number(priced?.price?.base)) ? roundMoney(priced.price.base) : null,
     currency: pricedCurrency || null,
+    refundable: typeof priced?._ama?.refundable === 'boolean' ? priced._ama.refundable : null,
   };
 
   // The merchant settles only in USD. A fare in anything else would be charged

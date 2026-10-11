@@ -2,6 +2,11 @@ import axios from 'axios';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRequest, createResponse } from './helpers/express.helpers.js';
 
+// A customer's ticketed cancel after 24 hours is our team's call
+// (customerCancelPolicy.test.js); the tests that pin the refund itself cancel as staff.
+let caller = null;
+beforeEach(() => { caller = null; });
+
 /**
  * Cancelling a booking held after DocIssuance went unanswered.
  *
@@ -126,7 +131,7 @@ const captured = (amount = 291) => ({
 const runCancel = async (row) => {
   supabaseDouble = supabaseFor(row);
   const { handleCancelBookingAction } = await import('../../backend/routes/payment/operations.handlers.js');
-  const req = createRequest({ method: 'POST', body: { bookingReference: REF, reason: 'test', email: 'jane@example.com' } });
+  const req = createRequest({ method: 'POST', user: caller, body: { bookingReference: REF, reason: 'test', email: 'jane@example.com' } });
   const res = createResponse();
   await handleCancelBookingAction(req, res);
   const written = supabaseDouble.updates.find((u) => u.status === 'cancelled');
@@ -199,6 +204,7 @@ describe('a retrieve showing no ticket, on a booking whose issuance went unanswe
 
 describe('the cancels around it, as before', () => {
   it('the ticket on the PNR: voided before PNR_Cancel, and refunded as a voided ticket', async () => {
+    caller = { id: 'staff-1', role: 'admin' };
     axios.post
       .mockResolvedValueOnce(soap(retrievedWithTicketToday())) // PNR_Retrieve
       .mockResolvedValueOnce(soap(voided)) // Ticket_CancelDocument

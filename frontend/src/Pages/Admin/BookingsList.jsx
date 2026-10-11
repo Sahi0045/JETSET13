@@ -67,7 +67,7 @@ const BookingsList = () => {
         const fetchCancelFee = async () => {
             try {
                 const token = getStoredToken();
-                const response = await fetch(getApiUrl('admin/price-config/general'), {
+                const response = await fetch(getApiUrl('admin/price-config/flights'), {
                     headers: adminHeaders(),
                     credentials: 'include'
                 });

@@ -1010,3 +1010,29 @@ describe('hosted checkout for a flight', () => {
     });
   });
 });
+
+describe('whether the fare is refundable', () => {
+  beforeEach(() => {
+    vi.doUnmock('../../backend/services/flightCheckout.service.js');
+  });
+
+  const pricedSaying = (refundable) => vi.fn().mockResolvedValue({ price: { total: '400.00', base: '300.00', currency: 'USD' }, _ama: { refundable } });
+
+  it('is recorded from the offer our server priced', async () => {
+    expect((await verify({ amount: 401, bookingData: bookingFor(1), priceOffer: pricedSaying(false) })).pricedFare.refundable).toBe(false);
+    expect((await verify({ amount: 401, bookingData: bookingFor(1), priceOffer: pricedSaying(true) })).pricedFare.refundable).toBe(true);
+  });
+
+  it('is unknown when the pricing did not say', async () => {
+    expect((await verify({ amount: 401, bookingData: bookingFor(1), priceOffer: pricedAt(400) })).pricedFare.refundable).toBeNull();
+  });
+
+  it('never comes from the offer the browser sent', async () => {
+    const booking = bookingFor(1);
+    booking.originalOffer = { ...booking.originalOffer, _ama: { refundable: true } };
+
+    const result = await verify({ amount: 401, bookingData: booking, priceOffer: pricedSaying(false) });
+
+    expect(result.pricedFare.refundable).toBe(false);
+  });
+});

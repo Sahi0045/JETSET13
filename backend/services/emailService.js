@@ -669,7 +669,7 @@ export const sendBookingNotificationEmails = async (bookingData) => {
 export const sendCancellationNotificationEmails = async (cancellationData) => {
   try {
     const adminEmail = process.env.ADMIN_EMAIL || 'jetsetters721@gmail.com';
-    const { customerEmail, customerName, bookingReference, bookingType, refundAmount, cancellationFee, currency, paymentAction } = cancellationData;
+    const { customerEmail, customerName, bookingReference, bookingType, refundAmount, cancellationFee, currency, paymentAction, policy, terms, reversalOutcomeUnknown } = cancellationData;
 
     if (!customerEmail) {
       console.warn('⚠️ No customer email provided for cancellation confirmation');
@@ -684,7 +684,10 @@ export const sendCancellationNotificationEmails = async (cancellationData) => {
       refundAmount,
       cancellationFee,
       currency,
-      paymentAction
+      paymentAction,
+      policy,
+      terms,
+      reversalOutcomeUnknown
     });
 
     const customerResult = await getResend().emails.send({

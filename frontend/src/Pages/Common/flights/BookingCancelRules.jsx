@@ -3,7 +3,8 @@ import { Loader2 } from 'lucide-react';
 import AirlineFeeTable from './AirlineFeeTable';
 import { describeFee } from './FlightCancellationPolicy';
 import { ifYouCancel } from '../../../../../shared/ifYouCancel';
-import { documentState, ticketState, ticketsVoided } from '../../../utils/eTicket';
+import { documentState, ticketState } from '../../../utils/eTicket';
+import { QuoteLoading } from './CancelQuote';
 
 const SUPPORT_PHONE = '(877) 538-7380';
 
@@ -13,7 +14,7 @@ const airlineNameOf = (booking) => {
   return /^[A-Z0-9]{2}$/.test(name) ? '' : name;
 };
 
-export default function BookingCancelRules({ booking, feeRules, canCancel }) {
+export default function BookingCancelRules({ booking, feeRules, quote, canCancel }) {
   const state = ticketState(booking);
   if (state === 'cancelled') {
     return <p className="text-sm text-gray-700">This booking is cancelled, so these rules no longer apply.</p>;
@@ -33,8 +34,7 @@ export default function BookingCancelRules({ booking, feeRules, canCancel }) {
     return described ? [described.main, described.note].filter(Boolean).join(' ') : `${currency} ${amount}`;
   };
   const lines = ifYouCancel({
-    ticketState: state,
-    ticketsVoided: ticketsVoided(booking),
+    quote: quote?.data ?? null,
     ticketComing: ['held', 'queued'].includes(documentState(booking)),
     penalties,
     airline: airlineNameOf(booking),
@@ -46,7 +46,7 @@ export default function BookingCancelRules({ booking, feeRules, canCancel }) {
       <section>
         <h3 className="text-lg font-semibold mb-3">If you cancel</h3>
         <div className="space-y-2 text-sm text-gray-700">
-          {lines.map((line) => <p key={line}>{line}</p>)}
+          {quote?.isLoading || quote?.isFetching ? <QuoteLoading /> : lines.map((line) => <p key={line}>{line}</p>)}
         </div>
       </section>
       {booking?.pnr ? (

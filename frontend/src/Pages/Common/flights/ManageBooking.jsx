@@ -11,13 +11,14 @@ import Footer from '../Footer';
 import FlightETicket from './FlightETicket';
 import BookingItinerary from './BookingItinerary';
 import BookingCancelRules from './BookingCancelRules';
+import CancelQuote from './CancelQuote';
 import { bookingItineraries } from '../../../../../shared/bookingItineraries';
 import { formatUsd } from '../../../utils/bookingCharge';
-import { canDownloadDocument, isCommitUnknown, isPaid, ticketState, ticketsVoided } from '../../../utils/eTicket';
+import { canDownloadDocument, isCommitUnknown, isPaid, ticketState } from '../../../utils/eTicket';
 import { attentionMessage, bookingStatusBadge, cancellationMessage, refundStatus } from '../../../utils/bookingStatus';
-import { refundOutcome } from '../../../../../shared/cancellationOutcome';
+import { refundOutcome, serviceFeeKeptBy } from '../../../../../shared/cancellationOutcome';
 import ArcPayService from '../../../Services/ArcPayService';
-import { useBookedFeeRules, useFlightBooking } from '../../../hooks/queries';
+import { useBookedFeeRules, useCancelQuote, useFlightBooking } from '../../../hooks/queries';
 import { useQueryClient } from '@tanstack/react-query';
 
 function ManageBooking() {
@@ -86,6 +87,10 @@ function ManageBooking() {
     enabled: activeTab === 'rules' && canCancelOnline && Boolean(bookingData?.pnr),
   });
   const [showCancelModal, setShowCancelModal] = useState(false);
+  const cancelQuote = useCancelQuote(bookingId, {
+    email: submittedEmail,
+    enabled: canCancelOnline && (showCancelModal || activeTab === 'rules'),
+  });
   const [cancelling, setCancelling] = useState(false);
   const [cancelReason, setCancelReason] = useState('Change of plans');
 
@@ -99,6 +104,7 @@ function ManageBooking() {
   const handleCancelBooking = () => {
     cancelTriggerRef.current = document.activeElement;
     setShowCancelModal(true);
+    cancelQuote.refetch();
   };
 
   const closeCancelDialog = () => {
@@ -564,7 +570,7 @@ function ManageBooking() {
                     {/* Only a fee the cancellation actually kept. It used to be
                         labelled "Standard" beside every booking, including the
                         ones that pay no fee. */}
-                    <span className="text-slate-600 font-medium">Cancellation Fee</span>
+                    <span className="text-slate-600 font-medium">{serviceFeeKeptBy(cancelData) > 0 ? 'Service fee (not refundable)' : 'Cancellation Fee'}</span>
                     <span className="text-rose-600 font-semibold">
                       -${Number(cancelData.cancellationFee || 0).toFixed(2)}
                     </span>
@@ -956,7 +962,7 @@ function ManageBooking() {
             )}
 
             {activeTab === 'rules' && bookingData && (
-              <BookingCancelRules booking={bookingData} feeRules={feeRules} canCancel={canCancelOnline} />
+              <BookingCancelRules booking={bookingData} feeRules={feeRules} quote={cancelQuote} canCancel={canCancelOnline} />
             )}
           </div>
 
@@ -1005,24 +1011,9 @@ function ManageBooking() {
                       every booking and 5-7 days, while the result screen and
                       the email said 5-10 - and a booking never ticketed pays
                       no fee at all. */}
-                  {['issued', 'pending'].includes(ticketState(bookingData)) ? (
-                    <>
-                      <p>• Your ticket has been issued, so a cancellation fee may apply.</p>
-                      <p>• What is refunded depends on your fare's rules; some fares need our team to review the refund first.</p>
-                    </>
-                  ) : ticketsVoided(bookingData) ? (
-                    // Voided by an earlier cancel the airline refused. "No
-                    // ticket has been issued yet, so no cancellation fee
-                    // applies" was false: a voided ticket is refunded less the
-                    // fee (decideFlightRefund), or reviewed by our team.
-                    <>
-                      <p>• Your ticket has been voided, so a cancellation fee may apply.</p>
-                      <p>• Some refunds need our team to review them first.</p>
-                    </>
-                  ) : (
-                    <p>• No ticket has been issued yet, so no cancellation fee applies and what you paid is returned.</p>
-                  )}
-                  <p>• You will see what happens to your payment as soon as the cancellation completes.</p>
+                  <div className="space-y-1">
+                    <CancelQuote query={cancelQuote} />
+                  </div>
                 </div>
               </div>
             </div>

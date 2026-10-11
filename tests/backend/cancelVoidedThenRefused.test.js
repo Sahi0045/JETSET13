@@ -91,10 +91,10 @@ const officeDDMMMYY = (daysAgo = 0) => {
   return `${String(date.getUTCDate()).padStart(2, '0')}${months[date.getUTCMonth()]}${String(date.getUTCFullYear()).slice(-2)}`;
 };
 
-const cancel = async () => {
+const cancel = async ({ user = null } = {}) => {
   const { handleCancelBookingAction } = await import('../../backend/routes/payment/operations.handlers.js');
   const res = createResponse();
-  await handleCancelBookingAction(createRequest({ method: 'POST', body: { bookingReference: REF, reason: 'Change of plans', email: 'traveler@example.com' } }), res);
+  await handleCancelBookingAction(createRequest({ method: 'POST', user, body: { bookingReference: REF, reason: 'Change of plans', email: 'traveler@example.com' } }), res);
   return res;
 };
 
@@ -117,6 +117,10 @@ beforeEach(() => {
   });
 });
 
+// Staff cancels: what a customer's cancel after 24 hours refunds is our team's
+// call (customerCancelPolicy.test.js); the ticket accounting is the same.
+const STAFF = { id: 'staff-1', role: 'admin' };
+
 describe('a cancel that voided every ticket and then could not cancel the PNR', () => {
   it('records both tickets as voided on the day, and a later day does not ask the airline to refund them', async () => {
     table = fakeBookingsTable([flight()], { tables: { price_settings: [], payments: [] } });
@@ -128,7 +132,7 @@ describe('a cancel that voided every ticket and then could not cancel the PNR', 
       .mockResolvedValueOnce(soapReply(cancelRefused))
       .mockResolvedValue(soapReply(ok('Security_SignOutReply')));
 
-    const first = await cancel();
+    const first = await cancel({ user: STAFF });
 
     expect(first.statusCode).toBe(502);
     const afterFirst = table.row(REF).booking_details;
@@ -144,7 +148,7 @@ describe('a cancel that voided every ticket and then could not cancel the PNR', 
       .mockResolvedValueOnce(soapReply(ok('PNR_Reply')))
       .mockResolvedValue(soapReply(ok('Security_SignOutReply')));
 
-    const second = await cancel();
+    const second = await cancel({ user: STAFF });
 
     expect(second.statusCode).toBe(200);
     expect(second.body.cancellation.requiresAirlineRefund).toEqual([]);

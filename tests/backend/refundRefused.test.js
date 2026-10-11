@@ -2,6 +2,11 @@ import axios from 'axios';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRequest, createResponse } from './helpers/express.helpers.js';
 
+// A customer's ticketed cancel after 24 hours is our team's call
+// (customerCancelPolicy.test.js); the tests that pin the refund itself cancel as staff.
+let caller = null;
+beforeEach(() => { caller = null; });
+
 /**
  * A refund the gateway refused, on the customer-initiated cancel path.
  *
@@ -67,7 +72,7 @@ vi.mock('../../backend/services/flightProvider.js', () => ({
 const runCancel = async () => {
   supabaseDouble = supabaseFor(booking());
   const { handleCancelBookingAction } = await import('../../backend/routes/payment/operations.handlers.js');
-  const req = createRequest({ method: 'POST', body: { bookingReference: 'FLT123', reason: 'test', email: 'traveler@example.com' } });
+  const req = createRequest({ method: 'POST', user: caller, body: { bookingReference: 'FLT123', reason: 'test', email: 'traveler@example.com' } });
   const res = createResponse();
   await handleCancelBookingAction(req, res);
   return res;
@@ -98,6 +103,7 @@ describe('when the gateway refuses the refund', () => {
   });
 
   it('records the refund as failed, not partial', async () => {
+    caller = { id: 'staff-1', role: 'admin' };
     const res = await runCancel();
 
     expect(res.body.cancellation.paymentAction).toBe('REFUND_FAILED');
@@ -122,6 +128,7 @@ describe('when the gateway refuses the refund', () => {
   });
 
   it('keeps the gateway\'s reason so a human can act on it', async () => {
+    caller = { id: 'staff-1', role: 'admin' };
     const res = await runCancel();
 
     expect(res.body.cancellation.errorDetails?.response?.gatewayCode).toBe('DECLINED');
@@ -132,6 +139,7 @@ describe('when the gateway answers 200 with no verdict', () => {
   // Nor as a refusal: the refund may have been made, and REFUND_FAILED told
   // the desk nothing had gone back (cancelRefundReplyWithoutVerdict.test.js).
   it('is not treated as a refund, nor as a refusal', async () => {
+    caller = { id: 'staff-1', role: 'admin' };
     axios.put.mockResolvedValue({ status: 200, data: {} });
 
     const res = await runCancel();
@@ -174,6 +182,7 @@ describe('a refusal that carries the payer with it', () => {
   };
 
   it('keeps the payer out of a flight cancel response and the log', async () => {
+    caller = { id: 'staff-1', role: 'admin' };
     axios.put.mockResolvedValue({ status: 200, data: refusal });
     const logged = vi.spyOn(console, 'error');
 
@@ -189,7 +198,7 @@ describe('a refusal that carries the payer with it', () => {
     supabaseDouble = supabaseFor({ ...booking(), travel_type: 'hotel', booking_details: { order_id: 'FLT123', customer_email: 'traveler@example.com' } });
     const { handleCancelBookingAction } = await import('../../backend/routes/payment/operations.handlers.js');
     const res = createResponse();
-    await handleCancelBookingAction(createRequest({ method: 'POST', body: { bookingReference: 'FLT123', reason: 'test', email: 'traveler@example.com' } }), res);
+    await handleCancelBookingAction(createRequest({ method: 'POST', user: caller, body: { bookingReference: 'FLT123', reason: 'test', email: 'traveler@example.com' } }), res);
 
     expect(res.body.cancellation.paymentAction).toBe('REFUND_FAILED');
     expectNoPayer(res, logged);
@@ -198,6 +207,7 @@ describe('a refusal that carries the payer with it', () => {
 
 describe('when the gateway accepts the refund', () => {
   it('records a partial refund and the row reflects it', async () => {
+    caller = { id: 'staff-1', role: 'admin' };
     axios.put.mockResolvedValue({ status: 200, data: { result: 'SUCCESS' } });
 
     const res = await runCancel();

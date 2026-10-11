@@ -13,6 +13,7 @@ vi.mock('../../frontend/src/Pages/Common/Footer', () => ({ default: () => null }
 vi.mock('../../frontend/src/hooks/queries', () => ({
   useFlightBooking: (...args) => mockUseFlightBooking(...args),
   useBookedFeeRules: () => ({ isLoading: false, data: null }),
+  useCancelQuote: () => ({ isLoading: false, data: null, refetch: () => {} }),
 }));
 
 const { default: FlightETicket } = await import('../../frontend/src/Pages/Common/flights/FlightETicket.jsx');
@@ -116,8 +117,10 @@ describe('every recorded ticket voided, then the cancel refused', () => {
 
     expect(text).not.toMatch(/Download E-Ticket|Download Booking Confirmation/);
     expect(text).not.toMatch(/Your ticket has been issued/);
-    expect(text).not.toMatch(/No ticket has been issued yet, so no cancellation fee applies/);
-    expect(text).toMatch(/Your ticket has been voided, so a cancellation fee may apply/);
+    expect(text).not.toMatch(/No ticket has been issued yet/);
+    // What a cancel returns is the server's quote now (cancelQuote.test.jsx);
+    // with none, the dialog promises nothing.
+    expect(text).toMatch(/We could not work out your refund just now/);
   });
 
   it('the confirmation page and the booking\'s sentence say it was voided, not issued or being issued', () => {
@@ -172,7 +175,7 @@ describe('fence: tickets nobody voided, and the states next to it', () => {
 
     const manage = manageBookingText(ticketed, { openCancel: true });
     expect(manage).toMatch(/Download E-Ticket/);
-    expect(manage).toMatch(/Your ticket has been issued, so a cancellation fee may apply/);
+    expect(manage).toMatch(/We could not work out your refund just now/);
 
     expect(confirmationText(ticketed)).toMatch(/Booking Confirmed!/);
   });

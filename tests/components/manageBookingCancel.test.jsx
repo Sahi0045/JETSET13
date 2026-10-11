@@ -15,6 +15,7 @@ vi.mock('../../frontend/src/Pages/Common/flights/FlightETicket', () => ({
 vi.mock('../../frontend/src/hooks/queries', () => ({
   useFlightBooking: (...args) => mockUseFlightBooking(...args),
   useBookedFeeRules: () => ({ isLoading: false, data: null }),
+  useCancelQuote: () => ({ isLoading: false, data: null, refetch: () => {} }),
 }));
 vi.mock('../../frontend/src/Services/ArcPayService', () => ({
   default: { cancelFlightBooking: (...args) => mockCancelBooking(...args) },
