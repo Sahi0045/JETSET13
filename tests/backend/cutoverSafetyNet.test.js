@@ -83,6 +83,16 @@ describe('the cutover checklist', () => {
     })).toEqual([]);
   });
 
+  // The pricing route sells seats only for a request carrying this secret.
+  // Without it a booking host prices every checkout but never confirms the
+  // seats, and a fare the airline refuses is found after the charge.
+  it('names a missing checkout secret on a host that books', () => {
+    expect(cutoverRisks({ AMADEUS_WS_BOOKING_ENABLED: 'true' }).map((r) => r.setting)).toContain('FLIGHTS_INTERNAL_SECRET');
+    expect(cutoverRisks({ AMADEUS_WS_BOOKING_ENABLED: 'true', FLIGHTS_INTERNAL_SECRET: ' ' }).map((r) => r.setting)).toContain('FLIGHTS_INTERNAL_SECRET');
+    expect(cutoverRisks({ AMADEUS_WS_BOOKING_ENABLED: 'true', FLIGHTS_INTERNAL_SECRET: 'set' }).map((r) => r.setting)).not.toContain('FLIGHTS_INTERNAL_SECRET');
+    expect(cutoverRisks({ AMADEUS_WS_BOOKING_ENABLED: 'false' }).map((r) => r.setting)).not.toContain('FLIGHTS_INTERNAL_SECRET');
+  });
+
   it('explains each risk rather than only naming it', () => {
     for (const risk of cutoverRisks({})) {
       expect(String(risk.risk).length, risk.setting).toBeGreaterThan(20);

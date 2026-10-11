@@ -40,6 +40,7 @@ import { liveChainState } from '../utils/bookingChainClaim.js';
 import { isUsableEmail } from '../services/guestBooking.service.js';
 import { readBookedFeeTable } from '../services/bookedFeeTable.service.js';
 import { freeUntilOf } from '../../shared/flightCancelPolicy.js';
+import { isInternalRequest } from '../utils/internalRequest.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -2483,6 +2484,7 @@ router.post('/price', async (req, res) => {
     // seats at the airline for a checkout that could only end in
     // BOOKING_DISABLED, counted against the office's look-to-book ratio.
     const seatsChecked = req.body.confirmSeats === true
+      && isInternalRequest(req)
       && providerStatus().seatCheckBeforePayment
       && providerStatus().bookingEnabled === true;
     if (seatsChecked) {

@@ -6,6 +6,7 @@ import { describeGroup, groupFromOffer } from '../../shared/travellerGroup.js';
 import { NAME_MISSING, travellerNameProblem } from '../../shared/passengerName.js';
 import { DEFAULT_PRICE_SETTINGS } from '../config/priceDefaults.js';
 import { couponTripKey, evaluateCoupon } from './coupon.service.js';
+import { internalRequestHeaders } from '../utils/internalRequest.js';
 
 /**
  * Verify what a flight checkout is about to charge, before ARC Pay sees it.
@@ -61,7 +62,7 @@ export async function priceOfferForCheckout(offer) {
     const resp = await axios.post(
       `${base.replace(/\/$/, '')}/api/flights/price`,
       { flightOffer: offer, confirmSeats: true },
-      { timeout: 25000, validateStatus: () => true },
+      { timeout: 25000, validateStatus: () => true, headers: internalRequestHeaders() },
     );
     const priced = resp?.data?.data?.flightOffers?.[0];
     if (resp?.data?.code === 'FARE_UNAVAILABLE') {

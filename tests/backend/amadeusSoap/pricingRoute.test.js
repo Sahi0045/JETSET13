@@ -124,10 +124,14 @@ describe('POST /api/flights/price', () => {
     const signOut = '<?xml version="1.0" encoding="UTF-8"?><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Header/><soap:Body><Security_SignOutReply/></soap:Body></soap:Envelope>';
     const sells = () => axios.post.mock.calls.filter(([, body]) => String(body).includes('<Air_SellFromRecommendation'));
 
+    const CHECKOUT_SECRET = 'checkout-secret-for-tests';
+    const asCheckout = (req) => req.set('x-jetsetters-internal', CHECKOUT_SECRET);
+
     beforeEach(() => {
       vi.stubEnv('AMADEUS_WS_WSAP', '1ASIWJETJEC');
       // The seat check exists to protect a booking this host would make.
       vi.stubEnv('AMADEUS_WS_BOOKING_ENABLED', 'true');
+      vi.stubEnv('FLIGHTS_INTERNAL_SECRET', CHECKOUT_SECRET);
     });
 
     // AMADEUS_WS_BOOKING_ENABLED false is the switch that says this deployment
@@ -145,7 +149,7 @@ describe('POST /api/flights/price', () => {
         .mockResolvedValue(reply(signOut));
       const app = await makeApp();
 
-      const res = await request(app).post('/api/flights/price').send({ flightOffer: await offerFrom('mptbs-oneway-jfk-lhr'), confirmSeats: true });
+      const res = await asCheckout(request(app).post('/api/flights/price')).send({ flightOffer: await offerFrom('mptbs-oneway-jfk-lhr'), confirmSeats: true });
 
       expect(res.status).toBe(200);
       expect(res.body.meta.bookingEnabled).toBe(false);
@@ -175,11 +179,61 @@ describe('POST /api/flights/price', () => {
         .mockResolvedValue(reply(signOut));
       const app = await makeApp();
 
-      const res = await request(app).post('/api/flights/price').send({ flightOffer: await offerFrom('mptbs-oneway-jfk-lhr'), confirmSeats: true });
+      const res = await asCheckout(request(app).post('/api/flights/price')).send({ flightOffer: await offerFrom('mptbs-oneway-jfk-lhr'), confirmSeats: true });
 
       expect(res.status).toBe(200);
       expect(res.body.meta.seatsConfirmed).toBe(true);
       expect(sells()).toHaveLength(1);
+    });
+
+    // The route is public: vercel.json forwards every flight request here. A
+    // request body flag alone let anyone sell and release seats at the airline,
+    // as often as they liked, against the office's look-to-book ratio.
+    describe('for anyone but our checkout', () => {
+      const pricingOnly = () => {
+        axios.post.mockReset();
+        axios.post
+          .mockResolvedValueOnce(reply(fixture('informative-pricing')))
+          .mockResolvedValueOnce(reply(sellReply('OK', 'OK')))
+          .mockResolvedValue(reply(signOut));
+      };
+
+      it('prices without selling when the request has no secret', async () => {
+        pricingOnly();
+        const app = await makeApp();
+
+        const res = await request(app).post('/api/flights/price').send({ flightOffer: await offerFrom('mptbs-oneway-jfk-lhr'), confirmSeats: true });
+
+        expect(res.status).toBe(200);
+        expect(res.body.data.flightOffers).toHaveLength(1);
+        expect(res.body.meta.seatsConfirmed).toBe(false);
+        expect(sells()).toHaveLength(0);
+      });
+
+      it('prices without selling when the secret is wrong', async () => {
+        pricingOnly();
+        const app = await makeApp();
+
+        const res = await request(app).post('/api/flights/price').set('x-jetsetters-internal', 'guessed')
+          .send({ flightOffer: await offerFrom('mptbs-oneway-jfk-lhr'), confirmSeats: true });
+
+        expect(res.status).toBe(200);
+        expect(res.body.meta.seatsConfirmed).toBe(false);
+        expect(sells()).toHaveLength(0);
+      });
+
+      it('never sells on a host with no secret set, whatever the request sends', async () => {
+        vi.stubEnv('FLIGHTS_INTERNAL_SECRET', '');
+        pricingOnly();
+        const app = await makeApp();
+
+        const res = await request(app).post('/api/flights/price').set('x-jetsetters-internal', '')
+          .send({ flightOffer: await offerFrom('mptbs-oneway-jfk-lhr'), confirmSeats: true });
+
+        expect(res.status).toBe(200);
+        expect(res.body.meta.seatsConfirmed).toBe(false);
+        expect(sells()).toHaveLength(0);
+      });
     });
 
     it('answers seats the airline will not sell as FARE_UNAVAILABLE', async () => {
@@ -190,7 +244,7 @@ describe('POST /api/flights/price', () => {
         .mockResolvedValue(reply(signOut));
       const app = await makeApp();
 
-      const res = await request(app).post('/api/flights/price').send({ flightOffer: await offerFrom('mptbs-oneway-jfk-lhr'), confirmSeats: true });
+      const res = await asCheckout(request(app).post('/api/flights/price')).send({ flightOffer: await offerFrom('mptbs-oneway-jfk-lhr'), confirmSeats: true });
 
       expect(res.status).toBe(409);
       expect(res.body.code).toBe('FARE_UNAVAILABLE');
@@ -202,7 +256,7 @@ describe('POST /api/flights/price', () => {
       axios.post.mockResolvedValue(reply(fixture('informative-pricing')));
       const app = await makeApp();
 
-      const res = await request(app).post('/api/flights/price').send({ flightOffer: await offerFrom('mptbs-oneway-jfk-lhr'), confirmSeats: true });
+      const res = await asCheckout(request(app).post('/api/flights/price')).send({ flightOffer: await offerFrom('mptbs-oneway-jfk-lhr'), confirmSeats: true });
 
       expect(res.status).toBe(200);
       expect(res.body.meta.seatsConfirmed).toBe(false);
