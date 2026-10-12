@@ -1,27 +1,40 @@
 import React from 'react';
 import { X } from 'lucide-react';
 import currencyService from '../../../Services/CurrencyService';
+import { WHOLE_DAY, clockLabel, hoursLabel } from './searchResults';
 
-const STOP_LABELS = { '0': 'Non-stop', '1': 'Up to 1 stop', '2': '2+ stops' };
-const TIME_LABELS = {
-  early_morning: 'Before 6 AM',
-  morning: 'Morning 6AM–12PM',
-  afternoon: 'Afternoon 12–6PM',
-  evening: 'Evening 6–9PM',
-  night: 'Night after 9PM',
-};
-const BAGGAGE_LABELS = { included: 'With check-in baggage', cabin_only: 'Cabin baggage only' };
+const STOP_LABELS = ['Direct', '1 stop', '2+ stops'];
+const BAGGAGE_LABELS = { included: 'Checked bag included', cabin_only: 'Cabin bag only' };
 const REFUND_LABELS = { yes: 'Refundable', no: 'Non-refundable' };
+
+const isNarrowed = (range) => Array.isArray(range) && (range[0] > WHOLE_DAY[0] || range[1] < WHOLE_DAY[1]);
 
 function FlightAppliedFilters({ filters, priceRangeBounds, onFilterChange, onToggleAirline, onToggleAirport, onResetAll }) {
   const sym = currencyService.getCurrencySymbol();
   const chips = [];
 
-  if (filters.stops !== 'any') {
-    chips.push({ key: 'stops', label: STOP_LABELS[filters.stops] || filters.stops, clear: () => onFilterChange('stops', 'any') });
+  (filters.stops || []).forEach((value) => {
+    chips.push({ key: `stops-${value}`, label: STOP_LABELS[value], clear: () => onFilterChange('stops', filters.stops.filter((v) => v !== value)) });
+  });
+  if (isNarrowed(filters.outboundTimes)) {
+    chips.push({
+      key: 'outbound',
+      label: `Departs ${clockLabel(filters.outboundTimes[0])}–${clockLabel(filters.outboundTimes[1])}`,
+      clear: () => onFilterChange('outboundTimes', [...WHOLE_DAY]),
+    });
   }
-  if (filters.departureTime !== 'any') {
-    chips.push({ key: 'depart', label: TIME_LABELS[filters.departureTime] || filters.departureTime, clear: () => onFilterChange('departureTime', 'any') });
+  if (isNarrowed(filters.returnTimes)) {
+    chips.push({
+      key: 'return',
+      label: `Return ${clockLabel(filters.returnTimes[0])}–${clockLabel(filters.returnTimes[1])}`,
+      clear: () => onFilterChange('returnTimes', [...WHOLE_DAY]),
+    });
+  }
+  if (filters.maxJourney != null) {
+    chips.push({ key: 'journey', label: `Journey up to ${hoursLabel(filters.maxJourney)}`, clear: () => onFilterChange('maxJourney', null) });
+  }
+  if (filters.maxLayover != null) {
+    chips.push({ key: 'layover', label: `Layover up to ${hoursLabel(filters.maxLayover)}`, clear: () => onFilterChange('maxLayover', null) });
   }
   if (filters.baggage !== 'any') {
     chips.push({ key: 'baggage', label: BAGGAGE_LABELS[filters.baggage] || filters.baggage, clear: () => onFilterChange('baggage', 'any') });

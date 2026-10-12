@@ -6,7 +6,7 @@
 
 import { formatDateToISO, getSafeDate, getTodayDate } from '../../../utils/dateUtils';
 import { hasCheckedBag } from '../../../utils/baggage';
-import { legsOf, maxStops } from './flightSort';
+import { legsOf, maxStops, parseDurationMin } from './flightSort';
 
 /** A local calendar date `days` after another, both YYYY-MM-DD. */
 const addDays = (isoDate, days) => {
@@ -164,6 +164,15 @@ export const searchFailureMessage = (status, body) => {
   return "We couldn't load flights just now. Please try again.";
 };
 
+/** "06:00" for minutes after midnight. */
+export const clockLabel = (minutes) => `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+
+/** "1.5 hours" for 90 minutes, as the duration sliders read. */
+export const hoursLabel = (minutes) => `${(minutes / 60).toFixed(1)} hours`;
+
+/** The whole day on the departure-time sliders, in minutes after midnight. */
+export const WHOLE_DAY = [0, 1439];
+
 /**
  * The sidebar filters with nothing narrowed: every price from the lowest to
  * the highest of these results, in the currency they are shown in.
@@ -172,13 +181,19 @@ export const searchFailureMessage = (status, body) => {
  * the visitor was browsing in. In rupees a USD 700 fare is past 50,000, so
  * "Reset all filters" hid the very flights it was meant to bring back.
  *
+ * `stops` lists the stop counts kept (0 direct, 1, 2 for two or more); empty
+ * keeps them all. `maxJourney` and `maxLayover` are minutes, null for no limit.
+ *
  * @param {{ min: number, max: number }} bounds the results' price range
  */
 export const filtersWithin = (bounds) => ({
   price: [bounds.min, bounds.max],
-  stops: 'any',
+  stops: [],
   airlines: [],
-  departureTime: 'any',
+  outboundTimes: [...WHOLE_DAY],
+  returnTimes: [...WHOLE_DAY],
+  maxJourney: null,
+  maxLayover: null,
   baggage: 'any',
   refundable: 'any',
   originAirports: [],
@@ -207,31 +222,38 @@ export const seatsLeftLabel = (seats) => {
   return { text: `${n} seat${n === 1 ? '' : 's'} left`, urgent: true };
 };
 
-const DEPARTURE_WINDOWS = {
-  early_morning: [0, 6],
-  morning: [6, 12],
-  afternoon: [12, 18],
-  evening: [18, 21],
-  night: [21, 24],
-};
-
-/** The hour of "14:05" or "02:05 PM", or null when there is no time to read. */
-const hourOf = (time) => {
-  const match = String(time ?? '').match(/(\d{1,2})(?::\d{2})?\s*(AM|PM)?/i);
+/** Minutes after midnight for "14:05" or "02:05 PM", or null when there is no time to read. */
+export const minuteOfDay = (time) => {
+  const match = String(time ?? '').match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
   if (!match) return null;
   let hour = parseInt(match[1], 10) % 24;
-  const meridiem = match[2]?.toUpperCase();
+  const meridiem = match[3]?.toUpperCase();
   if (meridiem === 'PM' && hour !== 12) hour += 12;
   if (meridiem === 'AM' && hour === 12) hour = 0;
-  return hour;
+  return hour * 60 + parseInt(match[2], 10);
 };
+
+/** The stop-count box a flight falls in: 0, 1, or 2 for two or more, worst leg first. */
+const stopBucket = (flight) => Math.min(maxStops(flight), 2);
+
+const legDurations = (flight) => legsOf(flight)
+  .map((leg) => (Number.isFinite(leg.durationMinutes) ? leg.durationMinutes : parseDurationMin(leg.duration)))
+  .filter((minutes) => Number.isFinite(minutes) && minutes > 0 && minutes < Number.MAX_SAFE_INTEGER);
+
+const layoverMinutes = (flight) => legsOf(flight)
+  .flatMap((leg) => layoversOf(leg.segments))
+  .map((layover) => layover.minutes)
+  .filter((minutes) => Number.isFinite(minutes));
+
+const outside = (minute, [from, to]) => minute !== null && (minute < from || minute > to);
 
 /**
  * Whether a flight passes the sidebar filters.
  *
- * Stops and departure time apply to every leg. They looked only at the
- * outbound, so a round trip with a connecting return passed "Non-stop", and
- * one coming back at midnight passed "Morning".
+ * Stops and the journey and layover limits apply to every leg: a round trip is
+ * only direct, or short, if both of its legs are. The outbound and the return
+ * each have their own departure-time range. Anything the flight does not tell
+ * us - a time, a duration, a layover - keeps it rather than hides it.
  *
  * @param {(flight: object) => number} priceOf the fare in the slider's currency
  */
@@ -239,23 +261,16 @@ export const matchesFilters = (flight, filters, priceOf) => {
   const price = priceOf(flight);
   if (price < filters.price[0] || price > filters.price[1]) return false;
 
-  if (filters.stops !== 'any') {
-    const wanted = parseInt(filters.stops, 10);
-    const worst = maxStops(flight);
-    if (wanted === 2 && worst < 2) return false;           // "2+ stops"
-    if (wanted === 1 && worst > 1) return false;           // "up to 1 stop"
-    if (wanted === 0 && worst !== 0) return false;         // "non-stop"
-  }
+  if (filters.stops?.length > 0 && !filters.stops.includes(stopBucket(flight))) return false;
 
   if (filters.airlines.length > 0 && !filters.airlines.includes(flight.airline?.name)) return false;
 
-  const window = DEPARTURE_WINDOWS[filters.departureTime];
-  if (window) {
-    for (const leg of legsOf(flight)) {
-      const hour = hourOf(leg.departure?.time);
-      if (hour !== null && (hour < window[0] || hour >= window[1])) return false;
-    }
-  }
+  if (filters.outboundTimes && outside(minuteOfDay(flight.departure?.time), filters.outboundTimes)) return false;
+  if (filters.returnTimes && flight.returnLeg
+    && outside(minuteOfDay(flight.returnLeg.departure?.time), filters.returnTimes)) return false;
+
+  if (filters.maxJourney != null && legDurations(flight).some((minutes) => minutes > filters.maxJourney)) return false;
+  if (filters.maxLayover != null && layoverMinutes(flight).some((minutes) => minutes > filters.maxLayover)) return false;
 
   if (filters.baggage !== 'any') {
     // An allowance is a weight OR a piece count - `{weight, weightUnit}` or
@@ -277,3 +292,20 @@ export const matchesFilters = (flight, filters, priceOf) => {
 
   return true;
 };
+
+/**
+ * How many flights each stops box keeps, and the cheapest of them, across all
+ * the results - the "from $27" under each box. A box with none reads "None".
+ */
+export const stopsSummary = (flights = [], priceOf) => [0, 1, 2].map((value) => {
+  const prices = flights.filter((flight) => stopBucket(flight) === value).map(priceOf).filter(Number.isFinite);
+  return { value, count: prices.length, minPrice: prices.length ? Math.min(...prices) : null };
+});
+
+const spanOf = (values) => (values.length ? { min: Math.min(...values), max: Math.max(...values) } : null);
+
+/** The shortest and longest leg in the results, in minutes; null when none is known. */
+export const journeyBounds = (flights = []) => spanOf(flights.flatMap(legDurations));
+
+/** The shortest and longest connection wait in the results; null when nothing connects. */
+export const layoverBounds = (flights = []) => spanOf(flights.flatMap(layoverMinutes));

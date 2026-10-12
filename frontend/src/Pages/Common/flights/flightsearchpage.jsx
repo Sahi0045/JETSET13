@@ -23,7 +23,6 @@ import apiConfig from '@/config/api';
 import LoadingSpinner from '../../../Components/LoadingSpinner';
 import FlightCard from './FlightCard';
 import FlightFilterSidebar from './FlightFilterSidebar';
-import FlightFilterBar from './FlightFilterBar';
 import FlightModifyBar from './FlightModifyBar';
 import FlightSortTabs from './FlightSortTabs';
 import FlightMobileSortFilter from './FlightMobileSortFilter';
@@ -32,7 +31,7 @@ import FlightAppliedFilters from './FlightAppliedFilters';
 import FlightFareCalendar from './FlightFareCalendar';
 import { sortFlights } from './flightSort';
 import { buildSearchPayload, fieldCode, searchFromQuery, searchKeyOf, searchToQuery } from './searchQuery';
-import { airportClockLabel, buildDateStrip, filtersWithin, legDateLabel, matchesFilters, minutesBetweenAirportTimes, priceStep, searchFailureMessage, shiftDateStrip, withDepartureDate } from './searchResults';
+import { airportClockLabel, buildDateStrip, filtersWithin, journeyBounds, layoverBounds, legDateLabel, matchesFilters, minutesBetweenAirportTimes, priceStep, searchFailureMessage, shiftDateStrip, stopsSummary, withDepartureDate } from './searchResults';
 
 // The IATA code in "New Delhi (DEL)", or a bare code as typed.
 const extractRouteCode = (str) => {
@@ -883,6 +882,16 @@ function FlightSearchPage() {
     [airlineStats]
   );
 
+  // What each sidebar control can offer, across every result: the "from" price
+  // under each stops box, and the ends of the journey and layover sliders.
+  const stopsStats = useMemo(
+    () => stopsSummary(flights || [], (f) => Number(f.price?.amount) || null),
+    [flights]
+  );
+  const journeyRange = useMemo(() => journeyBounds(flights || []), [flights]);
+  const layoverRange = useMemo(() => layoverBounds(flights || []), [flights]);
+  const isRoundTrip = useMemo(() => (flights || []).some((f) => f.returnLeg), [flights]);
+
   // Toggle a departure/arrival airport in the filter
   const toggleAirportFilter = useCallback((type, code) => {
     const key = type === 'origin' ? 'originAirports' : 'destAirports';
@@ -1157,21 +1166,24 @@ function FlightSearchPage() {
               )}
             </div>
           ) : (
-            <div className="flex flex-col gap-2">
+            <div className="flex gap-6 items-start">
+              <FlightFilterSidebar
+                filters={filters}
+                priceRangeBounds={priceRangeBounds}
+                airlines={allAirlines}
+                airlineStats={airlineStats}
+                airportStats={airportStats}
+                stopsStats={stopsStats}
+                journeyRange={journeyRange}
+                layoverRange={layoverRange}
+                isRoundTrip={isRoundTrip}
+                onFilterChange={handleFilterChange}
+                onToggleAirline={toggleAirlineFilter}
+                onToggleAirport={toggleAirportFilter}
+                onResetAll={handleResetAllFilters}
+              />
               {/* Results */}
               <div className="flex-1 min-w-0">
-                {/* Filters, above the list rather than beside it: the rail took
-                    a third of the page for controls used once. */}
-                <FlightFilterBar
-                  filters={filters}
-                  priceRangeBounds={priceRangeBounds}
-                  airlines={allAirlines}
-                  airlineStats={airlineStats}
-                  onFilterChange={handleFilterChange}
-                  onToggleAirline={toggleAirlineFilter}
-                  onResetAll={handleResetAllFilters}
-                  resultCount={totalItems}
-                />
                 {/* Mobile: single-line filter + sort bar */}
                 <FlightMobileSortFilter
                   filters={filters}
@@ -1328,11 +1340,14 @@ function FlightSearchPage() {
 
       {/* Mobile filter drawer */}
       {showMobileFilters && (
-        <div className="fixed inset-0 z-[150] md:hidden flex">
+        <div className="fixed inset-0 z-[10000] lg:hidden flex">
           <div className="absolute inset-0 bg-black/50" onClick={() => setShowMobileFilters(false)} />
           <div className="relative ml-auto w-[88%] max-w-sm h-full bg-white shadow-2xl flex flex-col animate-in slide-in-from-right duration-200">
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 flex-shrink-0">
-              <span className="text-sm font-bold text-gray-800 uppercase tracking-wide">Filters &amp; Sort</span>
+              <span className="text-base font-bold text-gray-900">Filters</span>
+              <button onClick={handleResetAllFilters} className="ml-auto mr-3 text-xs font-semibold text-[#055B75] hover:underline">
+                Reset all
+              </button>
               <button onClick={() => setShowMobileFilters(false)} className="p-1.5 rounded-full hover:bg-gray-100 text-gray-500">
                 <X className="h-5 w-5" />
               </button>
@@ -1345,6 +1360,10 @@ function FlightSearchPage() {
                 airlines={allAirlines}
                 airlineStats={airlineStats}
                 airportStats={airportStats}
+                stopsStats={stopsStats}
+                journeyRange={journeyRange}
+                layoverRange={layoverRange}
+                isRoundTrip={isRoundTrip}
                 onFilterChange={handleFilterChange}
                 onToggleAirline={toggleAirlineFilter}
                 onToggleAirport={toggleAirportFilter}

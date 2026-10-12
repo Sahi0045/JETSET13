@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { matchesFilters } from '../../frontend/src/Pages/Common/flights/searchResults.js';
+import { filtersWithin, matchesFilters } from '../../frontend/src/Pages/Common/flights/searchResults.js';
 import { formatCheckedBag } from '../../frontend/src/utils/baggage';
 import {
   BOOKING_DRAFT_MAX_AGE_MS,
@@ -10,16 +10,7 @@ import {
  * Two customer-facing defects from the 16 Sep audit.
  */
 
-const anyFilters = {
-  price: [0, 50000],
-  stops: 'any',
-  airlines: [],
-  departureTime: 'any',
-  baggage: 'any',
-  refundable: 'any',
-  originAirports: [],
-  destAirports: [],
-};
+const anyFilters = filtersWithin({ min: 0, max: 50000 });
 const priceOf = (f) => f.price.amount;
 
 const flightWith = (checked) => ({
