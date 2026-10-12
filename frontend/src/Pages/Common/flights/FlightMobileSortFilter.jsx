@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { SlidersHorizontal } from 'lucide-react';
+import { WHOLE_DAY } from './searchResults';
 
 const SORT_PILLS = [
   { key: 'price', label: 'Cheapest' },
@@ -20,8 +21,12 @@ function FlightMobileSortFilter({ filters, priceRangeBounds, sortOrder, onSortCh
   const activeCount = useMemo(() => {
     if (!filters) return 0;
     let n = 0;
-    if (filters.stops && filters.stops !== 'any') n += 1;
-    if (filters.departureTime && filters.departureTime !== 'any') n += 1;
+    n += (filters.stops || []).length;
+    [filters.outboundTimes, filters.returnTimes].forEach((range) => {
+      if (Array.isArray(range) && (range[0] > WHOLE_DAY[0] || range[1] < WHOLE_DAY[1])) n += 1;
+    });
+    if (filters.maxJourney != null) n += 1;
+    if (filters.maxLayover != null) n += 1;
     if (filters.baggage && filters.baggage !== 'any') n += 1;
     if (filters.refundable && filters.refundable !== 'any') n += 1;
     n += (filters.airlines || []).length;
@@ -38,7 +43,7 @@ function FlightMobileSortFilter({ filters, priceRangeBounds, sortOrder, onSortCh
   }, [filters, priceRangeBounds]);
 
   return (
-    <div className="md:hidden -mx-4 mb-3">
+    <div className="lg:hidden -mx-4 mb-3">
       <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar px-4 py-0.5">
         {/* Filters trigger — stays white, count communicated by the badge */}
         <button
@@ -56,7 +61,7 @@ function FlightMobileSortFilter({ filters, priceRangeBounds, sortOrder, onSortCh
         </button>
 
         {/* Divider */}
-        <span className="flex-shrink-0 h-6 w-px bg-gray-200" />
+        <span className="md:hidden flex-shrink-0 h-6 w-px bg-gray-200" />
 
         {/* Sort pills — solid teal fill when active */}
         {SORT_PILLS.map(({ key, label }) => {
@@ -66,7 +71,7 @@ function FlightMobileSortFilter({ filters, priceRangeBounds, sortOrder, onSortCh
               key={key}
               type="button"
               onClick={() => onSortChange(key)}
-              className={`flex-shrink-0 inline-flex items-center px-4 py-2 rounded-full border text-xs font-semibold whitespace-nowrap active:scale-95 transition-all ${
+              className={`md:hidden flex-shrink-0 inline-flex items-center px-4 py-2 rounded-full border text-xs font-semibold whitespace-nowrap active:scale-95 transition-all ${
                 active
                   ? 'bg-[#055B75] border-[#055B75] text-white shadow-md'
                   : 'bg-white border-gray-200 text-gray-600 hover:border-[#B9D0DC]'

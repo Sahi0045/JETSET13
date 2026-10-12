@@ -1,371 +1,298 @@
-import React from 'react';
-import { Filter, Moon, Sunrise, Sun, Sunset, Briefcase, ShieldCheck } from 'lucide-react';
+import React, { useState } from 'react';
+import { ChevronDown, ChevronUp, SlidersHorizontal } from 'lucide-react';
 import currencyService from '../../../Services/CurrencyService';
 import Price from '../../../Components/Price';
-import { priceStep } from './searchResults';
+import { WHOLE_DAY, clockLabel, hoursLabel, priceStep } from './searchResults';
+import { DualRange, SingleRange } from './RangeSlider';
 
-const DEPARTURE_TIMES = [
-  { value: 'early_morning', label: 'Before 6 AM', sublabel: 'Early Morning', Icon: Moon },
-  { value: 'morning', label: '6 AM - 12 PM', sublabel: 'Morning', Icon: Sunrise },
-  { value: 'afternoon', label: '12 PM - 6 PM', sublabel: 'Afternoon', Icon: Sun },
-  { value: 'evening', label: '6 PM - 9 PM', sublabel: 'Evening', Icon: Sunset },
-];
+const STOP_LABELS = ['Direct', '1 stop', '2+ stops'];
 
 const BAGGAGE_OPTIONS = [
-  { value: 'any', label: 'Any', desc: 'Show all flights' },
-  { value: 'included', label: 'Check-in Baggage Included', desc: 'Flights with checked baggage' },
-  { value: 'cabin_only', label: 'Cabin Baggage Only', desc: 'No checked baggage' },
+  { value: 'included', label: 'Checked bag included' },
+  { value: 'cabin_only', label: 'Cabin bag only' },
 ];
 
-const REFUNDABLE_OPTIONS = [
-  { value: 'any', label: 'All Fares' },
-  { value: 'yes', label: 'Refundable Only' },
-  { value: 'no', label: 'Non-Refundable Only' },
-];
+const snapToQuarterHour = (minutes) => (minutes >= WHOLE_DAY[1] - 7 ? WHOLE_DAY[1] : Math.round(minutes / 15) * 15);
 
-const STOP_OPTIONS = [
-  { value: 'any', label: 'Any' },
-  { value: '0', label: 'Non-stop' },
-  { value: '1', label: 'Up to 1 stop' },
-];
+const toggled = (list, value) => (list.includes(value) ? list.filter((v) => v !== value) : [...list, value]);
 
+function Section({ title, children, defaultOpen = true }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <section className="border-b border-gray-100 last:border-b-0">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="w-full flex items-center justify-between px-5 py-4 text-left"
+      >
+        <span className="text-[15px] font-bold text-gray-900">{title}</span>
+        {open ? <ChevronUp className="h-4 w-4 text-gray-500" /> : <ChevronDown className="h-4 w-4 text-gray-500" />}
+      </button>
+      {open && <div className="px-5 pb-5 -mt-1">{children}</div>}
+    </section>
+  );
+}
+
+function Check({ checked, disabled, onChange, label, sub }) {
+  return (
+    <label className={`flex items-start gap-3 py-1.5 ${disabled ? 'cursor-not-allowed' : 'cursor-pointer group'}`}>
+      <input
+        type="checkbox"
+        checked={checked}
+        disabled={disabled}
+        onChange={onChange}
+        aria-label={label}
+        className="mt-0.5 h-[18px] w-[18px] flex-shrink-0 rounded border-gray-300 accent-[#055B75] cursor-pointer disabled:cursor-not-allowed"
+      />
+      <span className="min-w-0">
+        <span className={`block text-sm ${disabled ? 'text-gray-400' : 'text-gray-800 group-hover:text-[#055B75]'}`}>{label}</span>
+        {sub && <span className="block text-xs text-gray-500 mt-0.5">{sub}</span>}
+      </span>
+    </label>
+  );
+}
+
+function TimeRange({ title, value, onChange }) {
+  return (
+    <div className="mb-4 last:mb-0">
+      <div className="text-sm text-gray-700">{title}</div>
+      <div className="text-sm font-semibold text-gray-900 mb-2">{clockLabel(value[0])} - {clockLabel(value[1])}</div>
+      <DualRange
+        min={WHOLE_DAY[0]} max={WHOLE_DAY[1]} step={1} value={value} snap={snapToQuarterHour}
+        labels={[`${title}: earliest departure`, `${title}: latest departure`]}
+        onChange={onChange}
+      />
+    </div>
+  );
+}
+
+function LimitRange({ range, value, onChange, label }) {
+  const min = Math.floor(range.min / 15) * 15;
+  const max = Math.ceil(range.max / 15) * 15;
+  const current = value == null ? max : Math.min(Math.max(value, min), max);
+  return (
+    <>
+      <div className="text-sm font-semibold text-gray-900 mb-2">{hoursLabel(min)} - {hoursLabel(current)}</div>
+      <SingleRange
+        min={min} max={max} step={15} value={current} label={label}
+        onChange={(v) => onChange(v >= max ? null : v)}
+      />
+    </>
+  );
+}
+
+/**
+ * The filter column on the results page, and the phone drawer's contents.
+ *
+ * Laid out the way the big comparison sites do it: one column of sections
+ * that open and close, tick boxes that say what each keeps and what it costs
+ * from, and sliders for times and lengths.
+ */
 function FlightFilterSidebar({
   filters,
   priceRangeBounds,
   airlines,
   airlineStats,
   airportStats,
+  stopsStats = [],
+  journeyRange = null,
+  layoverRange = null,
+  isRoundTrip = false,
   onFilterChange,
   onToggleAirline,
   onToggleAirport,
   onResetAll,
-  variant = 'desktop'
+  variant = 'desktop',
 }) {
   const currencySymbol = currencyService.getCurrencySymbol();
   const isMobile = variant === 'mobile';
-  // The price controls move in steps that follow the fares (searchResults.js).
   const step = priceStep(priceRangeBounds.max);
 
-  const popularFilters = [
-    { label: 'Non-Stop', action: () => onFilterChange('stops', filters.stops === '0' ? 'any' : '0'), active: filters.stops === '0' },
-    { label: 'Refundable', action: () => onFilterChange('refundable', filters.refundable === 'yes' ? 'any' : 'yes'), active: filters.refundable === 'yes' },
-    { label: 'With Baggage', action: () => onFilterChange('baggage', filters.baggage === 'included' ? 'any' : 'included'), active: filters.baggage === 'included' },
-    { label: 'Morning Dep.', action: () => onFilterChange('departureTime', filters.departureTime === 'morning' ? 'any' : 'morning'), active: filters.departureTime === 'morning' },
-  ];
-
   return (
-    <div className={isMobile ? 'w-full' : 'hidden md:block w-full md:w-[280px] lg:w-[300px] flex-shrink-0'}>
+    <aside
+      aria-label="Filters"
+      className={isMobile ? 'w-full' : 'hidden lg:block w-[280px] flex-shrink-0'}
+    >
       <div className={isMobile
         ? 'bg-white'
-        : 'bg-white rounded-xl shadow-sm border border-gray-100 sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent'}>
-
+        : 'bg-white rounded-xl border border-gray-200 shadow-sm sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent'}
+      >
+        {!isMobile && (
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-          <div className="flex items-center gap-2">
-            <Filter className="h-4 w-4 text-[#055B75]" />
-            <span className="text-sm font-bold text-gray-800 uppercase tracking-wide">Filters</span>
-          </div>
+          <span className="inline-flex items-center gap-2 text-sm font-bold text-gray-900">
+            <SlidersHorizontal className="h-4 w-4 text-[#055B75]" />
+            Filters
+          </span>
           <button
+            type="button"
             onClick={onResetAll}
-            className="text-xs font-semibold text-[#055B75] hover:text-[#034457] hover:underline transition-colors"
+            className="text-xs font-semibold text-[#055B75] hover:text-[#034457] hover:underline"
           >
-            RESET ALL
+            Reset all
           </button>
         </div>
+        )}
 
-        <div className="px-5 py-4 border-b border-gray-100">
-          <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Popular Filters</h4>
-          <div className="flex flex-wrap gap-2">
-            {popularFilters.map((chip, idx) => (
-              <button
-                key={idx}
-                onClick={chip.action}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all duration-200 ${chip.active
-                  ? 'bg-[#055B75] text-white border-[#055B75] shadow-sm'
-                  : 'bg-white text-gray-600 border-gray-200 hover:border-[#055B75] hover:text-[#055B75]'
-                  }`}
-              >
-                {chip.label}
-              </button>
-            ))}
-          </div>
-        </div>
+        <Section title="Stops">
+          {stopsStats.map(({ value, count, minPrice }) => (
+            <Check
+              key={value}
+              label={STOP_LABELS[value]}
+              checked={filters.stops.includes(value)}
+              disabled={count === 0}
+              onChange={() => onFilterChange('stops', toggled(filters.stops, value))}
+              sub={count === 0 ? 'None' : <>from <Price amount={minPrice} /></>}
+            />
+          ))}
+        </Section>
 
-        <div className="px-5 py-4 border-b border-gray-100">
-          <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Price Range</h4>
-          <div className="mb-3">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="flex-1">
-                <label className="text-[10px] text-gray-400 font-medium mb-1 block">MIN</label>
-                <div className="relative">
-                  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">{currencySymbol}</span>
-                  <input
-                    type="number"
-                    min={0}
-                    max={priceRangeBounds.max}
-                    step={step}
-                    value={filters.price[0]}
-                    onChange={(e) => {
-                      const val = parseInt(e.target.value);
-                      if (!isNaN(val)) onFilterChange('price', [val, filters.price[1]]);
-                    }}
-                    className="w-full pl-5 pr-2 py-1.5 text-xs border border-gray-200 rounded-md text-gray-700 focus:border-[#055B75] focus:ring-1 focus:ring-[#055B75] outline-none"
-                  />
-                </div>
-              </div>
-              <span className="text-gray-300 mt-4">-</span>
-              <div className="flex-1">
-                <label className="text-[10px] text-gray-400 font-medium mb-1 block">MAX</label>
-                <div className="relative">
-                  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">{currencySymbol}</span>
-                  <input
-                    type="number"
-                    min={0}
-                    max={priceRangeBounds.max}
-                    step={step}
-                    value={filters.price[1]}
-                    onChange={(e) => {
-                      const val = parseInt(e.target.value);
-                      if (!isNaN(val)) onFilterChange('price', [filters.price[0], val]);
-                    }}
-                    className="w-full pl-5 pr-2 py-1.5 text-xs border border-gray-200 rounded-md text-gray-700 focus:border-[#055B75] focus:ring-1 focus:ring-[#055B75] outline-none"
-                  />
-                </div>
-              </div>
-            </div>
-            <div className="relative h-6 mx-1">
-              <div className="absolute top-1/2 -translate-y-1/2 left-0 right-0 h-1.5 bg-gray-200 rounded-full" />
-              <div
-                className="absolute top-1/2 -translate-y-1/2 h-1.5 bg-[#055B75] rounded-full"
-                style={{
-                  left: `${((filters.price[0] - priceRangeBounds.min) / (priceRangeBounds.max - priceRangeBounds.min || 1)) * 100}%`,
-                  right: `${100 - ((filters.price[1] - priceRangeBounds.min) / (priceRangeBounds.max - priceRangeBounds.min || 1)) * 100}%`
-                }}
-              />
-              <input
-                type="range"
-                min={priceRangeBounds.min}
-                max={priceRangeBounds.max}
-                step={step}
-                value={filters.price[0]}
-                onChange={(e) => onFilterChange('price', [Math.min(parseInt(e.target.value) || priceRangeBounds.min, filters.price[1] - step), filters.price[1]])}
-                className="absolute top-0 left-0 w-full h-full appearance-none bg-transparent pointer-events-none [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-[#055B75] [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:relative [&::-webkit-slider-thumb]:z-30 [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-[#055B75] [&::-moz-range-thumb]:shadow-md [&::-moz-range-thumb]:cursor-pointer"
-                style={{ zIndex: filters.price[0] > 25000 ? 20 : 10 }}
-              />
-              <input
-                type="range"
-                min={priceRangeBounds.min}
-                max={priceRangeBounds.max}
-                step={step}
-                value={filters.price[1]}
-                onChange={(e) => onFilterChange('price', [filters.price[0], Math.max(parseInt(e.target.value) || priceRangeBounds.max, filters.price[0] + step)])}
-                className="absolute top-0 left-0 w-full h-full appearance-none bg-transparent pointer-events-none [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-[#055B75] [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:relative [&::-webkit-slider-thumb]:z-30 [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-[#055B75] [&::-moz-range-thumb]:shadow-md [&::-moz-range-thumb]:cursor-pointer"
-                style={{ zIndex: filters.price[1] < 25000 ? 20 : 10 }}
-              />
-            </div>
-            <div className="flex justify-between mt-1.5">
-              <span className="text-[10px] text-gray-400">{currencySymbol}{priceRangeBounds.min.toLocaleString()}</span>
-              <span className="text-[10px] text-gray-400">{currencySymbol}{priceRangeBounds.max.toLocaleString()}</span>
-            </div>
-          </div>
-        </div>
+        <Section title="Baggage">
+          {BAGGAGE_OPTIONS.map((opt) => (
+            <Check
+              key={opt.value}
+              label={opt.label}
+              checked={filters.baggage === opt.value}
+              onChange={() => onFilterChange('baggage', filters.baggage === opt.value ? 'any' : opt.value)}
+            />
+          ))}
+        </Section>
 
-        <div className="px-5 py-4 border-b border-gray-100">
-          <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Stops</h4>
-          <div className="grid grid-cols-3 gap-1.5">
-            {STOP_OPTIONS.map((opt) => (
-              <button
-                key={opt.value}
-                onClick={() => onFilterChange('stops', opt.value)}
-                className={`px-2 py-2 rounded-lg text-xs font-medium border text-center transition-all duration-200 ${filters.stops === opt.value
-                  ? 'bg-[#055B75] text-white border-[#055B75] shadow-sm'
-                  : 'bg-white text-gray-600 border-gray-200 hover:border-[#65B3CF]'
-                  }`}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-          <button
-            onClick={() => onFilterChange('stops', filters.stops === '2' ? 'any' : '2')}
-            className={`mt-1.5 w-full px-2 py-2 rounded-lg text-xs font-medium border text-center transition-all duration-200 ${filters.stops === '2'
-              ? 'bg-[#055B75] text-white border-[#055B75] shadow-sm'
-              : 'bg-white text-gray-600 border-gray-200 hover:border-[#65B3CF]'
-              }`}
-          >
-            2+ Stops
-          </button>
-        </div>
+        <Section title="Departure times">
+          <TimeRange
+            title="Outbound"
+            value={filters.outboundTimes}
+            onChange={(range) => onFilterChange('outboundTimes', range)}
+          />
+          {isRoundTrip && (
+            <TimeRange
+              title="Return"
+              value={filters.returnTimes}
+              onChange={(range) => onFilterChange('returnTimes', range)}
+            />
+          )}
+        </Section>
 
-        <div className="px-5 py-4 border-b border-gray-100">
-          <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Departure Time</h4>
-          <div className="grid grid-cols-2 gap-2">
-            {DEPARTURE_TIMES.map(({ value, label, sublabel, Icon }) => {
-              const isActive = filters.departureTime === value;
-              return (
+        {journeyRange && journeyRange.max > journeyRange.min && (
+          <Section title="Journey duration">
+            <LimitRange
+              range={journeyRange}
+              value={filters.maxJourney}
+              label="Longest journey"
+              onChange={(v) => onFilterChange('maxJourney', v)}
+            />
+          </Section>
+        )}
+
+        {layoverRange && layoverRange.max > layoverRange.min && (
+          <Section title="Layovers">
+            <div className="text-sm text-gray-700">Layover duration</div>
+            <LimitRange
+              range={layoverRange}
+              value={filters.maxLayover}
+              label="Longest layover"
+              onChange={(v) => onFilterChange('maxLayover', v)}
+            />
+          </Section>
+        )}
+
+        <Section title="Airlines">
+          {airlines.length > 0 ? (
+            <>
+              <div className="flex items-center gap-3 mb-2 text-xs">
                 <button
-                  key={value}
-                  onClick={() => onFilterChange('departureTime', isActive ? 'any' : value)}
-                  className={`flex flex-col items-center p-2.5 rounded-lg border text-center transition-all duration-200 ${isActive
-                    ? 'bg-[#F0FAFC] border-[#055B75] text-[#055B75]'
-                    : 'bg-white border-gray-200 text-gray-500 hover:border-[#65B3CF]'
-                    }`}
+                  type="button"
+                  onClick={() => airlines.forEach((a) => { if (!filters.airlines.includes(a)) onToggleAirline(a); })}
+                  className="font-semibold text-[#055B75] hover:underline"
                 >
-                  <span className={`mb-1 ${isActive ? 'text-[#055B75]' : 'text-gray-400'}`}>
-                    <Icon className="h-3.5 w-3.5" />
-                  </span>
-                  <span className="text-[10px] font-semibold leading-tight">{sublabel}</span>
-                  <span className="text-[9px] text-gray-400 mt-0.5">{label}</span>
+                  Select all
                 </button>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="px-5 py-4 border-b border-gray-100">
-          <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-            <Briefcase className="h-3.5 w-3.5 text-gray-400" />
-            Baggage
-          </h4>
-          <div className="space-y-1.5">
-            {BAGGAGE_OPTIONS.map((opt) => (
-              <label
-                key={opt.value}
-                className={`flex items-start gap-2.5 p-2.5 rounded-lg cursor-pointer transition-all duration-200 ${filters.baggage === opt.value
-                  ? 'bg-[#F0FAFC] border border-[#055B75]/20'
-                  : 'hover:bg-gray-50 border border-transparent'
-                  }`}
-              >
-                <input
-                  type="radio"
-                  name="baggage"
-                  className="mt-0.5 w-3.5 h-3.5 text-[#055B75] border-gray-300 focus:ring-[#055B75]"
-                  checked={filters.baggage === opt.value}
-                  onChange={() => onFilterChange('baggage', opt.value)}
-                />
-                <div>
-                  <div className="text-xs font-medium text-gray-700">{opt.label}</div>
-                  <div className="text-[10px] text-gray-400">{opt.desc}</div>
-                </div>
-              </label>
-            ))}
-          </div>
-        </div>
-
-        <div className="px-5 py-4 border-b border-gray-100">
-          <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-            <ShieldCheck className="h-3.5 w-3.5 text-gray-400" />
-            Fare Type
-          </h4>
-          <div className="space-y-1.5">
-            {REFUNDABLE_OPTIONS.map((opt) => (
-              <label
-                key={opt.value}
-                className={`flex items-center gap-2.5 px-3 py-2 rounded-lg cursor-pointer transition-all duration-200 ${filters.refundable === opt.value
-                  ? 'bg-[#F0FAFC] border border-[#055B75]/20'
-                  : 'hover:bg-gray-50 border border-transparent'
-                  }`}
-              >
-                <input
-                  type="radio"
-                  name="refundable"
-                  className="w-3.5 h-3.5 text-[#055B75] border-gray-300 focus:ring-[#055B75]"
-                  checked={filters.refundable === opt.value}
-                  onChange={() => onFilterChange('refundable', opt.value)}
-                />
-                <span className="text-xs font-medium text-gray-700">{opt.label}</span>
-              </label>
-            ))}
-          </div>
-        </div>
+                <span className="h-3 w-px bg-gray-300" />
+                <button
+                  type="button"
+                  onClick={() => onFilterChange('airlines', [])}
+                  className="font-semibold text-gray-500 hover:text-[#055B75] hover:underline"
+                >
+                  Clear all
+                </button>
+              </div>
+              <div className="max-h-64 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
+                {airlines.map((airline) => {
+                  const minPrice = airlineStats.get(airline)?.minPrice ?? null;
+                  return (
+                    <Check
+                      key={airline}
+                      label={airline}
+                      checked={filters.airlines.includes(airline)}
+                      onChange={() => onToggleAirline(airline)}
+                      sub={minPrice !== null ? <>from <Price amount={minPrice} /></> : null}
+                    />
+                  );
+                })}
+              </div>
+            </>
+          ) : (
+            <p className="text-sm text-gray-400">No airlines to filter</p>
+          )}
+        </Section>
 
         {airportStats && (airportStats.origins?.length > 1 || airportStats.dests?.length > 1) && (
-          <div className="px-5 py-4 border-b border-gray-100">
-            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Airports</h4>
+          <Section title="Airports">
             {airportStats.origins?.length > 1 && (
               <div className="mb-3">
-                <div className="text-[10px] font-semibold text-gray-400 mb-1.5">DEPARTURE</div>
-                <div className="space-y-0.5">
-                  {airportStats.origins.map((a) => (
-                    <label key={a.code} className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg cursor-pointer transition-all duration-200 ${filters.originAirports?.includes(a.code) ? 'bg-[#F0FAFC]' : 'hover:bg-gray-50'}`}>
-                      <div className="flex items-center gap-2 min-w-0">
-                        <input
-                          type="checkbox"
-                          className="w-3.5 h-3.5 text-[#055B75] border-gray-300 rounded focus:ring-[#055B75]"
-                          checked={filters.originAirports?.includes(a.code) || false}
-                          onChange={() => onToggleAirport('origin', a.code)}
-                        />
-                        <span className="text-xs text-gray-700 font-medium truncate">{a.code} <span className="text-gray-400 font-normal">{a.city}</span></span>
-                      </div>
-                      <span className="text-[10px] text-gray-400">{a.count}</span>
-                    </label>
-                  ))}
-                </div>
+                <div className="text-xs font-semibold text-gray-500 mb-1">Departing from</div>
+                {airportStats.origins.map((a) => (
+                  <Check
+                    key={a.code}
+                    label={`${a.code} · ${a.city}`}
+                    checked={filters.originAirports?.includes(a.code) || false}
+                    onChange={() => onToggleAirport('origin', a.code)}
+                  />
+                ))}
               </div>
             )}
             {airportStats.dests?.length > 1 && (
               <div>
-                <div className="text-[10px] font-semibold text-gray-400 mb-1.5">ARRIVAL</div>
-                <div className="space-y-0.5">
-                  {airportStats.dests.map((a) => (
-                    <label key={a.code} className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg cursor-pointer transition-all duration-200 ${filters.destAirports?.includes(a.code) ? 'bg-[#F0FAFC]' : 'hover:bg-gray-50'}`}>
-                      <div className="flex items-center gap-2 min-w-0">
-                        <input
-                          type="checkbox"
-                          className="w-3.5 h-3.5 text-[#055B75] border-gray-300 rounded focus:ring-[#055B75]"
-                          checked={filters.destAirports?.includes(a.code) || false}
-                          onChange={() => onToggleAirport('dest', a.code)}
-                        />
-                        <span className="text-xs text-gray-700 font-medium truncate">{a.code} <span className="text-gray-400 font-normal">{a.city}</span></span>
-                      </div>
-                      <span className="text-[10px] text-gray-400">{a.count}</span>
-                    </label>
-                  ))}
-                </div>
+                <div className="text-xs font-semibold text-gray-500 mb-1">Arriving at</div>
+                {airportStats.dests.map((a) => (
+                  <Check
+                    key={a.code}
+                    label={`${a.code} · ${a.city}`}
+                    checked={filters.destAirports?.includes(a.code) || false}
+                    onChange={() => onToggleAirport('dest', a.code)}
+                  />
+                ))}
               </div>
             )}
-          </div>
+          </Section>
         )}
 
-        <div className="px-5 py-4">
-          <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Airlines</h4>
-          {airlines.length > 0 ? (
-            <div className="space-y-0.5 max-h-52 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
-              {airlines.map(airline => {
-                const stats = airlineStats.get(airline);
-                const minPrice = stats ? stats.minPrice : null;
-                return (
-                  <label
-                    key={airline}
-                    className={`flex items-center justify-between px-2.5 py-2 rounded-lg cursor-pointer transition-all duration-200 ${filters.airlines.includes(airline)
-                      ? 'bg-[#F0FAFC]'
-                      : 'hover:bg-gray-50'
-                      }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        className="w-3.5 h-3.5 text-[#055B75] border-gray-300 rounded focus:ring-[#055B75]"
-                        checked={filters.airlines.includes(airline)}
-                        onChange={() => onToggleAirline(airline)}
-                      />
-                      <span className="text-xs text-gray-700 font-medium">{airline}</span>
-                    </div>
-                    {minPrice !== null && (
-                      <span className="text-[10px] text-gray-400 font-medium">
-                        <Price amount={minPrice} />
-                      </span>
-                    )}
-                  </label>
-                );
-              })}
-            </div>
-          ) : (
-            <p className="text-xs text-gray-400 italic">No airlines to filter</p>
-          )}
-        </div>
+        <Section title="Price">
+          <div className="text-sm font-semibold text-gray-900 mb-2">
+            {currencySymbol}{Math.round(filters.price[0]).toLocaleString()} - {currencySymbol}{Math.round(filters.price[1]).toLocaleString()}
+          </div>
+          <DualRange
+            min={priceRangeBounds.min} max={priceRangeBounds.max} step={step} value={filters.price}
+            labels={['Lowest price', 'Highest price']}
+            onChange={(range) => onFilterChange('price', range)}
+          />
+        </Section>
 
+        <Section title="Fare type">
+          <label className="flex items-center justify-between gap-3 cursor-pointer py-1">
+            <span className="text-sm text-gray-800">Refundable only</span>
+            <input
+              type="checkbox"
+              role="switch"
+              checked={filters.refundable === 'yes'}
+              onChange={() => onFilterChange('refundable', filters.refundable === 'yes' ? 'any' : 'yes')}
+              className="peer sr-only"
+            />
+            <span className="relative h-6 w-11 flex-shrink-0 rounded-full bg-gray-300 transition-colors peer-checked:bg-[#055B75] after:absolute after:top-0.5 after:left-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:shadow after:transition-transform peer-checked:after:translate-x-5" />
+          </label>
+        </Section>
       </div>
-    </div>
+    </aside>
   );
 }
 

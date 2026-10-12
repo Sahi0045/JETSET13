@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   buildDateStrip,
+  filtersWithin,
   matchesFilters,
   searchFailureMessage,
   shiftDateStrip,
@@ -118,10 +119,9 @@ describe('what a failed search tells the customer', () => {
 });
 
 describe('filters on a round trip', () => {
-  const anyFilters = {
-    price: [0, 50000], stops: 'any', airlines: [], departureTime: 'any',
-    baggage: 'any', refundable: 'any', originAirports: [], destAirports: [],
-  };
+  const anyFilters = filtersWithin({ min: 0, max: 50000 });
+  const MORNING = [360, 719];
+  const NIGHT = [1260, 1439];
   const priceOf = (flight) => flight.price.amount;
   const roundTrip = (outbound, back) => ({
     price: { amount: 300 },
@@ -136,31 +136,33 @@ describe('filters on a round trip', () => {
   it('is not non-stop when the return connects', () => {
     const flight = roundTrip({ stops: 0, time: '08:00' }, { stops: 1, time: '09:00 AM' });
 
-    expect(matchesFilters(flight, { ...anyFilters, stops: '0' }, priceOf)).toBe(false);
-    expect(matchesFilters(flight, { ...anyFilters, stops: '1' }, priceOf)).toBe(true);
+    expect(matchesFilters(flight, { ...anyFilters, stops: [0] }, priceOf)).toBe(false);
+    expect(matchesFilters(flight, { ...anyFilters, stops: [1] }, priceOf)).toBe(true);
   });
 
   it('counts two or more stops on either leg', () => {
     const flight = roundTrip({ stops: 0, time: '08:00' }, { stops: 2, time: '09:00 AM' });
-    expect(matchesFilters(flight, { ...anyFilters, stops: '2' }, priceOf)).toBe(true);
-    expect(matchesFilters(flight, { ...anyFilters, stops: '1' }, priceOf)).toBe(false);
+    expect(matchesFilters(flight, { ...anyFilters, stops: [2] }, priceOf)).toBe(true);
+    expect(matchesFilters(flight, { ...anyFilters, stops: [1] }, priceOf)).toBe(false);
   });
 
-  it('needs every leg to leave in the chosen part of the day', () => {
+  it('holds the return to its own departure range', () => {
     const lateReturn = roundTrip({ stops: 0, time: '08:00' }, { stops: 0, time: '11:30 PM' });
     const morningBothWays = roundTrip({ stops: 0, time: '08:00' }, { stops: 0, time: '09:15 AM' });
+    const mornings = { ...anyFilters, outboundTimes: MORNING, returnTimes: MORNING };
 
-    expect(matchesFilters(lateReturn, { ...anyFilters, departureTime: 'morning' }, priceOf)).toBe(false);
-    expect(matchesFilters(lateReturn, { ...anyFilters, departureTime: 'night' }, priceOf)).toBe(false);
-    expect(matchesFilters(morningBothWays, { ...anyFilters, departureTime: 'morning' }, priceOf)).toBe(true);
+    expect(matchesFilters(lateReturn, mornings, priceOf)).toBe(false);
+    expect(matchesFilters(lateReturn, { ...anyFilters, returnTimes: NIGHT }, priceOf)).toBe(true);
+    expect(matchesFilters(morningBothWays, mornings, priceOf)).toBe(true);
   });
 
   it('still filters a one-way flight on its only leg', () => {
     const oneWay = { price: { amount: 100 }, airline: { name: 'Vistara' }, stops: 0, departure: { time: '22:10' }, arrival: {} };
 
-    expect(matchesFilters(oneWay, { ...anyFilters, departureTime: 'night' }, priceOf)).toBe(true);
-    expect(matchesFilters(oneWay, { ...anyFilters, departureTime: 'morning' }, priceOf)).toBe(false);
-    expect(matchesFilters(oneWay, { ...anyFilters, stops: '0' }, priceOf)).toBe(true);
+    expect(matchesFilters(oneWay, { ...anyFilters, outboundTimes: NIGHT }, priceOf)).toBe(true);
+    expect(matchesFilters(oneWay, { ...anyFilters, outboundTimes: MORNING }, priceOf)).toBe(false);
+    expect(matchesFilters(oneWay, { ...anyFilters, returnTimes: MORNING }, priceOf)).toBe(true);
+    expect(matchesFilters(oneWay, { ...anyFilters, stops: [0] }, priceOf)).toBe(true);
     expect(matchesFilters(oneWay, { ...anyFilters, price: [0, 99] }, priceOf)).toBe(false);
   });
 });

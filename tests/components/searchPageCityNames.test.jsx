@@ -19,7 +19,6 @@ vi.mock('../../frontend/src/Pages/Common/Footer', () => ({ default: () => null }
 vi.mock('../../frontend/src/Pages/Common/PageWrapper', () => ({ default: (Page) => Page }));
 vi.mock('../../frontend/src/Pages/Common/flights/FlightCard', () => ({ default: () => null }));
 vi.mock('../../frontend/src/Pages/Common/flights/FlightFilterSidebar', () => ({ default: () => null }));
-vi.mock('../../frontend/src/Pages/Common/flights/FlightFilterBar', () => ({ default: () => null }));
 vi.mock('../../frontend/src/Pages/Common/flights/FlightModifyBar', () => ({
   default: ({ cityMap, searchParams }) => <div data-testid="modify-bar">{cityMap[searchParams.toCode || searchParams.to]}</div>,
 }));
