@@ -229,4 +229,14 @@ describe('a trip-reward voucher the booking could not reserve', () => {
     expect(container.textContent).toMatch(/Voucher SHUBHAM was not reserved \(VOUCHER_USED_UP\): no trip reward will be paid for this booking/);
     expect(container.textContent).not.toMatch(/Jet Coins: need a check/);
   });
+
+  it('says it was handled once the desk marked it', async () => {
+    vi.stubGlobal('fetch', deskServing([booking({
+      walletCoins: 0, walletCoinsOffer: 0,
+      walletIssue: { kind: 'voucher_refused', code: 'SHUBHAM', reason: 'WALLET_UNAVAILABLE', at: '2026-10-13T10:00:00Z', resolved_at: '2026-10-13T11:00:00Z' },
+    })]));
+    const { container } = renderQueue();
+
+    await waitFor(() => expect(container.textContent).toMatch(/Voucher SHUBHAM was not reserved \(WALLET_UNAVAILABLE\): no trip reward will be paid for this booking - handled/));
+  });
 });

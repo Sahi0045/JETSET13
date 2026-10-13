@@ -844,17 +844,44 @@ function coinsNotReturnedAttentionOf(booking) {
   };
 }
 
+/** The desk entry for a trip reward that could not be reserved (see tripRewardNotRecordedAttentionOf). */
+export const TRIP_REWARD_NOT_RECORDED = 'trip_reward_not_recorded';
+
+/**
+ * A trip-reward voucher checkout accepted that the order route could not
+ * reserve for a reason other than the voucher's own answer (VOUCHER_*): the
+ * wallet was unreachable on every try, so no reward will be paid unless a
+ * person records it. Not on a cancelled or refunded booking, which is owed no
+ * reward. For the desk only, like coins that could not be returned.
+ */
+function tripRewardNotRecordedAttentionOf(booking) {
+  const issue = detailsOf(booking)?.wallet_issue;
+  if (issue?.kind !== 'voucher_refused' || issue.resolved_at) return null;
+  if (String(issue.reason ?? '').startsWith('VOUCHER_')) return null;
+  if (['cancelled', 'refunded'].includes(statusOf(booking)) || ['refunded', 'reversed'].includes(paymentOf(booking))) return null;
+  const code = String(issue.code ?? '').trim();
+  return {
+    kind: TRIP_REWARD_NOT_RECORDED,
+    reason: `Trip reward ${code ? `${code} ` : ''}could not be recorded: check the voucher`,
+    since: issue.at || null,
+  };
+}
+
 /**
  * What still needs doing on this booking, or null. Any other job is shown
- * before Jet Coins that could not be returned.
+ * before Jet Coins that could not be returned, and before a trip reward that
+ * could not be recorded.
  *
  * @returns {null | { kind: 'not_ticketed'|'review'|'airline_refund'|'unrecorded_cancellation'|'cancel_failed'|'schedule_changed'
- *                    |'held_ticketed'|'refund_failed'|'refund_not_made'|'coins_not_returned',
+ *                    |'held_ticketed'|'refund_failed'|'refund_not_made'|'coins_not_returned'|'trip_reward_not_recorded',
  *                    reason: string, since: string|null, tickets?: string[], jobs?: string[] }}
  */
 export function attentionOf(booking) {
-  return bookingAttentionOf(booking) ?? coinsNotReturnedAttentionOf(booking);
+  return bookingAttentionOf(booking) ?? coinsNotReturnedAttentionOf(booking) ?? tripRewardNotRecordedAttentionOf(booking);
 }
+
+/** Kinds the desk lists that the needs-review alarm never announces, resolved on `wallet_issue`. */
+export const isWalletAttention = (attention) => attention?.kind === COINS_NOT_RETURNED || attention?.kind === TRIP_REWARD_NOT_RECORDED;
 
 function bookingAttentionOf(booking) {
   const details = detailsOf(booking);
@@ -987,5 +1014,6 @@ export const attentionLabel = (attention) => {
   if (attention.kind === 'refund_failed') return 'Refund did not go through';
   if (attention.kind === 'refund_not_made') return 'Refund not made yet';
   if (attention.kind === COINS_NOT_RETURNED) return 'Jet Coins not returned';
+  if (attention.kind === TRIP_REWARD_NOT_RECORDED) return 'Trip reward not recorded';
   return 'Flagged for review';
 };

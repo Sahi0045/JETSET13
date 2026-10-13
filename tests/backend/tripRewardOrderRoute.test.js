@@ -15,12 +15,15 @@ const row = (details = {}, over = {}) => ({
 });
 
 let table;
+let pause;
 const issueOnRow = () => table.row(REF).booking_details.wallet_issue;
 const reserve = (over = {}, report = vi.fn()) => reserveTripRewardAfterBooking({
   bookingReference: REF, userId: 'user-1', verifiedCharge: { total: 291, voucher }, offer, ...over,
-}, { report });
+}, { report, pause });
+const reservedReply = { data: { status: 'pending', code: 'SHUBHAM', coins: 5000, due_at: '2026-11-18T00:00:00+00:00', created: true }, error: null };
 
 beforeEach(() => {
+  pause = vi.fn(async () => {});
   supabaseMock.rpc = vi.fn();
   table = fakeBookingsTable([row()]);
   supabaseMock.from.mockImplementation(table.from);
@@ -86,6 +89,69 @@ describe('reserving a trip reward once the booking exists', () => {
     expect(report).toHaveBeenCalledWith(expect.objectContaining({ code: 'WALLET_UNAVAILABLE' }), expect.objectContaining({ bookingReference: REF, reason: 'WALLET_UNAVAILABLE' }));
     expect(issueOnRow()).toMatchObject({ kind: 'voucher_refused', code: 'SHUBHAM', reason: 'WALLET_UNAVAILABLE' });
     silence.mockRestore();
+  });
+
+  it('tries twice more when the reward could not be reserved right now, and reserves it', async () => {
+    const report = vi.fn();
+    supabaseMock.rpc
+      .mockResolvedValueOnce({ data: null, error: { message: 'connection reset' } })
+      .mockResolvedValueOnce({ data: null, error: { message: 'connection reset' } })
+      .mockResolvedValueOnce(reservedReply);
+
+    const reward = await reserve({}, report);
+
+    expect(supabaseMock.rpc).toHaveBeenCalledTimes(3);
+    expect(pause.mock.calls).toEqual([[300], [1000]]);
+    expect(reward).toEqual({ code: 'SHUBHAM', coins: 5000, dueAt: '2026-11-18T00:00:00.000Z' });
+    expect(issueOnRow()).toBeUndefined();
+    expect(table.row(REF).booking_details.trip_reward).toEqual({ code: 'SHUBHAM', coins: 5000, due_at: '2026-11-18T00:00:00.000Z' });
+    expect(report).not.toHaveBeenCalled();
+  });
+
+  it('marks and reports once a reward still cannot be reserved after three tries', async () => {
+    const silence = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const report = vi.fn();
+    supabaseMock.rpc.mockResolvedValue({ data: null, error: { message: 'connection reset' } });
+
+    expect(await reserve({}, report)).toBeNull();
+
+    expect(supabaseMock.rpc).toHaveBeenCalledTimes(3);
+    expect(report).toHaveBeenCalledTimes(1);
+    expect(issueOnRow()).toMatchObject({ kind: 'voucher_refused', code: 'SHUBHAM', reason: 'WALLET_UNAVAILABLE' });
+    silence.mockRestore();
+  });
+
+  it('never asks again when the voucher itself refused', async () => {
+    const silence = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    supabaseMock.rpc.mockResolvedValue({ data: null, error: { message: 'VOUCHER_FIRST_TIME_ONLY' } });
+
+    await reserve();
+
+    expect(supabaseMock.rpc).toHaveBeenCalledTimes(1);
+    expect(pause).not.toHaveBeenCalled();
+    silence.mockRestore();
+  });
+
+  it('closes the open refusal an earlier try left once a later one reserves the reward', async () => {
+    table = fakeBookingsTable([row({ wallet_issue: { kind: 'voucher_refused', code: 'SHUBHAM', reason: 'WALLET_UNAVAILABLE', at: '2026-10-13T10:00:00.000Z' } })]);
+    supabaseMock.from.mockImplementation(table.from);
+    supabaseMock.rpc.mockResolvedValue(reservedReply);
+
+    await reserve();
+
+    expect(issueOnRow() ?? null).toBeNull();
+    expect(table.row(REF).booking_details.trip_reward).toEqual({ code: 'SHUBHAM', coins: 5000, due_at: '2026-11-18T00:00:00.000Z' });
+  });
+
+  it('leaves any other problem on the booking alone when it reserves the reward', async () => {
+    const capture = { kind: 'capture_failed', coins: 500, status: 'released', at: '2026-10-13T10:00:00.000Z' };
+    table = fakeBookingsTable([row({ wallet_issue: capture })]);
+    supabaseMock.from.mockImplementation(table.from);
+    supabaseMock.rpc.mockResolvedValue(reservedReply);
+
+    await reserve();
+
+    expect(issueOnRow()).toEqual(capture);
   });
 
   it('leaves an open Jet Coins problem on the booking in place', async () => {

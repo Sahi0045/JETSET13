@@ -33,7 +33,7 @@ import {
   HELD_REVIEW_REASON_PREFIXES, liveTicketNumbersMissingOf, unrecordedCancellationForCustomerOf,
   voidedTicketsOf, commitUnknownOf, SCHEDULE_CHANGED_REVIEW_REASON, isHeldForReview, ticketIssuedBeforeHoldOf,
   openFailedCancellationOf, ATTENTION_JOBS, cancellationRecordedByHandOf,
-  notHeldStillPaidOf, scheduleChangeOf, COINS_NOT_RETURNED,
+  notHeldStillPaidOf, scheduleChangeOf, isWalletAttention,
 } from '../../shared/reviewQueue.js';
 import { errorSummary } from '../utils/errorSummary.js';
 import { flightSearchLimiter, guestBookingLimiter } from '../middleware/security.js';
@@ -200,14 +200,18 @@ export async function giveBackAllCoins(bookingReference, reason, { report = repo
   return result;
 }
 
+const RESERVE_RETRY_PAUSES_MS = [300, 1000];
+const pauseFor = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
+
 /**
  * The trip-reward voucher checkout verified, reserved now the booking exists.
  * It changes no price, so a refusal never fails the booking: it is marked on
  * the booking, without covering a Jet Coins problem the desk still has to fix.
  * A refusal by the voucher itself (VOUCHER_*) is the customer's answer; any
- * other reason means the reward could not be reserved right now, and is reported.
+ * other reason means the reward could not be reserved right now: it is asked
+ * twice more, then reported and left on the desk's queue (shared/reviewQueue.js).
  */
-export async function reserveTripRewardAfterBooking({ bookingReference, userId, verifiedCharge, offer }, { report = reportError } = {}) {
+export async function reserveTripRewardAfterBooking({ bookingReference, userId, verifiedCharge, offer }, { report = reportError, pause = pauseFor } = {}) {
   const voucher = tripVoucherOf(verifiedCharge);
   if (!voucher || !bookingReference) return null;
   const refused = async (reason, cause) => {
@@ -239,10 +243,15 @@ export async function reserveTripRewardAfterBooking({ bookingReference, userId, 
     });
   }
   let reward;
-  try {
-    reward = await reserveTripVoucher(supabase, { userId, code: voucher.code, bookingReference, dueAt });
-  } catch (error) {
-    return refused(error?.name === 'WalletError' ? error.code : 'WALLET_UNAVAILABLE', error);
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      reward = await reserveTripVoucher(supabase, { userId, code: voucher.code, bookingReference, dueAt });
+      break;
+    } catch (error) {
+      const reason = error?.name === 'WalletError' ? error.code : 'WALLET_UNAVAILABLE';
+      if (reason.startsWith('VOUCHER_') || attempt >= RESERVE_RETRY_PAUSES_MS.length) return refused(reason, error);
+      await pause(RESERVE_RETRY_PAUSES_MS[attempt]);
+    }
   }
   if (!['pending', 'paid'].includes(reward.status)) return null;
   const reserved = {
@@ -251,9 +260,10 @@ export async function reserveTripRewardAfterBooking({ bookingReference, userId, 
     dueAt: reward.due_at ? new Date(reward.due_at).toISOString() : null,
   };
   try {
-    const written = await patchBookingDetails(bookingReference, {
+    const written = await patchBookingDetails(bookingReference, (details) => ({
       trip_reward: { code: reserved.code, coins: reserved.coins, due_at: reserved.dueAt },
-    });
+      ...(details.wallet_issue?.kind === 'voucher_refused' && !details.wallet_issue.resolved_at ? { wallet_issue: null } : {}),
+    }));
     if (!written) {
       report(new Error('a reserved trip reward could not be recorded on the booking'), { where: 'reserveTripRewardAfterBooking', bookingReference });
     }
@@ -6361,10 +6371,10 @@ router.post('/admin-bookings/:id/resolve-review', protect, bookingStaff, async (
         + 'Nothing has been recorded; reload the page to see what it needs now.');
     }
 
-    // On the coin problem itself, never as a review flag: a flag written here
-    // drives the needs-review alarm and the cancel rules, and would leave the
-    // coins listed.
-    if (attention.kind === COINS_NOT_RETURNED) {
+    // On the coin or trip-reward problem itself, never as a review flag: a
+    // flag written here drives the needs-review alarm and the cancel rules,
+    // and would leave the problem listed.
+    if (isWalletAttention(attention)) {
       const coinsWrite = unchangedSince(
         supabase
           .from('bookings')
@@ -6382,7 +6392,7 @@ router.post('/admin-bookings/:id/resolve-review', protect, bookingStaff, async (
       const { data: written, error } = await pinResolution(coinsWrite, booking).select('id');
       if (error) return res.status(500).json({ success: false, error: 'Could not record it' });
       if (!written?.length) return refuseResolve(res, 409, 'BOOKING_CHANGED', BOOKING_CHANGED_TEXT);
-      console.log('✅ Jet Coins problem marked handled by the desk:', { reference: booking.booking_reference, by });
+      console.log('✅ Wallet problem marked handled by the desk:', { reference: booking.booking_reference, kind: attention.kind, by });
       return res.json({ success: true, resolvedAt: at, resolvedBy: by, note, message: 'Marked as handled' });
     }
 
