@@ -803,8 +803,8 @@ export async function handleHostedCheckout(req, res) {
             if (reusable) return handBack(reusable);
 
             // The coins are taken now, before a payment page exists, so a second
-            // tab cannot spend them too. Any way out below that does not hand
-            // the customer a page gives them back (finally).
+            // tab cannot spend them too. They go back before any error answer
+            // below, and only the request that took them gives them back.
             if (verifiedCharge?.wallet?.coins > 0) {
                 const walletChanged = () => res.status(409).json({
                     success: false,
@@ -813,11 +813,11 @@ export async function handleHostedCheckout(req, res) {
                 });
                 try {
                     const hold = await holdCoins(supabase, { userId: resolveBookingUserId(req), bookingReference: orderId, coins: verifiedCharge.wallet.coins });
-                    if (hold?.status !== 'held') return walletChanged();
-                    // A repeat of a hold an earlier request made answers `held`
-                    // too, and releasing it would free the coins behind that
-                    // request's live payment page.
-                    if (hold.created === true) heldCoinsRef = orderId;
+                    // A repeat answers `held` for a hold another request made, which
+                    // may be mid-checkout: opening a page on it would let that
+                    // request's failure free the coins behind this one's page.
+                    if (hold?.status !== 'held' || hold.created !== true) return walletChanged();
+                    heldCoinsRef = orderId;
                 } catch (walletError) {
                     if (walletError.code === 'INSUFFICIENT_COINS' || walletError.code === 'HOLD_CONFLICT') return walletChanged();
                     return res.status(503).json({

@@ -268,13 +268,13 @@ describe('the hosted checkout holds coins', () => {
   });
 });
 
-describe('a second checkout on a reference that already holds its coins', () => {
+describe('a second checkout on a reference whose coins are already held', () => {
   const otherPhone = { ...bookingData, bookingDetails: { contact: { email: 'jane@example.com', phone: '5550199' } } };
 
   it.each([
     ['a repeat of the hold', { status: 'held', created: false, coins: 5000 }],
     ['a reply that does not say it made the hold', { status: 'held', coins: 5000 }],
-  ])('never gives back the coins behind the first request\'s live page: %s', async (_name, repeat) => {
+  ])('answers WALLET_CHANGED and touches nothing: %s', async (_name, repeat) => {
     arcOpens();
     const holdCoins = vi.fn()
       .mockResolvedValueOnce({ status: 'held', created: true, coins: 5000, balance: 0 })
@@ -282,28 +282,19 @@ describe('a second checkout on a reference that already holds its coins', () => 
     const { post, releaseCoins, table } = await harness({ holdCoins });
     const first = await post({ orderId: 'FLTCOINS1' });
     expect(first.statusCode).toBe(200);
+    const rowBefore = JSON.parse(JSON.stringify(table.row('FLTCOINS1')));
+    const writesBefore = table.writes.length;
 
-    axios.post.mockReset();
-    axios.post.mockRejectedValue(new Error('ARC down'));
+    axios.post.mockClear();
     const second = await post({ orderId: 'FLTCOINS1', bookingData: otherPhone });
 
     expect(holdCoins).toHaveBeenCalledTimes(2);
-    expect(arcPages()).toHaveLength(1);
-    expect(second.statusCode).toBe(500);
-    expect(releaseCoins).not.toHaveBeenCalled();
-    expect(table.row('FLTCOINS1').booking_details.verified_charge.wallet).toEqual({ coins: 5000, amount: 50 });
-  });
-
-  it('gives nothing back either when it opens a page of its own', async () => {
-    arcOpens();
-    const holdCoins = vi.fn()
-      .mockResolvedValueOnce({ status: 'held', created: true, coins: 5000, balance: 0 })
-      .mockResolvedValueOnce({ status: 'held', created: false, coins: 5000 });
-    const { post, releaseCoins } = await harness({ holdCoins });
-    await post({ orderId: 'FLTCOINS1' });
-    const second = await post({ orderId: 'FLTCOINS1', bookingData: otherPhone });
-
-    expect(second.statusCode).toBe(200);
+    expect(second.statusCode).toBe(409);
+    expect(second.body.code).toBe('WALLET_CHANGED');
+    expect(second.body.error).toMatch(/Nothing has been charged/);
+    expect(openedAPage()).toBe(false);
+    expect(table.writes).toHaveLength(writesBefore);
+    expect(table.row('FLTCOINS1')).toEqual(rowBefore);
     expect(releaseCoins).not.toHaveBeenCalled();
   });
 });
