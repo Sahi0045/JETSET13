@@ -66,7 +66,7 @@ async function payWithCoupon(flights = airline()) {
   fireEvent.click(screen.getByRole('button', { name: 'Female' }));
   fireEvent.change(screen.getByLabelText(/^Mobile No/), { target: { value: '5550100' } });
 
-  fireEvent.change(screen.getByPlaceholderText('Enter coupon code'), { target: { value: 'SAVE20' } });
+  fireEvent.change(screen.getByPlaceholderText('Coupon or voucher code'), { target: { value: 'SAVE20' } });
   fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
   fireEvent.click((await screen.findAllByRole('button', { name: /^Pay US\$190\.00/ }))[0]);
 }
@@ -93,7 +93,7 @@ describe('a coupon the page takes off by itself', () => {
     expect((await screen.findAllByRole('button', { name: /^Pay US\$210\.00/ }))[0]).toBeTruthy();
     expect(boxSaysApplied()).toBe(false);
     // The box is ready for a code again.
-    expect(screen.getByPlaceholderText('Enter coupon code')).toBeTruthy();
+    expect(screen.getByPlaceholderText('Coupon or voucher code')).toBeTruthy();
   });
 
   // The fare came back at the same figure (the discount was what differed),
@@ -147,6 +147,6 @@ describe('a coupon the page keeps', () => {
 
     expect(boxSaysApplied()).toBe(false);
     expect(screen.getAllByRole('button', { name: /^Pay US\$210\.00/ }).length).toBeGreaterThan(0);
-    expect(screen.getByPlaceholderText('Enter coupon code').value).toBe('');
+    expect(screen.getByPlaceholderText('Coupon or voucher code').value).toBe('');
   });
 });

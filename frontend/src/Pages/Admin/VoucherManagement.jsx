@@ -17,9 +17,21 @@ const dates = (voucher) => {
   if (until) return `Until ${until}`;
   return 'Any time';
 };
-const EMPTY = { code: '', valueUsd: '', maxRedemptions: '', validFrom: '', validUntil: '', note: '' };
+const KIND_LABEL = { instant: 'Instant', trip: 'Trip reward' };
+const STATUS_LABEL = { credited: 'Credited', pending: 'Pending', paid: 'Paid', void: 'Void' };
+const kindOf = (voucher) => (voucher.kind === 'trip' ? 'trip' : 'instant');
+const kindText = (voucher) => `${KIND_LABEL[kindOf(voucher)]}${kindOf(voucher) === 'trip' && voucher.first_time_only ? ' · first-time only' : ''}`;
+const redemptionText = (row) => {
+  if (!row.bookingReference) return `${coinsText(row.coins)} coins · ${new Date(row.createdAt).toLocaleString()}`;
+  const parts = [`${coinsText(row.coins)} coins`, STATUS_LABEL[row.status] || row.status, row.bookingReference];
+  if (row.status === 'pending') parts.push(row.dueAt ? `due ${day(row.dueAt)}` : 'no payout date');
+  if (row.status === 'paid' && row.paidAt) parts.push(`paid ${day(row.paidAt)}`);
+  return parts.join(' · ');
+};
+const EMPTY = { code: '', valueUsd: '', maxRedemptions: '', validFrom: '', validUntil: '', note: '', kind: 'instant', firstTimeOnly: false };
 const UNREACHABLE = 'The server could not be reached. Try again.';
 const UNREADABLE = 'The server sent an answer that could not be read.';
+const FIELD = 'mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-[#055B75] focus:outline-none focus:ring-1 focus:ring-[#055B75] disabled:bg-gray-50 disabled:text-gray-500';
 
 async function send(path, options) {
   let response;
@@ -81,6 +93,8 @@ export default function VoucherManagement() {
         validFrom: form.validFrom,
         validUntil: form.validUntil,
         note: form.note,
+        kind: form.kind,
+        firstTimeOnly: form.kind === 'trip' && form.firstTimeOnly === true,
       }),
     });
     setSaving(false);
@@ -115,7 +129,7 @@ export default function VoucherManagement() {
       <input
         value={form[name]}
         onChange={(event) => setForm({ ...form, [name]: event.target.value })}
-        className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-[#055B75] focus:outline-none focus:ring-1 focus:ring-[#055B75] disabled:bg-gray-50 disabled:text-gray-500"
+        className={FIELD}
         {...props}
       />
     </label>
@@ -124,7 +138,9 @@ export default function VoucherManagement() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-sm text-gray-600">A voucher adds Jet Coins to the wallet of each customer who redeems it (once each). 100 coins = $1.</p>
+        <p className="text-sm text-gray-600">
+          A voucher gives Jet Coins once to each customer. Instant vouchers are redeemed in Profile → Jet Wallet; trip rewards are typed at flight checkout and pay out after the trip. 100 coins = $1.
+        </p>
         <button type="button" onClick={() => openForm({ ...EMPTY })} className="shrink-0 rounded-lg bg-[#055B75] px-4 py-2 text-sm font-semibold text-white hover:bg-[#034457]">
           New voucher
         </button>
@@ -146,12 +162,36 @@ export default function VoucherManagement() {
             {input('valueUsd', 'Value (USD)', { required: true, type: 'number', min: '0.01', step: '0.01', disabled: form.locked })}
             {Number(form.valueUsd) > 0 && <p className="mt-1 text-xs text-gray-500">{`= ${coinsText(Math.round(Number(form.valueUsd) * 100))} Jet Coins`}</p>}
           </div>
-          {form.locked && <p className="text-xs text-gray-500 sm:col-span-2">Customers have redeemed this voucher, so its code and value cannot be changed.</p>}
+          <div className="text-sm">
+            <label htmlFor="voucher-kind" className="font-medium text-gray-700">Kind</label>
+            <select
+              id="voucher-kind"
+              value={form.kind}
+              disabled={form.locked}
+              onChange={(event) => setForm({ ...form, kind: event.target.value })}
+              className={FIELD}
+            >
+              <option value="instant">Instant: redeemed in Profile → Jet Wallet</option>
+              <option value="trip">Trip reward: used at checkout, coins after the trip</option>
+            </select>
+          </div>
+          {form.kind === 'trip' ? (
+            <label className="flex items-center gap-2 self-end pb-2 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={form.firstTimeOnly}
+                onChange={(event) => setForm({ ...form, firstTimeOnly: event.target.checked })}
+                className="h-4 w-4 accent-[#055B75]"
+              />
+              First-time customers only
+            </label>
+          ) : <div className="hidden sm:block" />}
+          {form.locked && <p className="text-xs text-gray-500 sm:col-span-2">Customers have used this voucher, so its code, value and kind cannot be changed.</p>}
           {input('maxRedemptions', 'Total uses (empty = no limit)', { type: 'number', min: '1', step: '1' })}
           {input('note', 'Note (admin only)', { maxLength: 200 })}
           {input('validFrom', 'Starts', { type: 'date' })}
           {input('validUntil', 'Ends', { type: 'date' })}
-          <p className="text-xs text-gray-500 sm:col-span-2">Pick a code that is hard to guess (for example SHUBHAM-7K2Q): anyone signed in can try codes.</p>
+          <p className="text-xs text-gray-500 sm:col-span-2">Pick a code that is hard to guess (for example SHUBHAM-7K2Q): anyone signed in can try codes. A code a coupon already uses is refused.</p>
           {formError && <p role="alert" className="text-sm text-red-600 sm:col-span-2">{formError}</p>}
           <div className="flex gap-2 sm:col-span-2">
             <button type="submit" disabled={saving} className="rounded-lg bg-[#055B75] px-4 py-2 text-sm font-semibold text-white hover:bg-[#034457] disabled:opacity-50">
@@ -167,12 +207,21 @@ export default function VoucherManagement() {
       <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
         <table className="min-w-full text-sm">
           <thead className="bg-gray-50 text-left text-xs uppercase text-gray-500">
-            <tr><th className="px-4 py-2">Code</th><th className="px-4 py-2">Value</th><th className="px-4 py-2">Used</th><th className="px-4 py-2">Dates</th><th className="px-4 py-2">Status</th><th className="px-4 py-2" /></tr>
+            <tr>
+              <th className="px-4 py-2">Code</th>
+              <th className="px-4 py-2">Kind</th>
+              <th className="px-4 py-2">Value</th>
+              <th className="px-4 py-2">Used</th>
+              <th className="px-4 py-2">Dates</th>
+              <th className="px-4 py-2">Status</th>
+              <th className="px-4 py-2" />
+            </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {vouchers.map((voucher) => (
               <tr key={voucher.id}>
                 <td className="px-4 py-2 font-semibold text-gray-900">{voucher.code}</td>
+                <td className="px-4 py-2 text-gray-600">{kindText(voucher)}</td>
                 <td className="px-4 py-2">{usd(voucher.coins / 100)}</td>
                 <td className="px-4 py-2">{`${voucher.redemptions_count} / ${voucher.max_redemptions ?? '∞'}`}</td>
                 <td className="px-4 py-2 text-gray-600">{dates(voucher)}</td>
@@ -201,6 +250,8 @@ export default function VoucherManagement() {
                       validFrom: day(voucher.valid_from),
                       validUntil: day(voucher.valid_until),
                       note: voucher.note || '',
+                      kind: kindOf(voucher),
+                      firstTimeOnly: Boolean(voucher.first_time_only),
                     })}
                     className="ml-3 text-xs font-semibold text-[#055B75] hover:underline"
                   >
@@ -210,7 +261,7 @@ export default function VoucherManagement() {
               </tr>
             ))}
             {!loading && !loadError && vouchers.length === 0 && (
-              <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-500">No vouchers yet.</td></tr>
+              <tr><td colSpan={7} className="px-4 py-6 text-center text-gray-500">No vouchers yet.</td></tr>
             )}
           </tbody>
         </table>
@@ -228,7 +279,7 @@ export default function VoucherManagement() {
               {redemptions.rows.map((row) => (
                 <li key={row.id} className="flex justify-between gap-3 py-2">
                   <span>{row.email || row.userId}</span>
-                  <span className="text-gray-500">{`${coinsText(row.coins)} coins · ${new Date(row.createdAt).toLocaleString()}`}</span>
+                  <span className="text-gray-500">{redemptionText(row)}</span>
                 </li>
               ))}
             </ul>

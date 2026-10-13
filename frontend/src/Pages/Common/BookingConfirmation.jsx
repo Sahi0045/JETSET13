@@ -11,7 +11,7 @@ import { daysUntilDate, formatCalendarDate } from '../../utils/dateUtils';
 import { cancellationMessage } from '../../../../shared/cancellationOutcome';
 import { bookingItineraries, returnDateOf } from '../../../../shared/bookingItineraries';
 import BookingItinerary from './flights/BookingItinerary';
-import { bookingChargeLines, formatUsd } from '../../utils/bookingCharge';
+import { bookingChargeLines, formatUsd, tripRewardLine } from '../../utils/bookingCharge';
 
 // Days until the trip, from the calendar day the booking names. Parsing
 // "2026-11-15" with `new Date` made it UTC midnight - the evening before, in
@@ -351,6 +351,7 @@ function BookingConfirmation() {
   const hasAmount = Number.isFinite(paidAmount) && paidAmount > 0;
   // Fare, service fee, discount: what checkout charged, line by line.
   const charge = isFlight ? bookingChargeLines(bookingData) : null;
+  const rewardLine = isFlight ? tripRewardLine(bookingData) : null;
 
   // What the money did, not a constant: a cancelled booking said "Payment
   // received" beside a refund made - or one that failed - and so did one never
@@ -665,6 +666,11 @@ function BookingConfirmation() {
                       ))}
                       <div className="border-t border-gray-300 my-2"></div>
                     </div>
+                  )}
+                  {rewardLine && (
+                    <p data-trip-reward="" className="mb-4 rounded-xl border border-[#65B3CF] bg-[#F1FBFD] px-4 py-3 text-sm font-semibold text-[#034457]">
+                      {rewardLine}
+                    </p>
                   )}
                 </div>
 

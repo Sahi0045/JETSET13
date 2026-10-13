@@ -5,7 +5,10 @@ import { coinsToUsd, formatCoins } from '../../../../../shared/jetCoins.js';
 const usd = (amount) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
 
 const DESCRIBE = {
-  voucher: (entry) => `Voucher ${entry.note || ''}`.trim(),
+  voucher: (entry) => {
+    const named = `Voucher ${entry.note || ''}`.trim();
+    return entry.booking_reference ? `${named}: trip ${entry.booking_reference}` : named;
+  },
   earn: (entry) => `Earned on booking ${entry.booking_reference}`,
   earn_reversal: (entry) => `Earned coins taken back, booking ${entry.booking_reference} refunded`,
   hold: (entry) => `Used on booking ${entry.booking_reference}`,
@@ -18,6 +21,16 @@ const isCustomerMessage = (body) => typeof body?.error === 'string'
   && (String(body.code).startsWith('VOUCHER_') || body.code === 'RATE_LIMITED' || body.code === 'WALLET_UNAVAILABLE');
 
 const describeEntry = (entry) => (DESCRIBE[entry.kind] || (() => 'Wallet activity'))(entry);
+
+const dueDay = (iso) => {
+  const time = iso ? Date.parse(iso) : NaN;
+  return Number.isFinite(time) ? new Date(time).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' }) : '';
+};
+
+const pendingLine = (reward) => {
+  const due = dueDay(reward.dueAt);
+  return `${formatCoins(reward.coins)} coins arrive after your trip ${reward.bookingReference}${due ? `, due ${due}` : ''}`;
+};
 
 export default function JetWalletPanel() {
   const [wallet, setWallet] = useState(null);
@@ -96,6 +109,20 @@ export default function JetWalletPanel() {
           )}
           <p className="mt-3 text-xs opacity-80">100 Jet Coins = $1. Earn 1 coin for every $1 you pay for flights, and use them at checkout.</p>
         </div>
+
+        {wallet?.pending?.length > 0 && (
+          <div className="rounded-2xl border border-[#65B3CF] bg-[#F1FBFD]">
+            <div className="border-b border-[#65B3CF] px-5 py-3 text-sm font-semibold text-[#034457]">Coming after your trip</div>
+            <ul className="divide-y divide-[#65B3CF]">
+              {wallet.pending.map((reward) => (
+                <li key={reward.bookingReference} className="px-5 py-3">
+                  <div className="text-sm text-[#034457]">{pendingLine(reward)}</div>
+                  {reward.code && <div className="text-xs text-gray-500">{`Voucher ${reward.code}`}</div>}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         <form onSubmit={redeem} className="rounded-2xl border border-gray-200 bg-white p-5">
           <label htmlFor="voucher-code" className="block text-sm font-semibold text-gray-900">Voucher code</label>

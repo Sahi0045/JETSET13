@@ -37,7 +37,7 @@ export const isCancelledReturn = (search) => new URLSearchParams(search || '').g
  * couponToRestore), since it may have expired or been used up meanwhile.
  *
  * @param {Storage} [storage]
- * @returns {{ reviewState: { flightData: object, searchData: object|null, attemptId: string|null }, travellers: object[], contact: object|null, couponCode?: string }|null}
+ * @returns {{ reviewState: { flightData: object, searchData: object|null, attemptId: string|null }, travellers: object[], contact: object|null, couponCode?: string, voucherCode?: string }|null}
  */
 export function readCancelledCheckout(storage = globalThis.sessionStorage) {
   try {
@@ -50,6 +50,7 @@ export function readCancelledCheckout(storage = globalThis.sessionStorage) {
       travellers: Array.isArray(saved.passengerData) ? saved.passengerData : [],
       contact: saved.bookingDetails?.contact ?? null,
       ...(saved.couponCode ? { couponCode: String(saved.couponCode) } : {}),
+      ...(saved.voucherCode ? { voucherCode: String(saved.voucherCode) } : {}),
     };
   } catch {
     return null;

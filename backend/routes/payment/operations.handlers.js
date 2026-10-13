@@ -29,7 +29,9 @@ import { unchangedSince } from '../../utils/bookingDetailsGuard.js';
 import { DEFAULT_PRICE_SETTINGS, flightCancellationFeeFrom } from '../../config/priceDefaults.js';
 import { cancellationMessage, refundOutcome } from '../../../shared/cancellationOutcome.js';
 import { coinsBackOnCancel, coinsToUsd } from '../../../shared/jetCoins.js';
-import { captureCoins, releaseCoins, returnAllCoins, returnCoins, reverseEarnedCoins } from '../../services/wallet.service.js';
+import {
+    captureCoins, releaseCoins, returnAllCoins, returnCoins, reverseEarnedCoins, tripVoucherOf, voidTripReward,
+} from '../../services/wallet.service.js';
 import { customerCancelTerms, fareRuleOf, isWithinFreeWindow, serviceFeeKeptOf } from '../../../shared/flightCancelPolicy.js';
 import { readBookedFeeTable } from '../../services/bookedFeeTable.service.js';
 import { officeTimeZoneOf } from '../../services/amadeusSoap/config.js';
@@ -985,6 +987,7 @@ async function cancelFlightBooking(res, booking, { reason, email, customer = fal
     const coins = await settleCoinsOnCancel(supabase, {
         bookingReference, decision, heldAmount: payment.heldAmount, kept: keptForCoins, coins: coinsUsed,
     });
+    if (tripVoucherOf(details.verified_charge)) await voidTripReward(supabase, bookingReference);
 
     const now = new Date().toISOString();
     const reviewReasons = [
@@ -2318,6 +2321,7 @@ export async function handlePaymentVoid(req, res) {
 
         const coinsUsed = Number(booking?.booking_details?.verified_charge?.wallet?.coins) || 0;
         const coinsBack = coinsUsed > 0 ? await returnAllCoins(supabase, booking.booking_reference, 'void') : { ok: true, coins: 0 };
+        if (tripVoucherOf(booking?.booking_details?.verified_charge)) await voidTripReward(supabase, booking.booking_reference);
 
         // 4a. Update the booking (DB payment_status constraint allows 'refunded' — funds fully returned by void)
         //

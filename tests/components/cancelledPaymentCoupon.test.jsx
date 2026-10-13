@@ -205,7 +205,7 @@ describe('fence: no coupon is restored anywhere else', () => {
 
     renderReviewPage(FlightBookingConfirmation, { state: { flightData: reviewFlight(fare), searchData: { from: 'DEL', to: 'BOM', departDate: '2026-11-15' } } });
 
-    fireEvent.change(await screen.findByPlaceholderText('Enter coupon code'), { target: { value: 'save10' } });
+    fireEvent.change(await screen.findByPlaceholderText('Coupon or voucher code'), { target: { value: 'save10' } });
     fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
 
     await waitFor(() => expect(discountRow()).toBeTruthy());

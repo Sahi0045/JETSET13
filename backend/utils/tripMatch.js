@@ -77,12 +77,12 @@ export function travellerDetailsKey(travellers) {
 /**
  * What a flight checkout would book and charge, as one string: the flights,
  * every traveller detail, the contact details, the coupon, the verified
- * total in cents and, when any are used, the Jet Coins. Null when any of the
- * parts that identify a trip is missing.
+ * total in cents and, when used, the Jet Coins and the trip-reward voucher.
+ * Null when any of the parts that identify a trip is missing.
  *
- * @param {{ bookingData?: object, customerEmail?: string, total?: number, couponCode?: string, walletCoins?: number }} checkout
+ * @param {{ bookingData?: object, customerEmail?: string, total?: number, couponCode?: string, walletCoins?: number, voucherCode?: string }} checkout
  */
-export function checkoutKey({ bookingData, customerEmail, total, couponCode, walletCoins = 0 } = {}) {
+export function checkoutKey({ bookingData, customerEmail, total, couponCode, walletCoins = 0, voucherCode } = {}) {
   const flights = flightsKey(bookingData?.originalOffer);
   const travellers = travellerDetailsKey(bookingData?.passengerData);
   const cents = Math.round(Number(total) * 100);
@@ -102,5 +102,6 @@ export function checkoutKey({ bookingData, customerEmail, total, couponCode, wal
     upper(couponCode),
     cents,
     ...(Math.floor(Number(walletCoins) || 0) > 0 ? [Math.floor(Number(walletCoins))] : []),
+    ...(upper(voucherCode) ? [`voucher:${upper(voucherCode)}`] : []),
   ]);
 }

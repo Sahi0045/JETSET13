@@ -259,3 +259,37 @@ describe('a booking that used no coins', () => {
     silence.mockRestore();
   });
 });
+
+describe('a cancel of a booking with a trip-reward voucher', () => {
+  const withVoucher = { ...cardOnly, voucher: { id: 'v1', code: 'SHUBHAM', coins: 5000 } };
+
+  it('voids the pending reward', async () => {
+    axios.get.mockResolvedValue(arcOrder([pay(300)]));
+    rpcAnswers.void_trip_voucher = { data: { status: 'void', voided: true }, error: null };
+
+    const res = await cancel(flight({ charge: withVoucher }));
+
+    expect(res.statusCode).toBe(200);
+    expect(rpc).toHaveBeenCalledWith('void_trip_voucher', { p_ref: 'FLT300' });
+  });
+
+  it('leaves trip rewards alone for a booking without a voucher', async () => {
+    axios.get.mockResolvedValue(arcOrder([pay(300)]));
+
+    await cancel(flight({ charge: cardOnly }));
+
+    expect(rpcNames()).not.toContain('void_trip_voucher');
+  });
+
+  it('still cancels when the reward could not be voided', async () => {
+    const silence = vi.spyOn(console, 'error').mockImplementation(() => {});
+    axios.get.mockResolvedValue(arcOrder([pay(300)]));
+    rpcAnswers.void_trip_voucher = { data: null, error: { message: 'connection reset' } };
+
+    const res = await cancel(flight({ charge: withVoucher }));
+
+    expect(res.statusCode).toBe(200);
+    expect(closing().status).toBe('cancelled');
+    silence.mockRestore();
+  });
+});

@@ -230,3 +230,15 @@ export async function recordCouponUse(client, { coupon, userId = null, email = n
   console.warn('⚠️ Coupon usage recorded but its count could not be updated', { couponId: coupon.id, bookingReference });
   return { recorded: true, counted: false };
 }
+
+/** Whether a coupon, live or switched off, already uses this code. */
+export async function isCouponCode(client, code) {
+  const { data, error } = await client
+    .from('coupons')
+    .select('id')
+    .eq('code', String(code ?? '').trim().toUpperCase())
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return Boolean(data);
+}

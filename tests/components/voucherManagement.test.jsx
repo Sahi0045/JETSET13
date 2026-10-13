@@ -127,6 +127,7 @@ describe('admin vouchers page', () => {
     expect(adminFetch.mock.calls[1][0]).toMatch(/vouchers\/v1$/);
     expect(JSON.parse(adminFetch.mock.calls[1][1].body)).toEqual({
       code: 'SHUBHAM', valueUsd: 75.5, maxRedemptions: '', validFrom: '', validUntil: '2027-01-31', note: 'launch',
+      kind: 'instant', firstTimeOnly: false,
     });
   });
 
@@ -143,5 +144,60 @@ describe('admin vouchers page', () => {
     fireEvent.click(who);
     expect(await screen.findByText('Redemptions could not be loaded.')).toBeTruthy();
     expect(screen.queryByText('Nobody has redeemed it yet.')).toBeNull();
+  });
+});
+
+describe('voucher kinds on the admin page', () => {
+  beforeEach(() => adminFetch.mockReset());
+
+  it('shows each voucher kind, and first-time only', async () => {
+    adminFetch.mockResolvedValue(answer({ success: true, data: [
+      { id: 'v1', code: 'SHUBHAM', coins: 5000, redemptions_count: 0, max_redemptions: null, is_active: true, kind: 'trip', first_time_only: true },
+      { id: 'v2', code: 'WELCOME', coins: 1000, redemptions_count: 0, max_redemptions: null, is_active: true, kind: 'instant', first_time_only: false },
+    ] }));
+    render(<VoucherManagement />);
+    expect(await screen.findByText('Trip reward · first-time only')).toBeTruthy();
+    expect(screen.getByText('Instant')).toBeTruthy();
+  });
+
+  it('creates a trip reward for first-time customers', async () => {
+    adminFetch.mockResolvedValueOnce(answer({ success: true, data: [] }))
+      .mockResolvedValueOnce(answer({ success: true, data: { id: 'v3', code: 'SHUBHAM' } }, 201))
+      .mockResolvedValueOnce(answer({ success: true, data: [] }));
+    render(<VoucherManagement />);
+    fireEvent.click(await screen.findByRole('button', { name: 'New voucher' }));
+    expect(screen.queryByLabelText('First-time customers only')).toBeNull();
+    fireEvent.change(screen.getByLabelText('Code'), { target: { value: 'shubham' } });
+    fireEvent.change(screen.getByLabelText('Value (USD)'), { target: { value: '50' } });
+    fireEvent.change(screen.getByLabelText('Kind'), { target: { value: 'trip' } });
+    fireEvent.click(screen.getByLabelText('First-time customers only'));
+    fireEvent.click(screen.getByRole('button', { name: 'Create voucher' }));
+    await waitFor(() => expect(adminFetch.mock.calls[1][1].method).toBe('POST'));
+    expect(JSON.parse(adminFetch.mock.calls[1][1].body)).toMatchObject({ code: 'SHUBHAM', valueUsd: 50, kind: 'trip', firstTimeOnly: true });
+  });
+
+  it('locks the kind once customers have used the voucher', async () => {
+    adminFetch.mockResolvedValue(answer({ success: true, data: [
+      { id: 'v1', code: 'SHUBHAM', coins: 5000, redemptions_count: 2, max_redemptions: null, is_active: true, kind: 'trip' },
+    ] }));
+    render(<VoucherManagement />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit SHUBHAM' }));
+    expect(screen.getByLabelText('Kind').disabled).toBe(true);
+    expect(screen.getByLabelText('Kind').value).toBe('trip');
+  });
+
+  it('shows each trip reward with its status, booking and payout date', async () => {
+    const voucher = { id: 'v1', code: 'SHUBHAM', coins: 5000, redemptions_count: 1, max_redemptions: null, is_active: true, kind: 'trip' };
+    adminFetch.mockResolvedValueOnce(answer({ success: true, data: [voucher] }))
+      .mockResolvedValueOnce(answer({ success: true, data: [
+        { id: 'r1', coins: 5000, createdAt: '2026-10-13T10:00:00.000Z', userId: 'u1', email: 'ada@example.com', status: 'pending', bookingReference: 'FLT1', dueAt: '2026-11-18T00:00:00.000Z', paidAt: null },
+        { id: 'r2', coins: 5000, createdAt: '2026-10-12T10:00:00.000Z', userId: 'u2', email: 'bo@example.com', status: 'void', bookingReference: 'FLT2', dueAt: '2026-11-10T00:00:00.000Z', paidAt: null },
+        { id: 'r3', coins: 5000, createdAt: '2026-10-11T10:00:00.000Z', userId: 'u3', email: 'cy@example.com', status: 'pending', bookingReference: 'FLT3', dueAt: null, paidAt: null },
+      ] }));
+    render(<VoucherManagement />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Who used SHUBHAM' }));
+    expect(await screen.findByText('5,000 coins · Pending · FLT1 · due 2026-11-18')).toBeTruthy();
+    expect(screen.getByText('5,000 coins · Void · FLT2')).toBeTruthy();
+    expect(screen.getByText('5,000 coins · Pending · FLT3 · no payout date')).toBeTruthy();
   });
 });

@@ -481,7 +481,8 @@ function FlightCreateOrders() {
           fareBreakdown: fareBreakdown,    // Store fare breakdown for confirmation page
           contact: orderData.bookingDetails?.contact, // Store contact info
           itineraries: legs,
-          returnDate: returnDateOf(legs)
+          returnDate: returnDateOf(legs),
+          tripReward: body.tripReward || null
         };
 
         // Nothing is kept in this browser. `completedFlightBookings` and

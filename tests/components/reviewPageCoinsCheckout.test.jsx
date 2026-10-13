@@ -134,7 +134,7 @@ describe('paying part of a flight with Jet Coins', () => {
 
   it('takes the coupon off first, then the coins', async () => {
     await openPage(5000);
-    fireEvent.change(screen.getByPlaceholderText('Enter coupon code'), { target: { value: 'SAVE20' } });
+    fireEvent.change(screen.getByPlaceholderText('Coupon or voucher code'), { target: { value: 'SAVE20' } });
     fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
     await payButton('190.00');
     fireEvent.click(await screen.findByRole('switch'));

@@ -211,6 +211,36 @@ describe('verifyFlightCharge', () => {
       expect(priceOffer).not.toHaveBeenCalled();
     });
 
+    // The arrival date sets when a trip reward pays out, and is the page's own
+    // copy: an arrival moved into the past paid the reward on the next run.
+    it('refuses a flight shown landing two days before it leaves, before pricing', async () => {
+      const priceOffer = pricedAt(400);
+      const itineraries = shown('JFK', 'LHR');
+      itineraries[0].segments[0].arrival.at = '2026-11-13T06:10:00';
+
+      const result = await verify({ amount: 401, bookingData: withFlights(itineraries), priceOffer });
+
+      expect(result).toMatchObject({ ok: false, status: 400, code: 'OFFER_MISSING' });
+      expect(result.message).toMatch(/lands before it leaves.*search again.*Nothing has been charged/i);
+      expect(priceOffer).not.toHaveBeenCalled();
+    });
+
+    // The date line: Guam to Honolulu lands the evening before it leaves.
+    it('prices a flight that lands the calendar day before it leaves', async () => {
+      const booking = bookingFor(1);
+      booking.originalOffer = {
+        ...booking.originalOffer,
+        itineraries: [{ segments: [{ id: '1', carrierCode: 'UA', number: '200', departure: { iataCode: 'GUM', at: '2026-11-17T07:50:00' }, arrival: { iataCode: 'HNL', at: '2026-11-16T19:10:00' } }] }],
+        _ama: { segments: [{ legIndex: 0, boardPoint: 'GUM', offPoint: 'HNL', departureDate: '171126', marketingCarrier: 'UA', flightNumber: '200', rbd: 'Y' }] },
+      };
+      const priceOffer = pricedAt(400);
+
+      const result = await verify({ amount: 401, bookingData: booking, priceOffer });
+
+      expect(priceOffer).toHaveBeenCalledTimes(1);
+      expect(result.ok).toBe(true);
+    });
+
     it('prices a trip shown as it is sold', async () => {
       const priceOffer = pricedAt(400);
       const result = await verify({ amount: 401, bookingData: withFlights(shown('JFK', 'LHR')), priceOffer });

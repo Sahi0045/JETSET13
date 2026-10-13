@@ -74,7 +74,7 @@ describe('PRICE_CHANGED at checkout', () => {
     };
     await fillLeadTraveller();
 
-    fireEvent.change(screen.getByPlaceholderText('Enter coupon code'), { target: { value: 'SAVE20' } });
+    fireEvent.change(screen.getByPlaceholderText('Coupon or voucher code'), { target: { value: 'SAVE20' } });
     fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
     fireEvent.click((await screen.findAllByRole('button', { name: /^Pay US\$190\.00/ }))[0]);
 

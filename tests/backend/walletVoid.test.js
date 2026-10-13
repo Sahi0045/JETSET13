@@ -109,3 +109,20 @@ describe('voiding a payment made partly with Jet Coins', () => {
     expect(table.row(REF).booking_details.cancellation.coinsReturned).toBeUndefined();
   });
 });
+
+describe('voiding the payment of a booking with a trip-reward voucher', () => {
+  it('voids the pending reward after ARC voids', async () => {
+    const res = await voidWith([flight({ verified_charge: { total: 72.2, voucher: { id: 'v1', code: 'SHUBHAM', coins: 5000 } } })]);
+
+    expect(res.statusCode).toBe(200);
+    expect(rpc).toHaveBeenCalledWith('void_trip_voucher', { p_ref: REF });
+  });
+
+  it('asks for nothing when the void fails at ARC', async () => {
+    axios.put.mockResolvedValue({ status: 200, data: { result: 'FAILURE' } });
+
+    await voidWith([flight({ verified_charge: { total: 72.2, voucher: { id: 'v1', code: 'SHUBHAM', coins: 5000 } } })]);
+
+    expect(rpc).not.toHaveBeenCalled();
+  });
+});
