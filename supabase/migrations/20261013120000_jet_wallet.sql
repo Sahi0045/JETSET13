@@ -110,14 +110,14 @@ begin
   select * into v_hold from public.wallet_holds where booking_reference = p_ref;
   if found then
     if v_hold.user_id = p_user and v_hold.coins = p_coins and v_hold.status in ('held', 'captured') then
-      return jsonb_build_object('status', v_hold.status, 'coins', v_hold.coins,
+      return jsonb_build_object('status', v_hold.status, 'coins', v_hold.coins, 'created', false,
         'balance', (select balance from public.wallets where user_id = p_user));
     end if;
     raise exception 'HOLD_CONFLICT';
   end if;
   v_result := public.wallet_apply(p_user, -p_coins, 'hold', 'hold:' || p_ref, p_ref, null, null);
   insert into public.wallet_holds (booking_reference, user_id, coins, status) values (p_ref, p_user, p_coins, 'held');
-  return jsonb_build_object('status', 'held', 'coins', p_coins, 'balance', (v_result->>'balance')::bigint);
+  return jsonb_build_object('status', 'held', 'coins', p_coins, 'created', true, 'balance', (v_result->>'balance')::bigint);
 end;
 $$;
 

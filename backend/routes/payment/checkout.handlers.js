@@ -496,6 +496,19 @@ export async function handleHostedCheckout(req, res) {
     let tripLock = null;
     let heldCoinsRef = null;
     let checkoutDone = false;
+    // Awaited before the error answer, not left to `finally`: a serverless
+    // function may be frozen once the response is sent, and a release that never
+    // ran leaves coins held for a checkout that has no booking row to find them by.
+    const releaseHeldCoins = async () => {
+        const ref = heldCoinsRef;
+        if (!ref || checkoutDone) return;
+        heldCoinsRef = null;
+        try {
+            await releaseCoins(supabase, ref);
+        } catch (releaseError) {
+            console.error('⚠️ Coins held for a checkout that never opened could not be released', { orderId: ref, code: releaseError.code });
+        }
+    };
     try {
         // Never log the body: it carries the customer's name, email, phone and
         // the traveller details behind bookingData.
@@ -787,7 +800,10 @@ export async function handleHostedCheckout(req, res) {
                 try {
                     const hold = await holdCoins(supabase, { userId: resolveBookingUserId(req), bookingReference: orderId, coins: verifiedCharge.wallet.coins });
                     if (hold?.status !== 'held') return walletChanged();
-                    heldCoinsRef = orderId;
+                    // A repeat of a hold an earlier request made answers `held`
+                    // too, and releasing it would free the coins behind that
+                    // request's live payment page.
+                    if (hold.created === true) heldCoinsRef = orderId;
                 } catch (walletError) {
                     if (walletError.code === 'INSUFFICIENT_COINS' || walletError.code === 'HOLD_CONFLICT') return walletChanged();
                     return res.status(503).json({
@@ -1051,6 +1067,7 @@ export async function handleHostedCheckout(req, res) {
 
         if (!sessionId) {
             console.error('❌ Session ID not found in response');
+            await releaseHeldCoins();
             return res.status(500).json({
                 success: false,
                 error: 'Invalid response from payment gateway',
@@ -1164,6 +1181,7 @@ export async function handleHostedCheckout(req, res) {
                 reason: dbError?.message || String(dbError),
                 code: dbError?.code,
             });
+            await releaseHeldCoins();
             return res.status(503).json({
                 success: false,
                 // No "nothing has been charged" here: the review page strips
@@ -1197,18 +1215,13 @@ export async function handleHostedCheckout(req, res) {
         // Authorization header is the merchant's API password.
         console.error('❌ Hosted checkout error:', error.response?.status ?? null,
             error.response?.data?.error?.explanation || error.message);
+        await releaseHeldCoins();
         return res.status(500).json({
             success: false,
             error: 'Failed to create hosted checkout'
         });
     } finally {
-        if (heldCoinsRef && !checkoutDone) {
-            try {
-                await releaseCoins(supabase, heldCoinsRef);
-            } catch (releaseError) {
-                console.error('⚠️ Coins held for a checkout that never opened could not be released', { orderId: heldCoinsRef, code: releaseError.code });
-            }
-        }
+        await releaseHeldCoins();
         // Held until the page's row is written, so the next checkout of this
         // trip finds it; let go on every way out.
         if (tripLock) await releaseLock(tripLock.key, tripLock.token);

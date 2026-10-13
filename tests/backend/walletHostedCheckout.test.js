@@ -29,9 +29,15 @@ const verdictFor = (coins) => ({
 const cardFor = (coins) => cents(FULL_PRICE - coins / 100).toFixed(2);
 
 const walletError = (code) => Object.assign(new Error(code), { code });
-const held = () => vi.fn().mockResolvedValue({ status: 'held', coins: 5000, balance: 0 });
+const held = () => vi.fn().mockResolvedValue({ status: 'held', created: true, coins: 5000, balance: 0 });
 
-const harness = async ({ rows = [], holdCoins = held(), releaseCoins = vi.fn().mockResolvedValue({ status: 'released' }), fail } = {}) => {
+const harness = async ({ rows = [], holdCoins = held(), releaseCoins: releaseOverride, fail } = {}) => {
+  const events = [];
+  const releaseCoins = releaseOverride ?? vi.fn(async () => {
+    await new Promise((resolve) => { setTimeout(resolve, 5); });
+    events.push('released');
+    return { status: 'released', coins: 5000 };
+  });
   const table = fakeBookingsTable(rows, { fail });
   const verifyFlightCharge = vi.fn(async ({ walletCoins }) => verdictFor(Math.floor(Number(walletCoins) || 0)));
   vi.doMock('../../backend/services/flightCheckout.service.js', () => ({ verifyFlightCharge }));
@@ -72,10 +78,15 @@ const harness = async ({ rows = [], holdCoins = held(), releaseCoins = vi.fn().m
       },
     });
     const res = createResponse();
+    const json = res.json.bind(res);
+    res.json = (data) => {
+      events.push('response');
+      return json(data);
+    };
     await handleHostedCheckout(req, res);
     return res;
   };
-  return { post, table, verifyFlightCharge, holdCoins, releaseCoins };
+  return { post, table, verifyFlightCharge, holdCoins, releaseCoins, events };
 };
 
 const arcPages = () => axios.post.mock.calls.filter(([, sent]) => sent?.apiOperation === 'INITIATE_CHECKOUT');
@@ -174,35 +185,40 @@ describe('the hosted checkout holds coins', () => {
 
   it('gives the coins back when the payment page could not be opened', async () => {
     axios.post.mockRejectedValue(new Error('ARC down'));
-    const { post, releaseCoins } = await harness({ releaseCoins: vi.fn().mockResolvedValue({ status: 'released', coins: 5000 }) });
+    const { post, releaseCoins, events } = await harness();
     const res = await post();
 
     expect(res.statusCode).toBeGreaterThanOrEqual(500);
     expect(releaseCoins).toHaveBeenCalledTimes(1);
     expect(releaseCoins).toHaveBeenCalledWith(expect.anything(), 'FLTCOINS1');
+    expect(events).toEqual(['released', 'response']);
   });
 
   it('gives the coins back when the gateway answers without a session', async () => {
     axios.post.mockResolvedValue({ status: 201, data: { result: 'SUCCESS' } });
-    const { post, releaseCoins } = await harness();
+    const { post, releaseCoins, events } = await harness();
     const res = await post();
 
     expect(res.statusCode).toBe(500);
+    expect(releaseCoins).toHaveBeenCalledTimes(1);
     expect(releaseCoins).toHaveBeenCalledWith(expect.anything(), 'FLTCOINS1');
+    expect(events).toEqual(['released', 'response']);
   });
 
   it('gives the coins back when the booking row could not be written, and hands over no page', async () => {
     arcOpens();
-    const { post, releaseCoins } = await harness({ fail: ({ write }) => write?.kind === 'upsert' });
+    const { post, releaseCoins, events } = await harness({ fail: ({ write }) => write?.kind === 'upsert' });
     const res = await post();
 
     expect(res.statusCode).toBe(503);
     expect(res.body.code).toBe('CHECKOUT_NOT_RECORDED');
     expect(res.body).not.toHaveProperty('checkoutUrl');
+    expect(releaseCoins).toHaveBeenCalledTimes(1);
     expect(releaseCoins).toHaveBeenCalledWith(expect.anything(), 'FLTCOINS1');
+    expect(events).toEqual(['released', 'response']);
   });
 
-  it('answers as it would have even when the coins cannot be given back', async () => {
+  it('answers as it would have even when the coins cannot be given back, and tries once', async () => {
     axios.post.mockRejectedValue(new Error('ARC down'));
     const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
     const { post, releaseCoins } = await harness({ releaseCoins: vi.fn().mockRejectedValue(walletError('WALLET_UNAVAILABLE')) });
@@ -232,6 +248,46 @@ describe('the hosted checkout holds coins', () => {
     await post({ walletCoins: 0 });
 
     expect(holdCoins).not.toHaveBeenCalled();
+    expect(releaseCoins).not.toHaveBeenCalled();
+  });
+});
+
+describe('a second checkout on a reference that already holds its coins', () => {
+  const otherPhone = { ...bookingData, bookingDetails: { contact: { email: 'jane@example.com', phone: '5550199' } } };
+
+  it.each([
+    ['a repeat of the hold', { status: 'held', created: false, coins: 5000 }],
+    ['a reply that does not say it made the hold', { status: 'held', coins: 5000 }],
+  ])('never gives back the coins behind the first request\'s live page: %s', async (_name, repeat) => {
+    arcOpens();
+    const holdCoins = vi.fn()
+      .mockResolvedValueOnce({ status: 'held', created: true, coins: 5000, balance: 0 })
+      .mockResolvedValueOnce(repeat);
+    const { post, releaseCoins, table } = await harness({ holdCoins });
+    const first = await post({ orderId: 'FLTCOINS1' });
+    expect(first.statusCode).toBe(200);
+
+    axios.post.mockReset();
+    axios.post.mockRejectedValue(new Error('ARC down'));
+    const second = await post({ orderId: 'FLTCOINS1', bookingData: otherPhone });
+
+    expect(holdCoins).toHaveBeenCalledTimes(2);
+    expect(arcPages()).toHaveLength(1);
+    expect(second.statusCode).toBe(500);
+    expect(releaseCoins).not.toHaveBeenCalled();
+    expect(table.row('FLTCOINS1').booking_details.verified_charge.wallet).toEqual({ coins: 5000, amount: 50 });
+  });
+
+  it('gives nothing back either when it opens a page of its own', async () => {
+    arcOpens();
+    const holdCoins = vi.fn()
+      .mockResolvedValueOnce({ status: 'held', created: true, coins: 5000, balance: 0 })
+      .mockResolvedValueOnce({ status: 'held', created: false, coins: 5000 });
+    const { post, releaseCoins } = await harness({ holdCoins });
+    await post({ orderId: 'FLTCOINS1' });
+    const second = await post({ orderId: 'FLTCOINS1', bookingData: otherPhone });
+
+    expect(second.statusCode).toBe(200);
     expect(releaseCoins).not.toHaveBeenCalled();
   });
 });

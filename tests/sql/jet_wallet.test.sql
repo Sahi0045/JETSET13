@@ -35,8 +35,10 @@ begin
 
   r := public.wallet_hold(a, 'REF1', 3000);
   assert r->>'status' = 'held' and (r->>'balance')::bigint = 2000, 'a hold takes the coins';
+  assert (r->>'created')::boolean is true, 'the hold that takes the coins says it created the hold';
   r := public.wallet_hold(a, 'REF1', 3000);
   assert (select balance from public.wallets where user_id = a) = 2000, 'holding the same checkout again changes nothing';
+  assert r->>'status' = 'held' and (r->>'created')::boolean is false, 'a repeat of a live hold says it created nothing';
 
   failed := false;
   begin perform public.wallet_hold(a, 'REF2', 2500); exception when others then failed := sqlerrm like '%INSUFFICIENT_COINS%'; end;
