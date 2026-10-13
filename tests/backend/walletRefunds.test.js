@@ -18,7 +18,7 @@ describe('coins on a cancel', () => {
     expect(client.rpc).toHaveBeenNthCalledWith(1, 'wallet_capture', { p_ref: 'FLT1' });
     expect(client.rpc).toHaveBeenNthCalledWith(2, 'wallet_return', { p_ref: 'FLT1', p_coins: 5000, p_reason: 'cancel', p_note: null });
     expect(client.rpc).toHaveBeenNthCalledWith(3, 'wallet_reverse_earn', { p_ref: 'FLT1' });
-    expect(result).toEqual({ ok: true, coins: 5000 });
+    expect(result).toEqual({ ok: true, coins: 5000, owed: 5000 });
   });
 
   it('gives back only what is owed when the fee covers the card', async () => {
@@ -41,7 +41,7 @@ describe('coins on a cancel', () => {
     });
     expect(client.rpc.mock.calls.map(([name]) => name)).toEqual(['wallet_capture', 'wallet_return', 'wallet_reverse_earn']);
     expect(client.rpc.mock.calls[1][1].p_coins).toBe(12000);
-    expect(result).toEqual({ ok: true, coins: 12000 });
+    expect(result).toEqual({ ok: true, coins: 12000, owed: 12000 });
   });
 
   it('returns nothing, and does not capture, when the fee takes everything', async () => {
@@ -50,7 +50,7 @@ describe('coins on a cancel', () => {
       bookingReference: 'FLT1', decision: { action: 'fee_covers' }, heldAmount: 1, kept: 101, coins: 100,
     });
     expect(client.rpc).not.toHaveBeenCalled();
-    expect(result).toEqual({ ok: true, coins: 0 });
+    expect(result).toEqual({ ok: true, coins: 0, owed: 0 });
   });
 
   it('releases the hold of a checkout that was never paid', async () => {
@@ -60,7 +60,17 @@ describe('coins on a cancel', () => {
     });
     expect(client.rpc).toHaveBeenCalledTimes(1);
     expect(client.rpc).toHaveBeenCalledWith('wallet_release', { p_ref: 'FLT1' });
-    expect(result.coins).toBe(5000);
+    expect(result).toEqual({ ok: true, coins: 5000, owed: 5000 });
+  });
+
+  it('says what was owed when the hold of a never-paid checkout could not be released', async () => {
+    const silence = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const client = clientAnswering({ data: null, error: { message: 'connection reset' } });
+    const result = await settleCoinsOnCancel(client, {
+      bookingReference: 'FLT1', decision: { action: 'nothing_held' }, heldAmount: 0, kept: 0, coins: 5000,
+    });
+    expect(result).toEqual({ ok: false, coins: 0, owed: 5000 });
+    silence.mockRestore();
   });
 
   it('leaves coins to the desk when the cancel goes to review', async () => {
@@ -69,7 +79,7 @@ describe('coins on a cancel', () => {
       bookingReference: 'FLT1', decision: { action: 'review' }, heldAmount: 72.2, kept: 2.2, coins: 5000,
     });
     expect(client.rpc).not.toHaveBeenCalled();
-    expect(result).toEqual({ ok: true, coins: 0 });
+    expect(result).toEqual({ ok: true, coins: 0, owed: 0 });
   });
 
   it('says so when the coins could not go back, without failing the cancel', async () => {
@@ -78,7 +88,17 @@ describe('coins on a cancel', () => {
     const result = await settleCoinsOnCancel(client, {
       bookingReference: 'FLT1', decision: { action: 'refund_all' }, heldAmount: 72.2, kept: 0, coins: 5000,
     });
-    expect(result).toEqual({ ok: false, coins: 0 });
+    expect(result).toEqual({ ok: false, coins: 0, owed: 5000 });
+    silence.mockRestore();
+  });
+
+  it('names the coins that were owed, not the coins that were used, when a fee-covers return fails', async () => {
+    const silence = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const client = clientAnswering(captured, { data: null, error: { message: 'connection reset' } });
+    const result = await settleCoinsOnCancel(client, {
+      bookingReference: 'FLT1', decision: { action: 'fee_covers' }, heldAmount: 1, kept: 12.5, coins: 29900,
+    });
+    expect(result).toEqual({ ok: false, coins: 0, owed: 28750 });
     silence.mockRestore();
   });
 
@@ -89,7 +109,7 @@ describe('coins on a cancel', () => {
       bookingReference: 'FLT1', decision: { action: 'refund_all' }, heldAmount: 72.2, kept: 0, coins: 5000,
     });
     expect(client.rpc).toHaveBeenCalledTimes(1);
-    expect(result).toEqual({ ok: false, coins: 0 });
+    expect(result).toEqual({ ok: false, coins: 0, owed: 5000 });
     silence.mockRestore();
   });
 
@@ -99,7 +119,7 @@ describe('coins on a cancel', () => {
     const result = await settleCoinsOnCancel(client, {
       bookingReference: 'FLT1', decision: { action: 'refund_all' }, heldAmount: 72.2, kept: 0, coins: 5000,
     });
-    expect(result).toEqual({ ok: true, coins: 5000, earnedReversed: false });
+    expect(result).toEqual({ ok: true, coins: 5000, owed: 5000, earnedReversed: false });
     silence.mockRestore();
   });
 });
@@ -112,7 +132,7 @@ describe('earned coins on a refund that used no coins', () => {
     });
     expect(client.rpc).toHaveBeenCalledTimes(1);
     expect(client.rpc).toHaveBeenCalledWith('wallet_reverse_earn', { p_ref: 'FLT1' });
-    expect(result).toEqual({ ok: true, coins: 0 });
+    expect(result).toEqual({ ok: true, coins: 0, owed: 0 });
   });
 
   it('leaves them alone when nothing goes back to the customer', async () => {
@@ -129,7 +149,7 @@ describe('earned coins on a refund that used no coins', () => {
     const result = await settleCoinsOnCancel(client, {
       bookingReference: 'FLT1', decision: { action: 'refund_all' }, heldAmount: 130.38, kept: 0, coins: 0,
     });
-    expect(result).toEqual({ ok: true, coins: 0, earnedReversed: false });
+    expect(result).toEqual({ ok: true, coins: 0, owed: 0, earnedReversed: false });
     silence.mockRestore();
   });
 });

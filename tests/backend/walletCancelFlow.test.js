@@ -117,7 +117,7 @@ describe('a customer cancel of a booking that used coins', () => {
     expect(rpcNames()).toEqual(['wallet_capture', 'wallet_return', 'wallet_reverse_earn']);
     expect(rpc).toHaveBeenCalledWith('wallet_return', { p_ref: 'FLT300', p_coins: 5000, p_reason: 'cancel', p_note: null });
     expect(res.body.cancellation).toMatchObject({ paymentAction: 'PARTIAL_REFUND', refundAmount: 70, coinsReturned: 5000, needsReview: false });
-    expect(closing().booking_details.cancellation.coinsReturned).toBe(5000);
+    expect(closing().booking_details.cancellation).toMatchObject({ coinsReturned: 5000, coinsOwed: 5000, coinsKept: 0 });
     expect(closing().booking_details.needs_review).toBeUndefined();
   });
 
@@ -136,7 +136,8 @@ describe('a customer cancel of a booking that used coins', () => {
 
     expect(axios.put).not.toHaveBeenCalled();
     expect(returnedCoins()).toBe(28750);
-    expect(res.body.cancellation).toMatchObject({ paymentAction: 'NO_REFUND_FEE_COVERS', coinsReturned: 28750 });
+    expect(res.body.cancellation).toMatchObject({ paymentAction: 'NO_REFUND_FEE_COVERS', coinsReturned: 28750, coinsOwed: 28750, coinsKept: 1150 });
+    expect(closing().booking_details.cancellation).toMatchObject({ coinsReturned: 28750, coinsOwed: 28750, coinsKept: 1150 });
     expect(closing().booking_details.cancellation.terms).toMatchObject({ serviceFeeKept: 12.5, airlinePrice: 287.5 });
   });
 
@@ -146,7 +147,7 @@ describe('a customer cancel of a booking that used coins', () => {
     const res = await cancel(flight({ createdAt: hoursAgo(30), details: { gds: { ticketed: true }, tickets: [{ number: '057-2412345678' }] } }));
 
     expect(rpcNames()).not.toContain('wallet_return');
-    expect(res.body.cancellation).toMatchObject({ paymentAction: 'REFUND_UNDER_REVIEW', coinsReturned: 0 });
+    expect(res.body.cancellation).toMatchObject({ paymentAction: 'REFUND_UNDER_REVIEW', coinsReturned: 0, coinsOwed: 0, coinsKept: 0 });
   });
 
   it('flags the booking for the desk when the coins could not go back, and still cancels', async () => {
@@ -160,6 +161,22 @@ describe('a customer cancel of a booking that used coins', () => {
     expect(res.body.cancellation).toMatchObject({ needsReview: true, coinsReturned: 0 });
     expect(closing().booking_details.needs_review.reason)
       .toMatch(/Jet Coins \(5,000\) could not be returned automatically: return them with Return Jet Coins/);
+    silence.mockRestore();
+  });
+
+  it('names the coins that were owed, and records them, when a fee-covers return fails', async () => {
+    const silence = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const charge = { fare: 287.5, serviceFee: 12.5, discount: 0, total: 1, walletAmount: 299, walletCoins: 29900, wallet: { coins: 29900, amount: 299 } };
+    axios.get.mockResolvedValue(arcOrder([pay(1)]));
+    rpcAnswers.wallet_return = { data: null, error: { message: 'connection reset' } };
+
+    const res = await cancel(flight({ charge }));
+
+    const reason = closing().booking_details.needs_review.reason;
+    expect(reason).toMatch(/Jet Coins \(28,750\) could not be returned automatically/);
+    expect(reason).not.toMatch(/29,900/);
+    expect(res.body.cancellation).toMatchObject({ coinsReturned: 0, coinsOwed: 28750, coinsKept: 1150 });
+    expect(closing().booking_details.cancellation).toMatchObject({ coinsReturned: 0, coinsOwed: 28750, coinsKept: 1150 });
     silence.mockRestore();
   });
 
@@ -198,6 +215,8 @@ describe('a booking that used no coins', () => {
       serviceFeeKept: 12.5, airlinePrice: 287.5, cancellationFee: 50, penalty: null, penaltyCurrency: null,
     });
     expect(res.body.cancellation.coinsReturned).toBe(0);
+    expect(closing().booking_details.cancellation).not.toHaveProperty('coinsOwed');
+    expect(closing().booking_details.cancellation).not.toHaveProperty('coinsKept');
   });
 
   it('is not held up by a wallet that cannot be reached', async () => {

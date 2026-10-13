@@ -30,6 +30,7 @@ const booking = (over = {}) => ({
   bookingDetails: {},
   walletCoins: 5000,
   walletCoinsReturned: 0,
+  walletCoinsOffer: 5000,
   walletIssue: null,
   ...over,
 });
@@ -69,7 +70,7 @@ describe('the Jet Coins on a booking row', () => {
   });
 
   it('says nothing about coins on a booking that used none', async () => {
-    vi.stubGlobal('fetch', deskServing([booking({ walletCoins: 0 })]));
+    vi.stubGlobal('fetch', deskServing([booking({ walletCoins: 0, walletCoinsOffer: 0 })]));
     const { container } = renderQueue();
 
     await waitFor(() => expect(container.textContent).toMatch(/FLTCOIN1/));
@@ -91,10 +92,11 @@ describe('the Jet Coins on a booking row', () => {
 });
 
 describe('Return Jet Coins', () => {
-  it('is offered only while coins are still out', async () => {
+  it('is offered only when the server offers coins to return', async () => {
     vi.stubGlobal('fetch', deskServing([
-      booking({ id: 'b1', bookingReference: 'FLTOUT', walletCoinsReturned: 0 }),
-      booking({ id: 'b2', bookingReference: 'FLTDONE', walletCoinsReturned: 5000 }),
+      booking({ id: 'b1', bookingReference: 'FLTOUT', walletCoinsOffer: 5000 }),
+      booking({ id: 'b2', bookingReference: 'FLTDONE', walletCoinsReturned: 5000, walletCoinsOffer: 0 }),
+      booking({ id: 'b3', bookingReference: 'FLTLIVE', walletCoinsReturned: 0, walletCoinsOffer: 0 }),
     ]));
     const { container } = renderQueue();
 
@@ -102,8 +104,8 @@ describe('Return Jet Coins', () => {
     expect(screen.getAllByRole('button', { name: /Return Jet Coins/ })).toHaveLength(1);
   });
 
-  it('starts from the coins not yet returned and shows what they are worth', async () => {
-    vi.stubGlobal('fetch', deskServing([booking({ walletCoinsReturned: 3000 })]));
+  it('starts from the coins the server offers and shows what they are worth', async () => {
+    vi.stubGlobal('fetch', deskServing([booking({ walletCoinsReturned: 3000, walletCoinsOffer: 2000 })]));
     renderQueue();
 
     fireEvent.click(await screen.findByRole('button', { name: /Return Jet Coins/ }));
@@ -115,7 +117,7 @@ describe('Return Jet Coins', () => {
 
   it('sends the booking, the coins and the reason, and shows the coins the server returned', async () => {
     const post = vi.fn(() => reply({ success: true, data: { coins: 2000 }, message: '2,000 Jet Coins returned' }));
-    const fetchMock = deskServing([booking({ walletCoinsReturned: 3000 })], post);
+    const fetchMock = deskServing([booking({ walletCoinsReturned: 3000, walletCoinsOffer: 2000 })], post);
     vi.stubGlobal('fetch', fetchMock);
     const { container } = renderQueue();
 

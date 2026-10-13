@@ -5575,7 +5575,49 @@ export function searchFilterKey(params = {}, unticketable = [], interline = {}) 
   ].join('|');
 }
 
-function normalizeBookingRow(b) {
+const coinsUsedOn = (b) => Number(b.booking_details?.verified_charge?.wallet?.coins) || 0;
+
+/**
+ * The wallet holds of the bookings that used Jet Coins, by booking reference.
+ * The hold is the one record every return writes (cancel, void, order route,
+ * desk), so the desk reads what went back from it and not from the booking.
+ * Unreadable is an empty map: no booking then offers coins to return.
+ */
+async function readWalletHolds(bookings) {
+  const references = bookings.filter((b) => coinsUsedOn(b) > 0).map((b) => b.booking_reference);
+  const holds = new Map();
+  if (!references.length) return holds;
+  try {
+    const { data, error } = await supabase
+      .from('wallet_holds')
+      .select('booking_reference, coins, returned_coins, status')
+      .in('booking_reference', references);
+    if (error) throw error;
+    for (const hold of data || []) holds.set(hold.booking_reference, hold);
+  } catch (error) {
+    console.error('⚠️ Wallet holds could not be read for the desk:', error.message);
+  }
+  return holds;
+}
+
+/**
+ * The coins the desk may still return on a booking: what it used, less what
+ * the hold says went back, less the fee a decided cancel kept. Offered only
+ * where something is left for a person to settle - a wallet problem, a cancel
+ * left to review, or a cancel whose coin return did not complete - and only
+ * where the hold could be read.
+ */
+function coinsOfferedOn(details, used, hold, returned) {
+  if (!hold || used <= 0) return 0;
+  const cancellation = details.cancellation || {};
+  const unsettled = Boolean(details.wallet_issue)
+    || cancellation.paymentAction === 'REFUND_UNDER_REVIEW'
+    || (Number(cancellation.coinsOwed) || 0) > (Number(cancellation.coinsReturned) || 0);
+  if (!unsettled) return 0;
+  return Math.max(0, used - returned - (Number(cancellation.coinsKept) || 0));
+}
+
+function normalizeBookingRow(b, holds = null) {
   const amount = b.total_amount || b.booking_details?.amount || b.booking_details?.flight_offer?.price?.total || 0;
   let customerName = 'N/A', customerEmail = '', customerPhone = '';
   if (Array.isArray(b.passenger_details) && b.passenger_details.length) {
@@ -5597,6 +5639,11 @@ function normalizeBookingRow(b) {
   customerEmail = customerEmail || b.booking_details?.customer_email || '';
   customerPhone = customerPhone || b.booking_details?.contact?.phone || '';
   const d = b.booking_details || {};
+  const walletCoins = coinsUsedOn(b);
+  const walletHold = walletCoins > 0 ? holds?.get(b.booking_reference) || null : null;
+  const walletCoinsReturned = !walletHold ? 0
+    : walletHold.status === 'released' ? Number(walletHold.coins) || 0
+      : Number(walletHold.returned_coins) || 0;
   const service =
     b.travel_type === 'hotel' ? (d.hotel_name || d.location || 'Hotel') :
     b.travel_type === 'cruise' ? (d.cruise_name || `${d.departure || ''}→${d.arrival || ''}`) :
@@ -5611,8 +5658,9 @@ function normalizeBookingRow(b) {
     service,
     bookingDetails: adminSafeDetails(d), passengerDetails: b.passenger_details, isPackage: false,
     arcOrderId: d.arc_order_id || d.order_id || b.booking_reference,
-    walletCoins: Number(d.verified_charge?.wallet?.coins) || 0,
-    walletCoinsReturned: Number(d.cancellation?.coinsReturned) || 0,
+    walletCoins,
+    walletCoinsReturned,
+    walletCoinsOffer: coinsOfferedOn(d, walletCoins, walletHold, walletCoinsReturned),
     walletIssue: d.wallet_issue || null,
     // The desk's own fields. The panel showed a "PNR:" line this row never
     // carried, and never showed why a booking was flagged or which tickets a
@@ -5677,7 +5725,8 @@ router.get('/admin-bookings-all', protect, bookingStaff, async (req, res) => {
       if (type && type !== 'all') q = q.eq('travel_type', type);
       const { data, error } = await q.order('created_at', { ascending: false }).limit(2000);
       if (error) throw error;
-      rows = (data || []).map(normalizeBookingRow);
+      const holds = await readWalletHolds(data || []);
+      rows = (data || []).map((row) => normalizeBookingRow(row, holds));
     }
     if (!type || type === 'all' || type === 'package') {
       rows = rows.concat(await fetchPackageBookings());

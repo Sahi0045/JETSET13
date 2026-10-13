@@ -1,6 +1,6 @@
 import supabase from '../config/supabase.js';
 import {
-  VOUCHER_MESSAGES, redeemVoucher, returnCoins, reverseEarnedCoins, walletSummary,
+  VOUCHER_MESSAGES, captureCoins, redeemVoucher, returnCoins, reverseEarnedCoins, walletSummary,
 } from '../services/wallet.service.js';
 
 const CODE_PATTERN = /^[A-Z0-9-]{3,32}$/;
@@ -44,6 +44,8 @@ export async function staffReturn(req, res) {
   const note = `staff ${req.user.id}: ${typedReason || DESK_REASON}`;
   let given;
   try {
+    // wallet_return on a hold still `held` releases every coin in it, whatever was typed.
+    await captureCoins(supabase, bookingReference);
     given = await returnCoins(supabase, { bookingReference, coins, reason: `desk-${Date.now()}`, note });
     console.log('Staff coin return', { bookingReference, coins, given, staffId: req.user.id });
   } catch (error) {

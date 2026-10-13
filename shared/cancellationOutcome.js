@@ -78,12 +78,28 @@ export function customerReviewSentence(cancellation) {
 }
 
 /**
+ * The Jet Coins a cancel gave back, in one sentence, or ''. Formatted here and
+ * not with jetCoins.js: the app copies this file and syncs no other.
+ */
+const coinsSentence = (cancellation) => {
+  const coins = Math.floor(Number(cancellation?.coinsReturned) || 0);
+  if (coins <= 0) return '';
+  return `${new Intl.NumberFormat('en-US').format(coins)} Jet Coins (${money(coins / 100, 'USD')}) went back to your Jet Wallet.`;
+};
+
+/**
  * What to tell the customer after a cancellation, from what happened to the money.
  *
  * @param {{ cancellation?: object, booking?: object }} result - the cancel API's
  *   response, or anything carrying its `cancellation` record
  */
 export function cancellationMessage(result) {
+  const coins = coinsSentence(result?.cancellation);
+  const text = outcomeMessage(result, Boolean(coins));
+  return coins ? `${text} ${coins}` : text;
+}
+
+function outcomeMessage(result, coinsWentBack) {
   const cancellation = result?.cancellation || {};
   const amount = Number(cancellation.refundAmount);
   const fee = Number(cancellation.cancellationFee);
@@ -102,11 +118,15 @@ export function cancellationMessage(result) {
         + `to confirm what is returned to your card. Call ${SUPPORT_PHONE} if you have not heard from us by then.`;
     }
     case 'nothing_held':
-      return 'Your booking is cancelled. No payment is being held for this booking, so there is nothing to refund.';
-    case 'fee_covers':
-      return serviceFeeKeptBy(cancellation) > 0
-        ? 'Your booking is cancelled. The service fee covers the amount paid, so no refund is due.'
-        : 'Your booking is cancelled. The cancellation fee covers the amount paid, so no refund is due.';
+      return coinsWentBack
+        ? 'Your booking is cancelled. No card payment is being held for this booking, so no card refund is due.'
+        : 'Your booking is cancelled. No payment is being held for this booking, so there is nothing to refund.';
+    case 'fee_covers': {
+      const feeName = serviceFeeKeptBy(cancellation) > 0 ? 'service fee' : 'cancellation fee';
+      return coinsWentBack
+        ? `Your booking is cancelled. The ${feeName} covers the card payment, so no card refund is due.`
+        : `Your booking is cancelled. The ${feeName} covers the amount paid, so no refund is due.`;
+    }
     case 'refunded':
       if (amount > 0) {
         const serviceFee = serviceFeeKeptBy(cancellation);

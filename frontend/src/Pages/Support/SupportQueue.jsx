@@ -591,10 +591,10 @@ function SupportQueue() {
                       Finish refund
                     </button>
                   )}
-                  {booking.walletCoins > booking.walletCoinsReturned && (
+                  {booking.walletCoinsOffer > 0 && (
                     <button
                       type="button"
-                      onClick={() => setAction({ type: 'coins', booking, coins: booking.walletCoins - booking.walletCoinsReturned })}
+                      onClick={() => setAction({ type: 'coins', booking, coins: booking.walletCoinsOffer })}
                       className="rounded-lg border border-[#055B75] px-3 py-1.5 text-xs font-semibold text-[#055B75] hover:bg-[#F1FBFD]"
                     >
                       Return Jet Coins

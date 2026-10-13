@@ -716,13 +716,13 @@ export async function quoteCustomerCancel(booking, { now = new Date(), client = 
 export async function settleCoinsOnCancel(client, { bookingReference, decision, heldAmount, kept, coins }) {
     const used = Math.max(0, Math.floor(Number(coins) || 0));
     if (decision.action === 'nothing_held') {
-        if (used <= 0) return { ok: true, coins: 0 };
+        if (used <= 0) return { ok: true, coins: 0, owed: 0 };
         try {
             const released = await releaseCoins(client, bookingReference);
-            return { ok: true, coins: Number(released.coins) || 0 };
+            return { ok: true, coins: Number(released.coins) || 0, owed: used };
         } catch (error) {
             console.error('⚠️ Jet Coins were not released on a cancel', { bookingReference, code: error.code });
-            return { ok: false, coins: 0 };
+            return { ok: false, coins: 0, owed: used };
         }
     }
 
@@ -734,19 +734,19 @@ export async function settleCoinsOnCancel(client, { bookingReference, decision, 
             given = await returnCoins(client, { bookingReference, coins: owed, reason: 'cancel' });
         } catch (error) {
             console.error('⚠️ Jet Coins were not returned on a cancel', { bookingReference, code: error.code });
-            return { ok: false, coins: 0 };
+            return { ok: false, coins: 0, owed };
         }
     }
 
     const refundsCustomer = owed > 0 || ['refund_all', 'refund_less_fee'].includes(decision.action);
-    if (!refundsCustomer) return { ok: true, coins: given };
+    if (!refundsCustomer) return { ok: true, coins: given, owed };
     try {
         await reverseEarnedCoins(client, bookingReference);
     } catch (error) {
         console.error('⚠️ Coins earned on a cancelled booking were not taken back', { bookingReference, code: error.code });
-        return { ok: true, coins: given, earnedReversed: false };
+        return { ok: true, coins: given, owed, earnedReversed: false };
     }
-    return { ok: true, coins: given };
+    return { ok: true, coins: given, owed };
 }
 
 /**
@@ -988,7 +988,7 @@ async function cancelFlightBooking(res, booking, { reason, email, customer = fal
     const reviewReasons = [
         decision.action === 'review' ? decision.reason : null,
         returned.reviewReason || null,
-        coins.ok ? null : `Jet Coins (${coinsUsed.toLocaleString('en-US')}) could not be returned automatically: return them with Return Jet Coins`,
+        coins.ok ? null : `Jet Coins (${coins.owed.toLocaleString('en-US')}) could not be returned automatically: return them with Return Jet Coins`,
         coinsUsed > 0 && coins.earnedReversed === false ? 'the Jet Coins earned on this booking could not be taken back automatically: check the booking' : null,
         // A ticket past its same-day void window still holds value, and that
         // value is with the airline. It is ours to reclaim under the fare rules;
@@ -1003,6 +1003,9 @@ async function cancelFlightBooking(res, booking, { reason, email, customer = fal
         ? roundCents(Math.min(customerTerms.serviceFeeKept ?? 0, cardHeld + coinsToUsd(coinsUsed)))
         : (decision.serviceFeeKept ?? 0);
 
+    const decidedForCoins = ['refund_all', 'refund_less_fee', 'fee_covers'].includes(decision.action);
+    const coinsKept = decidedForCoins ? Math.max(0, coinsUsed - coins.owed) : 0;
+
     const cancellationResult = {
         bookingId: booking.id,
         bookingReference,
@@ -1014,6 +1017,7 @@ async function cancelFlightBooking(res, booking, { reason, email, customer = fal
         refundAmount: returned.refundAmount,
         cancellationFee: returned.cancellationFee,
         coinsReturned: coins.coins,
+        ...(coinsUsed > 0 ? { coinsOwed: coins.owed, coinsKept } : {}),
         currency,
         needsReview: reviewReasons.length > 0,
         ...(customerTerms && decision.policy
@@ -1064,6 +1068,7 @@ async function cancelFlightBooking(res, booking, { reason, email, customer = fal
                     cancellationFee: cancellationResult.cancellationFee || 0,
                     netRefund: cancellationResult.refundAmount || 0,
                     coinsReturned: cancellationResult.coinsReturned,
+                    ...(coinsUsed > 0 ? { coinsOwed: cancellationResult.coinsOwed, coinsKept: cancellationResult.coinsKept } : {}),
                     currency,
                     ticketsVoided: cancellationResult.ticketsVoided,
                     // Why this amount, for the support desk.

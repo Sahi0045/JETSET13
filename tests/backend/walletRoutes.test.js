@@ -42,35 +42,63 @@ describe('the customer wallet routes', () => {
     expect(res.body.code).toBe('WALLET_UNAVAILABLE');
   });
 
+  const CAPTURED = { data: { status: 'captured' }, error: null };
+  const returnCall = () => supabaseMock.rpc.mock.calls.find(([name]) => name === 'wallet_return');
+
   it('lets staff return coins on a booking, once per press', async () => {
-    supabaseMock.rpc.mockResolvedValueOnce({ data: { status: 'captured', coins: 2000 }, error: null })
+    supabaseMock.rpc.mockResolvedValueOnce(CAPTURED)
+      .mockResolvedValueOnce({ data: { status: 'captured', coins: 2000 }, error: null })
       .mockResolvedValueOnce({ data: { coins: 0 }, error: null });
     const res = await run(staffReturn, { body: { bookingReference: 'FLT1', coins: 2000, reason: 'refund' }, user: { id: 's1', role: 'support' } });
-    expect(supabaseMock.rpc.mock.calls[0][0]).toBe('wallet_return');
-    expect(supabaseMock.rpc.mock.calls[0][1]).toMatchObject({ p_ref: 'FLT1', p_coins: 2000 });
-    expect(supabaseMock.rpc.mock.calls[0][1].p_reason).toMatch(/^desk-/);
-    expect(supabaseMock.rpc.mock.calls[1][0]).toBe('wallet_reverse_earn');
+    expect(supabaseMock.rpc.mock.calls.map(([name]) => name)).toEqual(['wallet_capture', 'wallet_return', 'wallet_reverse_earn']);
+    expect(returnCall()[1]).toMatchObject({ p_ref: 'FLT1', p_coins: 2000 });
+    expect(returnCall()[1].p_reason).toMatch(/^desk-/);
     expect(res.body.data.coins).toBe(2000);
   });
 
+  it('captures a hold still held before it returns, so only the coins typed go back', async () => {
+    supabaseMock.rpc.mockResolvedValueOnce(CAPTURED)
+      .mockResolvedValueOnce({ data: { status: 'captured', coins: 1000, applied: true }, error: null })
+      .mockResolvedValueOnce({ data: { coins: 0 }, error: null });
+    const res = await run(staffReturn, { body: { bookingReference: 'FLT1', coins: 1000 }, user: { id: 's1', role: 'support' } });
+    expect(supabaseMock.rpc.mock.calls[0]).toEqual(['wallet_capture', { p_ref: 'FLT1' }]);
+    expect(supabaseMock.rpc.mock.calls[1][0]).toBe('wallet_return');
+    expect(supabaseMock.rpc.mock.calls[1][1].p_coins).toBe(1000);
+    expect(res.body.data.coins).toBe(1000);
+  });
+
+  it('moves nothing, and says so, when the hold cannot be captured', async () => {
+    const silence = vi.spyOn(console, 'error').mockImplementation(() => {});
+    supabaseMock.rpc.mockResolvedValueOnce({ data: null, error: { message: 'connection reset' } });
+    const res = await run(staffReturn, { body: { bookingReference: 'FLT1', coins: 1000 }, user: { id: 's1', role: 'support' } });
+    expect(res.statusCode).toBe(503);
+    expect(res.body.error).toMatch(/Nothing changed/);
+    expect(supabaseMock.rpc).toHaveBeenCalledTimes(1);
+    expect(supabaseMock.rpc.mock.calls[0][0]).toBe('wallet_capture');
+    silence.mockRestore();
+  });
+
   it('records the staff member and the reason on the return', async () => {
-    supabaseMock.rpc.mockResolvedValueOnce({ data: { status: 'captured', coins: 2000 }, error: null })
+    supabaseMock.rpc.mockResolvedValueOnce(CAPTURED)
+      .mockResolvedValueOnce({ data: { status: 'captured', coins: 2000 }, error: null })
       .mockResolvedValueOnce({ data: { coins: 0 }, error: null });
     await run(staffReturn, { body: { bookingReference: 'FLT1', coins: 2000, reason: '  Customer called, flight cancelled  ' }, user: { id: 's1', role: 'support' } });
-    expect(supabaseMock.rpc.mock.calls[0][1]).toMatchObject({ p_note: 'staff s1: Customer called, flight cancelled' });
-    expect(supabaseMock.rpc.mock.calls[0][1].p_reason).toMatch(/^desk-\d+$/);
+    expect(returnCall()[1]).toMatchObject({ p_note: 'staff s1: Customer called, flight cancelled' });
+    expect(returnCall()[1].p_reason).toMatch(/^desk-\d+$/);
   });
 
   it('names the desk when staff give no reason, and caps a long one', async () => {
     supabaseMock.rpc.mockResolvedValue({ data: { status: 'captured', coins: 0 }, error: null });
     await run(staffReturn, { body: { bookingReference: 'FLT1', coins: 2000, reason: '   ' }, user: { id: 's1', role: 'support' } });
-    expect(supabaseMock.rpc.mock.calls[0][1].p_note).toBe('staff s1: Returned by the support desk');
+    const notes = () => supabaseMock.rpc.mock.calls.filter(([name]) => name === 'wallet_return').map(([, args]) => args.p_note);
+    expect(notes()[0]).toBe('staff s1: Returned by the support desk');
     await run(staffReturn, { body: { bookingReference: 'FLT1', coins: 2000, reason: 'x'.repeat(500) }, user: { id: 's1', role: 'support' } });
-    expect(supabaseMock.rpc.mock.calls[1][1].p_note).toBe(`staff s1: ${'x'.repeat(200)}`);
+    expect(notes()[1]).toBe(`staff s1: ${'x'.repeat(200)}`);
   });
 
   it('does not say nothing changed when the coins went back but the earned ones could not be taken back', async () => {
-    supabaseMock.rpc.mockResolvedValueOnce({ data: { status: 'captured', coins: 2000 }, error: null })
+    supabaseMock.rpc.mockResolvedValueOnce(CAPTURED)
+      .mockResolvedValueOnce({ data: { status: 'captured', coins: 2000 }, error: null })
       .mockResolvedValueOnce({ data: null, error: { message: 'connection reset' } });
     const res = await run(staffReturn, { body: { bookingReference: 'FLT1', coins: 2000 }, user: { id: 's1', role: 'support' } });
     expect(res.statusCode).toBe(200);
