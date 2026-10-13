@@ -636,6 +636,14 @@ export function generateBookingConfirmationTemplate(data) {
   const coinsPaid = Number(d.walletAmount ?? recordedCharge.walletAmount ?? d.fareBreakdown?.walletAmount) || 0;
   const coinCount = Math.floor(Number(d.walletCoins ?? recordedCharge.walletCoins) || 0);
   const coinsPaidLabel = coinCount > 0 ? `Jet Coins (${new Intl.NumberFormat('en-US').format(coinCount)})` : 'Jet Coins';
+  const reservedReward = d.tripReward;
+  const rewardCoins = Math.floor(Number(reservedReward?.coins) || 0);
+  const tripRewardNote = reservedReward?.code && rewardCoins > 0
+    ? highlightBox(
+      `<strong>Voucher ${reservedReward.code}:</strong> ${new Intl.NumberFormat('en-US').format(rewardCoins)} Jet Coins after your trip. They land in your Jet Wallet once you have flown.`,
+      { bg: '#F1FBFD', border: '#0890BC', color: '#034457' },
+    )
+    : '';
 
   const content = `
     ${paragraph(opening)}
@@ -656,6 +664,7 @@ export function generateBookingConfirmationTemplate(data) {
     ].filter(Boolean),
     { total: formatCurrency(paymentAmount), currency, label: 'Total paid' },
   )}
+    ${tripRewardNote}
     ${actionRow([
     // To this booking. The bare /manage-booking page answers "No booking ID
     // provided", so the button every confirmation carried led to an error.
@@ -1149,6 +1158,28 @@ export function generateLogoutNotificationTemplate(data) {
 /* ────────────────────────────────────────────────────────────────────────────
  * Payments and internal alerts.
  * ──────────────────────────────────────────────────────────────────────────── */
+
+/** A trip-reward voucher paid out. The coins lead: they are the news. */
+export function generateTripRewardTemplate({ customerName, coins, code, bookingReference, origin, destination } = {}) {
+  const count = Math.max(0, Math.floor(Number(coins) || 0));
+  const coinsText = new Intl.NumberFormat('en-US').format(count);
+  const named = code ? `voucher <strong>${code}</strong>` : 'trip reward';
+  const trip = line([bookingReference, origin && destination ? `${origin} → ${destination}` : null]);
+  const paidOut = trip ? `Your ${named} has paid out for your trip <strong>${trip}</strong>.` : `Your ${named} has paid out.`;
+  return renderBrandedEmail({
+    preheader: `${coinsText} Jet Coins are in your Jet Wallet`,
+    headerLabel: 'Jet Wallet',
+    heading: 'Your Jet Coins have arrived',
+    subheading: 'Thank you for flying with Jetsetters',
+    contentHtml: `
+      ${paragraph(`Hi <strong>${firstNameOf(customerName)}</strong>,`)}
+      ${figureBlock([{ label: 'Added to your Jet Wallet', value: `${coinsText} Jet Coins`, note: `Worth ${money(count / 100)}` }])}
+      ${paragraph(paidOut)}
+      ${highlightBox('Use them on your next flight: switch on <strong>Use my Jet Coins</strong> at checkout. 100 Jet Coins = $1.', { bg: '#F1FBFD', border: '#0890BC', color: '#034457' })}
+    `,
+    cta: { text: 'Open my Jet Wallet', url: `${BRAND.site}/profiledashboard?tab=wallet` },
+  });
+}
 
 /** A payment link. The amount and the button are the entire email. */
 export function generatePaymentLinkTemplate({ customerName, description, amount, currency = 'USD', paymentUrl, expiresAt }) {

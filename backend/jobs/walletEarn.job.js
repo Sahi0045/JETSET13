@@ -1,5 +1,5 @@
 /**
- * Jet Coins on flights, two chores on one tick.
+ * Jet Coins on flights, three chores on one tick.
  *
  * Earning: one coin per whole dollar charged to the card, credited once the
  * booking's free-cancellation window has closed, and only while it is still
@@ -15,9 +15,18 @@
  * put in front of a person, and one on an unpaid checkout goes back only after
  * the gateway has said nothing was paid - by the abandoned-checkout job where it
  * covers the row, by this sweep where it does not.
+ *
+ * Trip rewards: a trip-reward voucher reserved on a booking is paid into the
+ * wallet once its payout date has passed and the booking, read again just
+ * before paying, is still ticketed and not cancelled. One whose booking was
+ * cancelled or refunded without the reward being voided is voided here on any
+ * run, however far off its payout date is, or whether it has none.
  */
 import supabase from '../config/supabase.js';
-import { captureCoins, earnCoins, releaseCoins, reverseEarnedCoins } from '../services/wallet.service.js';
+import { captureCoins, earnCoins, payTripVoucher, releaseCoins, reverseEarnedCoins, voidTripReward } from '../services/wallet.service.js';
+import { sendEmail } from '../services/emailService.js';
+import { generateTripRewardTemplate } from '../services/email/templates.js';
+import { isUsableEmail } from '../../shared/email.js';
 import { earnedCoinsFor } from '../../shared/jetCoins.js';
 import { freeUntilOf } from '../../shared/flightCancelPolicy.js';
 import { isTicketed } from '../../shared/reviewQueue.js';
@@ -33,6 +42,8 @@ const LOOKBACK_MS = 30 * DAY;
 const PAGE_SIZE = 500;
 const CHUNK = 50;
 const EARN_LIMIT = 200;
+const REWARD_LIMIT = 200;
+const REWARD_VOID_LIMIT = 50;
 const SWEEP_LIMIT = 50;
 const GATEWAY_ASKS = 5;
 
@@ -366,9 +377,179 @@ export async function sweepStaleHolds({
   return result;
 }
 
+const REVERSED_PAYMENTS = ['refunded', 'reversed'];
+
+const rewardLost = (row) => row.status === 'cancelled' || REVERSED_PAYMENTS.includes(String(row.payment_status || '').toLowerCase());
+
+/** What the payout does with a trip reward, from a fresh read of its booking. Pure. */
+export function tripRewardVerdict(row, now = Date.now()) {
+  if (!row) return 'wait';
+  if (rewardLost(row)) return 'void';
+  if (row.travel_type !== 'flight' || !EARNING_STATUSES.includes(row.status)) return 'wait';
+  const details = row.booking_details || {};
+  if (!isTicketed(details) || liveChainState(details.gds_chain, now) === 'cancelling') return 'wait';
+  return 'pay';
+}
+
+/** Best effort: a failed email is logged and never retried, so nobody is emailed twice. */
+export async function sendTripRewardEmail({ client = supabase, reward, booking, send = sendEmail }) {
+  try {
+    const { data: user } = await client.from('users').select('email, first_name, name').eq('id', reward.user_id).maybeSingle();
+    const details = booking?.booking_details || {};
+    const to = [user?.email, details.customer_email].find(isUsableEmail);
+    if (!to) {
+      warn('a trip reward was paid but nobody can be emailed', { bookingReference: booking?.booking_reference });
+      return false;
+    }
+    await send({
+      to,
+      subject: 'Your Jet Coins have arrived',
+      html: generateTripRewardTemplate({
+        customerName: user?.first_name || user?.name || '',
+        coins: reward.coins,
+        code: reward.code,
+        bookingReference: booking?.booking_reference,
+        origin: details.origin,
+        destination: details.destination,
+      }),
+    });
+    return true;
+  } catch (error) {
+    console.error('⚠️ Wallet: the Jet Coins email could not be sent', { bookingReference: booking?.booking_reference, error: error.message });
+    return false;
+  }
+}
+
+const rewardDueAt = (row) => {
+  const at = Date.parse(row.due_at);
+  return Number.isFinite(at) ? at : null;
+};
+
+export async function payTripRewardsOnce({
+  client = supabase,
+  now = Date.now(),
+  pay = payTripVoucher,
+  voidReward = voidTripReward,
+  notify = sendTripRewardEmail,
+  limit = REWARD_LIMIT,
+  voidLimit = REWARD_VOID_LIMIT,
+  pageSize = PAGE_SIZE,
+} = {}) {
+  const result = { paid: 0, voided: 0, waiting: 0, failed: 0 };
+  let pending;
+  try {
+    pending = (await readAll(() => client.from('voucher_redemptions')
+      .select('booking_reference, user_id, coins, due_at')
+      .eq('status', 'pending')
+      .order('booking_reference', { ascending: true }), pageSize))
+      .filter((row) => row.booking_reference);
+  } catch (error) {
+    warn('trip rewards could not be read', { error: error.message });
+    return result;
+  }
+  if (!pending.length) return result;
+
+  const handled = new Set();
+  const voided = new Set();
+  const voidOne = async (bookingReference) => {
+    let outcome;
+    try {
+      outcome = await voidReward(client, bookingReference);
+    } catch (voidError) {
+      outcome = { ok: false, status: 'error' };
+      console.error('⚠️ Wallet: a trip reward could not be voided', { bookingReference, error: voidError.message });
+    }
+    if (outcome?.status === 'void') {
+      result.voided += 1;
+      voided.add(bookingReference);
+    } else if (!outcome?.ok) {
+      result.failed += 1;
+    }
+  };
+
+  const due = pending
+    .filter((row) => rewardDueAt(row) !== null && rewardDueAt(row) <= now)
+    .sort((a, b) => (rewardDueAt(a) - rewardDueAt(b)) || (a.booking_reference < b.booking_reference ? -1 : 1));
+
+  let attempts = 0;
+  for (const { booking_reference: bookingReference } of due) {
+    if (attempts >= limit) break;
+    handled.add(bookingReference);
+    const { data: booking, error } = await client.from('bookings')
+      .select('booking_reference, user_id, travel_type, status, payment_status, booking_details')
+      .eq('booking_reference', bookingReference)
+      .maybeSingle();
+    if (error || !booking) {
+      result.waiting += 1;
+      warn('the booking behind a due trip reward could not be read', { bookingReference });
+      continue;
+    }
+    const verdict = tripRewardVerdict(booking, now);
+    if (verdict === 'wait') {
+      result.waiting += 1;
+      continue;
+    }
+    attempts += 1;
+    if (verdict === 'void') {
+      await voidOne(bookingReference);
+      continue;
+    }
+    let outcome;
+    try {
+      outcome = await pay(client, bookingReference);
+    } catch (payError) {
+      result.failed += 1;
+      console.error('⚠️ Wallet: a trip reward could not be paid; the next run tries again', { bookingReference, code: payError.code });
+      continue;
+    }
+    if (outcome?.status !== 'paid' || outcome.applied !== true) continue;
+    result.paid += 1;
+    try {
+      await notify({ client, reward: outcome, booking });
+    } catch (notifyError) {
+      console.error('⚠️ Wallet: the Jet Coins email could not be sent', { bookingReference, error: notifyError.message });
+    }
+  }
+
+  /**
+   * A reward whose void failed at cancel time stays pending, and the pass above
+   * reaches it only once it is due: one with a payout date years off, or none,
+   * would hold its voucher until then. Light columns, a chunk at a time.
+   */
+  try {
+    const open = pending.filter((row) => !handled.has(row.booking_reference)).map((row) => row.booking_reference);
+    let voids = 0;
+    scan: for (const refs of chunksOf(open, CHUNK)) {
+      const { data, error } = await client.from('bookings')
+        .select('booking_reference, status, payment_status')
+        .in('booking_reference', refs);
+      if (error) {
+        warn('bookings behind pending trip rewards could not be read', { error: error.message });
+        continue;
+      }
+      for (const row of data || []) {
+        if (!rewardLost(row)) continue;
+        if (voids >= voidLimit) break scan;
+        voids += 1;
+        await voidOne(row.booking_reference);
+      }
+    }
+  } catch (clearError) {
+    warn('pending trip rewards could not be cleared', { error: clearError.message });
+  }
+
+  const undated = pending.filter((row) => rewardDueAt(row) === null && !voided.has(row.booking_reference)).length;
+  if (undated) warn('trip rewards with no payout date stay pending until one is set', { count: undated });
+
+  if (result.paid || result.voided || result.failed) {
+    console.log(`🪙 Trip rewards: ${result.paid} paid, ${result.voided} voided, ${result.failed} failed, ${result.waiting} waiting`);
+  }
+  return result;
+}
+
 export async function tickOnce(options = {}) {
-  const { client, now, timeZone, site, earn, reverse, release, capture, reconcile } = options;
-  const tick = { earn: null, sweep: null };
+  const { client, now, timeZone, site, earn, reverse, release, capture, reconcile, pay, voidReward, notify } = options;
+  const tick = { earn: null, sweep: null, rewards: null };
   try {
     tick.earn = await earnOnce({ client, now, timeZone, earn, reverse });
   } catch (error) {
@@ -378,6 +559,11 @@ export async function tickOnce(options = {}) {
     tick.sweep = await sweepStaleHolds({ client, now, site, release, capture, reconcile });
   } catch (error) {
     console.error('⚠️ Wallet hold sweep failed:', error.message);
+  }
+  try {
+    tick.rewards = await payTripRewardsOnce({ client, now, pay, voidReward, notify });
+  } catch (error) {
+    console.error('⚠️ Trip reward payout failed:', error.message);
   }
   return tick;
 }
