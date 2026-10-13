@@ -7,7 +7,7 @@ import { NAME_MISSING, travellerNameProblem } from '../../shared/passengerName.j
 import { DEFAULT_PRICE_SETTINGS } from '../config/priceDefaults.js';
 import { couponTripKey, evaluateCoupon } from './coupon.service.js';
 import { internalRequestHeaders } from '../utils/internalRequest.js';
-import { maxWalletCoinsFor } from '../../shared/jetCoins.js';
+import { maxWalletCoinsFor, WALLET_CHANGED_MESSAGE } from '../../shared/jetCoins.js';
 import { readBalance } from './wallet.service.js';
 
 /**
@@ -400,7 +400,14 @@ export async function verifyFlightCharge({
       console.warn('Checkout could not read the Jet Wallet:', error?.message || error);
       return refuse(503, 'WALLET_UNAVAILABLE', 'We could not check your Jet Coins just now. Please try again in a moment.', { pricedFare });
     }
-    const coins = maxWalletCoinsFor(afterCoupon.total, Math.min(askedCoins, balance));
+    // The page asked for coins the wallet no longer holds (another tab's
+    // checkout took them, or earned coins were reversed). Clamping quietly
+    // raised the card total and the answer was PRICE_CHANGED, which the page
+    // reads as the fare moving and never reloads the balance.
+    if (askedCoins > balance) {
+      return refuse(409, 'WALLET_CHANGED', WALLET_CHANGED_MESSAGE, { pricedFare });
+    }
+    const coins = maxWalletCoinsFor(afterCoupon.total, askedCoins);
     if (coins > 0) wallet = { coins, amount: roundMoney(coins / 100) };
   }
 

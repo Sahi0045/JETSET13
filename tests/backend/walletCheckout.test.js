@@ -64,20 +64,45 @@ describe('coins at checkout', () => {
     expect(charge.walletCoins).toBe(5000);
   });
 
-  it('uses no more coins than the customer holds', async () => {
-    rows.wallets = { balance: 1000 };
-    const verdict = await verify({ amount: 112.2, walletCoins: 5000 });
+  it('spends every coin the customer holds', async () => {
+    rows.wallets = { balance: 3000 };
+    const verdict = await verify({ amount: 92.2, walletCoins: 3000 });
 
     expect(verdict.ok).toBe(true);
-    expect(verdict.wallet).toEqual({ coins: 1000, amount: 10 });
+    expect(verdict.wallet).toEqual({ coins: 3000, amount: 30 });
   });
 
-  it('asks for the price the coins actually give when the page assumed more coins than there are', async () => {
-    rows.wallets = { balance: 1000 };
+  it('refuses coins the customer no longer holds as WALLET_CHANGED, before it compares any price', async () => {
+    rows.wallets = { balance: 3000 };
     const verdict = await verify({ amount: 72.2, walletCoins: 5000 });
 
+    expect(verdict).toMatchObject({ ok: false, status: 409, code: 'WALLET_CHANGED' });
+    expect(verdict.message).toBe('Your Jet Coins changed while you were checking out. Please review the total and try again. Nothing has been charged.');
+    expect(verdict.charge).toBeUndefined();
+  });
+
+  it('gives the same answer whatever card amount the page sent with the stale coins', async () => {
+    rows.wallets = { balance: 3000 };
+    const asked = await verify({ amount: 72.2, walletCoins: 5000 });
+    const atTheNewPrice = await verify({ amount: 92.2, walletCoins: 5000 });
+
+    expect(asked.code).toBe('WALLET_CHANGED');
+    expect(atTheNewPrice.code).toBe('WALLET_CHANGED');
+  });
+
+  it('refuses coins as WALLET_CHANGED when the balance has gone to nothing', async () => {
+    rows.wallets = null;
+    const verdict = await verify({ amount: 72.2, walletCoins: 5000 });
+
+    expect(verdict).toMatchObject({ ok: false, status: 409, code: 'WALLET_CHANGED' });
+  });
+
+  it('still asks for the new price when the one dollar left on the card cuts the coins the page asked for', async () => {
+    rows.wallets = { balance: 1_000_000 };
+    const verdict = await verify({ amount: 72.2, walletCoins: 1_000_000 });
+
     expect(verdict).toMatchObject({ ok: false, status: 409, code: 'PRICE_CHANGED' });
-    expect(verdict.charge.total).toBe(112.2);
+    expect(verdict.charge.total).toBe(1);
   });
 
   it('never takes the card below one dollar', async () => {
@@ -119,15 +144,6 @@ describe('coins at checkout', () => {
     const verdict = await verify({ amount: 72.2, walletCoins: 5000 });
 
     expect(verdict).toMatchObject({ ok: false, status: 503, code: 'WALLET_UNAVAILABLE' });
-  });
-
-  it('charges the full price when the customer has no coins', async () => {
-    rows.wallets = null;
-    const verdict = await verify({ amount: 122.2, walletCoins: 5000 });
-
-    expect(verdict.ok).toBe(true);
-    expect(verdict.wallet).toBeNull();
-    expect(verdict.charge.walletCoins).toBe(0);
   });
 
   it('checks out with no coins exactly as before', async () => {

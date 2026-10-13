@@ -628,6 +628,13 @@ export function generateBookingConfirmationTemplate(data) {
     )
     : '';
 
+  // Total paid is what the card was charged. Coins paid the rest, so the
+  // lines above it only add up to it with the coins named.
+  const recordedCharge = d.verifiedCharge || {};
+  const coinsPaid = Number(d.walletAmount ?? recordedCharge.walletAmount ?? d.fareBreakdown?.walletAmount) || 0;
+  const coinCount = Math.floor(Number(d.walletCoins ?? recordedCharge.walletCoins) || 0);
+  const coinsPaidLabel = coinCount > 0 ? `Jet Coins (${new Intl.NumberFormat('en-US').format(coinCount)})` : 'Jet Coins';
+
   const content = `
     ${paragraph(opening)}
     ${journey}
@@ -643,6 +650,7 @@ export function generateBookingConfirmationTemplate(data) {
     [
       d.baseFare ? ['Base fare', formatCurrency(d.baseFare)] : null,
       d.taxes ? ['Taxes and fees', formatCurrency(d.taxes)] : null,
+      coinsPaid > 0 ? [coinsPaidLabel, `−${formatCurrency(coinsPaid)}`] : null,
     ].filter(Boolean),
     { total: formatCurrency(paymentAmount), currency, label: 'Total paid' },
   )}

@@ -14,6 +14,7 @@ import { errorSummary } from '../../utils/errorSummary.js';
 import { orderVoided, ARC_REQUEST_TIMEOUT_MS } from '../../utils/arcTransactions.js';
 import { arcFailureSummary } from './payment.helpers.js';
 import { holdCoins, releaseCoins } from '../../services/wallet.service.js';
+import { WALLET_CHANGED_MESSAGE } from '../../../shared/jetCoins.js';
 
 const sanitizeRef = (v) => String(v ?? '').replace(/[^A-Za-z0-9_-]/g, '') || '__none__';
 
@@ -809,7 +810,7 @@ export async function handleHostedCheckout(req, res) {
                 const walletChanged = () => res.status(409).json({
                     success: false,
                     code: 'WALLET_CHANGED',
-                    error: 'Your Jet Coins changed while you were checking out. Please review the total and try again. Nothing has been charged.',
+                    error: WALLET_CHANGED_MESSAGE,
                 });
                 try {
                     const hold = await holdCoins(supabase, { userId: resolveBookingUserId(req), bookingReference: orderId, coins: verifiedCharge.wallet.coins });

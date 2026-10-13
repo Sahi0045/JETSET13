@@ -4,6 +4,9 @@
  */
 import { MIN_CARD_CHARGE, roundMoney } from './flightCharge.js';
 
+/** What checkout answers when the coins the page asked for are no longer there. */
+export const WALLET_CHANGED_MESSAGE = 'Your Jet Coins changed while you were checking out. Please review the total and try again. Nothing has been charged.';
+
 export const coinsToUsd = (coins) => roundMoney(Math.floor(Number(coins) || 0) / 100);
 
 /** The most coins a checkout can use: never below $1 left on the card. */

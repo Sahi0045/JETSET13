@@ -182,4 +182,23 @@ describe('checkout refusing the coins', () => {
     expect(screen.getByRole('switch').checked).toBe(false);
     expect(screen.queryByRole('dialog')).toBeNull();
   });
+
+  it('sends the coins that are left on the next Pay, after the balance dropped behind the page', async () => {
+    checkout.answer = { code: 'WALLET_CHANGED', error: 'Your Jet Coins changed while you were checking out. Please review the total and try again. Nothing has been charged.' };
+    await openPage(5000, 3000);
+    fireEvent.click(await screen.findByRole('switch'));
+    fireEvent.click(await payButton('160.00'));
+    await screen.findByRole('alert');
+    await waitFor(() => expect(document.body.textContent).toMatch(/3,000 Jet Coins available/));
+
+    checkout.answer = { error: 'Declined in test.' };
+    fireEvent.click(screen.getByRole('switch'));
+    expect((await screen.findAllByRole('button', { name: /^Pay US\$180\.00/ })).length).toBeGreaterThan(0);
+    expect(screen.queryByRole('alert')).toBeNull();
+    fireEvent.click(await payButton('180.00'));
+
+    await waitFor(() => expect(checkout.calls).toHaveLength(2));
+    expect(checkout.calls[0]).toMatchObject({ amount: 160, walletCoins: 5000 });
+    expect(checkout.calls[1]).toMatchObject({ amount: 180, walletCoins: 3000 });
+  });
 });
