@@ -172,6 +172,7 @@ const walletIssueLine = (issue) => {
   const coins = Number(issue?.coins) > 0 ? ` (${formatCoins(issue.coins)} coins)` : '';
   if (issue?.kind === 'capture_failed') return `Jet Coins: could not be captured${coins}`;
   if (issue?.kind === 'return_failed') return `Jet Coins: could not be returned${coins}${issue.resolved_at ? ' - handled' : ''}`;
+  if (issue?.kind === 'voucher_refused') return `Voucher ${issue.code || ''} was not reserved${issue.reason ? ` (${issue.reason})` : ''}: no trip reward will be paid for this booking`;
   return 'Jet Coins: need a check';
 };
 

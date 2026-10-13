@@ -62,3 +62,16 @@ export function bookingChargeLines(booking) {
     couponCode: booking?.couponCode,
   });
 }
+
+/** Only a reward the server reserved counts: a voucher on the charge may still have been refused when the booking was made. */
+export function tripRewardOf(booking) {
+  const reward = booking?.tripReward;
+  const code = String(reward?.code ?? '').trim();
+  const coins = Math.floor(Number(reward?.coins) || 0);
+  return code && coins > 0 ? { code, coins } : null;
+}
+
+export function tripRewardLine(booking) {
+  const reward = tripRewardOf(booking);
+  return reward ? `Voucher ${reward.code}: ${new Intl.NumberFormat('en-US').format(reward.coins)} Jet Coins after your trip` : null;
+}
