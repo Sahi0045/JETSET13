@@ -13,6 +13,8 @@ import { toPnrName } from '../../../shared/passengerName.js';
 import { errorSummary } from '../../utils/errorSummary.js';
 import { orderVoided, ARC_REQUEST_TIMEOUT_MS } from '../../utils/arcTransactions.js';
 import { arcFailureSummary } from './payment.helpers.js';
+import { holdCoins, releaseCoins } from '../../services/wallet.service.js';
+import { WALLET_CHANGED_MESSAGE } from '../../../shared/jetCoins.js';
 
 const sanitizeRef = (v) => String(v ?? '').replace(/[^A-Za-z0-9_-]/g, '') || '__none__';
 
@@ -122,8 +124,23 @@ async function findReusableCheckout({ userId, customerEmail, key, returnOrigin, 
                 customerEmail: details.customer_email,
                 total: details.verified_charge?.total,
                 couponCode: details.verified_charge?.coupon?.code,
+                walletCoins: details.verified_charge?.wallet?.coins,
             });
             if (storedKey !== key) continue;
+
+            // The page is priced with its coins off the card, so it is handed
+            // back only while those coins are still held for it. A checkout the
+            // handler gave up on (its row write reported a failure) has its coins
+            // released but may have committed a row with a live page.
+            const storedCoins = Math.floor(Number(details.verified_charge?.wallet?.coins) || 0);
+            if (storedCoins > 0) {
+                const { data: hold, error: holdError } = await supabase
+                    .from('wallet_holds')
+                    .select('status, coins')
+                    .eq('booking_reference', row.booking_reference)
+                    .maybeSingle();
+                if (holdError || hold?.status !== 'held' || Number(hold.coins) !== storedCoins) continue;
+            }
 
             return { orderId: row.booking_reference, sessionId: details.session_id, checkoutUrl: details.arc_pay_checkout_url };
         }
@@ -492,6 +509,21 @@ export async function handleHostedCheckout(req, res) {
 
     // This trip's checkout lock, when this request holds it (lockCheckout).
     let tripLock = null;
+    let heldCoinsRef = null;
+    let checkoutDone = false;
+    // Awaited before the error answer, not left to `finally`: a serverless
+    // function may be frozen once the response is sent, and a release that never
+    // ran leaves coins held for a checkout that has no booking row to find them by.
+    const releaseHeldCoins = async () => {
+        const ref = heldCoinsRef;
+        if (!ref || checkoutDone) return;
+        heldCoinsRef = null;
+        try {
+            await releaseCoins(supabase, ref);
+        } catch (releaseError) {
+            console.error('⚠️ Coins held for a checkout that never opened could not be released', { orderId: ref, code: releaseError.code });
+        }
+    };
     try {
         // Never log the body: it carries the customer's name, email, phone and
         // the traveller details behind bookingData.
@@ -691,7 +723,7 @@ export async function handleHostedCheckout(req, res) {
             const openPage = await findReusableCheckout({
                 userId: signedInUserId,
                 customerEmail,
-                key: checkoutKey({ bookingData, customerEmail, total: amount, couponCode: req.body.couponCode }),
+                key: checkoutKey({ bookingData, customerEmail, total: amount, couponCode: req.body.couponCode, walletCoins: req.body.walletCoins }),
                 returnOrigin: urlOrigin(finalReturnUrl),
                 frontendBaseUrl,
             });
@@ -702,6 +734,7 @@ export async function handleHostedCheckout(req, res) {
                 amount,
                 bookingData,
                 couponCode: req.body.couponCode,
+                walletCoins: req.body.walletCoins,
                 userId: signedInUserId,
                 // A guest's coupon limit is kept by email, as they have no account.
                 email: customerEmail,
@@ -723,6 +756,7 @@ export async function handleHostedCheckout(req, res) {
             verifiedCharge = {
                 ...verdict.charge,
                 coupon: verdict.coupon,
+                wallet: verdict.wallet,
                 pricedFare: verdict.pricedFare,
                 verifiedAt: new Date().toISOString(),
             };
@@ -763,11 +797,37 @@ export async function handleHostedCheckout(req, res) {
             const reusable = await findReusableCheckout({
                 userId: resolveBookingUserId(req),
                 customerEmail,
-                key: checkoutKey({ bookingData, customerEmail, total: chargeAmount, couponCode: verifiedCharge?.coupon?.code }),
+                key: checkoutKey({ bookingData, customerEmail, total: chargeAmount, couponCode: verifiedCharge?.coupon?.code, walletCoins: verifiedCharge?.wallet?.coins }),
                 returnOrigin: urlOrigin(finalReturnUrl),
                 frontendBaseUrl,
             });
             if (reusable) return handBack(reusable);
+
+            // The coins are taken now, before a payment page exists, so a second
+            // tab cannot spend them too. They go back before any error answer
+            // below, and only the request that took them gives them back.
+            if (verifiedCharge?.wallet?.coins > 0) {
+                const walletChanged = () => res.status(409).json({
+                    success: false,
+                    code: 'WALLET_CHANGED',
+                    error: WALLET_CHANGED_MESSAGE,
+                });
+                try {
+                    const hold = await holdCoins(supabase, { userId: resolveBookingUserId(req), bookingReference: orderId, coins: verifiedCharge.wallet.coins });
+                    // A repeat answers `held` for a hold another request made, which
+                    // may be mid-checkout: opening a page on it would let that
+                    // request's failure free the coins behind this one's page.
+                    if (hold?.status !== 'held' || hold.created !== true) return walletChanged();
+                    heldCoinsRef = orderId;
+                } catch (walletError) {
+                    if (walletError.code === 'INSUFFICIENT_COINS' || walletError.code === 'HOLD_CONFLICT') return walletChanged();
+                    return res.status(503).json({
+                        success: false,
+                        code: 'WALLET_UNAVAILABLE',
+                        error: 'We could not use your Jet Coins just now. Please try again in a moment. Nothing has been charged.',
+                    });
+                }
+            }
         }
 
         const cleanBaseUrl = arcBaseUrl.replace(/\/$/, '');
@@ -1022,6 +1082,7 @@ export async function handleHostedCheckout(req, res) {
 
         if (!sessionId) {
             console.error('❌ Session ID not found in response');
+            await releaseHeldCoins();
             return res.status(500).json({
                 success: false,
                 error: 'Invalid response from payment gateway',
@@ -1135,6 +1196,7 @@ export async function handleHostedCheckout(req, res) {
                 reason: dbError?.message || String(dbError),
                 code: dbError?.code,
             });
+            await releaseHeldCoins();
             return res.status(503).json({
                 success: false,
                 // No "nothing has been charged" here: the review page strips
@@ -1144,6 +1206,8 @@ export async function handleHostedCheckout(req, res) {
                 code: 'CHECKOUT_NOT_RECORDED',
             });
         }
+
+        checkoutDone = true;
 
         // No success indicator. It is the secret that proves who paid - the order
         // route accepts it as the payer's proof - and ARC hands it to the payer's
@@ -1166,11 +1230,13 @@ export async function handleHostedCheckout(req, res) {
         // Authorization header is the merchant's API password.
         console.error('❌ Hosted checkout error:', error.response?.status ?? null,
             error.response?.data?.error?.explanation || error.message);
+        await releaseHeldCoins();
         return res.status(500).json({
             success: false,
             error: 'Failed to create hosted checkout'
         });
     } finally {
+        await releaseHeldCoins();
         // Held until the page's row is written, so the next checkout of this
         // trip finds it; let go on every way out.
         if (tripLock) await releaseLock(tripLock.key, tripLock.token);

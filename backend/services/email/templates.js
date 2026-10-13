@@ -13,7 +13,9 @@ import {
   figureBlock, routeStrip, statusPill, segmentCard, fareBreakdown, actionRow,
   stepList, stayCard, dataGrid, progressSteps, humanDuration, BRAND,
 } from '../emailTemplate.js';
-import { REFUND_STUCK_ACTIONS, REFUND_DONE_ACTIONS, customerReviewSentence, refundOutcome, serviceFeeKeptBy } from '../../../shared/cancellationOutcome.js';
+import {
+  REFUND_STUCK_ACTIONS, REFUND_DONE_ACTIONS, coinsSentence, customerReviewSentence, feeCoversSentence, refundOutcome, serviceFeeKeptBy,
+} from '../../../shared/cancellationOutcome.js';
 import { clockTime, itinerariesFromOffer, layoverBetween, legLabel } from '../../../shared/bookingItineraries.js';
 
 const money = (amount, currency = 'USD') =>
@@ -628,6 +630,13 @@ export function generateBookingConfirmationTemplate(data) {
     )
     : '';
 
+  // Total paid is what the card was charged. Coins paid the rest, so the
+  // lines above it only add up to it with the coins named.
+  const recordedCharge = d.verifiedCharge || {};
+  const coinsPaid = Number(d.walletAmount ?? recordedCharge.walletAmount ?? d.fareBreakdown?.walletAmount) || 0;
+  const coinCount = Math.floor(Number(d.walletCoins ?? recordedCharge.walletCoins) || 0);
+  const coinsPaidLabel = coinCount > 0 ? `Jet Coins (${new Intl.NumberFormat('en-US').format(coinCount)})` : 'Jet Coins';
+
   const content = `
     ${paragraph(opening)}
     ${journey}
@@ -643,6 +652,7 @@ export function generateBookingConfirmationTemplate(data) {
     [
       d.baseFare ? ['Base fare', formatCurrency(d.baseFare)] : null,
       d.taxes ? ['Taxes and fees', formatCurrency(d.taxes)] : null,
+      coinsPaid > 0 ? [coinsPaidLabel, `−${formatCurrency(coinsPaid)}`] : null,
     ].filter(Boolean),
     { total: formatCurrency(paymentAmount), currency, label: 'Total paid' },
   )}
@@ -864,6 +874,7 @@ export function generateCancellationTemplate(data) {
   const serviceFee = serviceFeeKeptBy(data);
   const keptRow = serviceFee > 0 ? ['Service fee (not refundable)', fmt(serviceFee)] : ['Cancellation fee', fmt(cancellationFee)];
   const policySentence = customerReviewSentence(data);
+  const coins = coinsSentence(data);
 
   const byOutcome = {
     refunded: {
@@ -877,14 +888,18 @@ export function generateCancellationTemplate(data) {
       ${highlightBox('Refunds reach the original payment method in 5-10 business days. Your bank decides the exact date, not us - if it has not landed after 10 working days, call and we will chase it.', {})}`,
     },
     fee_covers: {
-      preheader: 'no refund due',
-      figure: { label: 'Refund due', value: fmt(0), note: 'cancellation fee covers the fare' },
+      preheader: coins ? 'no card refund due' : 'no refund due',
+      figure: coins
+        ? { label: 'Card refund due', value: fmt(0), note: 'the fee covers the card payment' }
+        : { label: 'Refund due', value: fmt(0), note: 'cancellation fee covers the fare' },
       body: `
       ${fareBreakdown(
         [keptRow],
         { total: fmt(0), currency, label: 'Refund to original payment method', title: 'Refund breakdown' },
       )}
-      ${highlightBox('No refund is due: the cancellation fee is equal to or more than the amount paid, so nothing is returned to your card.', {})}`,
+      ${highlightBox(coins
+    ? feeCoversSentence(data, true)
+    : 'No refund is due: the cancellation fee is equal to or more than the amount paid, so nothing is returned to your card.', {})}`,
     },
     stuck: {
       preheader: 'refund needs manual processing',
@@ -928,7 +943,8 @@ export function generateCancellationTemplate(data) {
       ${figureBlock([
     { label: 'Booking reference', value: bookingReference, mono: true, small: true, note: statusPill('Cancelled', 'danger') },
     byOutcome.figure,
-  ])}${byOutcome.body}
+  ])}${byOutcome.body}${coins ? `
+      ${paragraph(coins)}` : ''}
       ${actionRow([{ text: 'My trips', url: `${BRAND.site}/my-trips` }, { text: 'Book again', url: `${BRAND.site}/flights` }])}
     `,
   });

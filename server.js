@@ -36,6 +36,8 @@ import subscriptionRoutes from "./backend/routes/subscription.routes.js";
 import pushRoutes from "./backend/routes/push.routes.js";
 import gdprRoutes from "./backend/routes/gdpr.routes.js";
 import savedTravellersRoutes from "./backend/routes/savedTravellers.routes.js";
+import walletRoutes from "./backend/routes/wallet.routes.js";
+import voucherRoutes from "./backend/routes/vouchers.routes.js";
 import supabase from "./backend/config/supabase.js";
 // Shared stability modules (same behavior across all 3 entry points)
 import "./backend/bootstrap/httpDefaults.js"; // global axios timeout safety net
@@ -45,6 +47,7 @@ import { installProcessGuards } from "./backend/bootstrap/processGuards.js";
 import { startBookingQueueWorker } from "./backend/jobs/bookingQueue.job.js";
 import { logCutoverRisks } from "./backend/services/amadeusSoap/config.js";
 import { startTicketSyncJob } from "./backend/jobs/ticketSync.job.js";
+import { startWalletEarnJob } from "./backend/jobs/walletEarn.job.js";
 import { startNeedsReviewAlertJob } from "./backend/jobs/needsReviewAlert.job.js";
 import { startPaymentFailureAlertJob } from "./backend/jobs/paymentFailureAlert.job.js";
 import { startAbandonedCheckoutJob } from "./backend/jobs/abandonedCheckout.job.js";
@@ -137,6 +140,8 @@ app.use(["/api/auth", "/api/supabase"], authLimiter);
 app.use("/api/auth", authRoutes);
 // Ahead of /api/users, whose routes take the path's next segment as an id.
 app.use("/api/users/me/travellers", savedTravellersRoutes);
+app.use("/api/wallet", walletRoutes);
+app.use("/api/vouchers", voucherRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/hotels", hotelRoutes);
 app.use("/api/flights", flightRoutes);
@@ -346,6 +351,9 @@ if (process.env.NODE_ENV !== "test") {
     // Notices when a ticket a person issued by hand has appeared on the PNR,
     // records the number, and sends the e-ticket every other email promised.
     startTicketSyncJob();
+    // Credits Jet Coins on flights whose free-cancellation window has closed,
+    // and settles coins held for checkouts that were never paid.
+    startWalletEarnJob();
   });
   // Crash guards + graceful shutdown (drain in-flight requests on SIGTERM/SIGINT)
   installProcessGuards({ server });

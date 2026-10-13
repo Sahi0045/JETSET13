@@ -170,7 +170,7 @@ describe('the booking record after the airline priced the fare', () => {
     });
 
     expect(table.row(REF).booking_details.fare_breakdown).toEqual({
-      baseFare: 120, totalTax: 185.5, serviceFee: 1, discount: 0, totalAmount: 306.5, currency: 'USD',
+      baseFare: 120, totalTax: 185.5, serviceFee: 1, discount: 0, walletAmount: 0, totalAmount: 306.5, currency: 'USD',
     });
   });
 

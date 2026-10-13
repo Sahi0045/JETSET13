@@ -125,6 +125,7 @@ class ArcPayService {
                 bookingType: checkoutData.bookingType || 'flight',
                 // Evaluated by the server on the total it computes itself.
                 couponCode: checkoutData.couponCode,
+                walletCoins: checkoutData.walletCoins || undefined,
                 customerEmail: checkoutData.customerEmail,
                 customerName: checkoutData.customerName,
                 customerPhone: checkoutData.customerPhone,

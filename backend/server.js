@@ -22,6 +22,8 @@ import analyticsRoutes from './routes/analytics.routes.js';
 import pushRoutes from './routes/push.routes.js';
 import gdprRoutes from './routes/gdpr.routes.js';
 import savedTravellersRoutes from './routes/savedTravellers.routes.js';
+import walletRoutes from './routes/wallet.routes.js';
+import voucherRoutes from './routes/vouchers.routes.js';
 import adminRoutes from './routes/admin.routes.js';
 import currencyRoutes from './routes/currency.routes.js';
 import { checkQuoteExpirationHandler } from './jobs/checkQuoteExpiration.js';
@@ -190,6 +192,8 @@ app.use('/api/gdpr', gdprRoutes);
 
 // A customer's saved travellers, mounted in all three entry points.
 app.use('/api/users/me/travellers', savedTravellersRoutes);
+app.use('/api/wallet', walletRoutes);
+app.use('/api/vouchers', voucherRoutes);
 
 
 // Direct send-email endpoint (must match api/index.js implementation)
