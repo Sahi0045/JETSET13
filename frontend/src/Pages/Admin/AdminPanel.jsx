@@ -17,6 +17,7 @@ import AdminsManager from './AdminsManager';
 import ActivityLog from './ActivityLog';
 import AccountSettings from './AccountSettings';
 import CouponManagement from './CouponManagement';
+import VoucherManagement from './VoucherManagement';
 import SubscriptionManagement from './SubscriptionManagement';
 import SLADashboard from './SLADashboard';
 import BulkActions from './BulkActions';
@@ -44,6 +45,7 @@ const AdminPanel = () => {
         <Route path="activity" element={<ActivityLog />} />
         <Route path="account" element={<AccountSettings />} />
         <Route path="coupons" element={<CouponManagement />} />
+        <Route path="vouchers" element={<VoucherManagement />} />
         <Route path="subscriptions" element={<SubscriptionManagement />} />
         <Route path="sla" element={<SLADashboard />} />
         <Route path="bulk" element={<BulkActions />} />
