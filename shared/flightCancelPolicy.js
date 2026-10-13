@@ -12,6 +12,8 @@
  * app. Dependency-free: the browser, Vercel, Lightsail and the app all load it.
  */
 
+import { grossPaidOf } from './jetCoins.js';
+
 export const FREE_CANCEL_HOURS = 24;
 const HOUR_MS = 60 * 60 * 1000;
 
@@ -93,31 +95,48 @@ export function fareRuleOf(penalties) {
  * whose service fee was never recorded keeps nothing.
  */
 export function customerCancelTerms({ charge, paidAt, now = new Date(), timeZone, hasReservation, ticketed, fareRule = null, cancellationFee = null } = {}) {
-  const paid = known(charge?.total) ? cents(charge.total) : null;
+  const paid = known(charge?.total) ? cents(grossPaidOf(charge)) : null;
   const serviceFeeKept = Math.min(serviceFeeKeptOf(charge) ?? 0, paid ?? Infinity);
   const airlinePrice = paid === null ? null : cents(Math.max(0, paid - serviceFeeKept));
-  const base = { paid, serviceFeeKept, airlinePrice, penalty: null, penaltyCurrency: null, cancellationFee: null, freeUntil: freeUntilOf(paidAt, timeZone) };
+  const walletCoins = Math.max(0, Math.floor(Number(charge?.walletCoins) || 0));
+  const splitRefund = (amount) => {
+    if (amount === null) return { coinsBack: 0, cardBack: null };
+    const coinsBack = Math.min(walletCoins, Math.round(amount * 100));
+    return { coinsBack, cardBack: cents(amount - coinsBack / 100) };
+  };
+  const undecided = { coinsBack: 0, cardBack: null };
+  const base = { paid, serviceFeeKept, airlinePrice, ...splitRefund(airlinePrice), penalty: null, penaltyCurrency: null, cancellationFee: null, freeUntil: freeUntilOf(paidAt, timeZone) };
 
-  if (!hasReservation) return { ...base, policy: 'never_booked', automatic: true, serviceFeeKept: 0, airlinePrice: paid, refundAmount: paid };
+  if (!hasReservation) return { ...base, policy: 'never_booked', automatic: true, serviceFeeKept: 0, airlinePrice: paid, refundAmount: paid, ...splitRefund(paid) };
   if (!ticketed) return { ...base, policy: 'not_ticketed', automatic: true, refundAmount: airlinePrice };
   if (isWithinFreeWindow(paidAt, now, timeZone)) return { ...base, policy: 'free_window', automatic: true, refundAmount: airlinePrice };
-  if (fareRule?.refundable === false) return { ...base, policy: 'non_refundable', automatic: false, refundAmount: null };
+  if (fareRule?.refundable === false) return { ...base, policy: 'non_refundable', automatic: false, refundAmount: null, ...undecided };
   if (fareRule?.refundable === true) {
     return {
       ...base,
       policy: 'refundable',
       automatic: false,
       refundAmount: null,
+      ...undecided,
       penalty: fareRule.penalty ?? null,
       penaltyCurrency: fareRule.currency ?? null,
       cancellationFee: known(cancellationFee) ? cents(cancellationFee) : null,
     };
   }
-  return { ...base, policy: 'rules_unknown', automatic: false, refundAmount: null };
+  return { ...base, policy: 'rules_unknown', automatic: false, refundAmount: null, ...undecided };
 }
 
 export function cancelTermsLines(terms, { money = usd, time = clock } = {}) {
   if (!terms?.policy) return [];
+  const lines = policyLines(terms, { money, time });
+  if (terms.coinsBack > 0) {
+    const rest = known(terms.cardBack) && Number(terms.cardBack) <= 0 ? '.' : ', and the rest to your card.';
+    lines.push(`${money(terms.coinsBack / 100)} goes back to your Jet Wallet as ${terms.coinsBack.toLocaleString('en-US')} Jet Coins${rest}`);
+  }
+  return lines;
+}
+
+function policyLines(terms, { money, time }) {
   const back = known(terms.airlinePrice) ? money(terms.airlinePrice) : 'what you paid';
   const kept = Number(terms.serviceFeeKept) > 0 ? money(terms.serviceFeeKept) : null;
   const youGetBack = `You get back ${back}${kept ? `; the ${kept} service fee is not refundable.` : '.'}`;

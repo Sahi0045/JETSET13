@@ -38,6 +38,9 @@ export function travellerTypesOf(offer) {
   return pricings.map((pricing) => String(pricing?.travelerType || 'ADULT').toUpperCase());
 }
 
+/** ARC Pay cannot take $0.00: coins never take the card below this. */
+export const MIN_CARD_CHARGE = 1;
+
 /**
  * @param {object} p
  * @param {number} p.fareTotal   the airline's total for every passenger on the offer
@@ -46,8 +49,9 @@ export function travellerTypesOf(offer) {
  * @param {string[]} [p.travellerTypes]  the offer's traveller types (travellerTypesOf)
  * @param {object} p.config      price settings: flight_taxes_fees, flight_taxes_fees_percentage
  * @param {number} [p.discount]  coupon discount, already computed on the pre-discount total
+ * @param {number} [p.walletAmount]  Jet Coins in dollars, taken off after the coupon
  */
-export function computeFlightCharge({ fareTotal, passengers, travellerTypes, config, discount = 0 } = {}) {
+export function computeFlightCharge({ fareTotal, passengers, travellerTypes, config, discount = 0, walletAmount = 0 } = {}) {
   const fare = roundMoney(fareTotal);
   const types = Array.isArray(travellerTypes) && travellerTypes.length > 0
     ? travellerTypes.map((type) => String(type || 'ADULT').toUpperCase())
@@ -68,6 +72,8 @@ export function computeFlightCharge({ fareTotal, passengers, travellerTypes, con
   const serviceFee = roundMoney(fixedFee + percentageFee);
   const subtotal = roundMoney(fare + serviceFee);
   const appliedDiscount = roundMoney(Math.min(Math.max(Number(discount) || 0, 0), subtotal));
+  const afterCoupon = roundMoney(subtotal - appliedDiscount);
+  const appliedWallet = roundMoney(Math.min(Math.max(Number(walletAmount) || 0, 0), Math.max(0, afterCoupon - MIN_CARD_CHARGE)));
 
   return {
     fare,
@@ -80,7 +86,9 @@ export function computeFlightCharge({ fareTotal, passengers, travellerTypes, con
     serviceFee,
     subtotal,
     discount: appliedDiscount,
-    total: roundMoney(subtotal - appliedDiscount),
+    walletAmount: appliedWallet,
+    walletCoins: Math.round(appliedWallet * 100),
+    total: roundMoney(afterCoupon - appliedWallet),
   };
 }
 
