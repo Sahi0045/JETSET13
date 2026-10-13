@@ -180,6 +180,26 @@ const flightsShownAreSold = (offer) => {
     && (!segment?.departureDate || ddmmyy(shown[i]?.departure?.at) === String(segment.departureDate)));
 };
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+const calendarDayOf = (at) => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(at ?? ''));
+  return match ? Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])) : null;
+};
+
+/**
+ * A shown flight landing two or more calendar days before it leaves. The
+ * arrival is never compared with the flights sold, and a trip reward's payout
+ * date is read from it. One day earlier is genuine: across the date line Guam
+ * to Honolulu lands the evening before it leaves.
+ */
+const landsBeforeItLeaves = (offer) => (Array.isArray(offer?.itineraries) ? offer.itineraries : [])
+  .flatMap((itinerary) => (Array.isArray(itinerary?.segments) ? itinerary.segments : []))
+  .some((segment) => {
+    const left = calendarDayOf(segment?.departure?.at);
+    const landed = calendarDayOf(segment?.arrival?.at);
+    return left !== null && landed !== null && left - landed > DAY_MS;
+  });
+
 /**
  * @returns {Promise<
  *   {ok: true, charge, coupon, wallet: {coins, amount} | null, voucher: {id, code, coins} | null, pricedFare} |
@@ -205,6 +225,9 @@ export async function verifyFlightCharge({
   }
   if (!flightsShownAreSold(offer)) {
     return refuse(400, 'OFFER_MISSING', 'Your flight selection did not reach us intact. Please search again.');
+  }
+  if (landsBeforeItLeaves(offer)) {
+    return refuse(400, 'OFFER_MISSING', 'A flight in your selection lands before it leaves, so it did not reach us intact. Please search again. Nothing has been charged.');
   }
 
   // The fare covers exactly the travellers it was priced for. Extra travellers

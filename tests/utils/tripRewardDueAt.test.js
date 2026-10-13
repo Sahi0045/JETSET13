@@ -22,6 +22,28 @@ describe('when a trip reward pays out', () => {
     expect(tripRewardDueAt(itinerariesFromOffer(offer))).toBe('2026-11-18T00:00:00.000Z');
   });
 
+  // The arrival date is the page's own copy and is never checked against the
+  // airline; the departure date is (checkout compares it with the flights sold).
+  it('never pays before two days after the last flight leaves, whatever arrival the page sent', () => {
+    const flight = (departureDate, arrivalDate) => ({ segments: [{ departureDate, arrivalDate }] });
+    expect(tripRewardDueAt([flight('2026-11-15', '2020-01-01')])).toBe('2026-11-17T00:00:00.000Z');
+    expect(tripRewardDueAt([flight('2026-11-15', '2026-11-16')])).toBe('2026-11-18T00:00:00.000Z');
+  });
+
+  it('reads an offer whose arrival was edited into the past as due two days after the departure', () => {
+    const offer = { itineraries: [{ segments: [{ departure: { iataCode: 'JFK', at: '2026-11-15T19:25:00' }, arrival: { iataCode: 'LHR', at: '2020-01-01T06:10:00' }, carrierCode: 'FI', number: '614' }] }] };
+    expect(tripRewardDueAt(itinerariesFromOffer(offer))).toBe('2026-11-17T00:00:00.000Z');
+  });
+
+  it('counts from the departure of a flight that lands the calendar day before it leaves', () => {
+    const offer = { itineraries: [{ segments: [{ departure: { iataCode: 'GUM', at: '2026-11-17T07:50:00' }, arrival: { iataCode: 'HNL', at: '2026-11-16T19:10:00' }, carrierCode: 'UA', number: '200' }] }] };
+    expect(tripRewardDueAt(itinerariesFromOffer(offer))).toBe('2026-11-19T00:00:00.000Z');
+  });
+
+  it('gives no date when the last arrival cannot be read, even with a departure date', () => {
+    expect(tripRewardDueAt([{ segments: [{ departureDate: '2026-11-15', arrivalDate: '' }] }])).toBeNull();
+  });
+
   it('gives no date for an itinerary it cannot read', () => {
     expect(tripRewardDueAt([])).toBeNull();
     expect(tripRewardDueAt(null)).toBeNull();

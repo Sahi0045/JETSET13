@@ -190,20 +190,35 @@ export function returnDateOf(legs) {
   return Array.isArray(legs) && legs.length === 2 ? legs[1]?.departureDate || '' : '';
 }
 
+/** 'YYYY-MM-DD' -> its 00:00 UTC in milliseconds, or null for anything else. */
+function calendarDay(value) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text(value));
+  if (!match) return null;
+  const [year, month, day] = [Number(match[1]), Number(match[2]) - 1, Number(match[3])];
+  const at = new Date(Date.UTC(year, month, day));
+  if (at.getUTCFullYear() !== year || at.getUTCMonth() !== month || at.getUTCDate() !== day) return null;
+  return at.getTime();
+}
+
 /**
  * When a trip-reward voucher pays out: 00:00 UTC two days after the last
  * flight's arrival date, or null when that date cannot be read. Arrival times
  * carry no zone, so only the date is used: by then the day after landing has
  * ended in UTC wherever the airport is.
+ *
+ * Never earlier than two days after that flight's departure date: the arrival
+ * is the client's copy and checkout never compares it with the flights sold,
+ * while the departure date it does compare. An arrival moved into the past
+ * would otherwise pay the reward at once, inside the free-cancellation window.
  */
 export function tripRewardDueAt(legs) {
   const list = Array.isArray(legs) ? legs : [];
   const lastLeg = list[list.length - 1];
   const segments = Array.isArray(lastLeg?.segments) ? lastLeg.segments : [];
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text(segments[segments.length - 1]?.arrivalDate));
-  if (!match) return null;
-  const [year, month, day] = [Number(match[1]), Number(match[2]) - 1, Number(match[3])];
-  const landed = new Date(Date.UTC(year, month, day));
-  if (landed.getUTCFullYear() !== year || landed.getUTCMonth() !== month || landed.getUTCDate() !== day) return null;
-  return new Date(Date.UTC(year, month, day + 2)).toISOString();
+  const lastFlight = segments[segments.length - 1];
+  const landed = calendarDay(lastFlight?.arrivalDate);
+  if (landed === null) return null;
+  const left = calendarDay(lastFlight?.departureDate);
+  const day = new Date(Math.max(landed, left ?? landed));
+  return new Date(Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate() + 2)).toISOString();
 }
