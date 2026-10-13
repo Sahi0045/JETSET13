@@ -555,9 +555,45 @@ describe('holds left behind', () => {
   });
 
   describe('a paid checkout with no reservation', () => {
+    const past = { created_at: iso(NOW - CHECKOUT_LOOKBACK_MS - DAY) };
+
+    it('is left alone, neither captured nor flagged, while the abandoned-checkout job still covers it', async () => {
+      for (const age of [4 * HOUR, 7 * HOUR, 3 * DAY]) {
+        const bookings = [checkout('PAID1', { payment_status: 'paid', created_at: iso(NOW - age) })];
+        const { deps, run } = sweepWith({}, fakeClient({ holds: [hold('PAID1', { created_at: iso(NOW - age) })], bookings }));
+        const result = await run();
+        expect(deps.capture).not.toHaveBeenCalled();
+        expect(deps.release).not.toHaveBeenCalled();
+        expect(deps.flag).not.toHaveBeenCalled();
+        expect(result.skipped).toEqual([{ bookingReference: 'PAID1', reason: 'left-to-abandoned-checkout' }]);
+      }
+    });
+
+    it('is flagged once the job no longer covers it, and not again', async () => {
+      const row = checkout('PAID2', { payment_status: 'paid', ...past });
+      const holdRow = hold('PAID2', past);
+      const flag = vi.fn(async () => 'flagged');
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const first = await sweepWith({ flag }, fakeClient({ holds: [holdRow], bookings: [row] })).run();
+      const flagged = { ...row, booking_details: { ...row.booking_details, needs_review: { reason: 'x' } } };
+      await sweepWith({ flag }, fakeClient({ holds: [holdRow], bookings: [flagged] })).run();
+      warn.mockRestore();
+      expect(flag).toHaveBeenCalledTimes(1);
+      expect(first.flagged).toBe(1);
+    });
+
+    it('is flagged when the job cannot cover it (no success indicator) at any age', async () => {
+      const bookings = [checkout('PAID5', { payment_status: 'paid', booking_details: { success_indicator: undefined } })];
+      const { deps, run } = sweepWith({}, fakeClient({ holds: [hold('PAID5')], bookings }));
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      await run();
+      warn.mockRestore();
+      expect(deps.flag).toHaveBeenCalledTimes(1);
+    });
+
     it('keeps its coins on hold and puts it in front of a person', async () => {
-      const bookings = [checkout('PAID2', { payment_status: 'paid' })];
-      const { deps, run } = sweepWith({}, fakeClient({ holds: [hold('PAID2')], bookings }));
+      const bookings = [checkout('PAID2', { payment_status: 'paid', ...past })];
+      const { deps, run } = sweepWith({}, fakeClient({ holds: [hold('PAID2', past)], bookings }));
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const result = await run();
       warn.mockRestore();
@@ -571,8 +607,8 @@ describe('holds left behind', () => {
     });
 
     it('is not flagged again once a person has been asked to look', async () => {
-      const bookings = [checkout('PAID3', { payment_status: 'paid', booking_details: { needs_review: { reason: 'x' } } })];
-      const { deps, run } = sweepWith({}, fakeClient({ holds: [hold('PAID3')], bookings }));
+      const bookings = [checkout('PAID3', { payment_status: 'paid', ...past, booking_details: { needs_review: { reason: 'x' } } })];
+      const { deps, run } = sweepWith({}, fakeClient({ holds: [hold('PAID3', past)], bookings }));
       await run();
       expect(deps.flag).not.toHaveBeenCalled();
       expect(deps.capture).not.toHaveBeenCalled();
@@ -589,16 +625,16 @@ describe('holds left behind', () => {
     });
 
     it('is not flagged from another site', async () => {
-      const bookings = [checkout('LOCALPAID', { payment_status: 'paid', booking_details: { pending_booking_data: { returnUrl: 'http://localhost:5173/payment/callback' } } })];
-      const { deps, run } = sweepWith({}, fakeClient({ holds: [hold('LOCALPAID')], bookings }));
+      const bookings = [checkout('LOCALPAID', { payment_status: 'paid', ...past, booking_details: { pending_booking_data: { returnUrl: 'http://localhost:5173/payment/callback' } } })];
+      const { deps, run } = sweepWith({}, fakeClient({ holds: [hold('LOCALPAID', past)], bookings }));
       await run();
       expect(deps.flag).not.toHaveBeenCalled();
     });
 
     it('says so when it could not be flagged, and carries on', async () => {
-      const bookings = [checkout('PAID4', { payment_status: 'paid' })];
+      const bookings = [checkout('PAID4', { payment_status: 'paid', ...past })];
       const flag = vi.fn().mockRejectedValue(new Error('down'));
-      const { deps, run } = sweepWith({ flag }, fakeClient({ holds: [hold('PAID4'), hold('GONE2', { created_at: iso(NOW - 4 * HOUR + 1000) })], bookings }));
+      const { deps, run } = sweepWith({ flag }, fakeClient({ holds: [hold('PAID4', past), hold('GONE2', { created_at: iso(NOW - 4 * HOUR + 1000) })], bookings }));
       const error = vi.spyOn(console, 'error').mockImplementation(() => {});
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const result = await run();

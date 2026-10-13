@@ -227,15 +227,22 @@ export function decideStaleHold(row, { now = Date.now(), site = unpaidSite() } =
   if (liveChainState(details.gds_chain, now)) return skip('booking-in-progress');
 
   const rowSite = checkoutSite(row);
-  if (row.payment_status === 'paid') return rowSite && rowSite !== site ? skip('other-site') : { action: 'flag', reason: 'paid-not-booked' };
+  const age = now - Date.parse(row.created_at);
+  // The job books a paid checkout within its auto-complete window and flags it itself after, up to its lookback.
+  const coveredByAbandonedCheckout = rowSite === site
+    && Boolean(details.success_indicator && details.pending_booking_data)
+    && age <= CHECKOUT_LOOKBACK_MS;
+
+  if (row.payment_status === 'paid') {
+    if (coveredByAbandonedCheckout) return skip('left-to-abandoned-checkout');
+    return rowSite && rowSite !== site ? skip('other-site') : { action: 'flag', reason: 'paid-not-booked' };
+  }
 
   // The gateway can only be asked with this site's own merchant: another
   // site's order reads as "no such order" here, which is not "never paid".
   if (rowSite !== site) return skip(rowSite ? 'other-site' : 'site-unknown');
 
-  const age = now - Date.parse(row.created_at);
   if (!Number.isFinite(age)) return skip('time-unreadable');
-  const coveredByAbandonedCheckout = Boolean(details.success_indicator && details.pending_booking_data) && age <= CHECKOUT_LOOKBACK_MS;
   if (coveredByAbandonedCheckout) return skip('left-to-abandoned-checkout');
   if (age <= AUTO_COMPLETE_WINDOW_MS) return skip('too-soon');
   return { action: 'ask-gateway', reason: 'not-covered-by-abandoned-checkout' };
