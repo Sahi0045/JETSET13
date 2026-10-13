@@ -211,6 +211,24 @@ export const guestBookingLimiter = rateLimit({
 });
 
 /**
+ * Voucher codes are words an admin chose, so they can be guessed: ten wrong
+ * tries per customer per 15 minutes. In-memory, per instance, like the others.
+ */
+export const voucherRedeemLimiter = rateLimit({
+  windowMs: minutes(15),
+  max: Number(process.env.RATE_LIMIT_VOUCHER_MAX || 10),
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  keyGenerator: (req) => (req.user?.id ? `user:${req.user.id}` : ipKeyGenerator(req.ip || '')),
+  message: {
+    success: false,
+    code: 'RATE_LIMITED',
+    error: 'Too many voucher attempts. Please wait 15 minutes and try again.',
+  },
+});
+
+/**
  * Stricter limiter for credential endpoints (login/register/OTP) where abuse
  * is brute-force. Kept off the payment routes deliberately — a legitimate
  * multi-step checkout can make several calls and must not be throttled.
