@@ -76,12 +76,13 @@ export function travellerDetailsKey(travellers) {
 
 /**
  * What a flight checkout would book and charge, as one string: the flights,
- * every traveller detail, the contact details, the coupon and the verified
- * total in cents. Null when any of the parts that identify a trip is missing.
+ * every traveller detail, the contact details, the coupon, the verified
+ * total in cents and, when any are used, the Jet Coins. Null when any of the
+ * parts that identify a trip is missing.
  *
- * @param {{ bookingData?: object, customerEmail?: string, total?: number, couponCode?: string }} checkout
+ * @param {{ bookingData?: object, customerEmail?: string, total?: number, couponCode?: string, walletCoins?: number }} checkout
  */
-export function checkoutKey({ bookingData, customerEmail, total, couponCode } = {}) {
+export function checkoutKey({ bookingData, customerEmail, total, couponCode, walletCoins = 0 } = {}) {
   const flights = flightsKey(bookingData?.originalOffer);
   const travellers = travellerDetailsKey(bookingData?.passengerData);
   const cents = Math.round(Number(total) * 100);
@@ -100,5 +101,6 @@ export function checkoutKey({ bookingData, customerEmail, total, couponCode } = 
     text(contact.countryCode).replace(/\D/g, ''),
     upper(couponCode),
     cents,
+    ...(Math.floor(Number(walletCoins) || 0) > 0 ? [Math.floor(Number(walletCoins))] : []),
   ]);
 }

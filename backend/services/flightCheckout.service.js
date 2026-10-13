@@ -7,6 +7,8 @@ import { NAME_MISSING, travellerNameProblem } from '../../shared/passengerName.j
 import { DEFAULT_PRICE_SETTINGS } from '../config/priceDefaults.js';
 import { couponTripKey, evaluateCoupon } from './coupon.service.js';
 import { internalRequestHeaders } from '../utils/internalRequest.js';
+import { maxWalletCoinsFor } from '../../shared/jetCoins.js';
+import { readBalance } from './wallet.service.js';
 
 /**
  * Verify what a flight checkout is about to charge, before ARC Pay sees it.
@@ -178,7 +180,7 @@ const flightsShownAreSold = (offer) => {
 
 /**
  * @returns {Promise<
- *   {ok: true, charge, coupon, pricedFare} |
+ *   {ok: true, charge, coupon, wallet: {coins, amount} | null, pricedFare} |
  *   {ok: false, status, code, message, charge?, pricedFare?}
  * >}
  */
@@ -189,6 +191,7 @@ export async function verifyFlightCharge({
   couponCode,
   userId,
   email,
+  walletCoins = 0,
   settlementCurrency = 'USD',
   priceOffer = priceOfferForCheckout,
 } = {}) {
@@ -373,16 +376,35 @@ export async function verifyFlightCharge({
     coupon = { id: evaluated.coupon.id, code: evaluated.coupon.code, discountAmount: discount };
   }
 
-  const charge = computeFlightCharge({ fareTotal, travellerTypes, config, discount });
+  const afterCoupon = computeFlightCharge({ fareTotal, travellerTypes, config, discount });
 
   // A coupon worth the whole booking leaves nothing to charge, and a payment
   // page cannot be opened for $0.00. The page sent 0, and checkout answered
   // with its own internal "Missing required fields" message.
-  if (coupon && charge.total <= 0) {
+  if (coupon && afterCoupon.total <= 0) {
     return refuse(409, 'COUPON_INVALID',
       'This coupon covers the whole fare, and a booking cannot be paid for at $0.00 online. Please call (877) 538-7380 to use it.',
       { pricedFare });
   }
+
+  let wallet = null;
+  const askedCoins = Math.floor(Number(walletCoins) || 0);
+  if (askedCoins > 0) {
+    if (!userId) {
+      return refuse(401, 'LOGIN_REQUIRED', 'Please log in to use your Jet Coins. Nothing has been charged.', { pricedFare });
+    }
+    let balance;
+    try {
+      balance = await readBalance(client, userId);
+    } catch (error) {
+      console.warn('Checkout could not read the Jet Wallet:', error?.message || error);
+      return refuse(503, 'WALLET_UNAVAILABLE', 'We could not check your Jet Coins just now. Please try again in a moment.', { pricedFare });
+    }
+    const coins = maxWalletCoinsFor(afterCoupon.total, Math.min(askedCoins, balance));
+    if (coins > 0) wallet = { coins, amount: roundMoney(coins / 100) };
+  }
+
+  const charge = computeFlightCharge({ fareTotal, travellerTypes, config, discount, walletAmount: wallet ? wallet.amount : 0 });
 
   const requested = roundMoney(amount);
 
@@ -392,5 +414,5 @@ export async function verifyFlightCharge({
       { charge, pricedFare });
   }
 
-  return { ok: true, charge, coupon, pricedFare };
+  return { ok: true, charge, coupon, wallet, pricedFare };
 }

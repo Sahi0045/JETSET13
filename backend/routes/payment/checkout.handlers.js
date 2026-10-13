@@ -13,6 +13,7 @@ import { toPnrName } from '../../../shared/passengerName.js';
 import { errorSummary } from '../../utils/errorSummary.js';
 import { orderVoided, ARC_REQUEST_TIMEOUT_MS } from '../../utils/arcTransactions.js';
 import { arcFailureSummary } from './payment.helpers.js';
+import { holdCoins, releaseCoins } from '../../services/wallet.service.js';
 
 const sanitizeRef = (v) => String(v ?? '').replace(/[^A-Za-z0-9_-]/g, '') || '__none__';
 
@@ -122,6 +123,7 @@ async function findReusableCheckout({ userId, customerEmail, key, returnOrigin, 
                 customerEmail: details.customer_email,
                 total: details.verified_charge?.total,
                 couponCode: details.verified_charge?.coupon?.code,
+                walletCoins: details.verified_charge?.wallet?.coins,
             });
             if (storedKey !== key) continue;
 
@@ -492,6 +494,8 @@ export async function handleHostedCheckout(req, res) {
 
     // This trip's checkout lock, when this request holds it (lockCheckout).
     let tripLock = null;
+    let heldCoinsRef = null;
+    let checkoutDone = false;
     try {
         // Never log the body: it carries the customer's name, email, phone and
         // the traveller details behind bookingData.
@@ -691,7 +695,7 @@ export async function handleHostedCheckout(req, res) {
             const openPage = await findReusableCheckout({
                 userId: signedInUserId,
                 customerEmail,
-                key: checkoutKey({ bookingData, customerEmail, total: amount, couponCode: req.body.couponCode }),
+                key: checkoutKey({ bookingData, customerEmail, total: amount, couponCode: req.body.couponCode, walletCoins: req.body.walletCoins }),
                 returnOrigin: urlOrigin(finalReturnUrl),
                 frontendBaseUrl,
             });
@@ -702,6 +706,7 @@ export async function handleHostedCheckout(req, res) {
                 amount,
                 bookingData,
                 couponCode: req.body.couponCode,
+                walletCoins: req.body.walletCoins,
                 userId: signedInUserId,
                 // A guest's coupon limit is kept by email, as they have no account.
                 email: customerEmail,
@@ -723,6 +728,7 @@ export async function handleHostedCheckout(req, res) {
             verifiedCharge = {
                 ...verdict.charge,
                 coupon: verdict.coupon,
+                wallet: verdict.wallet,
                 pricedFare: verdict.pricedFare,
                 verifiedAt: new Date().toISOString(),
             };
@@ -763,11 +769,34 @@ export async function handleHostedCheckout(req, res) {
             const reusable = await findReusableCheckout({
                 userId: resolveBookingUserId(req),
                 customerEmail,
-                key: checkoutKey({ bookingData, customerEmail, total: chargeAmount, couponCode: verifiedCharge?.coupon?.code }),
+                key: checkoutKey({ bookingData, customerEmail, total: chargeAmount, couponCode: verifiedCharge?.coupon?.code, walletCoins: verifiedCharge?.wallet?.coins }),
                 returnOrigin: urlOrigin(finalReturnUrl),
                 frontendBaseUrl,
             });
             if (reusable) return handBack(reusable);
+
+            // The coins are taken now, before a payment page exists, so a second
+            // tab cannot spend them too. Any way out below that does not hand
+            // the customer a page gives them back (finally).
+            if (verifiedCharge?.wallet?.coins > 0) {
+                const walletChanged = () => res.status(409).json({
+                    success: false,
+                    code: 'WALLET_CHANGED',
+                    error: 'Your Jet Coins changed while you were checking out. Please review the total and try again. Nothing has been charged.',
+                });
+                try {
+                    const hold = await holdCoins(supabase, { userId: resolveBookingUserId(req), bookingReference: orderId, coins: verifiedCharge.wallet.coins });
+                    if (hold?.status !== 'held') return walletChanged();
+                    heldCoinsRef = orderId;
+                } catch (walletError) {
+                    if (walletError.code === 'INSUFFICIENT_COINS' || walletError.code === 'HOLD_CONFLICT') return walletChanged();
+                    return res.status(503).json({
+                        success: false,
+                        code: 'WALLET_UNAVAILABLE',
+                        error: 'We could not use your Jet Coins just now. Please try again in a moment. Nothing has been charged.',
+                    });
+                }
+            }
         }
 
         const cleanBaseUrl = arcBaseUrl.replace(/\/$/, '');
@@ -1145,6 +1174,8 @@ export async function handleHostedCheckout(req, res) {
             });
         }
 
+        checkoutDone = true;
+
         // No success indicator. It is the secret that proves who paid - the order
         // route accepts it as the payer's proof - and ARC hands it to the payer's
         // own browser on the way back. Returning it here handed it to whoever
@@ -1171,6 +1202,13 @@ export async function handleHostedCheckout(req, res) {
             error: 'Failed to create hosted checkout'
         });
     } finally {
+        if (heldCoinsRef && !checkoutDone) {
+            try {
+                await releaseCoins(supabase, heldCoinsRef);
+            } catch (releaseError) {
+                console.error('⚠️ Coins held for a checkout that never opened could not be released', { orderId: heldCoinsRef, code: releaseError.code });
+            }
+        }
         // Held until the page's row is written, so the next checkout of this
         // trip finds it; let go on every way out.
         if (tripLock) await releaseLock(tripLock.key, tripLock.token);
