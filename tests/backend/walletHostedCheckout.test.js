@@ -426,3 +426,109 @@ describe('the coins a payment page holds outlast the page', () => {
     expect(CHECKOUT_REUSE_WINDOW_MS).toBeLessThan(PAYABLE_MS);
   });
 });
+
+describe('a trip-reward voucher on the hosted checkout', () => {
+  const voucher = { id: 'v1', code: 'SHUBHAM', coins: 5000 };
+
+  it('checks the voucher and keeps it on the booking row, without touching the price', async () => {
+    arcOpens();
+    const { post, table, verifyFlightCharge } = await harness();
+    verifyFlightCharge.mockImplementation(async () => ({ ...verdictFor(0), voucher }));
+
+    const res = await post({ walletCoins: 0, voucherCode: 'shubham' });
+
+    expect(res.statusCode).toBe(200);
+    expect(verifyFlightCharge).toHaveBeenCalledWith(expect.objectContaining({ voucherCode: 'shubham', userId: CUSTOMER.id }));
+    expect(arcPages()[0][1].order.amount).toBe('122.20');
+    expect(table.row('FLTCOINS1').booking_details.verified_charge.voucher).toEqual(voucher);
+  });
+
+  it('answers a refused voucher with its code before any payment page opens', async () => {
+    const { post, verifyFlightCharge } = await harness();
+    verifyFlightCharge.mockResolvedValue({ ok: false, status: 409, code: 'VOUCHER_FIRST_TIME_ONLY', message: 'This voucher is for first-time customers only.' });
+
+    const res = await post({ walletCoins: 0, voucherCode: 'SHUBHAM' });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.body).toMatchObject({ code: 'VOUCHER_FIRST_TIME_ONLY', error: 'This voucher is for first-time customers only.' });
+    expect(openedAPage()).toBe(false);
+  });
+});
+
+describe('the payment page a voucher checkout leaves open', () => {
+  const voucherHarness = async () => {
+    arcOpens();
+    const setup = await harness();
+    setup.verifyFlightCharge.mockImplementation(async ({ walletCoins, voucherCode }) => ({
+      ...verdictFor(Math.floor(Number(walletCoins) || 0)),
+      voucher: voucherCode ? { id: 'v1', code: String(voucherCode).trim().toUpperCase(), coins: 5000 } : null,
+    }));
+    return setup;
+  };
+  const noCoins = { walletCoins: 0, amount: '122.20' };
+
+  it('is handed back for the same trip and the same voucher, however it is typed', async () => {
+    const { post, verifyFlightCharge, holdCoins } = await voucherHarness();
+    const first = await post({ ...noCoins, orderId: 'FLTVOUCH1', voucherCode: 'SHUBHAM' });
+    expect(first.statusCode).toBe(200);
+
+    axios.post.mockClear();
+    const second = await post({ ...noCoins, orderId: 'FLTVOUCH2', voucherCode: ' shubham ' });
+
+    expect(second.body).toMatchObject({ success: true, reused: true, orderId: 'FLTVOUCH1' });
+    expect(openedAPage()).toBe(false);
+    expect(verifyFlightCharge).toHaveBeenCalledTimes(1);
+    expect(holdCoins).not.toHaveBeenCalled();
+  });
+
+  it('is handed back at the verified total, by the voucher the first check found', async () => {
+    const { post, verifyFlightCharge } = await voucherHarness();
+    await post({ ...noCoins, orderId: 'FLTVOUCH1', voucherCode: 'SHUBHAM' });
+
+    axios.post.mockClear();
+    const second = await post({ ...noCoins, amount: '999.00', orderId: 'FLTVOUCH2', voucherCode: 'shubham' });
+
+    expect(verifyFlightCharge).toHaveBeenCalledTimes(2);
+    expect(second.body).toMatchObject({ reused: true, orderId: 'FLTVOUCH1' });
+    expect(openedAPage()).toBe(false);
+  });
+
+  it('is not handed to a checkout without a voucher', async () => {
+    const { post, table } = await voucherHarness();
+    await post({ ...noCoins, orderId: 'FLTVOUCH1', voucherCode: 'SHUBHAM' });
+
+    axios.post.mockClear();
+    const second = await post({ ...noCoins, orderId: 'FLTVOUCH2' });
+
+    expect(second.body.reused).toBeUndefined();
+    expect(second.body.orderId).toBe('FLTVOUCH2');
+    expect(openedAPage()).toBe(true);
+    expect(table.row('FLTVOUCH2').booking_details.verified_charge.voucher).toBeNull();
+  });
+
+  it('is not handed to a checkout with another voucher', async () => {
+    const { post, table } = await voucherHarness();
+    await post({ ...noCoins, orderId: 'FLTVOUCH1', voucherCode: 'SHUBHAM' });
+
+    axios.post.mockClear();
+    const second = await post({ ...noCoins, orderId: 'FLTVOUCH2', voucherCode: 'OTHER1' });
+
+    expect(second.body.reused).toBeUndefined();
+    expect(second.body.orderId).toBe('FLTVOUCH2');
+    expect(openedAPage()).toBe(true);
+    expect(table.row('FLTVOUCH2').booking_details.verified_charge.voucher).toMatchObject({ code: 'OTHER1' });
+  });
+
+  it('is never handed back to a checkout that now asks for a voucher when the open page has none', async () => {
+    const { post, verifyFlightCharge } = await voucherHarness();
+    await post({ ...noCoins, orderId: 'FLTVOUCH1' });
+
+    axios.post.mockClear();
+    const second = await post({ ...noCoins, orderId: 'FLTVOUCH2', voucherCode: 'SHUBHAM' });
+
+    expect(second.body.reused).toBeUndefined();
+    expect(second.body.orderId).toBe('FLTVOUCH2');
+    expect(openedAPage()).toBe(true);
+    expect(verifyFlightCharge).toHaveBeenCalledTimes(2);
+  });
+});

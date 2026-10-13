@@ -125,6 +125,7 @@ async function findReusableCheckout({ userId, customerEmail, key, returnOrigin, 
                 total: details.verified_charge?.total,
                 couponCode: details.verified_charge?.coupon?.code,
                 walletCoins: details.verified_charge?.wallet?.coins,
+                voucherCode: details.verified_charge?.voucher?.code,
             });
             if (storedKey !== key) continue;
 
@@ -723,7 +724,7 @@ export async function handleHostedCheckout(req, res) {
             const openPage = await findReusableCheckout({
                 userId: signedInUserId,
                 customerEmail,
-                key: checkoutKey({ bookingData, customerEmail, total: amount, couponCode: req.body.couponCode, walletCoins: req.body.walletCoins }),
+                key: checkoutKey({ bookingData, customerEmail, total: amount, couponCode: req.body.couponCode, walletCoins: req.body.walletCoins, voucherCode: req.body.voucherCode }),
                 returnOrigin: urlOrigin(finalReturnUrl),
                 frontendBaseUrl,
             });
@@ -735,6 +736,7 @@ export async function handleHostedCheckout(req, res) {
                 bookingData,
                 couponCode: req.body.couponCode,
                 walletCoins: req.body.walletCoins,
+                voucherCode: req.body.voucherCode,
                 userId: signedInUserId,
                 // A guest's coupon limit is kept by email, as they have no account.
                 email: customerEmail,
@@ -757,6 +759,7 @@ export async function handleHostedCheckout(req, res) {
                 ...verdict.charge,
                 coupon: verdict.coupon,
                 wallet: verdict.wallet,
+                voucher: verdict.voucher,
                 pricedFare: verdict.pricedFare,
                 verifiedAt: new Date().toISOString(),
             };
@@ -797,7 +800,7 @@ export async function handleHostedCheckout(req, res) {
             const reusable = await findReusableCheckout({
                 userId: resolveBookingUserId(req),
                 customerEmail,
-                key: checkoutKey({ bookingData, customerEmail, total: chargeAmount, couponCode: verifiedCharge?.coupon?.code, walletCoins: verifiedCharge?.wallet?.coins }),
+                key: checkoutKey({ bookingData, customerEmail, total: chargeAmount, couponCode: verifiedCharge?.coupon?.code, walletCoins: verifiedCharge?.wallet?.coins, voucherCode: verifiedCharge?.voucher?.code }),
                 returnOrigin: urlOrigin(finalReturnUrl),
                 frontendBaseUrl,
             });

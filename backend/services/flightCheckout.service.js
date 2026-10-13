@@ -8,7 +8,9 @@ import { DEFAULT_PRICE_SETTINGS } from '../config/priceDefaults.js';
 import { couponTripKey, evaluateCoupon } from './coupon.service.js';
 import { internalRequestHeaders } from '../utils/internalRequest.js';
 import { maxWalletCoinsFor, WALLET_CHANGED_MESSAGE } from '../../shared/jetCoins.js';
-import { readBalance } from './wallet.service.js';
+import {
+  CHECKOUT_VOUCHER_MESSAGES, VOUCHER_CODE_PATTERN, checkTripVoucher, normalizeVoucherCode, readBalance,
+} from './wallet.service.js';
 
 /**
  * Verify what a flight checkout is about to charge, before ARC Pay sees it.
@@ -180,7 +182,7 @@ const flightsShownAreSold = (offer) => {
 
 /**
  * @returns {Promise<
- *   {ok: true, charge, coupon, wallet: {coins, amount} | null, pricedFare} |
+ *   {ok: true, charge, coupon, wallet: {coins, amount} | null, voucher: {id, code, coins} | null, pricedFare} |
  *   {ok: false, status, code, message, charge?, pricedFare?}
  * >}
  */
@@ -192,6 +194,7 @@ export async function verifyFlightCharge({
   userId,
   email,
   walletCoins = 0,
+  voucherCode,
   settlementCurrency = 'USD',
   priceOffer = priceOfferForCheckout,
 } = {}) {
@@ -236,6 +239,27 @@ export async function verifyFlightCharge({
     || [...sentTypes].sort().join() !== [...pricedTypes].sort().join())) {
     return refuse(400, 'PASSENGER_COUNT_MISMATCH',
       `The travellers do not match this fare, which is for ${describeGroup(groupFromOffer(offer))}. Please search again for the people travelling.`);
+  }
+
+  let voucher = null;
+  const askedVoucher = normalizeVoucherCode(voucherCode);
+  if (askedVoucher) {
+    if (!userId) {
+      return refuse(401, 'LOGIN_REQUIRED', 'Please log in to use a voucher. Nothing has been charged.');
+    }
+    if (!VOUCHER_CODE_PATTERN.test(askedVoucher)) {
+      return refuse(409, 'VOUCHER_NOT_FOUND', CHECKOUT_VOUCHER_MESSAGES.VOUCHER_NOT_FOUND);
+    }
+    try {
+      const found = await checkTripVoucher(client, { userId, code: askedVoucher });
+      voucher = { id: found.id, code: found.code, coins: Math.floor(Number(found.coins) || 0) };
+    } catch (error) {
+      if (Object.hasOwn(CHECKOUT_VOUCHER_MESSAGES, error?.code)) {
+        return refuse(409, error.code, CHECKOUT_VOUCHER_MESSAGES[error.code]);
+      }
+      console.warn('Checkout could not check the voucher:', error?.message || error);
+      return refuse(503, 'VOUCHER_UNAVAILABLE', 'We could not check your voucher just now. Please try again in a moment. Nothing has been charged.');
+    }
   }
 
   // The fee settings, read before the fare is priced. Pricing is where the
@@ -421,5 +445,5 @@ export async function verifyFlightCharge({
       { charge, pricedFare });
   }
 
-  return { ok: true, charge, coupon, wallet, pricedFare };
+  return { ok: true, charge, coupon, wallet, voucher, pricedFare };
 }
