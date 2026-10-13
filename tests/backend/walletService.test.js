@@ -7,10 +7,11 @@ const rpcClient = (answer) => ({ rpc: vi.fn(async () => answer) });
 
 const tableClient = (tables) => ({
   from: vi.fn((table) => {
+    const answer = tables[table] ?? { data: [], error: null };
     const chain = {};
     for (const op of ['select', 'eq', 'order', 'limit']) chain[op] = vi.fn(() => chain);
-    chain.maybeSingle = vi.fn(async () => tables[table]);
-    chain.then = (resolve) => resolve(tables[table]);
+    chain.maybeSingle = vi.fn(async () => answer);
+    chain.then = (resolve) => resolve(answer);
     return chain;
   }),
 });

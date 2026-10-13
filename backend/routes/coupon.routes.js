@@ -9,6 +9,7 @@ import { protect, admin } from '../middleware/auth.middleware.js';
 // flight.routes.js was fixed the same way and for the same reason.
 import supabase from '../config/supabase.js';
 import { evaluateCoupon } from '../services/coupon.service.js';
+import { isVoucherCode } from '../services/wallet.service.js';
 
 dotenv.config();
 
@@ -132,6 +133,9 @@ router.post('/', protect, admin, async (req, res) => {
         if (!code || !discountType || !discountValue) {
             return res.status(400).json({ success: false, message: 'code, discountType, discountValue are required.' });
         }
+        if (await isVoucherCode(supabase, code)) {
+            return res.status(409).json({ success: false, message: 'A voucher already uses this code. Pick another code.' });
+        }
 
         const { data, error } = await supabase.from('coupons').insert([{
             code: code.trim().toUpperCase(),
@@ -186,6 +190,9 @@ router.put('/:id', protect, admin, async (req, res) => {
         if (b.applicableTo != null) updates.applicable_to = b.applicableTo;
         if (b.applicable_to != null) updates.applicable_to = b.applicable_to;
         if (typeof b.is_active === 'boolean') updates.is_active = b.is_active;
+        if (updates.code && await isVoucherCode(supabase, updates.code)) {
+            return res.status(409).json({ success: false, message: 'A voucher already uses this code. Pick another code.' });
+        }
 
         const { data, error } = await supabase
             .from('coupons')

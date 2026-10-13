@@ -1,11 +1,17 @@
 import supabase from '../config/supabase.js';
 import {
-  VOUCHER_MESSAGES, captureCoins, redeemVoucher, returnCoins, reverseEarnedCoins, walletSummary,
+  CHECKOUT_VOUCHER_MESSAGES, VOUCHER_CODE_PATTERN, VOUCHER_MESSAGES, captureCoins, checkTripVoucher, normalizeVoucherCode,
+  redeemVoucher, returnCoins, reverseEarnedCoins, walletSummary,
 } from '../services/wallet.service.js';
 import { patchBookingDetails } from '../routes/flight.routes.js';
 
-const CODE_PATTERN = /^[A-Z0-9-]{3,32}$/;
-const STATUS = { VOUCHER_NOT_FOUND: 404, VOUCHER_ALREADY_REDEEMED: 409, VOUCHER_USED_UP: 409 };
+const STATUS = {
+  VOUCHER_NOT_FOUND: 404,
+  VOUCHER_ALREADY_REDEEMED: 409,
+  VOUCHER_USED_UP: 409,
+  VOUCHER_WRONG_KIND: 409,
+  VOUCHER_FIRST_TIME_ONLY: 409,
+};
 const DESK_REASON = 'Returned by the support desk';
 const MAX_REASON_LENGTH = 200;
 
@@ -19,8 +25,8 @@ export async function getWallet(req, res) {
 }
 
 export async function redeem(req, res) {
-  const code = String(req.body?.code || '').trim().toUpperCase();
-  if (!CODE_PATTERN.test(code)) {
+  const code = normalizeVoucherCode(req.body?.code);
+  if (!VOUCHER_CODE_PATTERN.test(code)) {
     return res.status(404).json({ success: false, code: 'VOUCHER_NOT_FOUND', error: VOUCHER_MESSAGES.VOUCHER_NOT_FOUND });
   }
   try {
@@ -32,6 +38,23 @@ export async function redeem(req, res) {
     }
     console.error('⚠️ Voucher could not be redeemed:', error.message);
     return res.status(503).json({ success: false, code: 'WALLET_UNAVAILABLE', error: 'The voucher could not be redeemed just now. Please try again.' });
+  }
+}
+
+export async function voucherCheck(req, res) {
+  const code = normalizeVoucherCode(req.body?.code);
+  if (!VOUCHER_CODE_PATTERN.test(code)) {
+    return res.status(404).json({ success: false, code: 'VOUCHER_NOT_FOUND', error: CHECKOUT_VOUCHER_MESSAGES.VOUCHER_NOT_FOUND });
+  }
+  try {
+    const voucher = await checkTripVoucher(supabase, { userId: req.user.id, code });
+    return res.json({ success: true, data: { kind: 'trip', code: voucher.code, coins: Number(voucher.coins) } });
+  } catch (error) {
+    if (CHECKOUT_VOUCHER_MESSAGES[error.code]) {
+      return res.status(STATUS[error.code] || 400).json({ success: false, code: error.code, error: CHECKOUT_VOUCHER_MESSAGES[error.code] });
+    }
+    console.error('⚠️ Voucher could not be checked:', error.message);
+    return res.status(503).json({ success: false, code: 'WALLET_UNAVAILABLE', error: 'The voucher could not be checked just now. Please try again.' });
   }
 }
 

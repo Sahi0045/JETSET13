@@ -30,7 +30,10 @@ describe('admin vouchers', () => {
   it('reads the form into coins, an uppercase code and dates', () => {
     expect(voucherInput({ code: ' shubham ', valueUsd: '50', maxRedemptions: '', validUntil: '2026-12-31' })).toEqual({
       ok: true,
-      row: { code: 'SHUBHAM', coins: 5000, max_redemptions: null, valid_from: null, valid_until: '2026-12-31T23:59:59.999Z', note: null },
+      row: {
+        code: 'SHUBHAM', coins: 5000, max_redemptions: null, valid_from: null, valid_until: '2026-12-31T23:59:59.999Z', note: null,
+        kind: 'instant', first_time_only: false,
+      },
     });
   });
 
