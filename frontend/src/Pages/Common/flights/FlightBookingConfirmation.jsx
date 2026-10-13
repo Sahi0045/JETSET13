@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { makeOrderRef } from '../../../utils/orderRef';
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { Check, Printer, Download, Share2, ChevronDown, ChevronUp, CheckCircle, UserCircle, Plus, Edit, Save, Briefcase, Luggage, Info, ShieldCheck, Clock, PlusCircle } from "lucide-react";
@@ -20,6 +20,8 @@ import { allAirports } from './airports';
 import PricingService from '../../../Services/PricingService';
 import { useCancelPolicy, useGuestFlightBooking, usePriceConfig } from '../../../hooks/queries';
 import CouponInput from '../../../components/CouponInput';
+import JetCoinsToggle from '../../../components/JetCoinsToggle';
+import { apiGet } from '../../../utils/apiHelper';
 import FlightFareRules from './FlightFareRules';
 import CancellationPolicyNote from './CancellationPolicyNote';
 import { formatCalendarDate } from '../../../utils/dateUtils';
@@ -33,6 +35,7 @@ import { handedFareCheck } from '../../../utils/fareCheckHandoff';
 // The same formula checkout verifies the charge with, so this page can never
 // quote a total the server will not accept.
 import { computeFlightCharge, PASSENGER_TYPES, travellerTypesOf } from '../../../../../shared/flightCharge';
+import { maxWalletCoinsFor } from '../../../../../shared/jetCoins';
 import { describeGroup, groupFromOffer, travellerGroupProblem } from '../../../../../shared/travellerGroup';
 import { lastFlightDepartureDate, needsDateOfBirth, tripDates } from '../../../../../shared/travellerDetails';
 import { CALLING_CODES, COUNTRIES, callingCodeDigits } from '../../../../../shared/countries';
@@ -141,6 +144,33 @@ function FlightBookingConfirmation() {
   // go once the box has an answer, so a box remounted for a changed total or
   // a refusal does not ask again on its own.
   const [couponToRestore, setCouponToRestore] = useState(() => cancelledCheckout?.couponCode ?? null);
+  const [wallet, setWallet] = useState({ balance: 0, held: 0 });
+  const [useCoins, setUseCoins] = useState(false);
+  const [walletProblem, setWalletProblem] = useState(null);
+  const loadWallet = useCallback(async () => {
+    try {
+      const response = await apiGet('wallet');
+      const body = response.ok ? await response.json() : null;
+      setWallet(body?.success
+        ? { balance: Number(body.data.balance) || 0, held: Number(body.data.held) || 0 }
+        : { balance: 0, held: 0 });
+    } catch {
+      setWallet({ balance: 0, held: 0 });
+    }
+  }, []);
+  const walletProblemRef = React.useRef(null);
+  useEffect(() => {
+    if (walletProblem) walletProblemRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+  }, [walletProblem]);
+  const signedInUserId = user?.id;
+  useEffect(() => {
+    if (signedInUserId) {
+      loadWallet();
+      return;
+    }
+    setWallet({ balance: 0, held: 0 });
+    setUseCoins(false);
+  }, [signedInUserId, loadWallet]);
   // The total a coupon's discount was computed on, so a changed total drops it.
   const couponBase = React.useRef(null);
   // The page taking the coupon off by itself: checkout refused it, the fare or
@@ -1198,6 +1228,14 @@ function FlightBookingConfirmation() {
     }, 250);
   };
 
+  // What the card will be charged, in US dollars: the summary total, the Pay
+  // buttons and the mobile bar all show this one figure. Worked out as checkout
+  // does - the coupon first, then the coins the balance and the $1.00 minimum
+  // allow - because checkout refuses an amount that differs from its own.
+  const afterCoupon = appliedCoupon ? appliedCoupon.finalTotal : calculatedFare.totalAmount;
+  const coinsToUse = useCoins ? maxWalletCoinsFor(afterCoupon, wallet.balance) : 0;
+  const amountDue = Math.round((afterCoupon - coinsToUse / 100) * 100) / 100;
+
   // Handle proceeding to payment - DIRECT to ARC Pay (bypass FlightPayment.jsx)
   const handleProceedToPayment = async () => {
     // Not while the group is being re-priced: the fare on the page is about to change.
@@ -1257,7 +1295,7 @@ function FlightBookingConfirmation() {
     let redirecting = false;
     try {
       const rawFlightData = reviewState?.flightData;
-      const amount = appliedCoupon ? appliedCoupon.finalTotal : calculatedFare.totalAmount;
+      const amount = amountDue;
 
       // The real flight numbers. This used to send the offer id - "AI 1" - as
       // the flight number to the card network, on every segment.
@@ -1355,6 +1393,7 @@ function FlightBookingConfirmation() {
         bookingType: 'flight',
         // The server evaluates the coupon itself on the total it computes.
         couponCode: appliedCoupon?.code || undefined,
+        walletCoins: coinsToUse || undefined,
         // No placeholder address: the email step is optional, and a made-up
         // one is where ARC would send the receipt.
         customerEmail: finalContact.email || undefined,
@@ -1408,6 +1447,15 @@ function FlightBookingConfirmation() {
           ? `The fare has changed, so your coupon ${appliedCoupon.code} has been removed. Please apply it again to see the new total with the discount. The total has been updated. Nothing has been charged.`
           : `${refusal.error} The total has been updated. Nothing has been charged.`);
         window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
+      // The coins changed in another tab, or the wallet could not be read. The
+      // switch goes off and the balance is read again, so the total shown is
+      // the one a retry will be charged.
+      if (refusal.code === 'WALLET_CHANGED' || refusal.code === 'WALLET_UNAVAILABLE') {
+        setWalletProblem(refusal.error);
+        setUseCoins(false);
+        loadWallet();
         return;
       }
       // The coupon no longer applies - used up, expired, or already used by this
@@ -1555,10 +1603,6 @@ function FlightBookingConfirmation() {
       </div>
     );
   }
-
-  // What the card will be charged, in US dollars: the summary total, the Pay
-  // buttons and the mobile bar all show this one figure.
-  const amountDue = appliedCoupon ? appliedCoupon.finalTotal : calculatedFare.totalAmount;
 
   // A leg's flights one after another, with the change of planes between them.
   // Drawn the same way for the flights out and, on a round trip, the flights
@@ -2428,6 +2472,17 @@ function FlightBookingConfirmation() {
                   </div>
                 )}
 
+                {coinsToUse > 0 && (
+                  <div className="flex items-start gap-3 py-3 border-b border-gray-100">
+                    <PlusCircle className="h-5 w-5 text-emerald-400 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-bold text-gray-800">Jet Coins</div>
+                      <div className="text-xs text-gray-400 mt-0.5">{coinsToUse.toLocaleString('en-US')} coins</div>
+                    </div>
+                    <div className="text-sm font-semibold text-emerald-600 whitespace-nowrap">- <ChargeAmount amount={coinsToUse / 100} /></div>
+                  </div>
+                )}
+
                 {/* Coupon Input */}
                 <div className="mt-4 mb-2">
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Have a coupon?</p>
@@ -2461,6 +2516,9 @@ function FlightBookingConfirmation() {
                     <p className="mt-1.5 text-xs text-red-600" role="alert">{couponProblem}</p>
                   )}
                 </div>
+
+                <JetCoinsToggle balance={wallet.balance} held={wallet.held} afterCoupon={afterCoupon} useCoins={useCoins} onChange={(next) => { setWalletProblem(null); setUseCoins(next); }} />
+                {walletProblem && <p ref={walletProblemRef} className="mt-1.5 text-xs text-red-600" role="alert">{walletProblem}</p>}
 
                 <div className="fare-row total">
                   <span className="label">Total Amount</span>

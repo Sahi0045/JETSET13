@@ -17,16 +17,18 @@ export function formatUsd(amount) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(amount) || 0);
 }
 
-function chargeLines({ fare, serviceFee = 0, discount = 0, total, couponCode }) {
-  const [f, s, d, t] = [fare, serviceFee, discount, total].map((value) => cents(value || 0));
+function chargeLines({ fare, serviceFee = 0, discount = 0, walletAmount = 0, walletCoins = 0, total, couponCode }) {
+  const [f, s, d, w, t] = [fare, serviceFee, discount, walletAmount, total].map((value) => cents(value || 0));
   // A cent either way for rounding; anything more and the lines are not shown.
-  if (![f, s, d, t].every(Number.isFinite) || f <= 0 || t <= 0 || Math.abs(f + s - d - t) > 1) return null;
+  if (![f, s, d, w, t].every(Number.isFinite) || f <= 0 || t <= 0 || Math.abs(f + s - d - w - t) > 1) return null;
+  const coins = Math.round(Number(walletCoins) || w);
   return {
     total: t / 100,
     lines: [
       { label: 'Airline fare (incl. taxes)', amount: f / 100 },
       ...(s > 0 ? [{ label: 'Service fee', amount: s / 100 }] : []),
       ...(d > 0 ? [{ label: couponCode ? `Discount (${couponCode})` : 'Discount', amount: -d / 100 }] : []),
+      ...(w > 0 ? [{ label: `Jet Coins (${new Intl.NumberFormat('en-US').format(coins)})`, amount: -w / 100 }] : []),
     ],
   };
 }
@@ -49,10 +51,13 @@ export function bookingChargeLines(booking) {
   const fareTotal = Number(fare.baseFare || 0) + Number(fare.totalTax || 0);
   const serviceFee = Number(fare.serviceFee || 0);
   const beforeDiscount = Number(fare.totalAmount) > 0 ? Number(fare.totalAmount) : fareTotal + serviceFee;
+  const walletAmount = Number(fare.walletAmount || 0);
   return chargeLines({
     fare: fareTotal,
     serviceFee,
-    discount: Math.max(0, beforeDiscount - paid),
+    discount: Math.max(0, beforeDiscount - paid - walletAmount),
+    walletAmount,
+    walletCoins: fare.walletCoins,
     total: paid,
     couponCode: booking?.couponCode,
   });
