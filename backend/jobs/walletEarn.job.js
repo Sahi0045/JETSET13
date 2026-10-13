@@ -3,17 +3,18 @@
  *
  * Earning: one coin per whole dollar charged to the card, credited once the
  * booking's free-cancellation window has closed, and only while it is still
- * confirmed, paid and ticketed. A booking cancelled inside the window never
+ * ticketed, paid and not cancelled (a booking ticketed by hand stays
+ * pending_ticketing). A booking cancelled inside the window never
  * earns; one refunded later gives its coins back (wallet.service
  * reverseEarnedCoins, called from the refund paths).
  *
  * Stale holds: coins are held before a payment page exists, so a request that
  * dies, or a customer who never pays, leaves a hold behind. Past the time the
  * payment page can be paid, a hold with no booking row goes back, one on a
- * booking that was made is kept (captured), and one on an unpaid checkout goes
- * back only after the gateway has said nothing was paid - by the
- * abandoned-checkout job where it covers the row, by this sweep where it does
- * not.
+ * booking with a reservation is kept (captured), a paid checkout with none is
+ * put in front of a person, and one on an unpaid checkout goes back only after
+ * the gateway has said nothing was paid - by the abandoned-checkout job where it
+ * covers the row, by this sweep where it does not.
  */
 import supabase from '../config/supabase.js';
 import { captureCoins, earnCoins, releaseCoins, reverseEarnedCoins } from '../services/wallet.service.js';
@@ -24,7 +25,7 @@ import { officeTimeZoneOf } from '../services/amadeusSoap/config.js';
 import { reconcileBookingPayment } from '../routes/payment/checkout.handlers.js';
 import { queueEnvironment } from '../utils/queueEnvironment.js';
 import { liveChainState, AUTO_COMPLETE_WINDOW_MS } from '../utils/bookingChainClaim.js';
-import { PAYABLE_MS, LOOKBACK_MS as CHECKOUT_LOOKBACK_MS, checkoutSite } from './abandonedCheckout.job.js';
+import { PAYABLE_MS, LOOKBACK_MS as CHECKOUT_LOOKBACK_MS, checkoutSite, flagForReview } from './abandonedCheckout.job.js';
 
 const MINUTE = 60 * 1000;
 const DAY = 24 * 60 * MINUTE;
@@ -57,10 +58,19 @@ const chunksOf = (list, size) => {
   return chunks;
 };
 
-const earnsCoins = (row) => row?.travel_type === 'flight'
-  && row.status === 'confirmed'
+const EARNING_STATUSES = ['confirmed', 'pending_ticketing'];
+
+const earnsCoins = (row, now) => row?.travel_type === 'flight'
+  && EARNING_STATUSES.includes(row.status)
   && row.payment_status === 'paid'
-  && isTicketed(row.booking_details);
+  && isTicketed(row.booking_details)
+  && liveChainState(row.booking_details?.gds_chain, now) !== 'cancelling';
+
+// Every checkout since the wallet launched records walletCoins (0 when none): older bookings earn nothing retroactively.
+const checkedOutWithWallet = (details) => {
+  const coins = details?.verified_charge?.walletCoins;
+  return coins !== undefined && coins !== null && Number.isFinite(Number(coins));
+};
 
 const windowClosed = (row, now, timeZone) => {
   const until = freeUntilOf(row.created_at, timeZone);
@@ -68,16 +78,15 @@ const windowClosed = (row, now, timeZone) => {
 };
 
 /**
- * Whether a booking still earns, read again after its coins were credited.
- * null when it could not be read.
+ * Whether a booking earns on a fresh read of it. null when it could not be read.
  */
-async function stillEarns(client, bookingReference) {
+async function earnsNow(client, bookingReference, now) {
   const { data, error } = await client.from('bookings')
     .select('travel_type, status, payment_status, booking_details')
     .eq('booking_reference', bookingReference)
     .maybeSingle();
   if (error || !data) return null;
-  return earnsCoins(data);
+  return earnsCoins(data, now);
 }
 
 export async function earnOnce({
@@ -105,7 +114,7 @@ export async function earnOnce({
     const candidates = await readAll(() => client.from('bookings')
       .select('booking_reference, user_id, created_at')
       .eq('travel_type', 'flight')
-      .eq('status', 'confirmed')
+      .in('status', EARNING_STATUSES)
       .eq('payment_status', 'paid')
       .not('user_id', 'is', null)
       .gte('created_at', windowStart)
@@ -140,8 +149,20 @@ export async function earnOnce({
     for (const row of [...(rows || [])].sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)))) {
       if (attempts >= limit) break;
       const coins = earnedCoinsFor(row.booking_details?.verified_charge?.total);
-      if (!row.user_id || coins <= 0 || !earnsCoins(row) || !windowClosed(row, now, timeZone)) {
+      if (!row.user_id || coins <= 0 || !checkedOutWithWallet(row.booking_details) || !earnsCoins(row, now) || !windowClosed(row, now, timeZone)) {
         result.skipped += 1;
+        continue;
+      }
+
+      /**
+       * A cancel reverses earned coins and only then writes `cancelled`; a
+       * credit landing in between would never be taken back. So the booking is
+       * read fresh just before it is credited, and one being cancelled waits.
+       */
+      const earnsBefore = await earnsNow(client, row.booking_reference, now);
+      if (earnsBefore !== true) {
+        result.skipped += 1;
+        if (earnsBefore === null) warn('could not confirm a booking still earns before crediting it', { bookingReference: row.booking_reference });
         continue;
       }
       attempts += 1;
@@ -163,7 +184,7 @@ export async function earnOnce({
        * already looked for coins to take back and found none. Nothing would
        * take these back afterwards, so the booking is read again.
        */
-      const stands = await stillEarns(client, row.booking_reference);
+      const stands = await earnsNow(client, row.booking_reference, now);
       if (stands === false) {
         try {
           await reverse(client, row.booking_reference);
@@ -198,13 +219,19 @@ export function decideStaleHold(row, { now = Date.now(), site = unpaidSite() } =
 
   const details = row.booking_details || {};
   if (row.status === 'cancelled' || ['refunded', 'partially_refunded'].includes(row.payment_status)) return skip('cancelled-or-refunded');
-  if (row.payment_status === 'paid' || details.pnr || isTicketed(details)) return { action: 'capture', reason: 'booked' };
+  // Only a reservation makes the coins spent. A captured hold can no longer be
+  // released, so a paid checkout that was never booked would lose its coins
+  // quietly when the abandoned-checkout job refunds it.
+  if (details.pnr || isTicketed(details)) return { action: 'capture', reason: 'booked' };
   if (details.queued_order || details.needs_review) return skip('owned-by-queue-or-review');
   if (liveChainState(details.gds_chain, now)) return skip('booking-in-progress');
 
+  const rowSite = checkoutSite(row);
+  if (row.payment_status === 'paid') return rowSite && rowSite !== site ? skip('other-site') : { action: 'flag', reason: 'paid-not-booked' };
+
   // The gateway can only be asked with this site's own merchant: another
   // site's order reads as "no such order" here, which is not "never paid".
-  if (checkoutSite(row) !== site) return skip(checkoutSite(row) ? 'other-site' : 'site-unknown');
+  if (rowSite !== site) return skip(rowSite ? 'other-site' : 'site-unknown');
 
   const age = now - Date.parse(row.created_at);
   if (!Number.isFinite(age)) return skip('time-unreadable');
@@ -224,8 +251,9 @@ export async function sweepStaleHolds({
   reconcile = reconcileBookingPayment,
   release = releaseCoins,
   capture = captureCoins,
+  flag = flagForReview,
 } = {}) {
-  const result = { released: 0, captured: 0, failed: 0, skipped: [] };
+  const result = { released: 0, captured: 0, flagged: 0, failed: 0, skipped: [] };
   const skip = (bookingReference, reason) => result.skipped.push({ bookingReference, reason });
 
   let holds;
@@ -280,6 +308,20 @@ export async function sweepStaleHolds({
     }
   };
 
+  const flagPaidUnbooked = async (row) => {
+    changes += 1;
+    const bookingReference = row.booking_reference;
+    skip(bookingReference, 'paid-not-booked');
+    try {
+      const outcome = await flag(row, 'Paid, but not booked, and the Jet Coins it used are still on hold: book it by hand or refund it.');
+      if (outcome === 'flagged') result.flagged += 1;
+      warn('a paid checkout with no reservation holds coins', { bookingReference, flag: outcome });
+    } catch (error) {
+      result.failed += 1;
+      console.error('⚠️ Wallet: a paid checkout with no reservation could not be flagged', { bookingReference, error: error.message });
+    }
+  };
+
   for (const { booking_reference: bookingReference } of holds) {
     if (unreadable.has(bookingReference)) { skip(bookingReference, 'booking-unreadable'); continue; }
     const row = rows.get(bookingReference);
@@ -299,7 +341,7 @@ export async function sweepStaleHolds({
       // The same reading as the abandoned-checkout job (settle): a 400 or 404
       // for an order with no PNR is "never paid", any other non-answer is an outage.
       const neverSeen = payment.gatewayUnavailable && [400, 404].includes(payment.gatewayStatus) && !row.booking_details?.pnr;
-      if (payment.paid) decision = { action: 'capture', reason: 'paid-at-gateway' };
+      if (payment.paid) decision = { action: 'flag', reason: 'paid-at-gateway-not-booked' };
       else if (payment.gatewayUnavailable && !neverSeen) { skip(bookingReference, 'gateway-unavailable'); continue; }
       else if (Number(payment.heldAmount) > 0) { skip(bookingReference, 'money-held-at-gateway'); continue; }
       else decision = { action: 'release', reason: 'not-paid-at-gateway' };
@@ -307,10 +349,11 @@ export async function sweepStaleHolds({
 
     if (decision.action === 'skip') { skip(bookingReference, decision.reason); continue; }
     if (changes >= limit) { skip(bookingReference, 'run-limit'); continue; }
-    await apply(bookingReference, decision.action);
+    if (decision.action === 'flag') await flagPaidUnbooked(row);
+    else await apply(bookingReference, decision.action);
   }
 
-  console.log(`🪙 Wallet holds: ${holds.length} past their payment window, ${result.released} released, ${result.captured} kept, ${result.failed} failed`, {
+  console.log(`🪙 Wallet holds: ${holds.length} past their payment window, ${result.released} released, ${result.captured} kept, ${result.flagged} flagged, ${result.failed} failed`, {
     left: result.skipped.slice(0, 10),
   });
   return result;
@@ -332,8 +375,15 @@ export async function tickOnce(options = {}) {
   return tick;
 }
 
-export function startWalletEarnJob({ intervalMs = 15 * MINUTE } = {}) {
-  if (!supabase) return () => {};
+export function startWalletEarnJob({ intervalMs = 15 * MINUTE, env = process.env } = {}) {
+  if (!supabase) return { stop: () => {} };
+
+  // It writes to every customer's wallet, so a laptop on the shared database must not run it.
+  if (queueEnvironment(env) !== 'production' && env.WALLET_JOB !== 'true') {
+    console.log('[WalletEarn] asleep: set WALLET_JOB=true to run it outside production');
+    return { stop: () => {} };
+  }
+
   let running = false;
   const tick = async () => {
     if (running) return;
@@ -348,5 +398,5 @@ export function startWalletEarnJob({ intervalMs = 15 * MINUTE } = {}) {
   const first = setTimeout(tick, MINUTE);
   timer.unref?.();
   first.unref?.();
-  return () => { clearInterval(timer); clearTimeout(first); };
+  return { stop: () => { clearInterval(timer); clearTimeout(first); }, tick };
 }

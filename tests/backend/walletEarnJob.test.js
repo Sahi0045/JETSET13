@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { earnOnce, sweepStaleHolds, tickOnce } from '../../backend/jobs/walletEarn.job.js';
+import { earnOnce, startWalletEarnJob, sweepStaleHolds, tickOnce } from '../../backend/jobs/walletEarn.job.js';
 import { settle, PAYABLE_MS, LOOKBACK_MS as CHECKOUT_LOOKBACK_MS } from '../../backend/jobs/abandonedCheckout.job.js';
 
 const HOUR = 3600 * 1000;
@@ -14,7 +14,7 @@ const booking = (overrides = {}) => ({
   payment_status: 'paid',
   travel_type: 'flight',
   created_at: iso(NOW - 30 * HOUR),
-  booking_details: { verified_charge: { total: 130.38 }, gds: { ticketed: true } },
+  booking_details: { verified_charge: { total: 130.38, walletCoins: 0 }, gds: { ticketed: true } },
   ...overrides,
 });
 
@@ -93,7 +93,7 @@ describe('earning Jet Coins', () => {
   it('skips a booking not ticketed, already earned, or without an owner', async () => {
     const earn = vi.fn();
     const bookings = [
-      booking({ booking_reference: 'A', booking_details: { verified_charge: { total: 50 } } }),
+      booking({ booking_reference: 'A', booking_details: { verified_charge: { total: 50, walletCoins: 0 } } }),
       booking({ booking_reference: 'B' }),
       booking({ booking_reference: 'C', user_id: null }),
     ];
@@ -114,14 +114,14 @@ describe('earning Jet Coins', () => {
 
   it('does not credit a booking before a dollar was charged to the card', async () => {
     const earn = vi.fn();
-    const bookings = [booking({ booking_details: { verified_charge: { total: 0.4 }, gds: { ticketed: true } } })];
+    const bookings = [booking({ booking_details: { verified_charge: { total: 0.4, walletCoins: 0 }, gds: { ticketed: true } } })];
     await earnOnce(earnArgs(fakeClient({ bookings }), { earn }));
     expect(earn).not.toHaveBeenCalled();
   });
 
   it('credits a booking whose ticket numbers are recorded though gds says nothing', async () => {
     const earn = vi.fn(async () => ({ applied: true }));
-    const bookings = [booking({ booking_details: { verified_charge: { total: 20 }, tickets: [{ number: '0572100000001' }] } })];
+    const bookings = [booking({ booking_details: { verified_charge: { total: 20, walletCoins: 0 }, tickets: [{ number: '0572100000001' }] } })];
     await earnOnce(earnArgs(fakeClient({ bookings }), { earn }));
     expect(earn).toHaveBeenCalledTimes(1);
   });
@@ -145,7 +145,7 @@ describe('earning Jet Coins', () => {
     const notTicketed = Array.from({ length: 7 }, (_, index) => booking({
       booking_reference: `NT${index}`,
       created_at: iso(NOW - (10 * DAY) + index * HOUR),
-      booking_details: { verified_charge: { total: 50 } },
+      booking_details: { verified_charge: { total: 50, walletCoins: 0 } },
     }));
     const ready = booking({ booking_reference: 'READY', created_at: iso(NOW - 26 * HOUR) });
     await earnOnce(earnArgs(fakeClient({ bookings: [...notTicketed, ready] }), { earn, pageSize: 3 }));
@@ -217,6 +217,67 @@ describe('earning Jet Coins', () => {
   });
 });
 
+describe('which bookings earn', () => {
+  const run = (rows, extra = {}) => {
+    const earn = vi.fn(async () => ({ applied: true }));
+    const done = earnOnce(earnArgs(fakeClient({ bookings: rows }), { earn, ...extra }));
+    return { earn, done };
+  };
+
+  it('never credits a booking made before checkouts recorded walletCoins', async () => {
+    const { earn, done } = run([booking({ booking_details: { verified_charge: { total: 130.38 }, gds: { ticketed: true } } })]);
+    await done;
+    expect(earn).not.toHaveBeenCalled();
+  });
+
+  it('credits a booking whose checkout recorded walletCoins, even 0', async () => {
+    const { earn, done } = run([booking()]);
+    await done;
+    expect(earn).toHaveBeenCalledTimes(1);
+  });
+
+  it('credits on the card amount of a booking that also used coins', async () => {
+    const { earn, done } = run([booking({ booking_details: { verified_charge: { total: 80.5, walletCoins: 2000 }, gds: { ticketed: true } } })]);
+    await done;
+    expect(earn).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ coins: 80 }));
+  });
+
+  it('credits a booking ticketed by hand, which stays pending_ticketing', async () => {
+    const { earn, done } = run([booking({ status: 'pending_ticketing' })]);
+    const result = await done;
+    expect(earn).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({ credited: 1, reversed: 0 });
+  });
+
+  it('does not credit a pending_ticketing booking that has no ticket', async () => {
+    const { earn, done } = run([booking({ status: 'pending_ticketing', booking_details: { verified_charge: { total: 130.38, walletCoins: 0 } } })]);
+    await done;
+    expect(earn).not.toHaveBeenCalled();
+  });
+
+  it('does not credit a ticketed booking that is cancelled or still pending', async () => {
+    const { earn, done } = run([booking({ booking_reference: 'A', status: 'cancelled' }), booking({ booking_reference: 'B', status: 'pending' })]);
+    await done;
+    expect(earn).not.toHaveBeenCalled();
+  });
+
+  it('does not credit a booking that is being cancelled', async () => {
+    const { earn, done } = run([booking({ booking_details: {
+      verified_charge: { total: 130.38, walletCoins: 0 }, gds: { ticketed: true }, gds_chain: { state: 'cancelling', startedAt: iso(NOW - 30_000) },
+    } })]);
+    await done;
+    expect(earn).not.toHaveBeenCalled();
+  });
+
+  it('credits a booking whose cancel claim has long expired', async () => {
+    const { earn, done } = run([booking({ booking_details: {
+      verified_charge: { total: 130.38, walletCoins: 0 }, gds: { ticketed: true }, gds_chain: { state: 'cancelling', startedAt: iso(NOW - HOUR) },
+    } })]);
+    await done;
+    expect(earn).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('a booking cancelled while its coins are being credited', () => {
   it('takes the coins back when the booking is no longer confirmed', async () => {
     const rows = [booking()];
@@ -233,7 +294,7 @@ describe('a booking cancelled while its coins are being credited', () => {
   it('takes the coins back when the booking is no longer ticketed', async () => {
     const rows = [booking()];
     const earn = vi.fn(async () => {
-      rows[0] = { ...rows[0], booking_details: { verified_charge: { total: 130.38 }, gds: { ticketed: false } } };
+      rows[0] = { ...rows[0], booking_details: { verified_charge: { total: 130.38, walletCoins: 0 }, gds: { ticketed: false } } };
       return { applied: true };
     });
     const reverse = vi.fn(async () => 130);
@@ -252,6 +313,64 @@ describe('a booking cancelled while its coins are being credited', () => {
     expect(reverse).toHaveBeenCalledTimes(1);
   });
 
+  it('does not credit a booking found being cancelled on the read just before crediting', async () => {
+    const client = fakeClient({ bookings: [booking()] });
+    const from = client.from.bind(client);
+    client.from = (table) => {
+      const query = from(table);
+      if (table === 'bookings') {
+        query.maybeSingle = async () => ({
+          data: booking({ booking_details: { verified_charge: { total: 130.38, walletCoins: 0 }, gds: { ticketed: true }, gds_chain: { state: 'cancelling', startedAt: iso(NOW - 1000) } } }),
+          error: null,
+        });
+      }
+      return query;
+    };
+    const earn = vi.fn();
+    const result = await earnOnce(earnArgs(client, { earn }));
+    expect(earn).not.toHaveBeenCalled();
+    expect(result.credited).toBe(0);
+  });
+
+  it('does not credit when the booking cannot be read just before crediting, and says so', async () => {
+    const client = fakeClient({ bookings: [booking()] });
+    const from = client.from.bind(client);
+    client.from = (table) => {
+      const query = from(table);
+      if (table === 'bookings') query.maybeSingle = async () => ({ data: null, error: { message: 'timeout' } });
+      return query;
+    };
+    const earn = vi.fn();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await earnOnce(earnArgs(client, { earn }));
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+    expect(earn).not.toHaveBeenCalled();
+  });
+
+  it('takes the coins back when a cancel claimed the booking while it was credited', async () => {
+    const rows = [booking()];
+    const earn = vi.fn(async () => {
+      rows[0] = { ...rows[0], booking_details: { ...rows[0].booking_details, gds_chain: { state: 'cancelling', startedAt: iso(NOW) } } };
+      return { applied: true };
+    });
+    const reverse = vi.fn(async () => 130);
+    const result = await earnOnce(earnArgs(fakeClient({ bookings: rows }), { earn, reverse }));
+    expect(reverse).toHaveBeenCalledWith(expect.anything(), 'FLT1');
+    expect(result).toMatchObject({ credited: 0, reversed: 1 });
+  });
+
+  it('leaves the coins when a booking moves to pending_ticketing after being credited', async () => {
+    const rows = [booking()];
+    const earn = vi.fn(async () => {
+      rows[0] = { ...rows[0], status: 'pending_ticketing' };
+      return { applied: true };
+    });
+    const reverse = vi.fn();
+    await earnOnce(earnArgs(fakeClient({ bookings: rows }), { earn, reverse }));
+    expect(reverse).not.toHaveBeenCalled();
+  });
+
   it('leaves the coins when the booking still stands', async () => {
     const reverse = vi.fn();
     const result = await earnOnce(earnArgs(fakeClient({ bookings: [booking()] }), { earn: async () => ({ applied: true }), reverse }));
@@ -266,9 +385,10 @@ describe('a booking cancelled while its coins are being credited', () => {
     client.from = (table) => {
       const query = from(table);
       if (table === 'bookings') {
+        const read = query.maybeSingle;
         query.maybeSingle = async () => {
           reads += 1;
-          return { data: null, error: { message: 'timeout' } };
+          return reads === 1 ? read() : { data: null, error: { message: 'timeout' } };
         };
       }
       return query;
@@ -278,7 +398,7 @@ describe('a booking cancelled while its coins are being credited', () => {
     await earnOnce(earnArgs(client, { earn: async () => ({ applied: true }), reverse }));
     expect(warn).toHaveBeenCalled();
     warn.mockRestore();
-    expect(reads).toBe(1);
+    expect(reads).toBe(2);
     expect(reverse).not.toHaveBeenCalled();
   });
 
@@ -346,6 +466,25 @@ describe('a checkout never paid', () => {
     expect(outcome).toEqual({ outcome: 'not-paid', final: false });
   });
 
+  it('does not call it settled when the coins were already captured by a booking, and reports it', async () => {
+    const release = vi.fn(async () => ({ status: 'captured', coins: 0 }));
+    const report = vi.fn();
+    const outcome = await settle(row, { now: NOW, reconcile: async () => ({ paid: false }), release, report });
+    expect(outcome).toEqual({ outcome: 'not-paid', final: false });
+    expect(report).toHaveBeenCalledTimes(1);
+    expect(report.mock.calls[0][1]).toMatchObject({ bookingReference: 'FLT9', status: 'captured' });
+  });
+
+  it('is settled when the hold was already released or never existed', async () => {
+    const report = vi.fn();
+    for (const status of ['released', 'none']) {
+      const release = vi.fn(async () => ({ status, coins: 0 }));
+      const outcome = await settle(row, { now: NOW, reconcile: async () => ({ paid: false }), release, report });
+      expect(outcome).toEqual({ outcome: 'not-paid', final: true });
+    }
+    expect(report).not.toHaveBeenCalled();
+  });
+
   it('does not touch the wallet for a checkout that used no coins', async () => {
     const release = vi.fn();
     const outcome = await settle({ ...row, booking_details: { verified_charge: { total: 100 } } }, { now: NOW, reconcile: async () => ({ paid: false }), release });
@@ -379,6 +518,7 @@ describe('holds left behind', () => {
       release: vi.fn(async () => ({ status: 'released', coins: 500 })),
       capture: vi.fn(async () => ({ status: 'captured' })),
       reconcile: vi.fn(async () => ({ paid: false })),
+      flag: vi.fn(async () => 'flagged'),
     };
     const run = () => sweepStaleHolds({ client, now: NOW, site: 'site', ...deps, ...extra });
     return { deps, run };
@@ -405,13 +545,68 @@ describe('holds left behind', () => {
     expect(deps.capture).not.toHaveBeenCalled();
   });
 
-  it('captures the coins of a booking that was paid', async () => {
-    const bookings = [checkout('PAID1', { payment_status: 'paid' })];
+  it('captures the coins of a paid booking that has a reservation', async () => {
+    const bookings = [checkout('PAID1', { payment_status: 'paid', booking_details: { pnr: 'ABC123' } })];
     const { deps, run } = sweepWith({}, fakeClient({ holds: [hold('PAID1')], bookings }));
     const result = await run();
     expect(deps.capture).toHaveBeenCalledWith(expect.anything(), 'PAID1');
     expect(deps.release).not.toHaveBeenCalled();
     expect(result.captured).toBe(1);
+  });
+
+  describe('a paid checkout with no reservation', () => {
+    it('keeps its coins on hold and puts it in front of a person', async () => {
+      const bookings = [checkout('PAID2', { payment_status: 'paid' })];
+      const { deps, run } = sweepWith({}, fakeClient({ holds: [hold('PAID2')], bookings }));
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const result = await run();
+      warn.mockRestore();
+      expect(deps.capture).not.toHaveBeenCalled();
+      expect(deps.release).not.toHaveBeenCalled();
+      expect(deps.reconcile).not.toHaveBeenCalled();
+      expect(deps.flag).toHaveBeenCalledTimes(1);
+      expect(deps.flag).toHaveBeenCalledWith(expect.objectContaining({ booking_reference: 'PAID2' }), expect.stringContaining('Paid, but not booked'));
+      expect(result).toMatchObject({ captured: 0, released: 0, flagged: 1 });
+      expect(result.skipped).toEqual([{ bookingReference: 'PAID2', reason: 'paid-not-booked' }]);
+    });
+
+    it('is not flagged again once a person has been asked to look', async () => {
+      const bookings = [checkout('PAID3', { payment_status: 'paid', booking_details: { needs_review: { reason: 'x' } } })];
+      const { deps, run } = sweepWith({}, fakeClient({ holds: [hold('PAID3')], bookings }));
+      await run();
+      expect(deps.flag).not.toHaveBeenCalled();
+      expect(deps.capture).not.toHaveBeenCalled();
+    });
+
+    it('is not flagged while a booking chain is running on it, or the queue has it', async () => {
+      const bookings = [
+        checkout('RUN1', { payment_status: 'paid', booking_details: { gds_chain: { state: 'in_progress', startedAt: iso(NOW - 30_000) } } }),
+        checkout('QUE1', { payment_status: 'paid', booking_details: { queued_order: { a: 1 } } }),
+      ];
+      const { deps, run } = sweepWith({}, fakeClient({ holds: [hold('RUN1'), hold('QUE1')], bookings }));
+      await run();
+      expect(deps.flag).not.toHaveBeenCalled();
+    });
+
+    it('is not flagged from another site', async () => {
+      const bookings = [checkout('LOCALPAID', { payment_status: 'paid', booking_details: { pending_booking_data: { returnUrl: 'http://localhost:5173/payment/callback' } } })];
+      const { deps, run } = sweepWith({}, fakeClient({ holds: [hold('LOCALPAID')], bookings }));
+      await run();
+      expect(deps.flag).not.toHaveBeenCalled();
+    });
+
+    it('says so when it could not be flagged, and carries on', async () => {
+      const bookings = [checkout('PAID4', { payment_status: 'paid' })];
+      const flag = vi.fn().mockRejectedValue(new Error('down'));
+      const { deps, run } = sweepWith({ flag }, fakeClient({ holds: [hold('PAID4'), hold('GONE2', { created_at: iso(NOW - 4 * HOUR + 1000) })], bookings }));
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const result = await run();
+      error.mockRestore();
+      warn.mockRestore();
+      expect(result.failed).toBe(1);
+      expect(deps.release).toHaveBeenCalledWith(expect.anything(), 'GONE2');
+    });
   });
 
   it('captures the coins of a booking that has a PNR', async () => {
@@ -430,7 +625,7 @@ describe('holds left behind', () => {
   });
 
   it('never asks the gateway about a booking it captures', async () => {
-    const bookings = [checkout('PAID1', { payment_status: 'paid' })];
+    const bookings = [checkout('PAID1', { payment_status: 'paid', booking_details: { pnr: 'ABC123' } })];
     const { deps, run } = sweepWith({}, fakeClient({ holds: [hold('PAID1')], bookings }));
     await run();
     expect(deps.reconcile).not.toHaveBeenCalled();
@@ -502,13 +697,18 @@ describe('holds left behind', () => {
       expect(result.skipped[0].reason).toBe('money-held-at-gateway');
     });
 
-    it('captures them when the gateway says it was paid', async () => {
+    it('keeps them and puts it in front of a person when the gateway says it was paid but nothing was booked', async () => {
       const reconcile = vi.fn(async () => ({ paid: true }));
       const release = vi.fn();
-      const capture = vi.fn(async () => ({ status: 'captured' }));
-      await sweepStaleHolds({ client: fakeClient({ holds: [oldHold], bookings: [oldRow()] }), now: NOW, site: 'site', reconcile, release, capture });
-      expect(capture).toHaveBeenCalledWith(expect.anything(), 'OLD1');
+      const capture = vi.fn();
+      const flag = vi.fn(async () => 'flagged');
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const result = await sweepStaleHolds({ client: fakeClient({ holds: [oldHold], bookings: [oldRow()] }), now: NOW, site: 'site', reconcile, release, capture, flag });
+      warn.mockRestore();
+      expect(capture).not.toHaveBeenCalled();
       expect(release).not.toHaveBeenCalled();
+      expect(flag).toHaveBeenCalledWith(expect.objectContaining({ booking_reference: 'OLD1' }), expect.stringContaining('Paid, but not booked'));
+      expect(result.flagged).toBe(1);
     });
 
     it('asks the gateway about only a few checkouts a run', async () => {
@@ -625,5 +825,48 @@ describe('the periodic run', () => {
     await tickOnce({ client, now: NOW, timeZone: 'America/Los_Angeles', site: 'site', earn });
     warn.mockRestore();
     expect(earn).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('starting the job', () => {
+  const productionEnv = { BOOKING_QUEUE_ENV: 'production' };
+
+  it('sleeps outside production unless asked for by name', () => {
+    vi.useFakeTimers();
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      const job = startWalletEarnJob({ env: {} });
+      expect(vi.getTimerCount()).toBe(0);
+      expect(log).toHaveBeenCalledWith(expect.stringContaining('WALLET_JOB=true'));
+      expect(() => job.stop()).not.toThrow();
+      startWalletEarnJob({ env: { NODE_ENV: 'production' } });
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      log.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
+  it('runs in production', () => {
+    vi.useFakeTimers();
+    try {
+      const job = startWalletEarnJob({ env: productionEnv });
+      expect(vi.getTimerCount()).toBe(2);
+      job.stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('runs outside production when WALLET_JOB is true, and stop clears both timers', () => {
+    vi.useFakeTimers();
+    try {
+      const job = startWalletEarnJob({ env: { WALLET_JOB: 'true' } });
+      expect(vi.getTimerCount()).toBe(2);
+      job.stop();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -43,6 +43,7 @@ import { AUTO_COMPLETE_WINDOW_MS, liveChainState } from '../utils/bookingChainCl
 import { unchangedSince } from '../utils/bookingDetailsGuard.js';
 import { buildFlightOrderBody, orderDataFromCheckoutRow } from '../../shared/flightOrderBody.js';
 import { releaseCoins } from '../services/wallet.service.js';
+import { reportError } from '../services/monitoring.js';
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -272,7 +273,7 @@ const releaseCheckoutCoins = async (bookingReference) => {
  * Settle one checkout. `final` means this process need not ask about it again.
  */
 export async function settle(row, {
-  now = Date.now(), reconcile = reconcileBookingPayment, send, flag = flagForReview, release = releaseCheckoutCoins,
+  now = Date.now(), reconcile = reconcileBookingPayment, send, flag = flagForReview, release = releaseCheckoutCoins, report = reportError,
 } = {}) {
   const age = now - Date.parse(row.created_at);
 
@@ -293,9 +294,17 @@ export async function settle(row, {
       // Money still held for the order is a person's to settle: its coins stay with it.
       if (Number(payment.heldAmount) > 0) {
         log('coins kept: the gateway still holds money for an unpaid checkout', { bookingReference: row.booking_reference });
-      } else if (await release(row.booking_reference) === null) {
-        // Not released: ask again rather than call it settled with coins still held.
-        return { outcome: 'not-paid', final: false };
+      } else {
+        const released = await release(row.booking_reference);
+        // 'captured' means the coins were spent on a booking: a release cannot give them back.
+        if (released === null || !['released', 'none'].includes(released?.status)) {
+          if (released !== null) {
+            report(new Error('Jet Coins held for an unpaid checkout were not released'), {
+              where: 'abandonedCheckout.settle', bookingReference: row.booking_reference, status: released?.status ?? null,
+            });
+          }
+          return { outcome: 'not-paid', final: false };
+        }
       }
     }
     return { outcome: 'not-paid', final };
