@@ -52,4 +52,14 @@ describe('the customer wallet routes', () => {
     expect(supabaseMock.rpc.mock.calls[1][0]).toBe('wallet_reverse_earn');
     expect(res.body.data.coins).toBe(2000);
   });
+
+  it('does not say nothing changed when the coins went back but the earned ones could not be taken back', async () => {
+    supabaseMock.rpc.mockResolvedValueOnce({ data: { status: 'captured', coins: 2000 }, error: null })
+      .mockResolvedValueOnce({ data: null, error: { message: 'connection reset' } });
+    const res = await run(staffReturn, { body: { bookingReference: 'FLT1', coins: 2000 }, user: { id: 's1', role: 'support' } });
+    expect(res.statusCode).toBe(200);
+    expect(res.body.data).toEqual({ coins: 2000, earnedReversed: false });
+    expect(res.body.message).toMatch(/earned/i);
+    expect(res.body.message).not.toMatch(/nothing changed/i);
+  });
 });

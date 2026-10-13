@@ -38,12 +38,25 @@ export async function staffReturn(req, res) {
   if (!bookingReference || !Number.isFinite(coins) || coins <= 0) {
     return res.status(400).json({ success: false, error: 'A booking reference and a number of coins are needed.' });
   }
+  let given;
   try {
-    const given = await returnCoins(supabase, { bookingReference, coins, reason: `desk-${Date.now()}` });
-    if (given > 0) await reverseEarnedCoins(supabase, bookingReference);
-    return res.json({ success: true, data: { coins: given }, message: `${given.toLocaleString('en-US')} Jet Coins returned` });
+    given = await returnCoins(supabase, { bookingReference, coins, reason: `desk-${Date.now()}` });
   } catch (error) {
     console.error('⚠️ Staff coin return failed:', error.message);
     return res.status(503).json({ success: false, error: 'The coins could not be returned just now. Nothing changed; try again.' });
   }
+  const returned = `${given.toLocaleString('en-US')} Jet Coins returned`;
+  if (given <= 0) return res.json({ success: true, data: { coins: given }, message: returned });
+  try {
+    await reverseEarnedCoins(supabase, bookingReference);
+  } catch (error) {
+    // A retry cannot reach this step: the coins are already back, so it would return 0 and skip the reversal.
+    console.error('⚠️ Coins returned but the coins earned on the booking were not reversed', { bookingReference, code: error.code });
+    return res.json({
+      success: true,
+      data: { coins: given, earnedReversed: false },
+      message: `${returned}, but the coins earned on this booking could not be taken back. Check the booking before telling the customer.`,
+    });
+  }
+  return res.json({ success: true, data: { coins: given }, message: returned });
 }
