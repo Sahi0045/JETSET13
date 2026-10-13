@@ -502,7 +502,7 @@ export async function payTripRewardsOnce({
       outcome = await pay(client, bookingReference);
     } catch (payError) {
       result.failed += 1;
-      console.error('⚠️ Wallet: a trip reward could not be paid; the next run tries again', { bookingReference, code: payError.code });
+      console.error('⚠️ Wallet: a trip reward could not be paid; the next run tries again', { bookingReference, code: payError.code, error: payError.message });
       continue;
     }
     if (outcome?.status !== 'paid' || outcome.applied !== true) continue;

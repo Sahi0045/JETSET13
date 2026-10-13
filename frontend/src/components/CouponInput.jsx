@@ -169,7 +169,7 @@ const CouponInput = ({
                     type="text"
                     value={code}
                     onChange={(e) => { setCode(e.target.value.toUpperCase()); setError(null); }}
-                    onKeyDown={(e) => e.key === 'Enter' && handleApply()}
+                    onKeyDown={(e) => e.key === 'Enter' && !loading && handleApply()}
                     placeholder={acceptsVouchers ? 'Coupon or voucher code' : 'Enter coupon code'}
                     className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#0890BC] focus:border-[#0890BC] uppercase"
                 />

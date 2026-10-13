@@ -378,13 +378,14 @@ describe('a booking with a trip-reward voucher', () => {
     bookingProvider(() => {
       throw Object.assign(new Error('ticketing refused'), { committed: true, pnr: 'NEW999', step: 'issueTicket', ticketed: false });
     });
-    const { place } = await appWith([withVoucher(REF)]);
+    const { place, table } = await appWith([withVoucher(REF)]);
 
     const res = await place(REF);
 
     expect(res.status).toBe(202);
     expect(calls('reserve_trip_voucher')).toHaveLength(1);
     expect(calls('void_trip_voucher')).toHaveLength(0);
+    expect(table.row(REF).booking_details.trip_reward).toEqual({ code: 'SHUBHAM', coins: 5000, due_at: '2026-11-18T00:00:00.000Z' });
   });
 
   it('voids the reward when the payment is reversed after a failed booking', async () => {

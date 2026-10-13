@@ -120,6 +120,40 @@ describe('the trip-voucher service', () => {
     expect(summary.pending).toEqual([{ bookingReference: 'FLT1', code: 'SHUBHAM', coins: 5000, dueAt: '2026-11-18T00:00:00+00:00' }]);
   });
 
+  it('still loads the wallet when the trip rewards to come cannot be read, and logs why', async () => {
+    const summaryWith = async (rewards) => {
+      const tables = {
+        wallets: { data: { balance: 1200 }, error: null },
+        wallet_holds: { data: [{ coins: 200 }], error: null },
+        wallet_entries: { data: [{ id: 1, kind: 'earn', coins: 1200, note: null }], error: null },
+      };
+      const client = {
+        from: vi.fn((table) => {
+          const chain = {};
+          for (const op of ['select', 'eq', 'order', 'limit']) chain[op] = vi.fn(() => chain);
+          chain.maybeSingle = vi.fn(async () => tables[table]);
+          chain.then = (resolve, reject) => (table === 'voucher_redemptions' ? rewards() : Promise.resolve(tables[table])).then(resolve, reject);
+          return chain;
+        }),
+      };
+      return walletSummary(client, 'u1');
+    };
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    for (const rewards of [
+      () => Promise.resolve({ data: null, error: { code: '42703', message: 'column voucher_redemptions.due_at does not exist' } }),
+      () => Promise.reject(new Error('fetch failed')),
+    ]) {
+      const summary = await summaryWith(rewards);
+      expect(summary).toMatchObject({ balance: 1200, held: 200, pending: [] });
+      expect(summary.entries).toHaveLength(1);
+    }
+    expect(logged).toHaveBeenCalledTimes(2);
+    expect(JSON.stringify(logged.mock.calls[0])).toMatch(/42703.*due_at does not exist/);
+    expect(JSON.stringify(logged.mock.calls[1])).toMatch(/fetch failed/);
+    logged.mockRestore();
+  });
+
   it('names every refusal the wallet functions raise, none hidden behind another code', async () => {
     const dir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../supabase/migrations');
     const raised = new Set();

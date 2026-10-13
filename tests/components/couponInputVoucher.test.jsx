@@ -101,6 +101,24 @@ describe('the flight box for coupons and vouchers', () => {
     expect(await screen.findByText('This booking already has a voucher. Remove it to use a different one.')).toBeTruthy();
     expect(checkVoucher).not.toHaveBeenCalled();
   });
+
+  it('ignores Enter while a code is being checked, as it does the greyed-out Apply', async () => {
+    let answer;
+    const checkVoucher = vi.fn(() => new Promise((resolve) => { answer = resolve; }));
+    const { onVoucherApply } = voucherBox({ checkVoucher });
+    const box = screen.getByRole('textbox');
+    fireEvent.change(box, { target: { value: 'SHUBHAM' } });
+
+    fireEvent.keyDown(box, { key: 'Enter' });
+    await waitFor(() => expect(checkVoucher).toHaveBeenCalledTimes(1));
+    fireEvent.keyDown(box, { key: 'Enter' });
+    fireEvent.keyDown(box, { key: 'Enter' });
+
+    answer({ ok: true, voucher: { code: 'SHUBHAM', coins: 5000 } });
+    await waitFor(() => expect(onVoucherApply).toHaveBeenCalledTimes(1));
+    expect(coupons.requests).toHaveLength(1);
+    expect(checkVoucher).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('the voucher on its way to the payment page and back', () => {

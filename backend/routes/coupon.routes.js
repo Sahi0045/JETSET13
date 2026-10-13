@@ -15,6 +15,20 @@ dotenv.config();
 
 const router = express.Router();
 
+const VOUCHER_CHECK_FAILED = 'Voucher codes could not be checked just now. Please try again.';
+
+/** True when it has answered: a voucher uses the code, or that could not be checked. */
+async function answeredVoucherClash(res, code) {
+    try {
+        if (!(await isVoucherCode(supabase, code))) return false;
+        res.status(409).json({ success: false, message: 'A voucher already uses this code. Pick another code.' });
+    } catch (error) {
+        console.error('Coupon code check against vouchers failed:', { code: error?.code, error: error?.message });
+        res.status(503).json({ success: false, message: VOUCHER_CHECK_FAILED });
+    }
+    return true;
+}
+
 // No local `requireSupabase` gate any more: config/supabase.js fails fast at
 // import if the credentials are missing, the same as every other route module.
 
@@ -133,9 +147,7 @@ router.post('/', protect, admin, async (req, res) => {
         if (!code || !discountType || !discountValue) {
             return res.status(400).json({ success: false, message: 'code, discountType, discountValue are required.' });
         }
-        if (await isVoucherCode(supabase, code)) {
-            return res.status(409).json({ success: false, message: 'A voucher already uses this code. Pick another code.' });
-        }
+        if (await answeredVoucherClash(res, code)) return res;
 
         const { data, error } = await supabase.from('coupons').insert([{
             code: code.trim().toUpperCase(),
@@ -190,9 +202,7 @@ router.put('/:id', protect, admin, async (req, res) => {
         if (b.applicableTo != null) updates.applicable_to = b.applicableTo;
         if (b.applicable_to != null) updates.applicable_to = b.applicable_to;
         if (typeof b.is_active === 'boolean') updates.is_active = b.is_active;
-        if (updates.code && await isVoucherCode(supabase, updates.code)) {
-            return res.status(409).json({ success: false, message: 'A voucher already uses this code. Pick another code.' });
-        }
+        if (updates.code && await answeredVoucherClash(res, updates.code)) return res;
 
         const { data, error } = await supabase
             .from('coupons')

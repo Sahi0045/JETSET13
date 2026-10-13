@@ -37,6 +37,21 @@ export async function readBalance(client, userId) {
   return Number(data?.balance) || 0;
 }
 
+async function pendingRewardRows(client, userId) {
+  try {
+    const { data, error } = await client.from('voucher_redemptions')
+      .select('booking_reference, coins, due_at, vouchers(code)')
+      .eq('user_id', userId)
+      .eq('status', 'pending')
+      .order('due_at', { ascending: true });
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    console.error('⚠️ Wallet: the trip rewards to come could not be read; the wallet loads without them', { code: error?.code, error: error?.message });
+    return [];
+  }
+}
+
 // Only a voucher entry's note (its code) is the customer's to read: staff returns store "staff <id>: <reason>" on the customer's own rows.
 export async function walletSummary(client, userId) {
   const [wallet, holds, entries, rewards] = await Promise.all([
@@ -47,18 +62,14 @@ export async function walletSummary(client, userId) {
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(50),
-    client.from('voucher_redemptions')
-      .select('booking_reference, coins, due_at, vouchers(code)')
-      .eq('user_id', userId)
-      .eq('status', 'pending')
-      .order('due_at', { ascending: true }),
+    pendingRewardRows(client, userId),
   ]);
-  const error = wallet.error || holds.error || entries.error || rewards.error;
+  const error = wallet.error || holds.error || entries.error;
   if (error) throw new WalletError('WALLET_UNAVAILABLE', error.message);
   const balance = Number(wallet.data?.balance) || 0;
   const held = (holds.data || []).reduce((sum, hold) => sum + (Number(hold.coins) || 0), 0);
   const customerEntries = (entries.data || []).map((entry) => ({ ...entry, note: entry.kind === 'voucher' ? entry.note : null }));
-  const pending = (rewards.data || []).map((row) => ({
+  const pending = rewards.map((row) => ({
     bookingReference: row.booking_reference,
     code: row.vouchers?.code || null,
     coins: Number(row.coins) || 0,

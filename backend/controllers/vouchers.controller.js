@@ -47,7 +47,8 @@ async function answeredCodeClash(res, code) {
   try {
     if (!(await isCouponCode(supabase, code))) return false;
     res.status(409).json({ success: false, code: 'CODE_TAKEN', error: 'A coupon already uses this code. Pick another code.' });
-  } catch {
+  } catch (error) {
+    console.error('Voucher code check against coupons failed:', { code: error?.code, error: error?.message });
     res.status(503).json({ success: false, error: 'The voucher could not be saved.' });
   }
   return true;
@@ -76,9 +77,10 @@ export async function updateVoucher(req, res) {
   const { data: current, error: readError } = await supabase.from('vouchers').select('*').eq('id', req.params.id).single();
   if (readError || !current) return res.status(404).json({ success: false, error: 'Voucher not found.' });
   const body = req.body || {};
+  const sentKind = body.kind === undefined || body.kind === null || body.kind === '' ? undefined : body.kind;
   const changesValue = body.valueUsd !== undefined && Math.round(Number(body.valueUsd) * 100) !== Number(current.coins);
   const changesCode = body.code !== undefined && String(body.code).trim().toUpperCase() !== current.code;
-  const changesKind = body.kind !== undefined && String(body.kind) !== (current.kind || 'instant');
+  const changesKind = sentKind !== undefined && String(sentKind) !== (current.kind || 'instant');
   if ((changesValue || changesCode || changesKind) && Number(current.redemptions_count) > 0) {
     return res.status(409).json({ success: false, code: 'VOUCHER_LOCKED', error: 'Customers have used this voucher, so its code, value and kind cannot change.' });
   }
@@ -89,7 +91,7 @@ export async function updateVoucher(req, res) {
     validFrom: body.validFrom !== undefined ? body.validFrom : current.valid_from,
     validUntil: body.validUntil !== undefined ? body.validUntil : current.valid_until,
     note: body.note !== undefined ? body.note : current.note,
-    kind: body.kind !== undefined ? body.kind : current.kind,
+    kind: sentKind !== undefined ? sentKind : current.kind,
     firstTimeOnly: body.firstTimeOnly !== undefined ? body.firstTimeOnly === true : current.first_time_only === true,
   });
   if (!input.ok) return res.status(400).json({ success: false, error: input.error });

@@ -206,6 +206,7 @@ describe('paying trip rewards', () => {
 
     expect((await result).failed).toBe(1);
     expect(used.notify).not.toHaveBeenCalled();
+    expect(silence).toHaveBeenCalledWith(expect.stringMatching(/could not be paid/), expect.objectContaining({ bookingReference: 'FLT1', code: 'WALLET_UNAVAILABLE', error: 'down' }));
     silence.mockRestore();
   });
 
