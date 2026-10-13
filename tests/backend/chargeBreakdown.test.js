@@ -25,7 +25,7 @@ describe('chargeBreakdown', () => {
       verifiedAt: '2026-09-15T10:00:00Z',
     }));
 
-    expect(out.chargeBreakdown).toEqual({ fare: 500, serviceFee: 50, discount: 9.14, total: 540.86, currency: 'USD', couponCode: 'SAVE' });
+    expect(out.chargeBreakdown).toEqual({ fare: 500, serviceFee: 50, discount: 9.14, walletAmount: 0, walletCoins: 0, total: 540.86, currency: 'USD', couponCode: 'SAVE' });
     const sent = JSON.stringify(out);
     expect(sent).not.toContain('coupon-uuid-1');
     expect(sent).not.toContain('fixedFeeByType');
@@ -35,7 +35,19 @@ describe('chargeBreakdown', () => {
 
   it('reads the fare from the priced fare when an older charge kept no fare', () => {
     expect(toClientBooking(row({ total: 291, pricedFare: { total: 291, currency: 'USD' } })).chargeBreakdown)
-      .toEqual({ fare: 291, serviceFee: 0, discount: 0, total: 291, currency: 'USD', couponCode: null });
+      .toEqual({ fare: 291, serviceFee: 0, discount: 0, walletAmount: 0, walletCoins: 0, total: 291, currency: 'USD', couponCode: null });
+  });
+
+  it('sends the coins a booking used, beside the card amount it was charged', () => {
+    const out = toClientBooking(row({
+      fare: 120, serviceFee: 2.2, discount: 0, total: 72.2, walletAmount: 50, walletCoins: 5000,
+      wallet: { coins: 5000, amount: 50 }, pricedFare: { total: 120, currency: 'USD' },
+    }));
+
+    expect(out.chargeBreakdown).toEqual({
+      fare: 120, serviceFee: 2.2, discount: 0, walletAmount: 50, walletCoins: 5000, total: 72.2, currency: 'USD', couponCode: null,
+    });
+    expect(JSON.stringify(out)).not.toContain('"wallet"');
   });
 
   it('sends none when checkout recorded no verified charge', () => {

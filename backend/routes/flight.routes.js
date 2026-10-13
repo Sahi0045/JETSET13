@@ -16,6 +16,7 @@ import { withBookingPriority } from '../services/amadeusSoap/semaphore.js';
 import { describeWsConfig, getWsConfig, officeTimeZoneOf } from '../services/amadeusSoap/config.js';
 import { isStandingTicketRefusal } from '../services/amadeusSoap/codes.js';
 import { recordCouponUse } from '../services/coupon.service.js';
+import { captureCoins, returnAllCoins } from '../services/wallet.service.js';
 import { isFareRefusal } from '../services/flightCheckout.service.js';
 import { crossesBorder, touchesUnitedStates } from '../utils/itinerary.js';
 import { CHAIN_CLAIM_TTL_MS, MAX_QUEUE_ATTEMPTS } from '../utils/bookingChainClaim.js';
@@ -142,6 +143,63 @@ async function invokeOrchestratedCancel(bookingReference, reason, req, { email, 
   return { statusCode, payload };
 }
 
+const coinsUsedOf = (verifiedCharge) => Math.max(0, Math.floor(Number(verifiedCharge?.wallet?.coins)) || 0);
+
+/**
+ * Best effort and never thrown: a coin problem is written onto the booking so
+ * staff can see it, and must not fail or hold up the booking it is about.
+ * `needs_review` is not used - it drives desk, alarm and cancel rules.
+ */
+async function markWalletIssue(bookingReference, issue, report) {
+  try {
+    const at = new Date().toISOString();
+    const written = await patchBookingDetails(bookingReference, () => ({ wallet_issue: { ...issue, at } }));
+    if (!written) {
+      report(new Error('a Jet Coins problem could not be recorded on the booking'), { where: 'markWalletIssue', bookingReference, issue });
+    }
+  } catch (error) {
+    report(error, { where: 'markWalletIssue', bookingReference, issue });
+  }
+}
+
+/**
+ * The coins a checkout held, used now that the booking exists. A hold already
+ * released means the coins went back to the customer before this payment
+ * landed: the booking stands, and someone must take the coins back by hand.
+ */
+export async function settleCoinsAfterBooking({ bookingReference, verifiedCharge }, { report = reportError } = {}) {
+  const coins = coinsUsedOf(verifiedCharge);
+  if (coins <= 0) return;
+  let issue = null;
+  try {
+    const { status } = await captureCoins(supabase, bookingReference);
+    if (status !== 'captured') {
+      report(new Error('Jet Coins for a completed booking were not held'), { bookingReference, status, coins });
+      issue = { kind: 'capture_failed', coins, status: status || 'unknown' };
+    }
+  } catch (error) {
+    report(error, { where: 'settleCoinsAfterBooking', bookingReference, coins });
+    issue = { kind: 'capture_failed', coins, status: 'error' };
+  }
+  if (issue) await markWalletIssue(bookingReference, issue, report);
+}
+
+/**
+ * Every coin a failed or duplicate payment used goes back; a failure is
+ * reported and marked on the booking, never swallowed. `coins` is what the
+ * booking used when the caller has read it: none means nothing to ask for, and
+ * unknown (undefined) asks anyway, because an unread booking may hold coins.
+ */
+export async function giveBackAllCoins(bookingReference, reason, { report = reportError, coins } = {}) {
+  if (!bookingReference || (coins !== undefined && !(coins > 0))) return { ok: true, coins: 0 };
+  const result = await returnAllCoins(supabase, bookingReference, reason);
+  if (!result.ok) {
+    report(result.error || new Error('Jet Coins were not returned'), { where: 'giveBackAllCoins', bookingReference, reason });
+    await markWalletIssue(bookingReference, { kind: 'return_failed', ...(coins > 0 ? { coins } : {}), reason }, report);
+  }
+  return result;
+}
+
 // Called when flight ticket issuance FAILS after the customer was already charged.
 // Reverses the ARC payment (VOID/REFUND), marks the booking row as cancelled/refunded with
 // the failure recorded, and returns an honest error — never fabricates a confirmed booking.
@@ -180,6 +238,7 @@ export async function refundOnFulfillmentFailure(res, { orderId, bookingReferenc
   // the reversal it records was left IN_PROGRESS longer than any reversal
   // takes (its request died), which is taken over.
   let prior = null;
+  let walletCoins;
   try {
     if (supabase && failingRef) {
       for (let attempt = 1; attempt <= 3; attempt += 1) {
@@ -191,6 +250,7 @@ export async function refundOnFulfillmentFailure(res, { orderId, bookingReferenc
           .limit(1)
           .maybeSingle();
         if (!failing) break;
+        walletCoins = coinsUsedOf(failing.booking_details?.verified_charge);
         const marker = failing.booking_details?.fulfillment_failed;
         if (marker && !reversalAbandoned(marker)) {
           prior = marker;
@@ -216,6 +276,7 @@ export async function refundOnFulfillmentFailure(res, { orderId, bookingReferenc
   }
   if (prior) {
     console.warn('↩️ This payment is already being reversed, or was; not reversing it again. order:', orderId);
+    await giveBackAllCoins(failingRef, 'reversal', { coins: walletCoins });
     return res.status(status).json(reversalAnswer(reversalOf(prior), { amount, errorMsg, code, customerMessage, reason }));
   }
   const reversal = await reverseArcPaymentForOrder(orderId, {
@@ -224,6 +285,7 @@ export async function refundOnFulfillmentFailure(res, { orderId, bookingReferenc
     reason: 'Flight booking failed after payment'
   });
   console.log('💸 Payment reversal result:', reversal.action, '| reversed:', reversal.reversed);
+  await giveBackAllCoins(failingRef, 'reversal', { coins: walletCoins });
 
   // Record the failure on the booking row created at hosted-checkout (if any).
   try {
@@ -1646,12 +1708,13 @@ async function holdDuplicatePayment(bookingReference, duplicateOf) {
  *
  * @returns {Promise<{ reversed: boolean, recorded: boolean, action?: string }>}
  */
-async function refundDuplicatePayment(bookingReference, { orderId, duplicateOf }) {
+async function refundDuplicatePayment(bookingReference, { orderId, duplicateOf, walletCoins }) {
   const reversal = await reverseArcPaymentForOrder(orderId || bookingReference, {
     reason: `Second payment of ${duplicateOf}`,
     once: 'duplicate',
   });
   console.log('💸 Second payment refund:', reversal.action, '| reversed:', reversal.reversed, '|', bookingReference);
+  await giveBackAllCoins(bookingReference, 'duplicate', { coins: walletCoins });
 
   for (let attempt = 1; supabase && attempt <= 3; attempt += 1) {
     const { data: row } = await supabase
@@ -3280,6 +3343,7 @@ router.post('/order', optionalProtect, async (req, res) => {
         console.error('⚠️ Could not record the coupon use:', couponError.message);
       }
     };
+    const noteCoinsUsed = () => settleCoinsAfterBooking({ bookingReference: existing.booking_reference, verifiedCharge });
 
     // A card without itineraries/source/travelerPricings cannot be sold: it is a
     // display object, not an offer. Refuse it rather than sending a request the
@@ -3481,6 +3545,7 @@ router.post('/order', optionalProtect, async (req, res) => {
         const refund = await refundDuplicatePayment(existing.booking_reference, {
           orderId: arcOrderId,
           duplicateOf: duplicate.duplicateOf,
+          walletCoins: coinsUsedOf(verifiedCharge),
         });
         if (refund.reversed) {
           return res.status(409).json(duplicatePaymentAnswer(existing.booking_reference, 'returned'));
@@ -3773,6 +3838,7 @@ router.post('/order', optionalProtect, async (req, res) => {
         });
         // The airline holds the seats the discount paid for.
         await noteCouponUse();
+        await noteCoinsUsed();
         reportError(providerError, {
           service: 'amadeus-ws',
           flow: 'booking',
@@ -3913,6 +3979,7 @@ router.post('/order', optionalProtect, async (req, res) => {
     // payment would use it up. It was never counted at all: a single-use code
     // could be used any number of times.
     await noteCouponUse();
+    await noteCoinsUsed();
 
     // The offer as the airline priced it and the chain booked it. The record
     // was written from the search offer, although pricing deliberately
@@ -4761,6 +4828,8 @@ function chargeBreakdownOf(charge) {
     fare: figure(charge.fare ?? charge.pricedFare?.total),
     serviceFee: figure(charge.serviceFee),
     discount: figure(charge.discount),
+    walletAmount: figure(charge.walletAmount),
+    walletCoins: figure(charge.walletCoins),
     total,
     currency: 'USD',
     couponCode: charge.coupon?.code || null,
@@ -4779,7 +4848,8 @@ export function fareBreakdownOf(charge) {
   const fare = Number(charge?.fare ?? charge?.pricedFare?.total);
   if (!charge || !Number.isFinite(total) || !Number.isFinite(fare)) return null;
   const discount = Number.isFinite(Number(charge.discount)) ? cents(charge.discount) : 0;
-  const serviceFee = Number.isFinite(Number(charge.serviceFee)) ? cents(charge.serviceFee) : cents(total + discount - fare);
+  const walletAmount = Number.isFinite(Number(charge.walletAmount)) ? cents(charge.walletAmount) : 0;
+  const serviceFee = Number.isFinite(Number(charge.serviceFee)) ? cents(charge.serviceFee) : cents(total + discount + walletAmount - fare);
   const base = Number(charge.pricedFare?.base);
   const baseFare = Number.isFinite(base) && base > 0 && base <= fare ? cents(base) : cents(fare);
   return {
@@ -4787,6 +4857,7 @@ export function fareBreakdownOf(charge) {
     totalTax: cents(fare - baseFare),
     serviceFee,
     discount,
+    walletAmount,
     totalAmount: cents(fare + serviceFee),
     currency: 'USD',
   };
