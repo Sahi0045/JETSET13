@@ -35,6 +35,29 @@ describe('reserving a trip reward once the booking exists', () => {
     expect(supabaseMock.rpc).toHaveBeenCalledWith('reserve_trip_voucher', { p_user: 'user-1', p_code: 'SHUBHAM', p_ref: REF, p_due_at: '2026-11-18T00:00:00.000Z' });
     expect(reward).toEqual({ code: 'SHUBHAM', coins: 5000, dueAt: '2026-11-18T00:00:00.000Z' });
     expect(issueOnRow()).toBeUndefined();
+    expect(table.row(REF).booking_details.trip_reward).toEqual({ code: 'SHUBHAM', coins: 5000, due_at: '2026-11-18T00:00:00.000Z' });
+  });
+
+  it('records a reward that is already paid, too', async () => {
+    supabaseMock.rpc.mockResolvedValue({ data: { status: 'paid', code: 'SHUBHAM', coins: 5000, due_at: '2026-11-18T00:00:00+00:00', created: false }, error: null });
+
+    await reserve();
+
+    expect(table.row(REF).booking_details.trip_reward).toEqual({ code: 'SHUBHAM', coins: 5000, due_at: '2026-11-18T00:00:00.000Z' });
+  });
+
+  it('still answers the reward when it could not be written on the booking, and reports it', async () => {
+    supabaseMock.rpc.mockResolvedValue({ data: { status: 'pending', code: 'SHUBHAM', coins: 5000, due_at: '2026-11-18T00:00:00+00:00', created: true }, error: null });
+    table = fakeBookingsTable([]);
+    supabaseMock.from.mockImplementation(table.from);
+    const silence = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const report = vi.fn();
+
+    const reward = await reserve({}, report);
+
+    expect(reward).toEqual({ code: 'SHUBHAM', coins: 5000, dueAt: '2026-11-18T00:00:00.000Z' });
+    expect(report).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringMatching(/trip reward could not be recorded/) }), expect.objectContaining({ bookingReference: REF }));
+    silence.mockRestore();
   });
 
   it('marks a refused voucher on the booking and never throws', async () => {
@@ -46,6 +69,7 @@ describe('reserving a trip reward once the booking exists', () => {
     expect(reward).toBeNull();
     expect(issueOnRow()).toMatchObject({ kind: 'voucher_refused', code: 'SHUBHAM', reason: 'VOUCHER_USED_UP' });
     expect(Number.isNaN(Date.parse(issueOnRow().at))).toBe(false);
+    expect(table.row(REF).booking_details.trip_reward).toBeUndefined();
     silence.mockRestore();
   });
 
@@ -104,19 +128,31 @@ describe('reserving a trip reward once the booking exists', () => {
   it('gives nothing back for a booking whose reward was already voided', async () => {
     supabaseMock.rpc.mockResolvedValue({ data: { status: 'void', code: 'SHUBHAM', coins: 5000, created: false }, error: null });
     expect(await reserve()).toBeNull();
+    expect(table.row(REF).booking_details.trip_reward).toBeUndefined();
   });
 });
 
 describe('the trip reward on a booking the customer reads', () => {
-  const confirmed = (details = {}, over = {}) => row({ verified_charge: { total: 291, voucher }, ...details }, { status: 'confirmed', ...over });
+  const recorded = { code: 'SHUBHAM', coins: 5000, due_at: '2026-11-18T00:00:00.000Z' };
+  const confirmed = (details = {}, over = {}) => row({ verified_charge: { total: 291, voucher }, trip_reward: recorded, ...details }, { status: 'confirmed', ...over });
 
-  it('names the voucher and its coins', () => {
+  it('names the voucher and its coins once a reward was reserved', () => {
     expect(toClientBooking(confirmed()).tripReward).toEqual({ code: 'SHUBHAM', coins: 5000 });
   });
 
-  it('has none for a cancelled booking, a refused voucher, or no voucher', () => {
+  it('has none for a voucher checkout accepted but nothing was reserved for', () => {
+    expect(toClientBooking(confirmed({ trip_reward: undefined })).tripReward).toBeNull();
+    expect(toClientBooking(confirmed({ trip_reward: undefined, wallet_issue: { kind: 'capture_failed', coins: 500 } })).tripReward).toBeNull();
+  });
+
+  it('has none for a cancelled booking, a refunded or reversed payment, or no voucher', () => {
     expect(toClientBooking(confirmed({}, { status: 'cancelled' })).tripReward).toBeNull();
-    expect(toClientBooking(confirmed({ wallet_issue: { kind: 'voucher_refused', code: 'SHUBHAM' } })).tripReward).toBeNull();
+    expect(toClientBooking(confirmed({}, { payment_status: 'refunded' })).tripReward).toBeNull();
+    expect(toClientBooking(confirmed({}, { payment_status: 'reversed' })).tripReward).toBeNull();
     expect(toClientBooking(row({ verified_charge: { total: 291 } }, { status: 'confirmed' })).tripReward).toBeNull();
+  });
+
+  it('keeps showing a reward on a payment only part of which was refunded', () => {
+    expect(toClientBooking(confirmed({}, { payment_status: 'partially_refunded' })).tripReward).toEqual({ code: 'SHUBHAM', coins: 5000 });
   });
 });

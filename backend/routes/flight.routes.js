@@ -245,11 +245,22 @@ export async function reserveTripRewardAfterBooking({ bookingReference, userId, 
     return refused(error?.name === 'WalletError' ? error.code : 'WALLET_UNAVAILABLE', error);
   }
   if (!['pending', 'paid'].includes(reward.status)) return null;
-  return {
+  const reserved = {
     code: reward.code || voucher.code,
     coins: Math.floor(Number(reward.coins) || 0),
     dueAt: reward.due_at ? new Date(reward.due_at).toISOString() : null,
   };
+  try {
+    const written = await patchBookingDetails(bookingReference, {
+      trip_reward: { code: reserved.code, coins: reserved.coins, due_at: reserved.dueAt },
+    });
+    if (!written) {
+      report(new Error('a reserved trip reward could not be recorded on the booking'), { where: 'reserveTripRewardAfterBooking', bookingReference });
+    }
+  } catch (error) {
+    report(error, { where: 'reserveTripRewardAfterBooking', bookingReference });
+  }
+  return reserved;
 }
 
 // Called when flight ticket issuance FAILS after the customer was already charged.
@@ -4905,13 +4916,18 @@ function chargeBreakdownOf(charge) {
   };
 }
 
-/** The voucher a booking will pay Jet Coins for after the trip, as the receipt shows it, or null. */
+/**
+ * The reward a booking will pay Jet Coins for after the trip, as the receipt
+ * shows it, or null. Only what was actually reserved counts
+ * (`booking_details.trip_reward`): a voucher checkout accepted can still be
+ * refused, or fail to reserve, once the booking is made.
+ */
 export function tripRewardOfRow(booking) {
-  const voucher = tripVoucherOf(booking?.booking_details?.verified_charge);
-  const coins = Math.floor(Number(voucher?.coins) || 0);
-  if (!voucher || coins <= 0) return null;
-  if (booking.status === 'cancelled' || booking.booking_details?.wallet_issue?.kind === 'voucher_refused') return null;
-  return { code: voucher.code, coins };
+  const reward = booking?.booking_details?.trip_reward;
+  const coins = Math.floor(Number(reward?.coins) || 0);
+  if (!reward?.code || coins <= 0) return null;
+  if (booking.status === 'cancelled' || ['refunded', 'reversed'].includes(String(booking.payment_status || '').toLowerCase())) return null;
+  return { code: reward.code, coins };
 }
 
 /**

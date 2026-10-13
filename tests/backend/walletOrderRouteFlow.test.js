@@ -351,6 +351,7 @@ describe('a booking with a trip-reward voucher', () => {
     expect(res.body.success).toBe(true);
     expect(calls('reserve_trip_voucher')).toEqual([['reserve_trip_voucher', { p_user: 'user-1', p_code: 'SHUBHAM', p_ref: REF, p_due_at: '2026-11-18T00:00:00.000Z' }]]);
     expect(res.body.tripReward).toEqual({ code: 'SHUBHAM', coins: 5000, dueAt: '2026-11-18T00:00:00.000Z' });
+    expect(table.row(REF).booking_details.trip_reward).toEqual({ code: 'SHUBHAM', coins: 5000, due_at: '2026-11-18T00:00:00.000Z' });
     expect(table.row(REF).booking_details.wallet_issue).toBeUndefined();
   });
 
@@ -368,6 +369,7 @@ describe('a booking with a trip-reward voucher', () => {
     expect(res.body.tripReward).toBeUndefined();
     expect(table.row(REF).booking_details.pnr).toBe('NEW999');
     expect(table.row(REF).booking_details.wallet_issue).toMatchObject({ kind: 'voucher_refused', code: 'SHUBHAM', reason: 'VOUCHER_USED_UP' });
+    expect(table.row(REF).booking_details.trip_reward).toBeUndefined();
     silence.mockRestore();
   });
 
