@@ -7,6 +7,7 @@ import { canVoidPayment } from '../../utils/adminBookingActions';
 import { needsManualRefund } from '../../utils/bookingStatus';
 import { formatUsd } from '../../utils/bookingCharge';
 import { isFullAdmin } from '../../../../shared/staffRoles';
+import { coinsToUsd, formatCoins } from '../../../../shared/jetCoins';
 
 /**
  * The customer support desk: the bookings the Slack alarms named.
@@ -159,6 +160,24 @@ const owedSentence = (booking) => {
     : decided;
 };
 
+/** What the order route or a void left unfinished with a booking's Jet Coins. */
+const walletIssueLine = (issue) => {
+  const coins = Number(issue?.coins) > 0 ? ` (${formatCoins(issue.coins)} coins)` : '';
+  if (issue?.kind === 'capture_failed') return `Jet Coins: could not be captured${coins}`;
+  if (issue?.kind === 'return_failed') return `Jet Coins: could not be returned${coins}`;
+  return 'Jet Coins: need a check';
+};
+
+/** The coins the server really gave back, in its own words; the earned-coin warning stays visible. */
+const coinsReply = (booking, result) => {
+  const given = Math.floor(Number(result.data?.coins) || 0);
+  const said = result.message || `${formatCoins(given)} Jet Coins returned`;
+  return {
+    tone: result.data?.earnedReversed === false ? 'error' : 'success',
+    text: `${booking.bookingReference}: ${said}${given === 0 ? ' - nothing could be returned for this booking' : ''}`,
+  };
+};
+
 const hoursSince = (iso) => {
   const at = Date.parse(iso ?? '');
   if (!Number.isFinite(at)) return null;
@@ -193,7 +212,7 @@ function SupportQueue() {
   const [message, setMessage] = useState(null);
   // { booking, note } while the "I have dealt with this" box is open.
   const [handling, setHandling] = useState(null);
-  // { type: 'cancel' | 'void' | 'refund', booking, reason?, amount? }
+  // { type: 'cancel' | 'void' | 'refund' | 'coins', booking, reason?, amount?, coins? }
   const [action, setAction] = useState(null);
   const [saving, setSaving] = useState(false);
   // Only the owner sees this: invite a support person, or take the desk away.
@@ -341,6 +360,15 @@ function SupportQueue() {
             reason: current.reason?.trim() || 'Voided by the support desk',
           }),
         });
+      } else if (type === 'coins') {
+        response = await adminFetch(getApiUrl('wallet/staff-return'), {
+          method: 'POST',
+          body: JSON.stringify({
+            bookingReference: booking.bookingReference,
+            coins: Math.floor(Number(current.coins)),
+            reason: current.reason?.trim() || 'Returned by the support desk',
+          }),
+        });
       } else {
         response = await adminFetch(getApiUrl(`flights/admin-bookings/${booking.id}/refund`), {
           method: 'POST',
@@ -351,7 +379,9 @@ function SupportQueue() {
       }
       const result = await response.json().catch(() => ({}));
       if (response.ok && result.success) {
-        setMessage({ tone: 'success', text: `${booking.bookingReference}: ${result.message || 'done'}` });
+        setMessage(type === 'coins'
+          ? coinsReply(booking, result)
+          : { tone: 'success', text: `${booking.bookingReference}: ${result.message || 'done'}` });
         setAction(null);
         load();
       } else {
@@ -465,6 +495,11 @@ function SupportQueue() {
                     {attention.tickets?.length ? ` — tickets ${attention.tickets.join(', ')}` : ''}
                   </p>
                 )}
+                {booking.walletIssue && (
+                  <p className="text-sm text-gray-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
+                    {walletIssueLine(booking.walletIssue)}
+                  </p>
+                )}
                 {resolved && (
                   <p className="text-sm text-gray-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 mb-3">
                     {resolved.note} — {resolved.by} on {new Date(resolved.at).toLocaleString()}
@@ -481,7 +516,16 @@ function SupportQueue() {
                   </Field>
                   <Field label="PNR">{booking.pnr || 'Not assigned'}</Field>
                   <Field label="Tickets">{booking.ticketNumbers?.length ? booking.ticketNumbers.join(', ') : (booking.ticketed ? 'Issued' : 'None')}</Field>
-                  <Field label="Paid">{booking.totalAmount > 0 ? formatUsd(booking.totalAmount) : '—'}<br /><span className="font-normal text-gray-500 text-xs">{booking.status} · {booking.paymentStatus}</span></Field>
+                  <Field label="Paid">{booking.totalAmount > 0 ? formatUsd(booking.totalAmount) : '—'}<br /><span className="font-normal text-gray-500 text-xs">{booking.status} · {booking.paymentStatus}</span>
+                    {booking.walletCoins > 0 && (
+                      <>
+                        <br />
+                        <span className="font-normal text-gray-500 text-xs">
+                          {formatCoins(booking.walletCoins)} Jet Coins used{booking.walletCoinsReturned > 0 ? ` · ${formatCoins(booking.walletCoinsReturned)} returned` : ''}
+                        </span>
+                      </>
+                    )}
+                  </Field>
                 </div>
 
                 <div className="flex flex-wrap gap-2">
@@ -545,6 +589,15 @@ function SupportQueue() {
                       className="px-3 py-2 rounded-lg border border-amber-300 bg-amber-50 text-amber-900 text-sm font-semibold"
                     >
                       Finish refund
+                    </button>
+                  )}
+                  {booking.walletCoins > booking.walletCoinsReturned && (
+                    <button
+                      type="button"
+                      onClick={() => setAction({ type: 'coins', booking, coins: booking.walletCoins - booking.walletCoinsReturned })}
+                      className="rounded-lg border border-[#055B75] px-3 py-1.5 text-xs font-semibold text-[#055B75] hover:bg-[#F1FBFD]"
+                    >
+                      Return Jet Coins
                     </button>
                   )}
                 </div>
@@ -615,14 +668,32 @@ function SupportQueue() {
               {action.type === 'cancel' && `Cancel ${action.booking.bookingReference} and refund`}
               {action.type === 'void' && `Void the payment for ${action.booking.bookingReference}`}
               {action.type === 'refund' && `Finish the refund for ${action.booking.bookingReference}`}
+              {action.type === 'coins' && `Return Jet Coins for ${action.booking.bookingReference}`}
             </h3>
             <p className="text-sm text-gray-600 mb-3">
               {action.type === 'cancel' && 'The seats are released with the airline first, then the money is returned under the fare rules.'}
               {action.type === 'void' && 'This reverses a payment that has not settled yet. It does not release any seats.'}
               {action.type === 'refund' && 'Check what ARC Pay already shows, or send the refund now. The amount is capped by what the gateway holds.'}
+              {action.type === 'coins' && 'Puts the coins back in the customer\'s Jet Wallet. No card money moves. It never returns more than the booking used.'}
             </p>
             {action.type === 'refund' && owedSentence(action.booking) && (
               <p className="text-sm font-semibold text-gray-800 mb-3">{owedSentence(action.booking)}</p>
+            )}
+            {action.type === 'coins' && (
+              <div className="mb-3">
+                <label className="block text-sm font-semibold text-gray-700">
+                  Jet Coins to return
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={action.coins}
+                    onChange={(event) => setAction({ ...action, coins: event.target.value })}
+                    className="mt-1 w-full border border-[#B9D0DC] rounded-lg p-2.5 text-sm font-normal"
+                  />
+                </label>
+                <p className="text-sm text-gray-600 mt-1">{coinsToUsd(action.coins)} USD</p>
+              </div>
             )}
             {action.type !== 'refund' && (
               <textarea
@@ -660,7 +731,7 @@ function SupportQueue() {
               <button
                 type="button"
                 onClick={() => runAction(action.type === 'refund' ? { mode: 'refund' } : {})}
-                disabled={saving}
+                disabled={saving || (action.type === 'coins' && !(Math.floor(Number(action.coins)) >= 1))}
                 className="px-3 py-2 rounded-lg bg-[#055B75] text-white text-sm font-semibold disabled:opacity-50"
               >
                 {saving ? 'Working…' : (action.type === 'refund' ? 'Refund now' : 'Confirm')}

@@ -5611,6 +5611,9 @@ function normalizeBookingRow(b) {
     service,
     bookingDetails: adminSafeDetails(d), passengerDetails: b.passenger_details, isPackage: false,
     arcOrderId: d.arc_order_id || d.order_id || b.booking_reference,
+    walletCoins: Number(d.verified_charge?.wallet?.coins) || 0,
+    walletCoinsReturned: Number(d.cancellation?.coinsReturned) || 0,
+    walletIssue: d.wallet_issue || null,
     // The desk's own fields. The panel showed a "PNR:" line this row never
     // carried, and never showed why a booking was flagged or which tickets a
     // cancelled one still has to claim back - all of which Slack had named.

@@ -28,6 +28,8 @@ import { canReachAmadeus } from '../../utils/amadeusReach.js';
 import { unchangedSince } from '../../utils/bookingDetailsGuard.js';
 import { DEFAULT_PRICE_SETTINGS, flightCancellationFeeFrom } from '../../config/priceDefaults.js';
 import { cancellationMessage, refundOutcome } from '../../../shared/cancellationOutcome.js';
+import { coinsBackOnCancel, coinsToUsd } from '../../../shared/jetCoins.js';
+import { captureCoins, releaseCoins, returnAllCoins, returnCoins, reverseEarnedCoins } from '../../services/wallet.service.js';
 import { customerCancelTerms, fareRuleOf, isWithinFreeWindow, serviceFeeKeptOf } from '../../../shared/flightCancelPolicy.js';
 import { readBookedFeeTable } from '../../services/bookedFeeTable.service.js';
 import { officeTimeZoneOf } from '../../services/amadeusSoap/config.js';
@@ -702,6 +704,52 @@ export async function quoteCustomerCancel(booking, { now = new Date(), client = 
 }
 
 /**
+ * The coins a cancelled booking used. ARC gives back the card part the refund
+ * decision chose; coins cover the rest of what is owed, and never more than
+ * were used. A booking that earned coins and is now refunded gives them back,
+ * whether or not it used any. Never throws: a failed return is said, and the
+ * desk is asked to finish it.
+ *
+ * A hold the booking never captured is captured first: wallet_return on a hold
+ * still `held` releases every coin it holds, whatever is owed.
+ */
+export async function settleCoinsOnCancel(client, { bookingReference, decision, heldAmount, kept, coins }) {
+    const used = Math.max(0, Math.floor(Number(coins) || 0));
+    if (decision.action === 'nothing_held') {
+        if (used <= 0) return { ok: true, coins: 0 };
+        try {
+            const released = await releaseCoins(client, bookingReference);
+            return { ok: true, coins: Number(released.coins) || 0 };
+        } catch (error) {
+            console.error('⚠️ Jet Coins were not released on a cancel', { bookingReference, code: error.code });
+            return { ok: false, coins: 0 };
+        }
+    }
+
+    const owed = used > 0 ? coinsBackOnCancel({ action: decision.action, heldAmount, kept, coins: used }) : 0;
+    let given = 0;
+    if (owed > 0) {
+        try {
+            await captureCoins(client, bookingReference);
+            given = await returnCoins(client, { bookingReference, coins: owed, reason: 'cancel' });
+        } catch (error) {
+            console.error('⚠️ Jet Coins were not returned on a cancel', { bookingReference, code: error.code });
+            return { ok: false, coins: 0 };
+        }
+    }
+
+    const refundsCustomer = owed > 0 || ['refund_all', 'refund_less_fee'].includes(decision.action);
+    if (!refundsCustomer) return { ok: true, coins: given };
+    try {
+        await reverseEarnedCoins(client, bookingReference);
+    } catch (error) {
+        console.error('⚠️ Coins earned on a cancelled booking were not taken back', { bookingReference, code: error.code });
+        return { ok: true, coins: given, earnedReversed: false };
+    }
+    return { ok: true, coins: given };
+}
+
+/**
  * Cancel a flight: take the booking, learn what the gateway holds, release the
  * seats, then return what the tickets and the fare say is owed - in that order,
  * and once.
@@ -930,15 +978,30 @@ async function cancelFlightBooking(res, booking, { reason, email, customer = fal
     });
     console.log('💰 Cancellation refund:', returned.paymentAction, returned.refundAmount, '-', decision.reason);
 
+    const coinsUsed = Number(details.verified_charge?.wallet?.coins) || 0;
+    const keptForCoins = customerTerms ? (customerTerms.serviceFeeKept ?? 0) : (decision.action === 'fee_covers' ? flightFee : decision.fee);
+    const coins = await settleCoinsOnCancel(supabase, {
+        bookingReference, decision, heldAmount: payment.heldAmount, kept: keptForCoins, coins: coinsUsed,
+    });
+
     const now = new Date().toISOString();
     const reviewReasons = [
         decision.action === 'review' ? decision.reason : null,
         returned.reviewReason || null,
+        coins.ok ? null : `Jet Coins (${coinsUsed.toLocaleString('en-US')}) could not be returned automatically: return them with Return Jet Coins`,
+        coinsUsed > 0 && coins.earnedReversed === false ? 'the Jet Coins earned on this booking could not be taken back automatically: check the booking' : null,
         // A ticket past its same-day void window still holds value, and that
         // value is with the airline. It is ours to reclaim under the fare rules;
         // it does not settle itself by cancelling.
         requiresAirlineRefund.length ? 'tickets could not be voided; airline refund must be claimed' : null,
     ].filter(Boolean);
+
+    // The decision clamps the service fee to the card; with coins the customer
+    // paid more than the card, so the fee kept is clamped to everything paid.
+    const cardHeld = Number(payment.heldAmount) || 0;
+    const termsServiceFeeKept = coinsUsed > 0 && customerTerms
+        ? roundCents(Math.min(customerTerms.serviceFeeKept ?? 0, cardHeld + coinsToUsd(coinsUsed)))
+        : (decision.serviceFeeKept ?? 0);
 
     const cancellationResult = {
         bookingId: booking.id,
@@ -950,14 +1013,15 @@ async function cancelFlightBooking(res, booking, { reason, email, customer = fal
         paymentAction: returned.paymentAction,
         refundAmount: returned.refundAmount,
         cancellationFee: returned.cancellationFee,
+        coinsReturned: coins.coins,
         currency,
         needsReview: reviewReasons.length > 0,
         ...(customerTerms && decision.policy
             ? {
                 policy: decision.policy,
                 terms: {
-                    serviceFeeKept: decision.serviceFeeKept ?? 0,
-                    airlinePrice: roundCents(Math.max(0, (Number(payment.heldAmount) || 0) - (decision.serviceFeeKept ?? 0))),
+                    serviceFeeKept: termsServiceFeeKept,
+                    airlinePrice: roundCents(Math.max(0, cardHeld + coinsToUsd(coinsUsed) - termsServiceFeeKept)),
                     cancellationFee: flightFee,
                     penalty: customerTerms.fareRule?.penalty ?? null,
                     penaltyCurrency: customerTerms.fareRule?.currency ?? null,
@@ -999,6 +1063,7 @@ async function cancelFlightBooking(res, booking, { reason, email, customer = fal
                     refundAmount: cancellationResult.refundAmount,
                     cancellationFee: cancellationResult.cancellationFee || 0,
                     netRefund: cancellationResult.refundAmount || 0,
+                    coinsReturned: cancellationResult.coinsReturned,
                     currency,
                     ticketsVoided: cancellationResult.ticketsVoided,
                     // Why this amount, for the support desk.
@@ -2237,6 +2302,9 @@ export async function handlePaymentVoid(req, res) {
         console.log('✅ ARC Pay VOID successful:', voidResponse.data?.result || voidResponse.status);
         const voidedAt = new Date().toISOString();
 
+        const coinsUsed = Number(booking?.booking_details?.verified_charge?.wallet?.coins) || 0;
+        const coinsBack = coinsUsed > 0 ? await returnAllCoins(supabase, booking.booking_reference, 'void') : { ok: true, coins: 0 };
+
         // 4a. Update the booking (DB payment_status constraint allows 'refunded' — funds fully returned by void)
         //
         // From here the money is back with the customer, so a write that fails,
@@ -2261,7 +2329,8 @@ export async function handlePaymentVoid(req, res) {
                     reason,
                     paymentAction: 'VOID',
                     refundAmount: voidedAmount ?? (parseFloat(booking.total_amount) || 0),
-                    cancellationFee: 0
+                    cancellationFee: 0,
+                    ...(coinsBack.coins > 0 ? { coinsReturned: coinsBack.coins } : {})
                 }
             };
             let update = supabase.from('bookings').update({
@@ -2278,7 +2347,8 @@ export async function handlePaymentVoid(req, res) {
                         reason,
                         voidedAt
                     },
-                    cancellation: recorded.cancellation
+                    cancellation: recorded.cancellation,
+                    ...(coinsBack.ok ? {} : { wallet_issue: { kind: 'return_failed', coins: coinsUsed, reason: 'void', at: voidedAt } })
                 },
                 updated_at: voidedAt
             }).eq('id', booking.id);
