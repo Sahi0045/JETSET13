@@ -17,8 +17,21 @@ import Price from '../Components/Price';
  *     had been typed and Apply pressed. The flight review page passes the one
  *     the customer had applied before cancelling on the payment page.
  *   onRefused (fn, optional) - callback(message) when a code is not accepted.
+ *   checkVoucher (fn, optional) - the flight review page's trip-voucher check,
+ *     (code) => Promise<{ ok, voucher } | { ok: false, message }>. Given, the
+ *     box takes coupons and vouchers: a code that is not a coupon is tried as
+ *     a voucher. Every other page leaves it out and keeps the plain box.
+ *   voucher ({ code, coins } | null, optional) - the voucher the page holds.
+ *   onVoucherApply (fn, optional) - callback({ code, coins }).
+ *   onVoucherRemove (fn, optional) - callback when the voucher is removed.
  */
-const CouponInput = ({ orderTotal, bookingType = 'all', onApply, onRemove, onRefused, formatAmount, initialCode = '' }) => {
+const coinsText = (coins) => new Intl.NumberFormat('en-US').format(Math.floor(Number(coins) || 0));
+
+const CouponInput = ({
+    orderTotal, bookingType = 'all', onApply, onRemove, onRefused, formatAmount, initialCode = '',
+    checkVoucher, voucher = null, onVoucherApply, onVoucherRemove,
+}) => {
+    const acceptsVouchers = typeof checkVoucher === 'function';
     const showAmount = (amount) => (formatAmount ? formatAmount(amount) : <Price amount={amount} />);
     const [code, setCode] = useState(() => String(initialCode || '').toUpperCase());
     const [loading, setLoading] = useState(false);
@@ -43,16 +56,37 @@ const CouponInput = ({ orderTotal, bookingType = 'all', onApply, onRemove, onRef
         return '/api/coupons';
     };
 
+    const refuse = (message) => {
+        setError(message);
+        onRefused && onRefused(message);
+    };
+
+    const applyVoucher = async (typed) => {
+        if (voucher) {
+            setError('This booking already has a voucher. Remove it to use a different one.');
+            return;
+        }
+        const result = await checkVoucher(typed);
+        if (!mounted.current) return;
+        if (!result?.ok) {
+            refuse(result?.message || 'The voucher could not be checked just now. Please try again.');
+            return;
+        }
+        setCode('');
+        onVoucherApply && onVoucherApply(result.voucher);
+    };
+
     const handleApply = async () => {
-        if (!code.trim()) {
-            setError('Please enter a coupon code.');
+        const typed = code.trim();
+        if (!typed) {
+            setError(acceptsVouchers ? 'Please enter a coupon or voucher code.' : 'Please enter a coupon code.');
             return;
         }
         setLoading(true);
         setError(null);
         try {
             const resp = await axios.post(`${getApiBase()}/validate`, {
-                code: code.trim(),
+                code: typed,
                 orderTotal,
                 bookingType,
                 userId: user?.id
@@ -60,8 +94,13 @@ const CouponInput = ({ orderTotal, bookingType = 'all', onApply, onRemove, onRef
             if (!mounted.current) return;
 
             if (resp.data.success) {
+                if (applied) {
+                    setError('This booking already has a coupon. Remove it to use a different one.');
+                    return;
+                }
                 const result = resp.data;
                 setApplied(result);
+                if (acceptsVouchers) setCode('');
                 onApply && onApply({
                     couponId: result.coupon.id,
                     code: result.coupon.code,
@@ -69,13 +108,15 @@ const CouponInput = ({ orderTotal, bookingType = 'all', onApply, onRemove, onRef
                     finalTotal: result.finalTotal
                 });
             } else {
-                setError(resp.data.message || 'Invalid coupon.');
-                onRefused && onRefused(resp.data.message || 'Invalid coupon.');
+                refuse(resp.data.message || 'Invalid coupon.');
             }
         } catch (err) {
             if (!mounted.current) return;
-            setError(err.response?.data?.message || 'Failed to validate coupon.');
-            onRefused && onRefused(err.response?.data?.message || 'Failed to validate coupon.');
+            if (acceptsVouchers && err.response?.status === 404) {
+                await applyVoucher(typed);
+                return;
+            }
+            refuse(err.response?.data?.message || 'Failed to validate coupon.');
         } finally {
             if (mounted.current) setLoading(false);
         }
@@ -98,30 +139,30 @@ const CouponInput = ({ orderTotal, bookingType = 'all', onApply, onRemove, onRef
         onRemove && onRemove();
     };
 
-    if (applied) {
-        return (
-            <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-xl">
-                <div>
-                    <p className="text-sm font-bold text-green-800">
-                        🎉 Coupon <span className="font-mono">{applied.coupon.code}</span> applied!
-                    </p>
-                    <p className="text-xs text-green-600 mt-0.5">
-                        {/* In the same form as every other figure in the fare
-                            summary; a bare "$" disagreed with the total beside it. */}
-                        You save <span className="font-semibold">{showAmount(applied.discountAmount)}</span>. New total: <span className="font-semibold">{showAmount(applied.finalTotal)}</span>
-                    </p>
-                </div>
-                <button
-                    onClick={handleRemove}
-                    className="text-xs text-red-600 hover:text-red-800 font-semibold ml-4 underline"
-                >
-                    Remove
-                </button>
+    const appliedBlock = applied && (
+        <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-xl">
+            <div>
+                <p className="text-sm font-bold text-green-800">
+                    🎉 Coupon <span className="font-mono">{applied.coupon.code}</span> applied!
+                </p>
+                <p className="text-xs text-green-600 mt-0.5">
+                    {/* In the same form as every other figure in the fare
+                        summary; a bare "$" disagreed with the total beside it. */}
+                    You save <span className="font-semibold">{showAmount(applied.discountAmount)}</span>. New total: <span className="font-semibold">{showAmount(applied.finalTotal)}</span>
+                </p>
             </div>
-        );
-    }
+            <button
+                onClick={handleRemove}
+                className="text-xs text-red-600 hover:text-red-800 font-semibold ml-4 underline"
+            >
+                Remove
+            </button>
+        </div>
+    );
 
-    return (
+    if (!acceptsVouchers && appliedBlock) return appliedBlock;
+
+    const inputBlock = (
         <div>
             <div className="flex gap-2">
                 <input
@@ -129,8 +170,8 @@ const CouponInput = ({ orderTotal, bookingType = 'all', onApply, onRemove, onRef
                     value={code}
                     onChange={(e) => { setCode(e.target.value.toUpperCase()); setError(null); }}
                     onKeyDown={(e) => e.key === 'Enter' && handleApply()}
-                    placeholder="Enter coupon code"
-                    className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase"
+                    placeholder={acceptsVouchers ? 'Coupon or voucher code' : 'Enter coupon code'}
+                    className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#0890BC] focus:border-[#0890BC] uppercase"
                 />
                 <button
                     onClick={handleApply}
@@ -141,6 +182,30 @@ const CouponInput = ({ orderTotal, bookingType = 'all', onApply, onRemove, onRef
                 </button>
             </div>
             {error && <p className="text-xs text-red-600 mt-1.5">{error}</p>}
+        </div>
+    );
+
+    if (!acceptsVouchers) return inputBlock;
+
+    return (
+        <div className="space-y-2">
+            {appliedBlock}
+            {voucher && (
+                <div className="flex items-center justify-between p-3 bg-[#F1FBFD] border border-[#65B3CF] rounded-xl">
+                    <p className="text-sm font-bold text-[#034457]">
+                        Voucher <span className="font-mono">{voucher.code}</span>: {coinsText(voucher.coins)} Jet Coins after your trip
+                    </p>
+                    <button
+                        type="button"
+                        aria-label={`Remove voucher ${voucher.code}`}
+                        onClick={() => { setError(null); onVoucherRemove && onVoucherRemove(); }}
+                        className="text-xs text-red-600 hover:text-red-800 font-semibold ml-4 underline"
+                    >
+                        Remove
+                    </button>
+                </div>
+            )}
+            {!(applied && voucher) && inputBlock}
         </div>
     );
 };

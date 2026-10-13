@@ -20,6 +20,7 @@ import { allAirports } from './airports';
 import PricingService from '../../../Services/PricingService';
 import { useCancelPolicy, useGuestFlightBooking, usePriceConfig } from '../../../hooks/queries';
 import CouponInput from '../../../components/CouponInput';
+import { checkTripVoucher } from '../../../utils/tripVoucher';
 import JetCoinsToggle from '../../../components/JetCoinsToggle';
 import { apiGet } from '../../../utils/apiHelper';
 import FlightFareRules from './FlightFareRules';
@@ -35,7 +36,7 @@ import { handedFareCheck } from '../../../utils/fareCheckHandoff';
 // The same formula checkout verifies the charge with, so this page can never
 // quote a total the server will not accept.
 import { computeFlightCharge, PASSENGER_TYPES, travellerTypesOf } from '../../../../../shared/flightCharge';
-import { maxWalletCoinsFor } from '../../../../../shared/jetCoins';
+import { formatCoins, maxWalletCoinsFor } from '../../../../../shared/jetCoins';
 import { describeGroup, groupFromOffer, travellerGroupProblem } from '../../../../../shared/travellerGroup';
 import { lastFlightDepartureDate, needsDateOfBirth, tripDates } from '../../../../../shared/travellerDetails';
 import { CALLING_CODES, COUNTRIES, callingCodeDigits } from '../../../../../shared/countries';
@@ -144,6 +145,13 @@ function FlightBookingConfirmation() {
   // go once the box has an answer, so a box remounted for a changed total or
   // a refusal does not ask again on its own.
   const [couponToRestore, setCouponToRestore] = useState(() => cancelledCheckout?.couponCode ?? null);
+  const [appliedVoucher, setAppliedVoucher] = useState(null);
+  const voucherToRestore = React.useRef(cancelledCheckout?.voucherCode ?? null);
+  const pageMounted = React.useRef(true);
+  useEffect(() => {
+    pageMounted.current = true;
+    return () => { pageMounted.current = false; };
+  }, []);
   const [wallet, setWallet] = useState({ balance: 0, held: 0 });
   const [useCoins, setUseCoins] = useState(false);
   const [walletProblem, setWalletProblem] = useState(null);
@@ -170,7 +178,20 @@ function FlightBookingConfirmation() {
     }
     setWallet({ balance: 0, held: 0 });
     setUseCoins(false);
+    setAppliedVoucher(null);
   }, [signedInUserId, loadWallet]);
+  // Back from a cancelled payment: the voucher is checked again before it is
+  // put back, as the coupon is - it may have been used up meanwhile.
+  useEffect(() => {
+    const code = voucherToRestore.current;
+    if (!code || authLoading || !signedInUserId) return;
+    voucherToRestore.current = null;
+    checkTripVoucher(code).then((result) => {
+      if (!pageMounted.current) return;
+      if (result.ok) setAppliedVoucher(result.voucher);
+      else setCouponProblem(`Voucher ${code} was not applied: ${result.message}`);
+    });
+  }, [authLoading, signedInUserId]);
   // The total a coupon's discount was computed on, so a changed total drops it.
   const couponBase = React.useRef(null);
   // The page taking the coupon off by itself: checkout refused it, the fare or
@@ -1352,6 +1373,7 @@ function FlightBookingConfirmation() {
         calculatedFare,
         amount,
         couponCode: appliedCoupon?.code || null,
+        voucherCode: appliedVoucher?.code || null,
         flightData: flightDataForArcPay,
         // So a cancelled payment can come back to this search's results too.
         searchData: reviewState?.searchData ?? null,
@@ -1394,6 +1416,7 @@ function FlightBookingConfirmation() {
         // The server evaluates the coupon itself on the total it computes.
         couponCode: appliedCoupon?.code || undefined,
         walletCoins: coinsToUse || undefined,
+        voucherCode: appliedVoucher?.code || undefined,
         // No placeholder address: the email step is optional, and a made-up
         // one is where ARC would send the receipt.
         customerEmail: finalContact.email || undefined,
@@ -1464,6 +1487,16 @@ function FlightBookingConfirmation() {
       if (refusal.code === 'COUPON_INVALID') {
         dropCoupon();
         setFareNotice(`${refusal.error} The coupon has been removed, so please check the total. Nothing has been charged.`);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
+      if (refusal.code === 'VOUCHER_UNAVAILABLE') {
+        setCouponProblem(refusal.error);
+        return;
+      }
+      if (String(refusal.code || '').startsWith('VOUCHER_')) {
+        setAppliedVoucher(null);
+        setFareNotice(`${refusal.error} The voucher has been removed. Nothing has been charged.`);
         window.scrollTo({ top: 0, behavior: 'smooth' });
         return;
       }
@@ -2483,9 +2516,19 @@ function FlightBookingConfirmation() {
                   </div>
                 )}
 
+                {appliedVoucher && (
+                  <div className="flex items-start gap-3 py-3 border-b border-gray-100" data-trip-reward="">
+                    <PlusCircle className="h-5 w-5 text-[#0890BC] mt-0.5 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-bold text-gray-800">Voucher {appliedVoucher.code}</div>
+                      <div className="text-xs text-gray-500 mt-0.5">You'll get {formatCoins(appliedVoucher.coins)} Jet Coins after your trip</div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Coupon Input */}
                 <div className="mt-4 mb-2">
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Have a coupon?</p>
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Have a coupon or voucher?</p>
                   {/* Keyed on the total, so a changed total also resets the
                       input's own "applied" display along with the coupon. */}
                   <CouponInput
@@ -2511,6 +2554,10 @@ function FlightBookingConfirmation() {
                       setAppliedCoupon(coupon);
                     }}
                     onRemove={() => { couponBase.current = null; setAppliedCoupon(null); setCouponToRestore(null); }}
+                    checkVoucher={checkTripVoucher}
+                    voucher={appliedVoucher}
+                    onVoucherApply={(voucher) => { setCouponProblem(null); setAppliedVoucher(voucher); }}
+                    onVoucherRemove={() => setAppliedVoucher(null)}
                   />
                   {couponProblem && (
                     <p className="mt-1.5 text-xs text-red-600" role="alert">{couponProblem}</p>
