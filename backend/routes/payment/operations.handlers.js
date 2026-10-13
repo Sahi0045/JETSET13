@@ -719,6 +719,8 @@ export async function settleCoinsOnCancel(client, { bookingReference, decision, 
         if (used <= 0) return { ok: true, coins: 0, owed: 0 };
         try {
             const released = await releaseCoins(client, bookingReference);
+            // Already captured: the coins were spent and the card went back some other way, so a person decides what is owed.
+            if (released.status === 'captured') return { ok: false, coins: 0, owed: used, inReview: true };
             return { ok: true, coins: Number(released.coins) || 0, owed: used };
         } catch (error) {
             console.error('⚠️ Jet Coins were not released on a cancel', { bookingReference, code: error.code });
@@ -1017,7 +1019,7 @@ async function cancelFlightBooking(res, booking, { reason, email, customer = fal
         refundAmount: returned.refundAmount,
         cancellationFee: returned.cancellationFee,
         coinsReturned: coins.coins,
-        ...(coinsUsed > 0 ? { coinsOwed: coins.owed, coinsKept, ...(decision.action === 'review' ? { coinsInReview: true } : {}) } : {}),
+        ...(coinsUsed > 0 ? { coinsOwed: coins.owed, coinsKept, ...(decision.action === 'review' || coins.inReview ? { coinsInReview: true } : {}) } : {}),
         currency,
         needsReview: reviewReasons.length > 0,
         ...(customerTerms && decision.policy
@@ -1722,6 +1724,7 @@ async function sendCancellationEmail(booking, email, cancellationResult) {
             // holds, which includes the fee the cancel keeps.
             ...(decided ? { decidedRefund: decided.owed } : {}),
             ...(cancellationResult.policy ? { policy: cancellationResult.policy, terms: cancellationResult.terms } : {}),
+            ...(cancellationResult.coinsReturned > 0 ? { coinsReturned: cancellationResult.coinsReturned } : {}),
             currency: cancellationResult.currency || 'USD'
         };
 
@@ -2920,6 +2923,12 @@ export async function settleManualFlightRefund(booking, { mode = 'sync', amount,
     }
 
     console.log('💵 Manual refund recorded', { bookingReference: booking.booking_reference, mode, returnedTotal, held, stillHeld });
+    // ARC shows money back with the customer, so the coins the booking earned go too.
+    try {
+        await reverseEarnedCoins(supabase, booking.booking_reference);
+    } catch (error) {
+        console.error('⚠️ Coins earned on a refunded booking were not taken back', { bookingReference: booking.booking_reference, code: error.code });
+    }
     // The first money recorded returned on a booking the desk found the
     // airline does not hold: its customer was told they would be emailed
     // when the refund is made (refundMadeEmailOwedOf). Read as the claim

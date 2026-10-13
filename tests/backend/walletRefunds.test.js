@@ -63,6 +63,15 @@ describe('coins on a cancel', () => {
     expect(result).toEqual({ ok: true, coins: 5000, owed: 5000 });
   });
 
+  it('leaves the coins to the desk when nothing is held on the card but the coins were already spent', async () => {
+    const client = clientAnswering({ data: { status: 'captured', coins: 0 }, error: null });
+    const result = await settleCoinsOnCancel(client, {
+      bookingReference: 'FLT1', decision: { action: 'nothing_held' }, heldAmount: 0, kept: 0, coins: 5000,
+    });
+    expect(client.rpc).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({ ok: false, coins: 0, owed: 5000, inReview: true });
+  });
+
   it('says what was owed when the hold of a never-paid checkout could not be released', async () => {
     const silence = vi.spyOn(console, 'error').mockImplementation(() => {});
     const client = clientAnswering({ data: null, error: { message: 'connection reset' } });

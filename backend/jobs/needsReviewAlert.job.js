@@ -26,7 +26,7 @@ import { unchangedSince } from '../utils/bookingDetailsGuard.js';
 import { liveChainState } from '../utils/bookingChainClaim.js';
 import { queueEnvironment } from '../utils/queueEnvironment.js';
 import {
-  ISSUANCE_UNKNOWN, NO_CONFIRMED_SEAT_REVIEW_REASON, SCHEDULE_CHANGED_REVIEW_REASON, TICKET_NUMBERS_MISSING, attentionOf,
+  COINS_NOT_RETURNED, ISSUANCE_UNKNOWN, NO_CONFIRMED_SEAT_REVIEW_REASON, SCHEDULE_CHANGED_REVIEW_REASON, TICKET_NUMBERS_MISSING, attentionOf,
   flagsInForce, isFailedCancellation, isTicketed, isUnrecordedCancellation, needsAirlineRefundClaim, openTicketedFlagOf,
   scheduleChangeOf, ticketNumbersMissingOf, ticketsOf, unrecordedCancellationOf,
   notHeldStillPaidOf, commitUnknownOf,
@@ -87,7 +87,9 @@ export function selectUnannounced(rows = []) {
     // the numbers-missing rule below read `resolved_at`. The rules below stay:
     // the desk also lists what other alarms own (a refund the gateway refused,
     // paymentFailureAlert.job.js), so Slack announces a part of it, never more.
-    if (!attentionOf(booking)) return false;
+    // Jet Coins left to return are the desk's alone: listed there, never announced.
+    const attention = attentionOf(booking);
+    if (!attention || attention.kind === COINS_NOT_RETURNED) return false;
 
     // A cancellation with a refund still to claim from the airline. It is
     // cancelled and ticketed, so both checks below would skip it - and did.

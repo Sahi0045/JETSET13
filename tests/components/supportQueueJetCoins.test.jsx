@@ -89,6 +89,16 @@ describe('the Jet Coins on a booking row', () => {
     expect(container.textContent).toMatch(/Jet Coins: could not be captured \(5,000 coins\)/);
     expect(container.textContent).toMatch(/Jet Coins: could not be returned \(5,000 coins\)/);
   });
+
+  it('says a give-back problem was handled once the desk resolved it', async () => {
+    vi.stubGlobal('fetch', deskServing([
+      booking({ walletIssue: { kind: 'return_failed', coins: 5000, reason: 'void', resolved_at: '2026-10-12T09:00:00Z', resolvedBy: 'staff-1' } }),
+    ]));
+    const { container } = renderQueue();
+
+    await waitFor(() => expect(container.textContent).toMatch(/FLTCOIN1/));
+    expect(container.textContent).toMatch(/Jet Coins: could not be returned \(5,000 coins\) - handled/);
+  });
 });
 
 describe('Return Jet Coins', () => {

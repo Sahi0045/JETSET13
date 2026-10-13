@@ -820,14 +820,43 @@ function notHeldRefundAttentionOf(booking) {
   };
 }
 
+/** The desk entry for Jet Coins that could not be given back (see coinsNotReturnedAttentionOf). */
+export const COINS_NOT_RETURNED = 'coins_not_returned';
+
 /**
- * What still needs doing on this booking, or null.
+ * Jet Coins a failed order, a duplicate payment or a void could not give back
+ * (`booking_details.wallet_issue`), until the desk returns them or marks the
+ * problem handled. A capture that failed is not listed: the customer kept the
+ * flight. For the desk only: the needs-review alarm does not announce it.
+ *
+ * Formatted here and not with jetCoins.js: the app copies this file and syncs
+ * no other.
+ */
+function coinsNotReturnedAttentionOf(booking) {
+  const issue = detailsOf(booking)?.wallet_issue;
+  if (issue?.kind !== 'return_failed' || issue.resolved_at) return null;
+  const coins = Math.floor(Number(issue.coins) || 0);
+  const named = coins > 0 ? ` (${String(coins).replace(/\B(?=(\d{3})+(?!\d))/g, ',')})` : '';
+  return {
+    kind: COINS_NOT_RETURNED,
+    reason: `Jet Coins${named} could not be returned: use Return Jet Coins`,
+    since: issue.at || null,
+  };
+}
+
+/**
+ * What still needs doing on this booking, or null. Any other job is shown
+ * before Jet Coins that could not be returned.
  *
  * @returns {null | { kind: 'not_ticketed'|'review'|'airline_refund'|'unrecorded_cancellation'|'cancel_failed'|'schedule_changed'
- *                    |'held_ticketed'|'refund_failed'|'refund_not_made',
+ *                    |'held_ticketed'|'refund_failed'|'refund_not_made'|'coins_not_returned',
  *                    reason: string, since: string|null, tickets?: string[], jobs?: string[] }}
  */
 export function attentionOf(booking) {
+  return bookingAttentionOf(booking) ?? coinsNotReturnedAttentionOf(booking);
+}
+
+function bookingAttentionOf(booking) {
   const details = detailsOf(booking);
   const review = details?.needs_review || null;
   if (review?.resolved_at) return refundNotReturnedAttentionOf(booking) ?? notHeldRefundAttentionOf(booking);
@@ -957,5 +986,6 @@ export const attentionLabel = (attention) => {
   if (attention.kind === 'held_ticketed') return 'Ticketed, customer not sent it';
   if (attention.kind === 'refund_failed') return 'Refund did not go through';
   if (attention.kind === 'refund_not_made') return 'Refund not made yet';
+  if (attention.kind === COINS_NOT_RETURNED) return 'Jet Coins not returned';
   return 'Flagged for review';
 };

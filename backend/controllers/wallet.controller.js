@@ -2,6 +2,7 @@ import supabase from '../config/supabase.js';
 import {
   VOUCHER_MESSAGES, captureCoins, redeemVoucher, returnCoins, reverseEarnedCoins, walletSummary,
 } from '../services/wallet.service.js';
+import { patchBookingDetails } from '../routes/flight.routes.js';
 
 const CODE_PATTERN = /^[A-Z0-9-]{3,32}$/;
 const STATUS = { VOUCHER_NOT_FOUND: 404, VOUCHER_ALREADY_REDEEMED: 409, VOUCHER_USED_UP: 409 };
@@ -34,6 +35,28 @@ export async function redeem(req, res) {
   }
 }
 
+const isOpenReturnFailure = (issue) => issue?.kind === 'return_failed' && !issue.resolved_at;
+
+/** Takes a failed give-back off the desk's queue once the desk returned coins. Never throws. */
+async function resolveReturnFailure(bookingReference, staffId) {
+  try {
+    const { data, error } = await supabase
+      .from('bookings')
+      .select('booking_details')
+      .eq('booking_reference', bookingReference)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!isOpenReturnFailure(data?.booking_details?.wallet_issue)) return;
+    const resolvedAt = new Date().toISOString();
+    const written = await patchBookingDetails(bookingReference, (details) => (isOpenReturnFailure(details.wallet_issue)
+      ? { wallet_issue: { ...details.wallet_issue, resolved_at: resolvedAt, resolvedBy: staffId } }
+      : {}));
+    if (!written) console.error('⚠️ Coins returned, but the Jet Coins problem was not marked resolved', { bookingReference });
+  } catch (error) {
+    console.error('⚠️ Coins returned, but the Jet Coins problem was not marked resolved', { bookingReference, message: error.message });
+  }
+}
+
 export async function staffReturn(req, res) {
   const bookingReference = String(req.body?.bookingReference || '').trim();
   const coins = Math.floor(Number(req.body?.coins));
@@ -54,6 +77,7 @@ export async function staffReturn(req, res) {
   }
   const returned = `${given.toLocaleString('en-US')} Jet Coins returned`;
   if (given <= 0) return res.json({ success: true, data: { coins: given }, message: returned });
+  await resolveReturnFailure(bookingReference, req.user.id);
   try {
     await reverseEarnedCoins(supabase, bookingReference);
   } catch (error) {

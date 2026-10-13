@@ -122,6 +122,15 @@ describe('a customer cancel of a booking that used coins', () => {
     expect(closing().booking_details.needs_review).toBeUndefined();
   });
 
+  it('tells the cancellation email the coins that went back', async () => {
+    const { sendCancellationNotificationEmails } = await import('../../backend/services/emailService.js');
+
+    await cancel(flight());
+
+    expect(sendCancellationNotificationEmails).toHaveBeenCalledTimes(1);
+    expect(sendCancellationNotificationEmails.mock.calls[0][0]).toMatchObject({ paymentAction: 'PARTIAL_REFUND', refundAmount: 70, coinsReturned: 5000 });
+  });
+
   it('records the airline price on what the customer paid in all: $72.20 and 5,000 coins, with a $2.20 fee, is $120.00', async () => {
     await cancel(flight());
 
@@ -204,6 +213,19 @@ describe('a cancel of a checkout that was never paid', () => {
     expect(rpcNames()).toEqual(['wallet_release']);
     expect(res.body.cancellation).toMatchObject({ paymentAction: 'NOTHING_TO_REFUND', coinsReturned: 5000 });
   });
+
+  it('leaves the coins to the desk when they were already spent and nothing is held on the card', async () => {
+    axios.get.mockResolvedValue({ status: 404, data: { error: { cause: 'INVALID_REQUEST' } } });
+    rpcAnswers.wallet_release = { data: { status: 'captured', coins: 0 }, error: null };
+
+    const res = await cancel(flight({ details: { pnr: undefined, gds: undefined }, over: { status: 'pending', payment_status: 'unpaid' } }));
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.cancellation).toMatchObject({ paymentAction: 'NOTHING_TO_REFUND', coinsReturned: 0, needsReview: true, coinsInReview: true });
+    expect(closing().booking_details.cancellation).toMatchObject({ coinsReturned: 0, coinsInReview: true });
+    expect(closing().booking_details.needs_review.reason)
+      .toMatch(/Jet Coins \(5,000\) could not be returned automatically: return them with Return Jet Coins/);
+  });
 });
 
 describe('a booking that used no coins', () => {
@@ -220,6 +242,8 @@ describe('a booking that used no coins', () => {
     expect(closing().booking_details.cancellation).not.toHaveProperty('coinsOwed');
     expect(closing().booking_details.cancellation).not.toHaveProperty('coinsKept');
     expect(closing().booking_details.cancellation).not.toHaveProperty('coinsInReview');
+    const { sendCancellationNotificationEmails } = await import('../../backend/services/emailService.js');
+    expect(sendCancellationNotificationEmails.mock.calls[0][0]).not.toHaveProperty('coinsReturned');
   });
 
   it('is not held up by a wallet that cannot be reached', async () => {

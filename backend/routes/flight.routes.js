@@ -33,7 +33,7 @@ import {
   HELD_REVIEW_REASON_PREFIXES, liveTicketNumbersMissingOf, unrecordedCancellationForCustomerOf,
   voidedTicketsOf, commitUnknownOf, SCHEDULE_CHANGED_REVIEW_REASON, isHeldForReview, ticketIssuedBeforeHoldOf,
   openFailedCancellationOf, ATTENTION_JOBS, cancellationRecordedByHandOf,
-  notHeldStillPaidOf, scheduleChangeOf,
+  notHeldStillPaidOf, scheduleChangeOf, COINS_NOT_RETURNED,
 } from '../../shared/reviewQueue.js';
 import { errorSummary } from '../utils/errorSummary.js';
 import { flightSearchLimiter, guestBookingLimiter } from '../middleware/security.js';
@@ -4500,7 +4500,7 @@ router.delete('/order/:orderId', protect, async (req, res) => {
       // airline. The airline did cancel; no refund was attempted, so the desk
       // is told to finish it.
       const cancelledAt = new Date().toISOString();
-      await patchBookingDetails(bookingRef, {
+      await patchBookingDetails(bookingRef, (details) => ({
         cancellation: {
           paymentAction: 'REFUND_UNDER_REVIEW',
           refundAmount: 0,
@@ -4509,8 +4509,10 @@ router.delete('/order/:orderId', protect, async (req, res) => {
           cancelledAt,
           reason: 'fallback cancel: the orchestrated cancel gave no answer, so no refund was attempted',
           source: 'fallback',
+          // No coins were returned either: without this the desk is offered no Return Jet Coins.
+          ...(coinsUsedOf(details?.verified_charge) > 0 ? { coinsInReview: true } : {}),
         },
-      });
+      }));
 
       const { error } = await supabase
         .from('bookings')
@@ -6264,6 +6266,31 @@ router.post('/admin-bookings/:id/resolve-review', protect, bookingStaff, async (
       return refuseResolve(res, 409, 'BOOKING_CHANGED', `This booking changed since your page showed it: it now reads `
         + `"${attentionLabel(attention)}"${attention.kind === 'airline_refund' ? ', and the customer\'s refund is no longer part of it' : ''}. `
         + 'Nothing has been recorded; reload the page to see what it needs now.');
+    }
+
+    // On the coin problem itself, never as a review flag: a flag written here
+    // drives the needs-review alarm and the cancel rules, and would leave the
+    // coins listed.
+    if (attention.kind === COINS_NOT_RETURNED) {
+      const coinsWrite = unchangedSince(
+        supabase
+          .from('bookings')
+          .update({
+            booking_details: {
+              ...details,
+              wallet_issue: { ...details.wallet_issue, resolved_at: at, resolvedBy: req.user?.id || by, resolution: note },
+            },
+            updated_at: at,
+          })
+          .eq('id', booking.id)
+          .is('booking_details->wallet_issue->>resolved_at', null),
+        booking,
+      );
+      const { data: written, error } = await pinResolution(coinsWrite, booking).select('id');
+      if (error) return res.status(500).json({ success: false, error: 'Could not record it' });
+      if (!written?.length) return refuseResolve(res, 409, 'BOOKING_CHANGED', BOOKING_CHANGED_TEXT);
+      console.log('✅ Jet Coins problem marked handled by the desk:', { reference: booking.booking_reference, by });
+      return res.json({ success: true, resolvedAt: at, resolvedBy: by, note, message: 'Marked as handled' });
     }
 
     // "Customer refund handled": recorded on the claim flag, which stays open

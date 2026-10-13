@@ -171,7 +171,7 @@ const capCoins = (value, offer) => {
 const walletIssueLine = (issue) => {
   const coins = Number(issue?.coins) > 0 ? ` (${formatCoins(issue.coins)} coins)` : '';
   if (issue?.kind === 'capture_failed') return `Jet Coins: could not be captured${coins}`;
-  if (issue?.kind === 'return_failed') return `Jet Coins: could not be returned${coins}`;
+  if (issue?.kind === 'return_failed') return `Jet Coins: could not be returned${coins}${issue.resolved_at ? ' - handled' : ''}`;
   return 'Jet Coins: need a check';
 };
 
