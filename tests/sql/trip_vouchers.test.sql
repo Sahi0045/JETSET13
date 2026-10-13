@@ -17,6 +17,7 @@ declare
   r jsonb;
   failed boolean;
   sig text;
+  cn text;
 begin
   insert into public.vouchers (code, coins, kind) values ('TRIP50', 5000, 'trip');
   insert into public.vouchers (code, coins, kind, first_time_only) values ('FIRSTTRIP', 2000, 'trip', true);
@@ -115,6 +116,19 @@ begin
   r := public.void_trip_voucher('FLTNONE');
   assert r->>'status' = 'none', 'voiding a booking with no reward does nothing';
 
+  r := public.reserve_trip_voucher(a, 'FIRSTTRIP', 'FLTA2', due);
+  assert not (r->>'created')::boolean and r->>'code' = 'TRIP50' and r->>'status' = 'paid', 'a booking that has a reward is answered with it, not given a second one from another voucher';
+  assert (select redemptions_count from public.vouchers where code = 'FIRSTTRIP') = 0, 'the other voucher is not counted';
+  failed := false;
+  begin
+    insert into public.voucher_redemptions (voucher_id, user_id, coins, status, booking_reference)
+    select id, a, 1000, 'void', 'FLTA2' from public.vouchers where code = 'OFFTRIP';
+  exception when unique_violation then
+    get stacked diagnostics cn = constraint_name;
+    failed := cn = 'voucher_redemptions_booking_once';
+  end;
+  assert failed, 'the database itself refuses a second reward row for one booking';
+
   insert into public.bookings (booking_reference, user_id, travel_type, status) values
     ('FLTB-OLD', b, 'flight', 'cancelled'),
     ('HTLB-OLD', b, 'hotel', 'confirmed'),
@@ -141,9 +155,23 @@ begin
   r := public.reserve_trip_voucher(c, 'TRIP50', 'FLTC-1', null);
   assert r->>'status' = 'pending' and (select due_at from public.voucher_redemptions where booking_reference = 'FLTC-1') is null, 'a trip with no readable date is reserved with no payout date';
 
+  perform public.wallet_apply(c, 5000, 'voucher', 'voucher:' || trip50 || ':' || c, 'FLTC-1', trip50, 'TRIP50');
+  r := public.pay_trip_voucher('FLTC-1');
+  assert r->>'status' = 'paid' and not (r->>'applied')::boolean, 'pay says it applied nothing when the wallet had already taken the coins';
+  assert (select balance from public.wallets where user_id = c) = 5000, 'and the coins are not credited twice';
+
   failed := false;
   begin perform public.reserve_trip_voucher(c, 'TRIP50', null, due); exception when others then failed := sqlerrm like '%BAD_REFERENCE%'; end;
   assert failed, 'a reward needs a booking';
+
+  insert into public.vouchers (code, coins, kind) values ('FLIPPED', 800, 'trip');
+  perform public.reserve_trip_voucher(d, 'FLIPPED', 'FLTD-FLIP', due);
+  perform public.void_trip_voucher('FLTD-FLIP');
+  update public.vouchers set kind = 'instant' where code = 'FLIPPED';
+  r := public.redeem_voucher(d, 'FLIPPED');
+  assert (r->>'coins')::bigint = 800, 'a voided reward does not block the same customer redeeming the voucher';
+  assert (select count(*) from public.voucher_redemptions rr join public.vouchers v on v.id = rr.voucher_id where v.code = 'FLIPPED' and rr.user_id = d and rr.status = 'void') = 1
+    and (select count(*) from public.voucher_redemptions rr join public.vouchers v on v.id = rr.voucher_id where v.code = 'FLIPPED' and rr.user_id = d and rr.status = 'credited') = 1, 'the void row stays beside the credited one';
 
   r := public.redeem_voucher(d, 'INSTANT10');
   assert (select status from public.voucher_redemptions r2 join public.vouchers v on v.id = r2.voucher_id where v.code = 'INSTANT10' and r2.user_id = d) = 'credited', 'an instant redemption is recorded as credited';

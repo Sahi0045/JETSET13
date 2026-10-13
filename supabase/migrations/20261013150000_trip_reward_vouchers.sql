@@ -6,6 +6,10 @@
 --   psql "$SUPABASE_DB_URL" -f supabase/migrations/20261013150000_trip_reward_vouchers.sql
 -- Safe to run twice.
 --
+-- Never re-apply 20261013120000_jet_wallet.sql on its own after this file: it
+-- restores the old redeem_voucher. If that ever happens, re-apply this file
+-- straight after.
+--
 -- One transaction: Supabase grants EXECUTE on new functions to anon and
 -- authenticated, so a failure part-way must not leave them callable.
 
@@ -104,9 +108,18 @@ begin
       'coins', r.coins, 'due_at', r.due_at, 'created', false);
   end if;
   perform public.check_trip_voucher(p_user, v.code, p_ref);
-  insert into public.voucher_redemptions (voucher_id, user_id, coins, booking_reference, status, due_at, updated_at)
-  values (v.id, p_user, v.coins, p_ref, 'pending', p_due_at, now());
-  update public.vouchers set redemptions_count = redemptions_count + 1, updated_at = now() where id = v.id;
+  -- The same booking reserved with a different voucher at the same moment locks a
+  -- different voucher row, so only the booking_once index stops the second one.
+  begin
+    insert into public.voucher_redemptions (voucher_id, user_id, coins, booking_reference, status, due_at, updated_at)
+    values (v.id, p_user, v.coins, p_ref, 'pending', p_due_at, now());
+    update public.vouchers set redemptions_count = redemptions_count + 1, updated_at = now() where id = v.id;
+  exception when unique_violation then
+    select * into r from public.voucher_redemptions where booking_reference = p_ref;
+    if not found then raise exception 'BOOKING_HAS_REWARD'; end if;
+    return jsonb_build_object('status', r.status, 'code', (select code from public.vouchers where id = r.voucher_id),
+      'coins', r.coins, 'due_at', r.due_at, 'created', false);
+  end;
   return jsonb_build_object('status', 'pending', 'code', v.code, 'coins', v.coins, 'due_at', p_due_at, 'created', true);
 end;
 $$;
@@ -116,6 +129,7 @@ returns jsonb language plpgsql security definer set search_path = public as $$
 declare
   r public.voucher_redemptions;
   v_code text;
+  v_result jsonb;
 begin
   select * into r from public.voucher_redemptions where booking_reference = p_ref for update;
   if not found then
@@ -125,9 +139,10 @@ begin
   if r.status <> 'pending' then
     return jsonb_build_object('status', r.status, 'coins', r.coins, 'user_id', r.user_id, 'code', v_code, 'applied', false);
   end if;
-  perform public.wallet_apply(r.user_id, r.coins, 'voucher', 'voucher:' || r.voucher_id || ':' || r.user_id, p_ref, r.voucher_id, v_code);
+  v_result := public.wallet_apply(r.user_id, r.coins, 'voucher', 'voucher:' || r.voucher_id || ':' || r.user_id, p_ref, r.voucher_id, v_code);
   update public.voucher_redemptions set status = 'paid', paid_at = now(), updated_at = now() where id = r.id;
-  return jsonb_build_object('status', 'paid', 'coins', r.coins, 'user_id', r.user_id, 'code', v_code, 'applied', true);
+  return jsonb_build_object('status', 'paid', 'coins', r.coins, 'user_id', r.user_id, 'code', v_code,
+    'applied', (v_result->>'applied')::boolean);
 end;
 $$;
 
@@ -145,6 +160,9 @@ begin
   end if;
   perform 1 from public.vouchers where id = v_voucher for update;
   select * into r from public.voucher_redemptions where booking_reference = p_ref for update;
+  if not found then
+    return jsonb_build_object('status', 'none', 'voided', false);
+  end if;
   if r.status <> 'pending' then
     return jsonb_build_object('status', r.status, 'voided', false);
   end if;
