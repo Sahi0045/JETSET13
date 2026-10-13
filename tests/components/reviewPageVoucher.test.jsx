@@ -30,7 +30,7 @@ const fare = offer({ id: '1', itineraries: [{ segments: [segment('DEL', 'BOM', '
 const searchData = { from: 'DEL', to: 'BOM', departDate: '2026-11-15' };
 const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 const voucherOk = () => json(200, { success: true, data: { kind: 'trip', code: 'SHUBHAM', coins: 5000 } });
-const server = { voucher: voucherOk, voucherRequests: [], couponRequests: [] };
+const server = { voucher: voucherOk, voucherRequests: [], couponRequests: [], walletBalance: 0 };
 
 beforeEach(() => {
   sessionStorage.clear();
@@ -42,11 +42,12 @@ beforeEach(() => {
   server.voucher = voucherOk;
   server.voucherRequests = [];
   server.couponRequests = [];
+  server.walletBalance = 0;
   const flights = airline();
   vi.stubGlobal('fetch', vi.fn((url, init) => {
     const target = String(url);
     if (target.endsWith('/wallet')) {
-      return Promise.resolve(json(200, { success: true, data: { balance: 0, balanceUsd: 0, held: 0, entries: [], pending: [] } }));
+      return Promise.resolve(json(200, { success: true, data: { balance: server.walletBalance, balanceUsd: server.walletBalance / 100, held: 0, entries: [], pending: [] } }));
     }
     if (target.includes('/wallet/voucher-check')) {
       server.voucherRequests.push(JSON.parse(init?.body || '{}'));
@@ -62,7 +63,10 @@ beforeEach(() => {
     return flights(url, init);
   }));
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  delete Element.prototype.scrollIntoView;
+});
 
 async function openPage() {
   renderReviewPage(FlightBookingConfirmation, { state: { flightData: reviewFlight(fare), searchData } });
@@ -116,6 +120,34 @@ describe('a trip-reward voucher on the review page', () => {
 
     await waitFor(() => expect(page()).toMatch(/This voucher has been fully used\. The voucher has been removed\. Nothing has been charged\./));
     expect(page()).not.toMatch(/Voucher SHUBHAM: 5,000/);
+  });
+
+  it('keeps the voucher, the coupon and the coins when checkout cannot check the voucher, and brings the message into view each time', async () => {
+    const scrolled = [];
+    Element.prototype.scrollIntoView = vi.fn(function scrollIntoView() { scrolled.push(this); });
+    checkout.answer = { code: 'VOUCHER_UNAVAILABLE', error: 'We could not check your voucher just now. Please try again in a moment. Nothing has been charged.' };
+    server.walletBalance = 5000;
+    await openPage();
+    typeCode('SAVE20');
+    await payButton('190.00');
+    typeCode('SHUBHAM');
+    await waitFor(() => expect(page()).toMatch(/Voucher SHUBHAM: 5,000 Jet Coins after your trip/));
+    fireEvent.click(await screen.findByRole('switch'));
+
+    fireEvent.click(await payButton('140.00'));
+
+    const message = await screen.findByText(checkout.answer.error);
+    await waitFor(() => expect(scrolled).toEqual([message]));
+    expect(page()).toMatch(/Voucher SHUBHAM: 5,000 Jet Coins after your trip/);
+    expect(page()).toMatch(/Coupon\s*SAVE20\s*applied/);
+    expect(screen.getByRole('switch').checked).toBe(true);
+    expect(checkout.calls).toHaveLength(1);
+
+    fireEvent.click(await payButton('140.00'));
+
+    await waitFor(() => expect(scrolled).toEqual([message, message]));
+    expect(checkout.calls).toHaveLength(2);
+    expect(checkout.calls[1]).toMatchObject({ amount: 140, walletCoins: 5000, couponCode: 'SAVE20', voucherCode: 'SHUBHAM' });
   });
 
   it('keeps a coupon and a voucher on one booking, each on its own line, the price taking only the coupon', async () => {

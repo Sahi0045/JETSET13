@@ -166,6 +166,11 @@ function FlightBookingConfirmation() {
       setWallet({ balance: 0, held: 0 });
     }
   }, []);
+  const couponProblemRef = React.useRef(null);
+  const [couponProblemAsked, setCouponProblemAsked] = useState(0);
+  useEffect(() => {
+    if (couponProblemAsked) couponProblemRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+  }, [couponProblemAsked]);
   const walletProblemRef = React.useRef(null);
   useEffect(() => {
     if (walletProblem) walletProblemRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
@@ -1492,6 +1497,7 @@ function FlightBookingConfirmation() {
       }
       if (refusal.code === 'VOUCHER_UNAVAILABLE') {
         setCouponProblem(refusal.error);
+        setCouponProblemAsked((round) => round + 1);
         return;
       }
       if (String(refusal.code || '').startsWith('VOUCHER_')) {
@@ -2560,7 +2566,7 @@ function FlightBookingConfirmation() {
                     onVoucherRemove={() => setAppliedVoucher(null)}
                   />
                   {couponProblem && (
-                    <p className="mt-1.5 text-xs text-red-600" role="alert">{couponProblem}</p>
+                    <p ref={couponProblemRef} className="mt-1.5 text-xs text-red-600" role="alert">{couponProblem}</p>
                   )}
                 </div>
 
