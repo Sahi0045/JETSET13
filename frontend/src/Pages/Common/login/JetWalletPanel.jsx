@@ -13,6 +13,10 @@ const DESCRIBE = {
   return: (entry) => `Returned from booking ${entry.booking_reference}`,
 };
 
+// A server `error` is the customer's to read only when the wallet routes worded it; `protect` and unexpected failures put raw text there (e.g. "jwt expired").
+const isCustomerMessage = (body) => typeof body?.error === 'string'
+  && (String(body.code).startsWith('VOUCHER_') || body.code === 'RATE_LIMITED' || body.code === 'WALLET_UNAVAILABLE');
+
 const describeEntry = (entry) => (DESCRIBE[entry.kind] || (() => 'Wallet activity'))(entry);
 
 export default function JetWalletPanel() {
@@ -44,9 +48,13 @@ export default function JetWalletPanel() {
     setNotice(null);
     try {
       const response = await apiPost('wallet/redeem', { code: cleaned });
+      if (response.status === 401) {
+        setNotice({ tone: 'error', text: 'Please sign in again to redeem a voucher.' });
+        return;
+      }
       const body = await response.json();
       if (!response.ok || !body?.success) {
-        setNotice({ tone: 'error', text: body?.error || 'The voucher could not be redeemed.' });
+        setNotice({ tone: 'error', text: isCustomerMessage(body) ? body.error : 'The voucher could not be redeemed.' });
       } else {
         setNotice({ tone: 'success', text: `${formatCoins(body.data.coins)} Jet Coins added to your wallet.` });
         setCode('');

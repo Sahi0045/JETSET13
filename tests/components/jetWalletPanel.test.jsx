@@ -109,7 +109,7 @@ describe('the Jet Wallet tab', () => {
 
   it('says why a voucher was refused', async () => {
     apiGet.mockResolvedValue(answer({ success: true, data: { balance: 0, balanceUsd: 0, held: 0, entries: [] } }));
-    apiPost.mockResolvedValue(answer({ success: false, error: 'You have already redeemed this voucher.' }, false));
+    apiPost.mockResolvedValue(answer({ success: false, code: 'VOUCHER_ALREADY_REDEEMED', error: 'You have already redeemed this voucher.' }, false));
     render(<JetWalletPanel />);
     fireEvent.change(await screen.findByLabelText('Voucher code'), { target: { value: 'SHUBHAM' } });
     fireEvent.click(screen.getByRole('button', { name: 'Redeem' }));
@@ -123,6 +123,40 @@ describe('the Jet Wallet tab', () => {
     fireEvent.change(await screen.findByLabelText('Voucher code'), { target: { value: 'WRONG' } });
     fireEvent.click(screen.getByRole('button', { name: 'Redeem' }));
     expect(await screen.findByText('Too many voucher attempts. Please wait 15 minutes and try again.')).toBeTruthy();
+  });
+
+  it('asks for a new sign-in on a 401 and never prints the raw token error', async () => {
+    apiGet.mockResolvedValue(wallet({}));
+    apiPost.mockResolvedValue({ ok: false, status: 401, json: async () => ({ message: 'Not authorized, token failed', error: 'jwt expired' }) });
+    const { container } = render(<JetWalletPanel />);
+    fireEvent.change(await screen.findByLabelText('Voucher code'), { target: { value: 'SHUBHAM' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Redeem' }));
+    expect(await screen.findByText('Please sign in again to redeem a voucher.')).toBeTruthy();
+    expect(container.textContent).not.toContain('jwt expired');
+    expect(container.textContent).not.toContain('token failed');
+  });
+
+  it('asks for a new sign-in on a 401 whose body is not JSON', async () => {
+    apiGet.mockResolvedValue(wallet({}));
+    apiPost.mockResolvedValue({ ok: false, status: 401, json: async () => { throw new SyntaxError('Unexpected token <'); } });
+    render(<JetWalletPanel />);
+    fireEvent.change(await screen.findByLabelText('Voucher code'), { target: { value: 'SHUBHAM' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Redeem' }));
+    expect(await screen.findByText('Please sign in again to redeem a voucher.')).toBeTruthy();
+  });
+
+  it('shows the wallet-unavailable message the server words, and hides any other server error text', async () => {
+    apiGet.mockResolvedValue(wallet({}));
+    apiPost.mockResolvedValueOnce(answer({ success: false, code: 'WALLET_UNAVAILABLE', error: 'The voucher could not be redeemed just now. Please try again.' }, false));
+    render(<JetWalletPanel />);
+    fireEvent.change(await screen.findByLabelText('Voucher code'), { target: { value: 'SHUBHAM' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Redeem' }));
+    expect(await screen.findByText('The voucher could not be redeemed just now. Please try again.')).toBeTruthy();
+
+    apiPost.mockResolvedValueOnce({ ok: false, status: 500, json: async () => ({ success: false, error: 'relation "vouchers" does not exist' }) });
+    fireEvent.click(screen.getByRole('button', { name: 'Redeem' }));
+    expect(await screen.findByText('The voucher could not be redeemed.')).toBeTruthy();
+    expect(screen.queryByText(/relation/)).toBeNull();
   });
 
   it('gives a plain message when the answer is not JSON', async () => {
