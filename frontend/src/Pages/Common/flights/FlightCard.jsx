@@ -288,7 +288,7 @@ function FlightCard({ flight, onBook, onViewPrices, priceStats, cityMap = {} }) 
   const taxesAndFees = Math.max(0, totalFare - baseFare);
 
   return (
-    <div className="bg-white border-b border-gray-100 last:border-b-0 hover:bg-[#FAFBFB] transition-colors duration-200">
+    <div className="group bg-white border-b border-gray-100 last:border-b-0 first:rounded-t-[15px] last:rounded-b-[15px] hover:bg-[#FAFBFB] transition-colors duration-200">
       {/* ===== Main row ===== */}
       <div className="p-4 sm:p-5">
         <div className="flex flex-col lg:flex-row lg:items-center gap-4">
@@ -363,7 +363,7 @@ function FlightCard({ flight, onBook, onViewPrices, priceStats, cityMap = {} }) 
 
               {/* Fare breakup popover */}
               {showBreakup && baseFare > 0 && (
-                <div className="absolute right-0 bottom-full mb-2 z-30 w-56 bg-white rounded-lg shadow-xl border border-gray-200 p-3 text-left animate-in fade-in zoom-in-95 duration-150">
+                <div className="absolute left-0 lg:left-auto lg:right-0 bottom-full mb-2 z-30 w-56 bg-white rounded-lg shadow-xl border border-gray-200 p-3 text-left animate-in fade-in zoom-in-95 duration-150">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xs font-bold text-gray-700">Fare Breakup</span>
                     <button onClick={() => setShowBreakup(false)} className="text-gray-400 hover:text-gray-600">
@@ -422,7 +422,7 @@ function FlightCard({ flight, onBook, onViewPrices, priceStats, cityMap = {} }) 
       </div>
 
       {/* ===== Footer strip ===== */}
-      <div className="flex items-center justify-between gap-2 px-4 sm:px-5 py-2.5 border-t border-gray-100 bg-[#FCFBF8]">
+      <div className={`flex items-center justify-between gap-2 px-4 sm:px-5 py-2.5 border-t border-gray-100 bg-[#FCFBF8] ${expanded ? '' : 'group-last:rounded-b-[15px]'}`}>
         <div className="flex items-center gap-3 sm:gap-4 text-[11px] text-gray-500 flex-wrap min-w-0">
           <span className="inline-flex items-center gap-1">
             <Luggage className="h-3.5 w-3.5 text-gray-400" />
@@ -459,7 +459,7 @@ function FlightCard({ flight, onBook, onViewPrices, priceStats, cityMap = {} }) 
 
       {/* ===== Expanded details ===== */}
       {expanded && (
-        <div className="px-4 sm:px-5 py-4 border-t border-gray-100 bg-white rounded-b-xl">
+        <div className="px-4 sm:px-5 py-4 border-t border-gray-100 bg-white rounded-b-[15px]">
           {flight.returnLeg && (
             <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-2">Onward</div>
           )}

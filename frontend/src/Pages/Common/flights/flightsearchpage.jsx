@@ -1242,7 +1242,7 @@ function FlightSearchPage() {
                     </button>
                   </div>
                 ) : (
-                  <div className="bg-white rounded-2xl border border-[#EFE9DD] overflow-hidden shadow-[0_10px_26px_-20px_rgba(12,42,51,0.45)]">
+                  <div className="bg-white rounded-2xl border border-[#EFE9DD] shadow-[0_10px_26px_-20px_rgba(12,42,51,0.45)]">
                     {currentItems.map((flight, index) => (
                       <FlightCard
                         key={flight.id ?? index}
