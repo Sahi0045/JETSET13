@@ -189,3 +189,21 @@ export function layoverBetween(arriving, departing) {
 export function returnDateOf(legs) {
   return Array.isArray(legs) && legs.length === 2 ? legs[1]?.departureDate || '' : '';
 }
+
+/**
+ * When a trip-reward voucher pays out: 00:00 UTC two days after the last
+ * flight's arrival date, or null when that date cannot be read. Arrival times
+ * carry no zone, so only the date is used: by then the day after landing has
+ * ended in UTC wherever the airport is.
+ */
+export function tripRewardDueAt(legs) {
+  const list = Array.isArray(legs) ? legs : [];
+  const lastLeg = list[list.length - 1];
+  const segments = Array.isArray(lastLeg?.segments) ? lastLeg.segments : [];
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text(segments[segments.length - 1]?.arrivalDate));
+  if (!match) return null;
+  const [year, month, day] = [Number(match[1]), Number(match[2]) - 1, Number(match[3])];
+  const landed = new Date(Date.UTC(year, month, day));
+  if (landed.getUTCFullYear() !== year || landed.getUTCMonth() !== month || landed.getUTCDate() !== day) return null;
+  return new Date(Date.UTC(year, month, day + 2)).toISOString();
+}

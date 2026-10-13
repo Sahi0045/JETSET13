@@ -335,3 +335,73 @@ describe('a booking that used no coins', () => {
     expect(supabaseMock.rpc).not.toHaveBeenCalled();
   });
 });
+
+describe('a booking with a trip-reward voucher', () => {
+  const voucher = { id: 'v1', code: 'SHUBHAM', coins: 5000 };
+  const withVoucher = (ref) => checkout(ref, { coins: false, booking_details: { verified_charge: { ...withoutCoins, voucher } } });
+  const reserved = { status: 'pending', code: 'SHUBHAM', coins: 5000, due_at: '2026-11-18T00:00:00+00:00', created: true };
+
+  it('reserves the reward once the airline has booked it, due two days after the last arrival', async () => {
+    supabaseMock.rpc.mockImplementation(async (fn) => ({ data: fn === 'reserve_trip_voucher' ? reserved : {}, error: null }));
+    bookingProvider(booked);
+    const { place, table } = await appWith([withVoucher(REF)]);
+
+    const res = await place(REF);
+
+    expect(res.body.success).toBe(true);
+    expect(calls('reserve_trip_voucher')).toEqual([['reserve_trip_voucher', { p_user: 'user-1', p_code: 'SHUBHAM', p_ref: REF, p_due_at: '2026-11-18T00:00:00.000Z' }]]);
+    expect(res.body.tripReward).toEqual({ code: 'SHUBHAM', coins: 5000, dueAt: '2026-11-18T00:00:00.000Z' });
+    expect(table.row(REF).booking_details.wallet_issue).toBeUndefined();
+  });
+
+  it('still books when the voucher is refused, and marks it', async () => {
+    const silence = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    supabaseMock.rpc.mockImplementation(async (fn) => (fn === 'reserve_trip_voucher'
+      ? { data: null, error: { message: 'VOUCHER_USED_UP' } }
+      : { data: {}, error: null }));
+    bookingProvider(booked);
+    const { place, table } = await appWith([withVoucher(REF)]);
+
+    const res = await place(REF);
+
+    expect(res.body.success).toBe(true);
+    expect(res.body.tripReward).toBeUndefined();
+    expect(table.row(REF).booking_details.pnr).toBe('NEW999');
+    expect(table.row(REF).booking_details.wallet_issue).toMatchObject({ kind: 'voucher_refused', code: 'SHUBHAM', reason: 'VOUCHER_USED_UP' });
+    silence.mockRestore();
+  });
+
+  it('reserves the reward when the airline holds the booking but ticketing failed', async () => {
+    supabaseMock.rpc.mockImplementation(async (fn) => ({ data: fn === 'reserve_trip_voucher' ? reserved : {}, error: null }));
+    bookingProvider(() => {
+      throw Object.assign(new Error('ticketing refused'), { committed: true, pnr: 'NEW999', step: 'issueTicket', ticketed: false });
+    });
+    const { place } = await appWith([withVoucher(REF)]);
+
+    const res = await place(REF);
+
+    expect(res.status).toBe(202);
+    expect(calls('reserve_trip_voucher')).toHaveLength(1);
+    expect(calls('void_trip_voucher')).toHaveLength(0);
+  });
+
+  it('voids the reward when the payment is reversed after a failed booking', async () => {
+    bookingProvider(booked, { bookingEnabled: false });
+    const { place } = await appWith([withVoucher(REF)]);
+
+    await place(REF);
+
+    expect(calls('void_trip_voucher')).toEqual([['void_trip_voucher', { p_ref: REF }]]);
+    expect(calls('reserve_trip_voucher')).toHaveLength(0);
+  });
+
+  it('voids the reward of a second payment', async () => {
+    bookingProvider(booked);
+    const { place } = await appWith([bookedFirst(), withVoucher(REF)]);
+
+    const res = await place(REF);
+
+    expect(res.body.code).toBe('DUPLICATE_PAYMENT');
+    expect(calls('void_trip_voucher')).toEqual([['void_trip_voucher', { p_ref: REF }]]);
+  });
+});

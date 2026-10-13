@@ -1,0 +1,122 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { supabaseMock } from './setup.js';
+import { fakeBookingsTable } from './helpers/fakeBookings.js';
+import { reserveTripRewardAfterBooking, toClientBooking } from '../../backend/routes/flight.routes.js';
+
+const REF = 'FLTTRIP1';
+const offer = {
+  itineraries: [{ segments: [{ departure: { iataCode: 'JFK', at: '2026-11-15T19:25:00' }, arrival: { iataCode: 'LHR', at: '2026-11-16T06:10:00' }, carrierCode: 'FI', number: '614' }] }],
+};
+const voucher = { id: 'v1', code: 'SHUBHAM', coins: 5000 };
+const row = (details = {}, over = {}) => ({
+  id: 'b1', booking_reference: REF, travel_type: 'flight', status: 'pending', payment_status: 'paid', user_id: 'user-1',
+  booking_details: { order_id: REF, ...details },
+  ...over,
+});
+
+let table;
+const issueOnRow = () => table.row(REF).booking_details.wallet_issue;
+const reserve = (over = {}, report = vi.fn()) => reserveTripRewardAfterBooking({
+  bookingReference: REF, userId: 'user-1', verifiedCharge: { total: 291, voucher }, offer, ...over,
+}, { report });
+
+beforeEach(() => {
+  supabaseMock.rpc = vi.fn();
+  table = fakeBookingsTable([row()]);
+  supabaseMock.from.mockImplementation(table.from);
+});
+
+describe('reserving a trip reward once the booking exists', () => {
+  it('reserves the voucher under the booking, due two days after the last arrival', async () => {
+    supabaseMock.rpc.mockResolvedValue({ data: { status: 'pending', code: 'SHUBHAM', coins: 5000, due_at: '2026-11-18T00:00:00+00:00', created: true }, error: null });
+
+    const reward = await reserve();
+
+    expect(supabaseMock.rpc).toHaveBeenCalledWith('reserve_trip_voucher', { p_user: 'user-1', p_code: 'SHUBHAM', p_ref: REF, p_due_at: '2026-11-18T00:00:00.000Z' });
+    expect(reward).toEqual({ code: 'SHUBHAM', coins: 5000, dueAt: '2026-11-18T00:00:00.000Z' });
+    expect(issueOnRow()).toBeUndefined();
+  });
+
+  it('marks a refused voucher on the booking and never throws', async () => {
+    const silence = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    supabaseMock.rpc.mockResolvedValue({ data: null, error: { message: 'VOUCHER_USED_UP' } });
+
+    const reward = await reserve();
+
+    expect(reward).toBeNull();
+    expect(issueOnRow()).toMatchObject({ kind: 'voucher_refused', code: 'SHUBHAM', reason: 'VOUCHER_USED_UP' });
+    expect(Number.isNaN(Date.parse(issueOnRow().at))).toBe(false);
+    silence.mockRestore();
+  });
+
+  it('reports a reward that could not be reserved right now, but not a voucher that refused', async () => {
+    const silence = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const report = vi.fn();
+
+    supabaseMock.rpc.mockResolvedValue({ data: null, error: { message: 'VOUCHER_USED_UP' } });
+    await reserve({}, report);
+    expect(report).not.toHaveBeenCalled();
+
+    supabaseMock.rpc.mockResolvedValue({ data: null, error: { message: 'connection reset' } });
+    await reserve({}, report);
+    expect(report).toHaveBeenCalledWith(expect.objectContaining({ code: 'WALLET_UNAVAILABLE' }), expect.objectContaining({ bookingReference: REF, reason: 'WALLET_UNAVAILABLE' }));
+    expect(issueOnRow()).toMatchObject({ kind: 'voucher_refused', code: 'SHUBHAM', reason: 'WALLET_UNAVAILABLE' });
+    silence.mockRestore();
+  });
+
+  it('leaves an open Jet Coins problem on the booking in place', async () => {
+    const silence = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    table = fakeBookingsTable([row({ wallet_issue: { kind: 'capture_failed', coins: 500, status: 'released', at: '2026-10-13T10:00:00.000Z' } })]);
+    supabaseMock.from.mockImplementation(table.from);
+    supabaseMock.rpc.mockResolvedValue({ data: null, error: { message: 'VOUCHER_USED_UP' } });
+
+    await reserve();
+
+    expect(issueOnRow()).toMatchObject({ kind: 'capture_failed', coins: 500 });
+    silence.mockRestore();
+  });
+
+  it('reserves nothing for a booking without a voucher', async () => {
+    expect(await reserve({ verifiedCharge: { total: 291 } })).toBeNull();
+    expect(await reserve({ verifiedCharge: null })).toBeNull();
+    expect(supabaseMock.rpc).not.toHaveBeenCalled();
+  });
+
+  it('marks a voucher on a booking with no owner as refused, without asking the database', async () => {
+    const silence = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(await reserve({ userId: null })).toBeNull();
+    expect(supabaseMock.rpc).not.toHaveBeenCalled();
+    expect(issueOnRow()).toMatchObject({ kind: 'voucher_refused', code: 'SHUBHAM', reason: 'LOGIN_REQUIRED' });
+    silence.mockRestore();
+  });
+
+  it('reserves with no payout date when the itinerary cannot be read, and reports it', async () => {
+    supabaseMock.rpc.mockResolvedValue({ data: { status: 'pending', code: 'SHUBHAM', coins: 5000, due_at: null, created: true }, error: null });
+    const report = vi.fn();
+
+    const reward = await reserve({ offer: { itineraries: [] } }, report);
+
+    expect(supabaseMock.rpc.mock.calls[0][1].p_due_at).toBeNull();
+    expect(reward).toEqual({ code: 'SHUBHAM', coins: 5000, dueAt: null });
+    expect(report).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringMatching(/no payout date/) }), expect.objectContaining({ bookingReference: REF }));
+  });
+
+  it('gives nothing back for a booking whose reward was already voided', async () => {
+    supabaseMock.rpc.mockResolvedValue({ data: { status: 'void', code: 'SHUBHAM', coins: 5000, created: false }, error: null });
+    expect(await reserve()).toBeNull();
+  });
+});
+
+describe('the trip reward on a booking the customer reads', () => {
+  const confirmed = (details = {}, over = {}) => row({ verified_charge: { total: 291, voucher }, ...details }, { status: 'confirmed', ...over });
+
+  it('names the voucher and its coins', () => {
+    expect(toClientBooking(confirmed()).tripReward).toEqual({ code: 'SHUBHAM', coins: 5000 });
+  });
+
+  it('has none for a cancelled booking, a refused voucher, or no voucher', () => {
+    expect(toClientBooking(confirmed({}, { status: 'cancelled' })).tripReward).toBeNull();
+    expect(toClientBooking(confirmed({ wallet_issue: { kind: 'voucher_refused', code: 'SHUBHAM' } })).tripReward).toBeNull();
+    expect(toClientBooking(row({ verified_charge: { total: 291 } }, { status: 'confirmed' })).tripReward).toBeNull();
+  });
+});

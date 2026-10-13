@@ -16,14 +16,14 @@ import { withBookingPriority } from '../services/amadeusSoap/semaphore.js';
 import { describeWsConfig, getWsConfig, officeTimeZoneOf } from '../services/amadeusSoap/config.js';
 import { isStandingTicketRefusal } from '../services/amadeusSoap/codes.js';
 import { recordCouponUse } from '../services/coupon.service.js';
-import { captureCoins, returnAllCoins } from '../services/wallet.service.js';
+import { captureCoins, reserveTripVoucher, returnAllCoins, tripVoucherOf, voidTripReward } from '../services/wallet.service.js';
 import { isFareRefusal } from '../services/flightCheckout.service.js';
 import { crossesBorder, touchesUnitedStates } from '../utils/itinerary.js';
 import { CHAIN_CLAIM_TTL_MS, MAX_QUEUE_ATTEMPTS } from '../utils/bookingChainClaim.js';
 import { queueEnvironment } from '../utils/queueEnvironment.js';
 import { unchangedSince } from '../utils/bookingDetailsGuard.js';
 import { UNTICKETED_REVIEW_REASON } from '../jobs/needsReviewAlert.job.js';
-import { clockTime, itinerariesFromOffer, returnDateOf, splitLocalDateTime } from '../../shared/bookingItineraries.js';
+import { clockTime, itinerariesFromOffer, returnDateOf, splitLocalDateTime, tripRewardDueAt } from '../../shared/bookingItineraries.js';
 import { flightsKey, travellerNamesKey } from '../utils/tripMatch.js';
 import { needsDateOfBirth } from '../../shared/travellerDetails.js';
 import { buildFlightOrderBody, orderDataFromCheckoutRow } from '../../shared/flightOrderBody.js';
@@ -200,6 +200,58 @@ export async function giveBackAllCoins(bookingReference, reason, { report = repo
   return result;
 }
 
+/**
+ * The trip-reward voucher checkout verified, reserved now the booking exists.
+ * It changes no price, so a refusal never fails the booking: it is marked on
+ * the booking, without covering a Jet Coins problem the desk still has to fix.
+ * A refusal by the voucher itself (VOUCHER_*) is the customer's answer; any
+ * other reason means the reward could not be reserved right now, and is reported.
+ */
+export async function reserveTripRewardAfterBooking({ bookingReference, userId, verifiedCharge, offer }, { report = reportError } = {}) {
+  const voucher = tripVoucherOf(verifiedCharge);
+  if (!voucher || !bookingReference) return null;
+  const refused = async (reason, cause) => {
+    console.warn('⚠️ Trip-reward voucher not reserved', { bookingReference, code: voucher.code, reason });
+    if (!reason.startsWith('VOUCHER_')) {
+      report(cause || new Error(`a trip-reward voucher could not be reserved: ${reason}`), {
+        where: 'reserveTripRewardAfterBooking', bookingReference, code: voucher.code, reason,
+      });
+    }
+    try {
+      const at = new Date().toISOString();
+      const written = await patchBookingDetails(bookingReference, (details) => (
+        details.wallet_issue && !details.wallet_issue.resolved_at && details.wallet_issue.kind !== 'voucher_refused'
+          ? {}
+          : { wallet_issue: { kind: 'voucher_refused', code: voucher.code, reason, at } }));
+      if (!written) {
+        report(new Error('a refused trip-reward voucher could not be recorded on the booking'), { where: 'reserveTripRewardAfterBooking', bookingReference });
+      }
+    } catch (error) {
+      report(error, { where: 'reserveTripRewardAfterBooking', bookingReference });
+    }
+    return null;
+  };
+  if (!userId) return refused('LOGIN_REQUIRED');
+  const dueAt = tripRewardDueAt(itinerariesFromOffer(offer));
+  if (!dueAt) {
+    report(new Error('a trip reward has no payout date: the itinerary could not be read'), {
+      where: 'reserveTripRewardAfterBooking', bookingReference, code: voucher.code,
+    });
+  }
+  let reward;
+  try {
+    reward = await reserveTripVoucher(supabase, { userId, code: voucher.code, bookingReference, dueAt });
+  } catch (error) {
+    return refused(error?.name === 'WalletError' ? error.code : 'WALLET_UNAVAILABLE', error);
+  }
+  if (!['pending', 'paid'].includes(reward.status)) return null;
+  return {
+    code: reward.code || voucher.code,
+    coins: Math.floor(Number(reward.coins) || 0),
+    dueAt: reward.due_at ? new Date(reward.due_at).toISOString() : null,
+  };
+}
+
 // Called when flight ticket issuance FAILS after the customer was already charged.
 // Reverses the ARC payment (VOID/REFUND), marks the booking row as cancelled/refunded with
 // the failure recorded, and returns an honest error — never fabricates a confirmed booking.
@@ -239,6 +291,7 @@ export async function refundOnFulfillmentFailure(res, { orderId, bookingReferenc
   // takes (its request died), which is taken over.
   let prior = null;
   let walletCoins;
+  let voucherOnBooking = false;
   try {
     if (supabase && failingRef) {
       for (let attempt = 1; attempt <= 3; attempt += 1) {
@@ -251,6 +304,7 @@ export async function refundOnFulfillmentFailure(res, { orderId, bookingReferenc
           .maybeSingle();
         if (!failing) break;
         walletCoins = coinsUsedOf(failing.booking_details?.verified_charge);
+        voucherOnBooking = Boolean(tripVoucherOf(failing.booking_details?.verified_charge));
         const marker = failing.booking_details?.fulfillment_failed;
         if (marker && !reversalAbandoned(marker)) {
           prior = marker;
@@ -277,6 +331,7 @@ export async function refundOnFulfillmentFailure(res, { orderId, bookingReferenc
   if (prior) {
     console.warn('↩️ This payment is already being reversed, or was; not reversing it again. order:', orderId);
     await giveBackAllCoins(failingRef, 'reversal', { coins: walletCoins });
+    if (voucherOnBooking) await voidTripReward(supabase, failingRef);
     return res.status(status).json(reversalAnswer(reversalOf(prior), { amount, errorMsg, code, customerMessage, reason }));
   }
   const reversal = await reverseArcPaymentForOrder(orderId, {
@@ -286,6 +341,7 @@ export async function refundOnFulfillmentFailure(res, { orderId, bookingReferenc
   });
   console.log('💸 Payment reversal result:', reversal.action, '| reversed:', reversal.reversed);
   await giveBackAllCoins(failingRef, 'reversal', { coins: walletCoins });
+  if (voucherOnBooking) await voidTripReward(supabase, failingRef);
 
   // Record the failure on the booking row created at hosted-checkout (if any).
   try {
@@ -1708,13 +1764,14 @@ async function holdDuplicatePayment(bookingReference, duplicateOf) {
  *
  * @returns {Promise<{ reversed: boolean, recorded: boolean, action?: string }>}
  */
-async function refundDuplicatePayment(bookingReference, { orderId, duplicateOf, walletCoins }) {
+async function refundDuplicatePayment(bookingReference, { orderId, duplicateOf, walletCoins, hasVoucher = false }) {
   const reversal = await reverseArcPaymentForOrder(orderId || bookingReference, {
     reason: `Second payment of ${duplicateOf}`,
     once: 'duplicate',
   });
   console.log('💸 Second payment refund:', reversal.action, '| reversed:', reversal.reversed, '|', bookingReference);
   await giveBackAllCoins(bookingReference, 'duplicate', { coins: walletCoins });
+  if (hasVoucher) await voidTripReward(supabase, bookingReference);
 
   for (let attempt = 1; supabase && attempt <= 3; attempt += 1) {
     const { data: row } = await supabase
@@ -3343,7 +3400,15 @@ router.post('/order', optionalProtect, async (req, res) => {
         console.error('⚠️ Could not record the coupon use:', couponError.message);
       }
     };
-    const noteCoinsUsed = () => settleCoinsAfterBooking({ bookingReference: existing.booking_reference, verifiedCharge });
+    const noteCoinsUsed = async () => {
+      await settleCoinsAfterBooking({ bookingReference: existing.booking_reference, verifiedCharge });
+      return reserveTripRewardAfterBooking({
+        bookingReference: existing.booking_reference,
+        userId: existing.user_id || null,
+        verifiedCharge,
+        offer: firstOffer,
+      });
+    };
 
     // A card without itineraries/source/travelerPricings cannot be sold: it is a
     // display object, not an offer. Refuse it rather than sending a request the
@@ -3546,6 +3611,7 @@ router.post('/order', optionalProtect, async (req, res) => {
           orderId: arcOrderId,
           duplicateOf: duplicate.duplicateOf,
           walletCoins: coinsUsedOf(verifiedCharge),
+          hasVoucher: Boolean(tripVoucherOf(verifiedCharge)),
         });
         if (refund.reversed) {
           return res.status(409).json(duplicatePaymentAnswer(existing.booking_reference, 'returned'));
@@ -3979,7 +4045,7 @@ router.post('/order', optionalProtect, async (req, res) => {
     // payment would use it up. It was never counted at all: a single-use code
     // could be used any number of times.
     await noteCouponUse();
-    await noteCoinsUsed();
+    const tripReward = await noteCoinsUsed();
 
     // The offer as the airline priced it and the chain booked it. The record
     // was written from the search offer, although pricing deliberately
@@ -4253,6 +4319,7 @@ router.post('/order', optionalProtect, async (req, res) => {
       tickets: orderResponse.tickets || [],
       transactionId: payment?.arcReceipt || null,
       savedToDatabase: !!dbBooking,
+      ...(tripReward ? { tripReward } : {}),
       message: orderResponse.message || 'Flight order created successfully'
     });
 
@@ -4838,6 +4905,15 @@ function chargeBreakdownOf(charge) {
   };
 }
 
+/** The voucher a booking will pay Jet Coins for after the trip, as the receipt shows it, or null. */
+export function tripRewardOfRow(booking) {
+  const voucher = tripVoucherOf(booking?.booking_details?.verified_charge);
+  const coins = Math.floor(Number(voucher?.coins) || 0);
+  if (!voucher || coins <= 0) return null;
+  if (booking.status === 'cancelled' || booking.booking_details?.wallet_issue?.kind === 'voucher_refused') return null;
+  return { code: voucher.code, coins };
+}
+
 /**
  * The receipt figures a booking record keeps (`fare_breakdown`), from what
  * checkout verified and charged. It was the request body's breakdown, stored
@@ -4947,6 +5023,7 @@ export function toClientBooking(booking, { showPassports = false } = {}) {
     fareBreakdown: booking.booking_details?.fare_breakdown || null,
     // What checkout verified and charged, by name - see chargeBreakdownOf.
     chargeBreakdown: chargeBreakdownOf(booking.booking_details?.verified_charge),
+    tripReward: booking.travel_type === 'flight' ? tripRewardOfRow(booking) : null,
     // Every leg and flight - see `legs` above. The flat fields describe the
     // first leg only and stay for the clients that read them.
     itineraries: legs,
