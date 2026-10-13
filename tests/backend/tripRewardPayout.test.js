@@ -87,8 +87,16 @@ describe('what a due trip reward is worth on a fresh read of its booking', () =>
     expect(tripRewardVerdict(flown({ payment_status: 'Reversed' }), NOW)).toBe('void');
   });
 
-  it('still pays after a partial refund', () => {
+  it('still pays after a partial refund, whatever the case', () => {
     expect(tripRewardVerdict(flown({ payment_status: 'partially_refunded' }), NOW)).toBe('pay');
+    expect(tripRewardVerdict(flown({ payment_status: 'Paid' }), NOW)).toBe('pay');
+    expect(tripRewardVerdict(flown({ payment_status: 'PARTIALLY_REFUNDED' }), NOW)).toBe('pay');
+  });
+
+  it('waits while the money has not landed in full: a ticketed flight that is unpaid or only partly paid', () => {
+    for (const payment_status of ['unpaid', 'partial', 'pending', 'failed', null, undefined]) {
+      expect(tripRewardVerdict(flown({ payment_status }), NOW)).toBe('wait');
+    }
   });
 
   it('waits for a booking that cannot be read, is not a flight, is not ticketed, or is being cancelled', () => {
@@ -143,6 +151,20 @@ describe('paying trip rewards', () => {
 
     expect((await result).voided).toBe(1);
     expect(used.pay).not.toHaveBeenCalled();
+  });
+
+  it('does not pay a ticketed flight whose payment has not landed, and does not void it', async () => {
+    const client = fakeClient({
+      voucher_redemptions: [reward(), reward({ booking_reference: 'FLT2' })],
+      bookings: [flown({ payment_status: 'unpaid' }), flown({ booking_reference: 'FLT2', payment_status: 'partial' })],
+    });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { used, result } = runWith(client);
+
+    expect(await result).toEqual({ paid: 0, voided: 0, waiting: 2, failed: 0 });
+    expect(used.pay).not.toHaveBeenCalled();
+    expect(used.voidReward).not.toHaveBeenCalled();
+    warn.mockRestore();
   });
 
   it('waits while the booking is not ticketed, is being cancelled, or cannot be read', async () => {

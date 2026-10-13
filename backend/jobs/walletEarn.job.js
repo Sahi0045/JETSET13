@@ -378,6 +378,7 @@ export async function sweepStaleHolds({
 }
 
 const REVERSED_PAYMENTS = ['refunded', 'reversed'];
+const PAYING_PAYMENTS = ['paid', 'partially_refunded'];
 
 const rewardLost = (row) => row.status === 'cancelled' || REVERSED_PAYMENTS.includes(String(row.payment_status || '').toLowerCase());
 
@@ -386,6 +387,7 @@ export function tripRewardVerdict(row, now = Date.now()) {
   if (!row) return 'wait';
   if (rewardLost(row)) return 'void';
   if (row.travel_type !== 'flight' || !EARNING_STATUSES.includes(row.status)) return 'wait';
+  if (!PAYING_PAYMENTS.includes(String(row.payment_status || '').toLowerCase())) return 'wait';
   const details = row.booking_details || {};
   if (!isTicketed(details) || liveChainState(details.gds_chain, now) === 'cancelling') return 'wait';
   return 'pay';
