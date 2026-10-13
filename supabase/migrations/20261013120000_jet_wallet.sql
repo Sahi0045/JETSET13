@@ -10,6 +10,11 @@
 -- a retried call never moves coins twice, and a balance never goes below zero.
 -- Only the backend (service_role) may call them; RLS with no policies keeps the
 -- tables away from the browser's anon and authenticated keys.
+--
+-- One transaction: Supabase grants EXECUTE on new functions to anon and
+-- authenticated, so a failure part-way must not leave them callable.
+
+begin;
 
 create table if not exists public.wallets (
   user_id uuid primary key references public.users(id) on delete cascade,
@@ -155,6 +160,8 @@ returns jsonb language plpgsql security definer set search_path = public as $$
 declare
   v_hold public.wallet_holds;
   v_give bigint;
+  v_key text := 'return:' || p_ref || ':' || coalesce(p_reason, 'refund');
+  v_prior bigint;
   v_result jsonb;
 begin
   select * into v_hold from public.wallet_holds where booking_reference = p_ref for update;
@@ -169,16 +176,20 @@ begin
   if v_hold.status = 'released' then
     return jsonb_build_object('status', 'released', 'coins', 0);
   end if;
+  -- A replay must report the coins it gave the first time: the caller sizes the
+  -- card refund from this number, and 0 here would make a retry over-refund.
+  select coins into v_prior from public.wallet_entries where idempotency_key = v_key;
+  if found then
+    return jsonb_build_object('status', 'captured', 'coins', v_prior, 'applied', false,
+      'balance', (select balance from public.wallets where user_id = v_hold.user_id));
+  end if;
   v_give := least(greatest(coalesce(p_coins, 0), 0), v_hold.coins - v_hold.returned_coins);
   if v_give <= 0 then
     return jsonb_build_object('status', 'captured', 'coins', 0);
   end if;
-  v_result := public.wallet_apply(v_hold.user_id, v_give, 'return', 'return:' || p_ref || ':' || coalesce(p_reason, 'refund'), p_ref, null, null);
-  if not (v_result->>'applied')::boolean then
-    return jsonb_build_object('status', 'captured', 'coins', 0);
-  end if;
+  v_result := public.wallet_apply(v_hold.user_id, v_give, 'return', v_key, p_ref, null, null);
   update public.wallet_holds set returned_coins = returned_coins + v_give, updated_at = now() where booking_reference = p_ref;
-  return jsonb_build_object('status', 'captured', 'coins', v_give, 'balance', (v_result->>'balance')::bigint);
+  return jsonb_build_object('status', 'captured', 'coins', v_give, 'applied', true, 'balance', (v_result->>'balance')::bigint);
 end;
 $$;
 
@@ -261,3 +272,5 @@ begin
     execute format('grant execute on function %s to service_role', fn);
   end loop;
 end $$;
+
+commit;

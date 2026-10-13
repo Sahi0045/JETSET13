@@ -54,11 +54,16 @@ begin
   r := public.wallet_release('REF3');
   assert (r->>'coins')::bigint = 0, 'a captured hold is not released';
   r := public.wallet_return('REF3', 1500, 'cancel');
-  assert (r->>'coins')::bigint = 1500 and (select balance from public.wallets where user_id = a) = 2500, 'return gives back part';
+  assert (r->>'coins')::bigint = 1500 and (r->>'applied')::boolean and (select balance from public.wallets where user_id = a) = 2500, 'return gives back part';
   r := public.wallet_return('REF3', 1500, 'cancel');
-  assert (r->>'coins')::bigint = 0, 'the same return reason is applied once';
+  assert (r->>'coins')::bigint = 1500 and not (r->>'applied')::boolean, 'a replayed return reports the coins it gave the first time';
+  assert (select balance from public.wallets where user_id = a) = 2500 and (select returned_coins from public.wallet_holds where booking_reference = 'REF3') = 1500, 'a replayed return moves nothing';
   r := public.wallet_return('REF3', 999999, 'desk-1');
   assert (r->>'coins')::bigint = 2500 and (select balance from public.wallets where user_id = a) = 5000, 'return never gives back more than was used';
+  r := public.wallet_return('REF3', 999999, 'desk-1');
+  assert (r->>'coins')::bigint = 2500 and not (r->>'applied')::boolean and (select balance from public.wallets where user_id = a) = 5000, 'a replay after the hold is fully returned still reports the first answer';
+  r := public.wallet_return('REF3', 1500, 'cancel');
+  assert (r->>'coins')::bigint = 1500 and not (r->>'applied')::boolean, 'an older reason replays its own coins once the hold is fully returned';
 
   perform public.wallet_hold(a, 'REF4', 100);
   r := public.wallet_return('REF4', 999999, 'reversal');
