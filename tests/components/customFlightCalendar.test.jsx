@@ -2,7 +2,7 @@ import React from 'react';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import CustomFlightCalendar from '../../frontend/src/Pages/Common/flights/CustomFlightCalendar.jsx';
 import { stripDates } from '../../frontend/src/Pages/Common/flights/searchResults.js';
 import { formatDateToISO } from '../../frontend/src/utils/dateUtils.js';
@@ -150,5 +150,56 @@ describe('CustomFlightCalendar', () => {
     expect(source).not.toMatch(/₹\{/);
     expect(source).not.toMatch(/getCheapestFlightDates/);
     expect(source).not.toMatch(/interpDate/);
+  });
+});
+
+/**
+ * The calendar opens under the field that was clicked, 640 px wide from that
+ * field's left edge. From the Return field it ran off the right of the screen
+ * on every laptop width: 233 px at 1024, 104 px at 1366, 67 px at 1440
+ * (measured on jetsetterss.com), with November cut off. jsdom has no layout,
+ * so these give the calendar the rectangle a browser measured.
+ */
+describe('keeping the calendar on screen', () => {
+  const place = ({ left, width = 640, page, scale = 1 }) => {
+    const drawn = width * scale;
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function rect() {
+      if (!this.hasAttribute('data-calendar-grid')) return new DOMRect(0, 0, 0, 0);
+      return new DOMRect(left + (width - drawn) / 2, 300, drawn, 400);
+    });
+    vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(width);
+    Object.defineProperty(document.documentElement, 'clientWidth', { configurable: true, value: page });
+  };
+  const calendar = () => screen.getByRole('dialog', { name: 'Choose a date' });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    delete document.documentElement.clientWidth;
+  });
+
+  it('moves left until its right edge is 16 px inside the page', () => {
+    place({ left: 830, page: 1366 });
+    renderCalendar({ showPrices: false });
+    expect(calendar().style.left).toBe('-120px');
+  });
+
+  // It opens with a zoom from 95%, so the first measurement is of a smaller,
+  // centred box; reading its left edge as-is left it 16 px off the page.
+  it('measures through the opening zoom', () => {
+    place({ left: 830, page: 1366, scale: 0.95 });
+    renderCalendar({ showPrices: false });
+    expect(calendar().style.left).toBe('-120px');
+  });
+
+  it('stays where it opened when it fits', () => {
+    place({ left: 635, page: 1366 });
+    renderCalendar({ showPrices: false });
+    expect(calendar().style.left).toBe('');
+  });
+
+  it('keeps its left edge on the page when the page is narrower than it', () => {
+    place({ left: 24, page: 600 });
+    renderCalendar({ showPrices: false });
+    expect(calendar().style.left).toBe('-8px');
   });
 });

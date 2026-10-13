@@ -263,6 +263,17 @@ describe('pages of results', () => {
     expect(screen.getAllByTestId('flight-card')[0].textContent).toBe('f0');
     expect(screen.queryByText('No flights found')).toBeNull();
   });
+
+  // The box around the cards cut off whatever reached past its edges: the
+  // first card's fare breakup opens upwards, so on a wide screen 122 px of its
+  // 141 px were hidden. Measured on jetsetterss.com.
+  it('lets a card show a pop-up past the edges of the results box', async () => {
+    searchAnswer = () => answer(200, { success: true, data: [card('f0')] });
+    renderPage();
+
+    const box = (await screen.findByTestId('flight-card')).parentElement;
+    expect(box.className).not.toMatch(/\boverflow-(hidden|clip)\b/);
+  });
 });
 
 /**

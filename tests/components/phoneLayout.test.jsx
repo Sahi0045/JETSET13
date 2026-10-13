@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../frontend/src/contexts/SupabaseAuthContext', () => ({
@@ -77,6 +77,19 @@ describe('a result card at phone width', () => {
     const { departure, arrival } = columns();
     expect(departure.children[1].className).toMatch(/\bwhitespace-nowrap\b/);
     expect(arrival.children[1].className).toMatch(/\bwhitespace-nowrap\b/);
+  });
+
+  // On a phone the price sits at the card's left edge. The breakup was pinned
+  // to the price's right edge, so it opened leftwards past the screen and its
+  // first 79 px were cut off. Measured at 526 px on jetsetterss.com.
+  it("opens the fare breakup from the price's left edge, and its right edge on a wide screen", () => {
+    render(<FlightCard flight={oneStop} onViewPrices={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: /Fare breakup/ }));
+    const popover = screen.getByText('Fare Breakup').closest('.absolute');
+    expect(popover.className).toMatch(/(^|\s)left-0\b/);
+    expect(popover.className).toMatch(/(^|\s)lg:left-auto\b/);
+    expect(popover.className).toMatch(/(^|\s)lg:right-0\b/);
+    expect(popover.className).not.toMatch(/(^|\s)right-0\b/);
   });
 });
 
