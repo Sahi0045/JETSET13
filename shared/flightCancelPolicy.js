@@ -12,8 +12,6 @@
  * app. Dependency-free: the browser, Vercel, Lightsail and the app all load it.
  */
 
-import { grossPaidOf } from './jetCoins.js';
-
 export const FREE_CANCEL_HOURS = 24;
 const HOUR_MS = 60 * 60 * 1000;
 
@@ -95,7 +93,8 @@ export function fareRuleOf(penalties) {
  * whose service fee was never recorded keeps nothing.
  */
 export function customerCancelTerms({ charge, paidAt, now = new Date(), timeZone, hasReservation, ticketed, fareRule = null, cancellationFee = null } = {}) {
-  const paid = known(charge?.total) ? cents(grossPaidOf(charge)) : null;
+  // Same sum as jetCoins.grossPaidOf, inline so the app's copy of this file has no imports.
+  const paid = known(charge?.total) ? cents((Number(charge.total) || 0) + (Number(charge.walletAmount) || 0)) : null;
   const serviceFeeKept = Math.min(serviceFeeKeptOf(charge) ?? 0, paid ?? Infinity);
   const airlinePrice = paid === null ? null : cents(Math.max(0, paid - serviceFeeKept));
   const walletCoins = Math.max(0, Math.floor(Number(charge?.walletCoins) || 0));
