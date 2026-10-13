@@ -8,3 +8,12 @@ insert into public.users (id, email) values
   ('00000000-0000-4000-8000-000000000001', 'a@test.dev'),
   ('00000000-0000-4000-8000-000000000002', 'b@test.dev')
 on conflict do nothing;
+create table if not exists public.bookings (
+  id bigserial primary key,
+  booking_reference text unique,
+  user_id uuid,
+  travel_type text,
+  status text,
+  payment_status text,
+  booking_details jsonb not null default '{}'::jsonb
+);
