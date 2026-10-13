@@ -42,6 +42,7 @@ import { queueEnvironment } from '../utils/queueEnvironment.js';
 import { AUTO_COMPLETE_WINDOW_MS, liveChainState } from '../utils/bookingChainClaim.js';
 import { unchangedSince } from '../utils/bookingDetailsGuard.js';
 import { buildFlightOrderBody, orderDataFromCheckoutRow } from '../../shared/flightOrderBody.js';
+import { releaseCoins } from '../services/wallet.service.js';
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -258,10 +259,21 @@ export async function flagForReview(row, reason) {
   return 'retry';
 }
 
+const releaseCheckoutCoins = async (bookingReference) => {
+  try {
+    return await releaseCoins(supabase, bookingReference);
+  } catch (error) {
+    log('coins held for an unpaid checkout could not be released', { bookingReference, code: error.code });
+    return null;
+  }
+};
+
 /**
  * Settle one checkout. `final` means this process need not ask about it again.
  */
-export async function settle(row, { now = Date.now(), reconcile = reconcileBookingPayment, send, flag = flagForReview } = {}) {
+export async function settle(row, {
+  now = Date.now(), reconcile = reconcileBookingPayment, send, flag = flagForReview, release = releaseCheckoutCoins,
+} = {}) {
   const age = now - Date.parse(row.created_at);
 
   const payment = await reconcile(row);
@@ -274,8 +286,20 @@ export async function settle(row, { now = Date.now(), reconcile = reconcileBooki
     && [400, 404].includes(payment.gatewayStatus)
     && !row?.booking_details?.pnr;
   if (payment.gatewayUnavailable && !noSuchOrder) return { outcome: 'gateway-unavailable', final: false };
-  if (noSuchOrder) return { outcome: 'not-paid', final: age > PAYABLE_MS };
-  if (!payment.paid) return { outcome: 'not-paid', final: age > PAYABLE_MS };
+  if (noSuchOrder || !payment.paid) {
+    const final = age > PAYABLE_MS;
+    const coins = Number(row?.booking_details?.verified_charge?.wallet?.coins);
+    if (final && coins > 0) {
+      // Money still held for the order is a person's to settle: its coins stay with it.
+      if (Number(payment.heldAmount) > 0) {
+        log('coins kept: the gateway still holds money for an unpaid checkout', { bookingReference: row.booking_reference });
+      } else if (await release(row.booking_reference) === null) {
+        // Not released: ask again rather than call it settled with coins still held.
+        return { outcome: 'not-paid', final: false };
+      }
+    }
+    return { outcome: 'not-paid', final };
+  }
 
   // Neither of these two sends anything, so asking again when the flag did not
   // land costs one reconcile and one more try. Calling them settled regardless

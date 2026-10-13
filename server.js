@@ -47,6 +47,7 @@ import { installProcessGuards } from "./backend/bootstrap/processGuards.js";
 import { startBookingQueueWorker } from "./backend/jobs/bookingQueue.job.js";
 import { logCutoverRisks } from "./backend/services/amadeusSoap/config.js";
 import { startTicketSyncJob } from "./backend/jobs/ticketSync.job.js";
+import { startWalletEarnJob } from "./backend/jobs/walletEarn.job.js";
 import { startNeedsReviewAlertJob } from "./backend/jobs/needsReviewAlert.job.js";
 import { startPaymentFailureAlertJob } from "./backend/jobs/paymentFailureAlert.job.js";
 import { startAbandonedCheckoutJob } from "./backend/jobs/abandonedCheckout.job.js";
@@ -350,6 +351,9 @@ if (process.env.NODE_ENV !== "test") {
     // Notices when a ticket a person issued by hand has appeared on the PNR,
     // records the number, and sends the e-ticket every other email promised.
     startTicketSyncJob();
+    // Credits Jet Coins on flights whose free-cancellation window has closed,
+    // and settles coins held for checkouts that were never paid.
+    startWalletEarnJob();
   });
   // Crash guards + graceful shutdown (drain in-flight requests on SIGTERM/SIGINT)
   installProcessGuards({ server });
