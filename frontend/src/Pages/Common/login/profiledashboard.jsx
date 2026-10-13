@@ -1,16 +1,18 @@
 "use client"
 
 import React, { useState, useEffect, useRef } from "react"
-import { useNavigate } from "react-router-dom"
+import { useLocation, useNavigate } from "react-router-dom"
 import { useSupabaseAuth } from "../../../contexts/SupabaseAuthContext"
 import supabase from "../../../lib/supabase"
 import PhoneInputWithCountry from "../components/PhoneInputWithCountry"
+import JetWalletPanel from "./JetWalletPanel"
 import useMembership from "../../../hooks/useMembership"
 import { registerForPushNotifications } from "../../../lib/pushNotifications"
 import './profile.css'
 
 export default function ProfilePage() {
   const navigate = useNavigate()
+  const { search } = useLocation()
   const fileInputRef = useRef(null)
   const { user, loading: authLoading, isAuthenticated, updateProfile, updatePassword } = useSupabaseAuth()
   const membership = useMembership()
@@ -69,6 +71,10 @@ export default function ProfilePage() {
   const isDirty = initialData
     ? EDITABLE_FIELDS.some((k) => (data[k] || '') !== (initialData[k] || '')) || !!data.profile_photo
     : false
+
+  useEffect(() => {
+    if (new URLSearchParams(search).get('tab') === 'wallet') setActiveSection('wallet')
+  }, [search])
 
   // Check and refresh session if needed
   useEffect(() => {
@@ -616,6 +622,7 @@ export default function ProfilePage() {
     { id: 'profile', label: 'Personal Information', icon: 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 7a4 4 0 1 0 0 8 4 4 0 0 0 0-8z' },
     { id: 'security', label: 'Account Security', icon: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10zM9 12l2 2 4-4' },
     { id: 'preferences', label: 'Preferences', icon: 'M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z' },
+    { id: 'wallet', label: 'Jet Wallet', icon: 'M21 12V7H5a2 2 0 0 1 0-4h14v4M3 5v14a2 2 0 0 0 2 2h16v-5M18 12a2 2 0 0 0 0 4h4v-4z' },
   ]
 
   return (
@@ -1069,6 +1076,8 @@ export default function ProfilePage() {
               </div>
             </div>
           )}
+
+          {activeSection === 'wallet' && <JetWalletPanel />}
         </main>
       </div>
 

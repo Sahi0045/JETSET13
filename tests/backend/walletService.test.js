@@ -78,6 +78,25 @@ describe('the wallet service', () => {
     expect(summary.entries).toHaveLength(1);
   });
 
+  it('sends a voucher entry its code but no other entry a note, so a staff note never reaches the customer', async () => {
+    const client = tableClient({
+      wallets: { data: { balance: 4500 }, error: null },
+      wallet_holds: { data: [], error: null },
+      wallet_entries: {
+        data: [
+          { id: 3, kind: 'return', coins: 800, note: 'staff 6f1c2d9e-0000-4000-8000-000000000001: customer rang, duplicate charge' },
+          { id: 2, kind: 'release', coins: 500, note: 'staff 6f1c2d9e-0000-4000-8000-000000000001: asked for a refund' },
+          { id: 1, kind: 'voucher', coins: 5000, note: 'SHUBHAM' },
+        ],
+        error: null,
+      },
+    });
+    const { entries } = await walletSummary(client, 'u1');
+    expect(entries.map((entry) => entry.note)).toEqual([null, null, 'SHUBHAM']);
+    expect(JSON.stringify(entries)).not.toContain('staff');
+    expect(entries[0]).toMatchObject({ id: 3, kind: 'return', coins: 800 });
+  });
+
   it('reads no wallet as zero coins', async () => {
     const client = tableClient({ wallets: { data: null, error: null } });
     expect(await readBalance(client, 'u1')).toBe(0);

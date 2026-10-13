@@ -33,6 +33,7 @@ export async function readBalance(client, userId) {
   return Number(data?.balance) || 0;
 }
 
+// Only a voucher entry's note (its code) is the customer's to read: staff returns store "staff <id>: <reason>" on the customer's own rows.
 export async function walletSummary(client, userId) {
   const [wallet, holds, entries] = await Promise.all([
     client.from('wallets').select('balance').eq('user_id', userId).maybeSingle(),
@@ -47,7 +48,8 @@ export async function walletSummary(client, userId) {
   if (error) throw new WalletError('WALLET_UNAVAILABLE', error.message);
   const balance = Number(wallet.data?.balance) || 0;
   const held = (holds.data || []).reduce((sum, hold) => sum + (Number(hold.coins) || 0), 0);
-  return { balance, balanceUsd: coinsToUsd(balance), held, entries: entries.data || [] };
+  const customerEntries = (entries.data || []).map((entry) => ({ ...entry, note: entry.kind === 'voucher' ? entry.note : null }));
+  return { balance, balanceUsd: coinsToUsd(balance), held, entries: customerEntries };
 }
 
 export const holdCoins = (client, { userId, bookingReference, coins }) =>
