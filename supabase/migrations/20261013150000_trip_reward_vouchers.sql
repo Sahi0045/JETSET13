@@ -83,7 +83,7 @@ begin
   if v.first_time_only and exists (select 1 from public.bookings b
              where b.user_id = p_user
                and coalesce(b.travel_type, 'flight') = 'flight'
-               and b.status in ('confirmed', 'pending_ticketing')
+               and b.status in ('confirmed', 'pending_ticketing', 'completed')
                and b.booking_reference is distinct from p_ref) then
     raise exception 'VOUCHER_FIRST_TIME_ONLY';
   end if;

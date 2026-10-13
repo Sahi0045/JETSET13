@@ -32,9 +32,10 @@ The owner's marketing line is: "Book with my code SHUBHAM and get $50 in Jet Coi
 - **A code of the wrong kind gets a pointer, not "not found".**
   - An instant voucher typed at checkout answers "Redeem this code in Profile → Jet Wallet".
   - A trip-reward voucher typed in the wallet answers "Use this code at checkout when you book a flight".
-- **"First-time" means** the customer has no other flight booking with status `confirmed` or `pending_ticketing`. Cancelled bookings and guest bookings do not count.
+- **"First-time" means** the customer has no other flight booking with status `confirmed`, `pending_ticketing` or `completed`. Cancelled bookings and guest bookings do not count.
 - **"Trip completed" means** the day after the last flight's arrival **date** has fully passed in UTC: `due_at` = the last segment's local arrival date + 2 days, at 00:00 UTC.
   - This is a date, not a time, because stored arrival times carry no timezone. It is always after landing anywhere in the world.
+  - Never earlier than that segment's departure date + 2 days: the arrival is the client's copy and is never compared with the flights sold, the departure date is. Checkout refuses a shown flight landing two or more calendar days before it leaves (one day earlier is genuine across the date line).
   - A booking whose itinerary cannot be read gets no `due_at`. It is logged and left for the desk, never paid blindly.
 - **The voucher is reserved when the booking is made,** not at checkout: it is reserved where coins are captured today.
   - It changes no price, so checkout only checks it (and tells the customer early). No hold is needed, and an abandoned checkout leaves nothing to release.
@@ -70,7 +71,7 @@ All are `security definer` and `set search_path = public`. EXECUTE is revoked fr
 
 - **`check_trip_voucher(p_user uuid, p_code text, p_ref text)`** is read-only and returns `{ id, code, coins, kind }`. It raises:
   - `VOUCHER_NOT_FOUND`, `VOUCHER_INACTIVE`, `VOUCHER_NOT_STARTED`, `VOUCHER_EXPIRED`, `VOUCHER_USED_UP`, `VOUCHER_ALREADY_REDEEMED`;
-  - `VOUCHER_FIRST_TIME_ONLY`: an other confirmed or `pending_ticketing` flight exists for `p_user`, excluding `p_ref`;
+  - `VOUCHER_FIRST_TIME_ONLY`: an other `confirmed`, `pending_ticketing` or `completed` flight exists for `p_user`, excluding `p_ref`;
   - `VOUCHER_WRONG_KIND`: an instant voucher.
 - **`reserve_trip_voucher(p_user, p_code, p_ref, p_due_at)`** locks the voucher row and runs the same checks.
   - It inserts a `pending` redemption with `booking_reference = p_ref` and increments `redemptions_count`.
@@ -95,7 +96,7 @@ All are `security definer` and `set search_path = public`. EXECUTE is revoked fr
 - **Order route:** where `settleCoinsAfterBooking` runs (commit and success), it also calls `reserve_trip_voucher`. `due_at` comes from the booking's itineraries (`bookingItineraries`).
   - It never fails the booking. A refusal writes `wallet_issue: { kind: 'voucher_refused' }`.
 - **Cancel, void, and full reversal** (`refundOnFulfillmentFailure`, `refundDuplicatePayment`, `cancelFlightBooking`, `handlePaymentVoid`) call `void_trip_voucher(ref)`, best effort.
-- **Payout:** the earning job (`walletEarn.job.js`, Lightsail only, production only) also pays rewards on each tick. It pays `pending` rewards with `due_at <= now` whose booking is still ticketed and not cancelled (re-read just before paying). It pays at most 200 per run.
+- **Payout:** the earning job (`walletEarn.job.js`, Lightsail only, production only) also pays rewards on each tick. It pays `pending` rewards with `due_at <= now` whose booking is `confirmed`, `pending_ticketing` or `completed`, paid (or partly refunded), ticketed and not cancelled (re-read just before paying). It pays at most 200 per run.
   - A reward whose booking was cancelled without the void landing is voided there.
   - After a payout it sends the email.
 - **Admin:**

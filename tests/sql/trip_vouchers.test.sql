@@ -3,7 +3,8 @@ insert into public.users (id, email) values
   ('00000000-0000-4000-8000-000000000011', 'trip-a@test.dev'),
   ('00000000-0000-4000-8000-000000000012', 'trip-b@test.dev'),
   ('00000000-0000-4000-8000-000000000013', 'trip-c@test.dev'),
-  ('00000000-0000-4000-8000-000000000014', 'trip-d@test.dev')
+  ('00000000-0000-4000-8000-000000000014', 'trip-d@test.dev'),
+  ('00000000-0000-4000-8000-000000000015', 'trip-e@test.dev')
 on conflict do nothing;
 
 do $$
@@ -12,6 +13,7 @@ declare
   b uuid := '00000000-0000-4000-8000-000000000012';
   c uuid := '00000000-0000-4000-8000-000000000013';
   d uuid := '00000000-0000-4000-8000-000000000014';
+  e uuid := '00000000-0000-4000-8000-000000000015';
   due timestamptz := '2026-11-18 00:00:00+00';
   trip50 uuid;
   r jsonb;
@@ -133,12 +135,16 @@ begin
     ('FLTB-OLD', b, 'flight', 'cancelled'),
     ('HTLB-OLD', b, 'hotel', 'confirmed'),
     ('FLTC-OLD', c, 'flight', 'pending_ticketing'),
-    ('FLTD-NEW', d, 'flight', 'confirmed');
+    ('FLTD-NEW', d, 'flight', 'confirmed'),
+    ('FLTE-OLD', e, 'flight', 'completed');
   r := public.check_trip_voucher(b, 'FIRSTTRIP', null);
   assert r->>'code' = 'FIRSTTRIP', 'cancelled flights and other kinds of booking leave a customer first-time';
   failed := false;
   begin perform public.check_trip_voucher(c, 'FIRSTTRIP', null); exception when others then failed := sqlerrm like '%VOUCHER_FIRST_TIME_ONLY%'; end;
   assert failed, 'a customer with a flight being ticketed is not first-time';
+  failed := false;
+  begin perform public.check_trip_voucher(e, 'FIRSTTRIP', null); exception when others then failed := sqlerrm like '%VOUCHER_FIRST_TIME_ONLY%'; end;
+  assert failed, 'a customer with a completed trip is not first-time';
   r := public.reserve_trip_voucher(d, 'FIRSTTRIP', 'FLTD-NEW', due);
   assert r->>'status' = 'pending', 'the booking being rewarded does not count against itself';
   r := public.check_trip_voucher(c, 'TRIP50', null);

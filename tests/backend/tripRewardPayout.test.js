@@ -81,6 +81,13 @@ describe('what a due trip reward is worth on a fresh read of its booking', () =>
     expect(tripRewardVerdict(flown({ status: 'pending_ticketing' }), NOW)).toBe('pay');
   });
 
+  it('pays a trip an admin marked completed, still only when paid and ticketed', () => {
+    expect(tripRewardVerdict(flown({ status: 'completed' }), NOW)).toBe('pay');
+    expect(tripRewardVerdict(flown({ status: 'completed', payment_status: 'partially_refunded' }), NOW)).toBe('pay');
+    expect(tripRewardVerdict(flown({ status: 'completed', payment_status: 'unpaid' }), NOW)).toBe('wait');
+    expect(tripRewardVerdict(flown({ status: 'completed', booking_details: { gds: { ticketed: false } } }), NOW)).toBe('wait');
+  });
+
   it('voids once the booking is cancelled or the payment went back in full, whatever the case', () => {
     expect(tripRewardVerdict(flown({ status: 'cancelled' }), NOW)).toBe('void');
     expect(tripRewardVerdict(flown({ payment_status: 'refunded' }), NOW)).toBe('void');
@@ -118,6 +125,14 @@ describe('paying trip rewards', () => {
     expect(await result).toEqual({ paid: 1, voided: 0, waiting: 0, failed: 0 });
     expect(used.pay).toHaveBeenCalledWith(client, 'FLT1');
     expect(used.notify).toHaveBeenCalledWith(expect.objectContaining({ reward: paid(), booking: expect.objectContaining({ booking_reference: 'FLT1' }) }));
+  });
+
+  it('pays a due reward on a booking an admin marked completed', async () => {
+    const client = fakeClient({ voucher_redemptions: [reward()], bookings: [flown({ status: 'completed' })] });
+    const { used, result } = runWith(client);
+
+    expect(await result).toEqual({ paid: 1, voided: 0, waiting: 0, failed: 0 });
+    expect(used.pay).toHaveBeenCalledWith(client, 'FLT1');
   });
 
   it('waits for a reward not yet due, and never pays one with no payout date', async () => {
