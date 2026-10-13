@@ -36,6 +36,8 @@ import airportRoutes from "../routes/airport.routes.js";
 import pushRoutes from "../routes/push.routes.js";
 import gdprRoutes from "../routes/gdpr.routes.js";
 import savedTravellersRoutes from "../routes/savedTravellers.routes.js";
+import walletRoutes from "../routes/wallet.routes.js";
+import voucherRoutes from "../routes/vouchers.routes.js";
 import chatRoutes from "./chat/index.js";
 
 // Shared stability modules (same behavior across all 3 entry points)
@@ -80,6 +82,8 @@ app.use(["/api/auth", "/auth", "/api/supabase-auth", "/supabase-auth"], authLimi
 app.use("/api/auth", authRoutes);
 // Ahead of /api/users, whose routes take the path's next segment as an id.
 app.use("/api/users/me/travellers", savedTravellersRoutes);
+app.use("/api/wallet", walletRoutes);
+app.use("/api/vouchers", voucherRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/email", emailRoutes);
 app.use("/api/flights", flightRoutes);
@@ -124,6 +128,8 @@ app.use("/geo", geoRoutes);
 app.use("/admin", adminRoutes);
 app.use("/currency", currencyRoutes);
 app.use("/coupons", couponRoutes);
+app.use("/wallet", walletRoutes);
+app.use("/vouchers", voucherRoutes);
 app.use("/subscription", subscriptionRoutes);
 app.use("/visa", visaRoutes);
 app.use("/analytics", analyticsRoutes);

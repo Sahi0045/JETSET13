@@ -36,6 +36,8 @@ import subscriptionRoutes from "./backend/routes/subscription.routes.js";
 import pushRoutes from "./backend/routes/push.routes.js";
 import gdprRoutes from "./backend/routes/gdpr.routes.js";
 import savedTravellersRoutes from "./backend/routes/savedTravellers.routes.js";
+import walletRoutes from "./backend/routes/wallet.routes.js";
+import voucherRoutes from "./backend/routes/vouchers.routes.js";
 import supabase from "./backend/config/supabase.js";
 // Shared stability modules (same behavior across all 3 entry points)
 import "./backend/bootstrap/httpDefaults.js"; // global axios timeout safety net
@@ -137,6 +139,8 @@ app.use(["/api/auth", "/api/supabase"], authLimiter);
 app.use("/api/auth", authRoutes);
 // Ahead of /api/users, whose routes take the path's next segment as an id.
 app.use("/api/users/me/travellers", savedTravellersRoutes);
+app.use("/api/wallet", walletRoutes);
+app.use("/api/vouchers", voucherRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/hotels", hotelRoutes);
 app.use("/api/flights", flightRoutes);
