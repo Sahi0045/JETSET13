@@ -58,16 +58,19 @@ begin
   r := public.wallet_return('REF3', 1500, 'cancel');
   assert (r->>'coins')::bigint = 1500 and not (r->>'applied')::boolean, 'a replayed return reports the coins it gave the first time';
   assert (select balance from public.wallets where user_id = a) = 2500 and (select returned_coins from public.wallet_holds where booking_reference = 'REF3') = 1500, 'a replayed return moves nothing';
-  r := public.wallet_return('REF3', 999999, 'desk-1');
+  r := public.wallet_return('REF3', 999999, 'desk-1', 'staff s1: customer called');
   assert (r->>'coins')::bigint = 2500 and (select balance from public.wallets where user_id = a) = 5000, 'return never gives back more than was used';
+  assert (select note from public.wallet_entries where idempotency_key = 'return:REF3:desk-1') = 'staff s1: customer called', 'the note is stored on the return entry';
+  assert (select note from public.wallet_entries where idempotency_key = 'return:REF3:cancel') is null, 'a return without a note stores none';
   r := public.wallet_return('REF3', 999999, 'desk-1');
   assert (r->>'coins')::bigint = 2500 and not (r->>'applied')::boolean and (select balance from public.wallets where user_id = a) = 5000, 'a replay after the hold is fully returned still reports the first answer';
   r := public.wallet_return('REF3', 1500, 'cancel');
   assert (r->>'coins')::bigint = 1500 and not (r->>'applied')::boolean, 'an older reason replays its own coins once the hold is fully returned';
 
   perform public.wallet_hold(a, 'REF4', 100);
-  r := public.wallet_return('REF4', 999999, 'reversal');
+  r := public.wallet_return('REF4', 999999, 'reversal', 'staff s1: unused');
   assert r->>'status' = 'released' and (r->>'coins')::bigint = 100, 'return on an unused hold releases it whole';
+  assert (select note from public.wallet_entries where idempotency_key = 'release:REF4') = 'staff s1: unused', 'the note is stored on the release entry too';
 
   r := public.wallet_earn(b, 'REF9', 130);
   assert (r->>'balance')::bigint = 130, 'earning credits';
@@ -79,6 +82,10 @@ begin
   assert (r->>'coins')::bigint = 0, 'reversal once';
 
   assert (select sum(coins) from public.wallet_entries where user_id = a) = (select balance from public.wallets where user_id = a), 'the ledger adds up to the balance';
+  assert (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'wallet_return') = 1, 'applying the migration twice leaves one wallet_return';
+  assert not has_function_privilege('anon', 'public.wallet_return(text,bigint,text,text)', 'execute'), 'anon cannot return coins';
+  assert not has_function_privilege('authenticated', 'public.wallet_return(text,bigint,text,text)', 'execute'), 'signed-in clients cannot return coins';
+  assert has_function_privilege('service_role', 'public.wallet_return(text,bigint,text,text)', 'execute'), 'the backend can return coins';
   assert not has_function_privilege('anon', 'public.wallet_hold(uuid,text,bigint)', 'execute'), 'anon cannot call wallet functions';
   assert not has_function_privilege('authenticated', 'public.redeem_voucher(uuid,text)', 'execute'), 'signed-in clients cannot call wallet functions directly';
   assert has_function_privilege('service_role', 'public.redeem_voucher(uuid,text)', 'execute'), 'the backend can call them';

@@ -5,6 +5,8 @@ import {
 
 const CODE_PATTERN = /^[A-Z0-9-]{3,32}$/;
 const STATUS = { VOUCHER_NOT_FOUND: 404, VOUCHER_ALREADY_REDEEMED: 409, VOUCHER_USED_UP: 409 };
+const DESK_REASON = 'Returned by the support desk';
+const MAX_REASON_LENGTH = 200;
 
 export async function getWallet(req, res) {
   try {
@@ -38,9 +40,12 @@ export async function staffReturn(req, res) {
   if (!bookingReference || !Number.isFinite(coins) || coins <= 0) {
     return res.status(400).json({ success: false, error: 'A booking reference and a number of coins are needed.' });
   }
+  const typedReason = typeof req.body?.reason === 'string' ? req.body.reason.trim().slice(0, MAX_REASON_LENGTH).trim() : '';
+  const note = `staff ${req.user.id}: ${typedReason || DESK_REASON}`;
   let given;
   try {
-    given = await returnCoins(supabase, { bookingReference, coins, reason: `desk-${Date.now()}` });
+    given = await returnCoins(supabase, { bookingReference, coins, reason: `desk-${Date.now()}`, note });
+    console.log('Staff coin return', { bookingReference, coins, given, staffId: req.user.id });
   } catch (error) {
     console.error('⚠️ Staff coin return failed:', error.message);
     return res.status(503).json({ success: false, error: 'The coins could not be returned just now. Nothing changed; try again.' });

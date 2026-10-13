@@ -42,6 +42,14 @@ describe('the wallet service', () => {
     expect(await returnCoins(client, { bookingReference: 'FLT1', coins: 1500, reason: 'cancel' })).toBe(1500);
   });
 
+  it('sends the key reason and the note to the return function, with no argument left undefined', async () => {
+    const client = rpcClient({ data: { status: 'captured', coins: 1500 }, error: null });
+    await returnCoins(client, { bookingReference: 'FLT1', coins: 1500.9, reason: 'desk-1', note: 'staff s1: refund' });
+    expect(client.rpc).toHaveBeenLastCalledWith('wallet_return', { p_ref: 'FLT1', p_coins: 1500, p_reason: 'desk-1', p_note: 'staff s1: refund' });
+    await returnCoins(client, { bookingReference: 'FLT1', coins: 1500 });
+    expect(client.rpc).toHaveBeenLastCalledWith('wallet_return', { p_ref: 'FLT1', p_coins: 1500, p_reason: null, p_note: null });
+  });
+
   it('never throws when giving every coin back, and says when it could not', async () => {
     const client = rpcClient({ data: null, error: { message: 'connection reset' } });
     const result = await returnAllCoins(client, 'FLT1', 'reversal');

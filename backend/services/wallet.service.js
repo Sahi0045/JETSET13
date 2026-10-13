@@ -57,8 +57,13 @@ export const captureCoins = (client, bookingReference) => call(client, 'wallet_c
 
 export const releaseCoins = (client, bookingReference) => call(client, 'wallet_release', { p_ref: bookingReference });
 
-export async function returnCoins(client, { bookingReference, coins, reason }) {
-  const result = await call(client, 'wallet_return', { p_ref: bookingReference, p_coins: Math.floor(coins), p_reason: reason });
+export async function returnCoins(client, { bookingReference, coins, reason, note }) {
+  const result = await call(client, 'wallet_return', {
+    p_ref: bookingReference,
+    p_coins: Math.floor(coins),
+    p_reason: reason ?? null,
+    p_note: note ?? null,
+  });
   return Number(result.coins) || 0;
 }
 

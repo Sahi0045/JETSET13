@@ -155,7 +155,7 @@ begin
 end;
 $$;
 
-create or replace function public.wallet_return(p_ref text, p_coins bigint, p_reason text)
+create or replace function public.wallet_return(p_ref text, p_coins bigint, p_reason text, p_note text default null)
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare
   v_hold public.wallet_holds;
@@ -169,7 +169,7 @@ begin
     return jsonb_build_object('status', 'none', 'coins', 0);
   end if;
   if v_hold.status = 'held' then
-    perform public.wallet_apply(v_hold.user_id, v_hold.coins, 'release', 'release:' || p_ref, p_ref, null, null);
+    perform public.wallet_apply(v_hold.user_id, v_hold.coins, 'release', 'release:' || p_ref, p_ref, null, p_note);
     update public.wallet_holds set status = 'released', updated_at = now() where booking_reference = p_ref;
     return jsonb_build_object('status', 'released', 'coins', v_hold.coins);
   end if;
@@ -187,7 +187,7 @@ begin
   if v_give <= 0 then
     return jsonb_build_object('status', 'captured', 'coins', 0);
   end if;
-  v_result := public.wallet_apply(v_hold.user_id, v_give, 'return', v_key, p_ref, null, null);
+  v_result := public.wallet_apply(v_hold.user_id, v_give, 'return', v_key, p_ref, null, p_note);
   update public.wallet_holds set returned_coins = returned_coins + v_give, updated_at = now() where booking_reference = p_ref;
   return jsonb_build_object('status', 'captured', 'coins', v_give, 'applied', true, 'balance', (v_result->>'balance')::bigint);
 end;
@@ -263,7 +263,7 @@ begin
     'public.wallet_hold(uuid,text,bigint)',
     'public.wallet_capture(text)',
     'public.wallet_release(text)',
-    'public.wallet_return(text,bigint,text)',
+    'public.wallet_return(text,bigint,text,text)',
     'public.wallet_earn(uuid,text,bigint)',
     'public.wallet_reverse_earn(text)',
     'public.redeem_voucher(uuid,text)'
