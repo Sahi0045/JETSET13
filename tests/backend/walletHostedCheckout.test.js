@@ -38,10 +38,25 @@ const harness = async ({ rows = [], holdCoins = held(), releaseCoins: releaseOve
     events.push('released');
     return { status: 'released', coins: 5000 };
   });
-  const table = fakeBookingsTable(rows, { fail });
+  const table = fakeBookingsTable(rows, { fail, tables: { wallet_holds: [] } });
+  const tablesRead = [];
+  const holds = () => table.from('wallet_holds');
   const verifyFlightCharge = vi.fn(async ({ walletCoins }) => verdictFor(Math.floor(Number(walletCoins) || 0)));
   vi.doMock('../../backend/services/flightCheckout.service.js', () => ({ verifyFlightCharge }));
-  vi.doMock('../../backend/services/wallet.service.js', () => ({ holdCoins, releaseCoins }));
+  vi.doMock('../../backend/services/wallet.service.js', () => ({
+    holdCoins: async (client, args) => {
+      const reply = await holdCoins(client, args);
+      if (reply?.created === true) {
+        await holds().insert({ booking_reference: args.bookingReference, user_id: args.userId, coins: args.coins, status: 'held' });
+      }
+      return reply;
+    },
+    releaseCoins: async (client, ref) => {
+      const reply = await releaseCoins(client, ref);
+      await holds().update({ status: 'released' }).eq('booking_reference', ref);
+      return reply;
+    },
+  }));
   vi.doMock('../../backend/services/cache.service.js', async () => ({
     ...(await vi.importActual('../../backend/services/cache.service.js')),
     acquireLock: vi.fn(async () => ({ acquired: true, token: 'lock' })),
@@ -51,6 +66,7 @@ const harness = async ({ rows = [], holdCoins = held(), releaseCoins: releaseOve
     const actual = await vi.importActual('../../backend/routes/payment/arcpay.config.js');
     // The database stamps created_at on insert; the fake table does not.
     const from = (name) => {
+      tablesRead.push(name);
       const builder = table.from(name);
       const upsert = builder.upsert.bind(builder);
       builder.upsert = (value, options) => upsert({ created_at: new Date().toISOString(), ...value }, options);
@@ -86,7 +102,7 @@ const harness = async ({ rows = [], holdCoins = held(), releaseCoins: releaseOve
     await handleHostedCheckout(req, res);
     return res;
   };
-  return { post, table, verifyFlightCharge, holdCoins, releaseCoins, events };
+  return { post, table, verifyFlightCharge, holdCoins, releaseCoins, events, holds, tablesRead };
 };
 
 const arcPages = () => axios.post.mock.calls.filter(([, sent]) => sent?.apiOperation === 'INITIATE_CHECKOUT');
@@ -289,6 +305,71 @@ describe('a second checkout on a reference that already holds its coins', () => 
 
     expect(second.statusCode).toBe(200);
     expect(releaseCoins).not.toHaveBeenCalled();
+  });
+});
+
+describe('a stored coin checkout is handed back only while its coins are still held', () => {
+  const retry = async (harnessOptions, spoil) => {
+    arcOpens();
+    const setup = await harness(harnessOptions);
+    const first = await setup.post({ orderId: 'FLTCOINS1' });
+    expect(first.statusCode).toBe(200);
+    await spoil?.(setup);
+
+    axios.post.mockClear();
+    setup.holdCoins.mockClear();
+    const second = await setup.post({ orderId: 'FLTCOINS2' });
+    return { ...setup, second };
+  };
+
+  it('hands the page back when the hold is still held for those coins', async () => {
+    const { second, holdCoins, tablesRead } = await retry();
+
+    expect(second.body).toMatchObject({ reused: true, orderId: 'FLTCOINS1' });
+    expect(openedAPage()).toBe(false);
+    expect(holdCoins).not.toHaveBeenCalled();
+    expect(tablesRead).toContain('wallet_holds');
+  });
+
+  it.each([
+    ['released', async ({ holds }) => { await holds().update({ status: 'released' }).eq('booking_reference', 'FLTCOINS1'); }],
+    ['captured', async ({ holds }) => { await holds().update({ status: 'captured' }).eq('booking_reference', 'FLTCOINS1'); }],
+    ['held for other coins', async ({ holds }) => { await holds().update({ coins: 3000 }).eq('booking_reference', 'FLTCOINS1'); }],
+    ['not there at all', async ({ holds }) => { await holds().delete().eq('booking_reference', 'FLTCOINS1'); }],
+  ])('opens a new page and a new hold when the hold is %s', async (_name, spoil) => {
+    const { second, holdCoins } = await retry({}, spoil);
+
+    expect(second.statusCode).toBe(200);
+    expect(second.body.reused).toBeUndefined();
+    expect(second.body.orderId).toBe('FLTCOINS2');
+    expect(openedAPage()).toBe(true);
+    expect(holdCoins).toHaveBeenCalledTimes(1);
+    expect(holdCoins).toHaveBeenCalledWith(expect.anything(), { userId: CUSTOMER.id, bookingReference: 'FLTCOINS2', coins: 5000 });
+  });
+
+  it('opens a new page and a new hold when the hold cannot be read', async () => {
+    const unreadable = ({ table: name, write, patch }) => name === 'wallet_holds' && !write && !patch;
+    arcOpens();
+    const { post, holdCoins } = await harness({ fail: unreadable });
+    await post({ orderId: 'FLTCOINS1' });
+
+    axios.post.mockClear();
+    holdCoins.mockClear();
+    const second = await post({ orderId: 'FLTCOINS2' });
+
+    expect(second.body.reused).toBeUndefined();
+    expect(openedAPage()).toBe(true);
+    expect(holdCoins).toHaveBeenCalledTimes(1);
+  });
+
+  it('never reads the wallet holds for a checkout that used no coins', async () => {
+    arcOpens();
+    const { post, tablesRead } = await harness();
+    await post({ orderId: 'FLTCOINS1', walletCoins: 0, amount: '122.20' });
+    const second = await post({ orderId: 'FLTCOINS2', walletCoins: 0, amount: '122.20' });
+
+    expect(second.body).toMatchObject({ reused: true, orderId: 'FLTCOINS1' });
+    expect(tablesRead).not.toContain('wallet_holds');
   });
 });
 

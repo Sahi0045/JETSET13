@@ -127,6 +127,20 @@ async function findReusableCheckout({ userId, customerEmail, key, returnOrigin, 
             });
             if (storedKey !== key) continue;
 
+            // The page is priced with its coins off the card, so it is handed
+            // back only while those coins are still held for it. A checkout the
+            // handler gave up on (its row write reported a failure) has its coins
+            // released but may have committed a row with a live page.
+            const storedCoins = Math.floor(Number(details.verified_charge?.wallet?.coins) || 0);
+            if (storedCoins > 0) {
+                const { data: hold, error: holdError } = await supabase
+                    .from('wallet_holds')
+                    .select('status, coins')
+                    .eq('booking_reference', row.booking_reference)
+                    .maybeSingle();
+                if (holdError || hold?.status !== 'held' || Number(hold.coins) !== storedCoins) continue;
+            }
+
             return { orderId: row.booking_reference, sessionId: details.session_id, checkoutUrl: details.arc_pay_checkout_url };
         }
         return null;
