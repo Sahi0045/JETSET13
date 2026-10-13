@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect, useMemo } from "react"
+import React, { useState, useEffect, useLayoutEffect, useMemo, useRef } from "react"
 import { format, addMonths, startOfMonth, isBefore, isToday } from "date-fns"
 import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react"
 import apiConfig from '@/config/api'
@@ -50,6 +50,24 @@ export default function CustomFlightCalendar({
     const [position, setPosition] = useState({ x: 0, y: 0 })
     const [isDragging, setIsDragging] = useState(false)
     const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
+
+    const calendarRef = useRef(null)
+    const [nudge, setNudge] = useState(0)
+
+    // Opened 640 px wide from the clicked field's left edge, it ran off the
+    // right of the screen from the Return field on laptop widths. The centre
+    // is measured because the opening zoom scales the box about its centre.
+    useLayoutEffect(() => {
+        const el = calendarRef.current
+        const width = el?.offsetWidth
+        if (!width) return
+        const rect = el.getBoundingClientRect()
+        const left = rect.left + rect.width / 2 - width / 2
+        const gutter = 16
+        const maxLeft = document.documentElement.clientWidth - gutter - width
+        const shift = Math.round(Math.max(gutter - left, Math.min(0, maxLeft - left)))
+        if (shift) setNudge(shift)
+    }, [])
 
     const nextMonth = addMonths(currentMonth, 1)
 
@@ -248,11 +266,13 @@ export default function CustomFlightCalendar({
 
     return (
         <div
+            ref={calendarRef}
             data-calendar-grid=""
             role="dialog"
             aria-label="Choose a date"
             className={`absolute top-full left-0 mt-4 z-[100] bg-white shadow-2xl rounded-xl border border-gray-200 w-[calc(100vw-2rem)] max-w-[360px] sm:max-w-none sm:w-[640px] overflow-hidden animate-in fade-in zoom-in-95 duration-200 ${isDragging ? 'cursor-grabbing select-none' : ''}`}
             style={{
+                left: nudge || undefined,
                 transform: `translate(${position.x}px, ${position.y}px)`,
             }}
         >
