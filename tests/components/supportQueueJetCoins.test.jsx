@@ -134,6 +134,25 @@ describe('Return Jet Coins', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
+  it('cannot be typed past the coins on offer, and never sends more than that', async () => {
+    const post = vi.fn(() => reply({ success: true, data: { coins: 1150 }, message: '1,150 Jet Coins returned' }));
+    vi.stubGlobal('fetch', deskServing([booking({ walletCoinsOffer: 1150 })], post));
+    renderQueue();
+
+    fireEvent.click(await screen.findByRole('button', { name: /Return Jet Coins/ }));
+    const dialog = screen.getByRole('dialog');
+    const input = within(dialog).getByLabelText('Jet Coins to return');
+    expect(input.getAttribute('max')).toBe('1150');
+
+    fireEvent.change(input, { target: { value: '29900' } });
+    expect(input.value).toBe('1150');
+    expect(dialog.textContent).toMatch(/11\.5 USD/);
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm' }));
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(1));
+    expect(JSON.parse(post.mock.calls[0][1].body).coins).toBe(1150);
+  });
+
   it('cannot be pressed twice while the request is in flight', async () => {
     let finish;
     const post = vi.fn(() => new Promise((resolve) => { finish = () => resolve(reply({ success: true, data: { coins: 5000 }, message: '5,000 Jet Coins returned' })); }));

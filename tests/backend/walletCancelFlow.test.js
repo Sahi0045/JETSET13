@@ -118,6 +118,7 @@ describe('a customer cancel of a booking that used coins', () => {
     expect(rpc).toHaveBeenCalledWith('wallet_return', { p_ref: 'FLT300', p_coins: 5000, p_reason: 'cancel', p_note: null });
     expect(res.body.cancellation).toMatchObject({ paymentAction: 'PARTIAL_REFUND', refundAmount: 70, coinsReturned: 5000, needsReview: false });
     expect(closing().booking_details.cancellation).toMatchObject({ coinsReturned: 5000, coinsOwed: 5000, coinsKept: 0 });
+    expect(closing().booking_details.cancellation).not.toHaveProperty('coinsInReview');
     expect(closing().booking_details.needs_review).toBeUndefined();
   });
 
@@ -147,7 +148,8 @@ describe('a customer cancel of a booking that used coins', () => {
     const res = await cancel(flight({ createdAt: hoursAgo(30), details: { gds: { ticketed: true }, tickets: [{ number: '057-2412345678' }] } }));
 
     expect(rpcNames()).not.toContain('wallet_return');
-    expect(res.body.cancellation).toMatchObject({ paymentAction: 'REFUND_UNDER_REVIEW', coinsReturned: 0, coinsOwed: 0, coinsKept: 0 });
+    expect(res.body.cancellation).toMatchObject({ paymentAction: 'REFUND_UNDER_REVIEW', coinsReturned: 0, coinsOwed: 0, coinsKept: 0, coinsInReview: true });
+    expect(closing().booking_details.cancellation.coinsInReview).toBe(true);
   });
 
   it('flags the booking for the desk when the coins could not go back, and still cancels', async () => {
@@ -217,6 +219,7 @@ describe('a booking that used no coins', () => {
     expect(res.body.cancellation.coinsReturned).toBe(0);
     expect(closing().booking_details.cancellation).not.toHaveProperty('coinsOwed');
     expect(closing().booking_details.cancellation).not.toHaveProperty('coinsKept');
+    expect(closing().booking_details.cancellation).not.toHaveProperty('coinsInReview');
   });
 
   it('is not held up by a wallet that cannot be reached', async () => {

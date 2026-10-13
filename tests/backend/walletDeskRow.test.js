@@ -116,7 +116,7 @@ describe('the coins the desk is offered to return', () => {
   });
 
   it('offers the whole of a cancel left to review, less what the hold says has gone back', async () => {
-    const review = { paymentAction: 'REFUND_UNDER_REVIEW', coinsReturned: 0, coinsOwed: 0, coinsKept: 0 };
+    const review = { paymentAction: 'REFUND_UNDER_REVIEW', coinsReturned: 0, coinsOwed: 0, coinsKept: 0, coinsInReview: true };
     const { rows } = await rowsFor([
       booking('FLTREV', { verified_charge: used(5000), cancellation: review }, { status: 'cancelled' }),
       booking('FLTREV2', { verified_charge: used(5000), cancellation: review }, { status: 'cancelled' }),
@@ -133,6 +133,36 @@ describe('the coins the desk is offered to return', () => {
     ], { holds: [hold('FLTFAIL', 29900), hold('FLTFAIL2', 29900, 10000)] });
     expect(rows.FLTFAIL.walletCoinsOffer).toBe(28750);
     expect(rows.FLTFAIL2.walletCoinsOffer).toBe(18750);
+  });
+
+  it('keeps offering a review cancel\'s coins after the desk finishes the card refund, until they are all back', async () => {
+    const finished = {
+      paymentAction: 'FULL_REFUND', refundAmount: 72.2, coinsReturned: 0, coinsOwed: 0, coinsKept: 0, coinsInReview: true,
+      manualRefund: { at: '2026-10-12T10:00:00Z', previousPaymentAction: 'REFUND_UNDER_REVIEW' },
+    };
+    const { rows } = await rowsFor([
+      booking('FLTFIN', { verified_charge: used(5000), cancellation: finished }, { status: 'cancelled', payment_status: 'refunded' }),
+      booking('FLTFIN2', { verified_charge: used(5000), cancellation: finished }, { status: 'cancelled', payment_status: 'refunded' }),
+    ], { holds: [hold('FLTFIN', 5000), hold('FLTFIN2', 5000, 5000)] });
+    expect(rows.FLTFIN.walletCoinsOffer).toBe(5000);
+    expect(rows.FLTFIN2.walletCoinsOffer).toBe(0);
+  });
+
+  it('offers nothing for a cancel that was not left to review and settled its coins', async () => {
+    const { rows } = await rowsFor(
+      [booking('FLTSETTLED', { verified_charge: used(5000), cancellation: { paymentAction: 'FULL_REFUND', coinsReturned: 5000, coinsOwed: 5000, coinsKept: 0 } }, { status: 'cancelled' })],
+      { holds: [hold('FLTSETTLED', 5000, 5000)] },
+    );
+    expect(rows.FLTSETTLED.walletCoinsOffer).toBe(0);
+  });
+
+  it('shows a capture problem but offers no coins for it: the customer kept the flight', async () => {
+    const issue = { kind: 'capture_failed', coins: 5000, status: 'error', at: '2026-10-11T10:00:00Z' };
+    const { rows } = await rowsFor(
+      [booking('FLTCAPT', { verified_charge: used(5000), wallet_issue: issue })],
+      { holds: [hold('FLTCAPT', 5000, 0, 'held')] },
+    );
+    expect(rows.FLTCAPT).toMatchObject({ walletIssue: issue, walletCoinsOffer: 0 });
   });
 
   it('offers the coins on a booking the order route or a void left a wallet problem on', async () => {

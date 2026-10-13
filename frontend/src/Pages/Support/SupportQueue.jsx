@@ -160,6 +160,13 @@ const owedSentence = (booking) => {
     : decided;
 };
 
+/** A number of coins typed for a return, held to the most the server offers; blank stays blank. */
+const capCoins = (value, offer) => {
+  const typed = Number(value);
+  if (value === '' || !Number.isFinite(typed)) return value;
+  return typed > offer ? String(offer) : value;
+};
+
 /** What the order route or a void left unfinished with a booking's Jet Coins. */
 const walletIssueLine = (issue) => {
   const coins = Number(issue?.coins) > 0 ? ` (${formatCoins(issue.coins)} coins)` : '';
@@ -365,7 +372,7 @@ function SupportQueue() {
           method: 'POST',
           body: JSON.stringify({
             bookingReference: booking.bookingReference,
-            coins: Math.floor(Number(current.coins)),
+            coins: Math.min(Math.floor(Number(current.coins)), booking.walletCoinsOffer),
             reason: current.reason?.trim() || 'Returned by the support desk',
           }),
         });
@@ -686,9 +693,10 @@ function SupportQueue() {
                   <input
                     type="number"
                     min="1"
+                    max={action.booking.walletCoinsOffer}
                     step="1"
                     value={action.coins}
-                    onChange={(event) => setAction({ ...action, coins: event.target.value })}
+                    onChange={(event) => setAction({ ...action, coins: capCoins(event.target.value, action.booking.walletCoinsOffer) })}
                     className="mt-1 w-full border border-[#B9D0DC] rounded-lg p-2.5 text-sm font-normal"
                   />
                 </label>

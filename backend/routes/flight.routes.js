@@ -5603,15 +5603,17 @@ async function readWalletHolds(bookings) {
 /**
  * The coins the desk may still return on a booking: what it used, less what
  * the hold says went back, less the fee a decided cancel kept. Offered only
- * where something is left for a person to settle - a wallet problem, a cancel
- * left to review, or a cancel whose coin return did not complete - and only
- * where the hold could be read.
+ * where something is left for a person to settle - a return that failed, a
+ * cancel whose coins were left to review (which stays marked after the desk
+ * finishes the card refund), or a cancel whose coin return did not complete -
+ * and only where the hold could be read. A capture that failed is shown to the
+ * desk but offers nothing: the customer kept the flight.
  */
 function coinsOfferedOn(details, used, hold, returned) {
   if (!hold || used <= 0) return 0;
   const cancellation = details.cancellation || {};
-  const unsettled = Boolean(details.wallet_issue)
-    || cancellation.paymentAction === 'REFUND_UNDER_REVIEW'
+  const unsettled = details.wallet_issue?.kind === 'return_failed'
+    || cancellation.coinsInReview === true
     || (Number(cancellation.coinsOwed) || 0) > (Number(cancellation.coinsReturned) || 0);
   if (!unsettled) return 0;
   return Math.max(0, used - returned - (Number(cancellation.coinsKept) || 0));

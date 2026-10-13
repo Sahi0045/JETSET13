@@ -1017,7 +1017,7 @@ async function cancelFlightBooking(res, booking, { reason, email, customer = fal
         refundAmount: returned.refundAmount,
         cancellationFee: returned.cancellationFee,
         coinsReturned: coins.coins,
-        ...(coinsUsed > 0 ? { coinsOwed: coins.owed, coinsKept } : {}),
+        ...(coinsUsed > 0 ? { coinsOwed: coins.owed, coinsKept, ...(decision.action === 'review' ? { coinsInReview: true } : {}) } : {}),
         currency,
         needsReview: reviewReasons.length > 0,
         ...(customerTerms && decision.policy
@@ -1068,7 +1068,13 @@ async function cancelFlightBooking(res, booking, { reason, email, customer = fal
                     cancellationFee: cancellationResult.cancellationFee || 0,
                     netRefund: cancellationResult.refundAmount || 0,
                     coinsReturned: cancellationResult.coinsReturned,
-                    ...(coinsUsed > 0 ? { coinsOwed: cancellationResult.coinsOwed, coinsKept: cancellationResult.coinsKept } : {}),
+                    ...(coinsUsed > 0
+                        ? {
+                            coinsOwed: cancellationResult.coinsOwed,
+                            coinsKept: cancellationResult.coinsKept,
+                            ...(cancellationResult.coinsInReview ? { coinsInReview: true } : {}),
+                        }
+                        : {}),
                     currency,
                     ticketsVoided: cancellationResult.ticketsVoided,
                     // Why this amount, for the support desk.
