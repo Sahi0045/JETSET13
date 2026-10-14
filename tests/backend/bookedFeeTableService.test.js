@@ -39,7 +39,7 @@ describe('readBookedFeeTable', () => {
     cache.get.mockResolvedValueOnce(table);
 
     expect(await readBookedFeeTable(booking)).toEqual(table);
-    expect(cache.get).toHaveBeenCalledWith(bookedFeeTableKey('FLTFEES1'));
+    expect(cache.get).toHaveBeenCalledWith(bookedFeeTableKey(booking));
     expect(getBookedFeeTable).not.toHaveBeenCalled();
   });
 
@@ -49,7 +49,22 @@ describe('readBookedFeeTable', () => {
     expect(await readBookedFeeTable(booking)).toEqual(table);
     expect(getBookedFeeTable).toHaveBeenCalledWith('2OY43E');
     expect(BOOKED_FEE_TABLE_TTL_SECONDS).toBe(6 * 60 * 60);
-    expect(cache.set).toHaveBeenCalledWith('flight:booked-fee-table:FLTFEES1', table, BOOKED_FEE_TABLE_TTL_SECONDS);
+    expect(cache.set).toHaveBeenCalledWith('flight:booked-fee-table:FLTFEES1:2OY43E:', table, BOOKED_FEE_TABLE_TTL_SECONDS);
+  });
+
+  // Keyed on the reference alone, a table read before the ticket was issued,
+  // reissued or moved to another record locator was served for six hours
+  // after the fare it described had gone.
+  it('reads again once the tickets or the record locator change', async () => {
+    const { bookedFeeTableKey } = await service();
+    const ticketed = { ...booking, booking_details: { pnr: '2OY43E', tickets: [{ number: '220-7491175310' }] } };
+    const reissued = { ...booking, booking_details: { pnr: '2OY43E', tickets: [{ number: '220-7491175999' }] } };
+    const moved = { ...booking, booking_details: { pnr: 'AWMMUE' } };
+
+    const keys = [booking, ticketed, reissued, moved].map(bookedFeeTableKey);
+    expect(new Set(keys).size).toBe(4);
+    expect(bookedFeeTableKey({ ...booking, booking_details: { pnr: '2OY43E', tickets: [{ number: 'B' }, { number: 'A' }] } }))
+      .toBe(bookedFeeTableKey({ ...booking, booking_details: { pnr: '2OY43E', tickets: [{ number: 'A' }, { number: 'B' }] } }));
   });
 
   it('answers null, and caches nothing, when the airline does not answer', async () => {
