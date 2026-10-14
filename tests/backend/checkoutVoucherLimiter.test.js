@@ -99,3 +99,30 @@ describe('a checkout without a voucher code', () => {
     expect(checkout).toHaveBeenCalledTimes(4);
   });
 });
+
+// Express reads `?action[]=hosted-checkout` as a list. The limiters compare the
+// action to a string and let it by, while the handler lookup turned the list
+// back into 'hosted-checkout' and ran checkout, so every guess went unlimited.
+describe('an action that is not a single word', () => {
+  const send = (app, query) => request(app)
+    .post(`/api/payments?${query}`)
+    .set('X-Forwarded-For', '203.0.113.7')
+    .set('x-test-user', 'u1')
+    .send({ orderId: 'FLT1', bookingReference: 'FLT1', amount: 291, voucherCode: 'GUESS' });
+
+  it.each([
+    'action[]=hosted-checkout',
+    'action=hosted-checkout&action=hosted-checkout',
+    'action[x]=hosted-checkout',
+  ])('is refused before checkout runs: %s', async (query) => {
+    const app = await paymentApp();
+    for (let i = 0; i < 5; i += 1) expect((await send(app, query)).status).toBe(400);
+    expect(checkout).not.toHaveBeenCalled();
+  });
+
+  it('does not reach a property every object has', async () => {
+    const app = await paymentApp();
+    const res = await send(app, 'action=constructor').timeout(2000);
+    expect(res.status).toBe(400);
+  });
+});

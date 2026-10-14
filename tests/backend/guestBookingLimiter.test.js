@@ -216,6 +216,19 @@ describe('cancelling a guest booking with an email', () => {
     }
   });
 
+  // `?action[]=cancel-booking` used to skip the limit and still cancel.
+  it('refuses a cancel whose action is sent as a list, without reaching the cancel', async () => {
+    const app = await makePaymentApp();
+    for (let i = 0; i < 12; i += 1) {
+      const res = await request(app)
+        .post('/api/payments?action[]=cancel-booking')
+        .set('X-Forwarded-For', EDGE)
+        .send({ bookingReference: 'FLTGUEST1', email: `guess${i}@example.com` });
+      expect(res.status).toBe(400);
+    }
+    expect(cancel).not.toHaveBeenCalled();
+  });
+
   it('never throttles a failing checkout, which carries an email too', async () => {
     const app = await makePaymentApp();
     for (let i = 0; i < 15; i += 1) {
