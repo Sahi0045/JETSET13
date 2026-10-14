@@ -368,7 +368,7 @@ describe('a booking with a trip-reward voucher', () => {
     expect(res.body.success).toBe(true);
     expect(res.body.tripReward).toBeUndefined();
     expect(table.row(REF).booking_details.pnr).toBe('NEW999');
-    expect(table.row(REF).booking_details.wallet_issue).toMatchObject({ kind: 'voucher_refused', code: 'SHUBHAM', reason: 'VOUCHER_USED_UP' });
+    expect(table.row(REF).booking_details.voucher_issue).toMatchObject({ kind: 'voucher_refused', code: 'SHUBHAM', reason: 'VOUCHER_USED_UP' });
     expect(table.row(REF).booking_details.trip_reward).toBeUndefined();
     silence.mockRestore();
   });

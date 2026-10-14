@@ -33,7 +33,7 @@ import {
   HELD_REVIEW_REASON_PREFIXES, liveTicketNumbersMissingOf, unrecordedCancellationForCustomerOf,
   voidedTicketsOf, commitUnknownOf, SCHEDULE_CHANGED_REVIEW_REASON, isHeldForReview, ticketIssuedBeforeHoldOf,
   openFailedCancellationOf, ATTENTION_JOBS, cancellationRecordedByHandOf,
-  notHeldStillPaidOf, scheduleChangeOf, isWalletAttention,
+  notHeldStillPaidOf, scheduleChangeOf, isWalletAttention, walletIssueKeyOf,
 } from '../../shared/reviewQueue.js';
 import { errorSummary } from '../utils/errorSummary.js';
 import { flightSearchLimiter, guestBookingLimiter } from '../middleware/security.js';
@@ -206,7 +206,8 @@ const pauseFor = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
 /**
  * The trip-reward voucher checkout verified, reserved now the booking exists.
  * It changes no price, so a refusal never fails the booking: it is marked on
- * the booking, without covering a Jet Coins problem the desk still has to fix.
+ * the booking under `voucher_issue`, apart from `wallet_issue`, because a
+ * Jet Coins capture problem in the same key used to keep it off the desk.
  * A refusal by the voucher itself (VOUCHER_*) is the customer's answer; any
  * other reason means the reward could not be reserved right now: it is asked
  * twice more, then reported and left on the desk's queue (shared/reviewQueue.js).
@@ -223,10 +224,9 @@ export async function reserveTripRewardAfterBooking({ bookingReference, userId, 
     }
     try {
       const at = new Date().toISOString();
-      const written = await patchBookingDetails(bookingReference, (details) => (
-        details.wallet_issue && !details.wallet_issue.resolved_at && details.wallet_issue.kind !== 'voucher_refused'
-          ? {}
-          : { wallet_issue: { kind: 'voucher_refused', code: voucher.code, reason, at } }));
+      const written = await patchBookingDetails(bookingReference, () => ({
+        voucher_issue: { kind: 'voucher_refused', code: voucher.code, reason, at },
+      }));
       if (!written) {
         report(new Error('a refused trip-reward voucher could not be recorded on the booking'), { where: 'reserveTripRewardAfterBooking', bookingReference });
       }
@@ -262,7 +262,7 @@ export async function reserveTripRewardAfterBooking({ bookingReference, userId, 
   try {
     const written = await patchBookingDetails(bookingReference, (details) => ({
       trip_reward: { code: reserved.code, coins: reserved.coins, due_at: reserved.dueAt },
-      ...(details.wallet_issue?.kind === 'voucher_refused' && !details.wallet_issue.resolved_at ? { wallet_issue: null } : {}),
+      ...(details.voucher_issue && !details.voucher_issue.resolved_at ? { voucher_issue: null } : {}),
     }));
     if (!written) {
       report(new Error('a reserved trip reward could not be recorded on the booking'), { where: 'reserveTripRewardAfterBooking', bookingReference });
@@ -5769,6 +5769,7 @@ function normalizeBookingRow(b, holds = null) {
     walletCoinsReturned,
     walletCoinsOffer: coinsOfferedOn(d, walletCoins, walletHold, walletCoinsReturned),
     walletIssue: d.wallet_issue || null,
+    voucherIssue: d.voucher_issue || null,
     // The desk's own fields. The panel showed a "PNR:" line this row never
     // carried, and never showed why a booking was flagged or which tickets a
     // cancelled one still has to claim back - all of which Slack had named.
@@ -6375,18 +6376,19 @@ router.post('/admin-bookings/:id/resolve-review', protect, bookingStaff, async (
     // flag written here drives the needs-review alarm and the cancel rules,
     // and would leave the problem listed.
     if (isWalletAttention(attention)) {
+      const issueKey = walletIssueKeyOf(attention);
       const coinsWrite = unchangedSince(
         supabase
           .from('bookings')
           .update({
             booking_details: {
               ...details,
-              wallet_issue: { ...details.wallet_issue, resolved_at: at, resolvedBy: req.user?.id || by, resolution: note },
+              [issueKey]: { ...details[issueKey], resolved_at: at, resolvedBy: req.user?.id || by, resolution: note },
             },
             updated_at: at,
           })
           .eq('id', booking.id)
-          .is('booking_details->wallet_issue->>resolved_at', null),
+          .is(`booking_details->${issueKey}->>resolved_at`, null),
         booking,
       );
       const { data: written, error } = await pinResolution(coinsWrite, booking).select('id');

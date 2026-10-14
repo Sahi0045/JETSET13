@@ -16,7 +16,8 @@ const row = (details = {}, over = {}) => ({
 
 let table;
 let pause;
-const issueOnRow = () => table.row(REF).booking_details.wallet_issue;
+const issueOnRow = () => table.row(REF).booking_details.voucher_issue;
+const coinIssueOnRow = () => table.row(REF).booking_details.wallet_issue;
 const reserve = (over = {}, report = vi.fn()) => reserveTripRewardAfterBooking({
   bookingReference: REF, userId: 'user-1', verifiedCharge: { total: 291, voucher }, offer, ...over,
 }, { report, pause });
@@ -133,7 +134,7 @@ describe('reserving a trip reward once the booking exists', () => {
   });
 
   it('closes the open refusal an earlier try left once a later one reserves the reward', async () => {
-    table = fakeBookingsTable([row({ wallet_issue: { kind: 'voucher_refused', code: 'SHUBHAM', reason: 'WALLET_UNAVAILABLE', at: '2026-10-13T10:00:00.000Z' } })]);
+    table = fakeBookingsTable([row({ voucher_issue: { kind: 'voucher_refused', code: 'SHUBHAM', reason: 'WALLET_UNAVAILABLE', at: '2026-10-13T10:00:00.000Z' } })]);
     supabaseMock.from.mockImplementation(table.from);
     supabaseMock.rpc.mockResolvedValue(reservedReply);
 
@@ -151,18 +152,22 @@ describe('reserving a trip reward once the booking exists', () => {
 
     await reserve();
 
-    expect(issueOnRow()).toEqual(capture);
+    expect(coinIssueOnRow()).toEqual(capture);
   });
 
-  it('leaves an open Jet Coins problem on the booking in place', async () => {
+  // Both used to share `wallet_issue`, so an open capture problem kept the
+  // refusal off the booking, and with it off the desk's queue.
+  it('records the refusal beside an open Jet Coins problem, and leaves that problem in place', async () => {
     const silence = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.spyOn(console, 'error').mockImplementation(() => {});
     table = fakeBookingsTable([row({ wallet_issue: { kind: 'capture_failed', coins: 500, status: 'released', at: '2026-10-13T10:00:00.000Z' } })]);
     supabaseMock.from.mockImplementation(table.from);
-    supabaseMock.rpc.mockResolvedValue({ data: null, error: { message: 'VOUCHER_USED_UP' } });
+    supabaseMock.rpc.mockRejectedValue(new Error('connect ECONNREFUSED'));
 
     await reserve();
 
-    expect(issueOnRow()).toMatchObject({ kind: 'capture_failed', coins: 500 });
+    expect(coinIssueOnRow()).toMatchObject({ kind: 'capture_failed', coins: 500 });
+    expect(issueOnRow()).toMatchObject({ kind: 'voucher_refused', code: 'SHUBHAM', reason: 'WALLET_UNAVAILABLE' });
     silence.mockRestore();
   });
 
