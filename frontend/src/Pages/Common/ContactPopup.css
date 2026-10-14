@@ -36,6 +36,11 @@
   align-items: flex-end;
 }
 
+/* Set by an open date picker, which on a phone spans the corner these buttons sit in. */
+body.date-picker-open .contact-us-container {
+  visibility: hidden;
+}
+
 /* WhatsApp Button */
 .whatsapp-button {
   width: 50px;
