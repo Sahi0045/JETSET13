@@ -849,13 +849,13 @@ export const TRIP_REWARD_NOT_RECORDED = 'trip_reward_not_recorded';
 
 /**
  * A trip-reward voucher checkout accepted that the order route could not
- * reserve for a reason other than the voucher's own answer (VOUCHER_*): the
- * wallet was unreachable on every try, so no reward will be paid unless a
- * person records it. Not on a cancelled or refunded booking, which is owed no
+ * reserve (`booking_details.voucher_issue`) for a reason other than the
+ * voucher's own answer (VOUCHER_*): the wallet was unreachable on every try,
+ * so no reward will be paid unless a person records it. Not on a cancelled or refunded booking, which is owed no
  * reward. For the desk only, like coins that could not be returned.
  */
 function tripRewardNotRecordedAttentionOf(booking) {
-  const issue = detailsOf(booking)?.wallet_issue;
+  const issue = detailsOf(booking)?.voucher_issue;
   if (issue?.kind !== 'voucher_refused' || issue.resolved_at) return null;
   if (String(issue.reason ?? '').startsWith('VOUCHER_')) return null;
   if (['cancelled', 'refunded'].includes(statusOf(booking)) || ['refunded', 'reversed'].includes(paymentOf(booking))) return null;
@@ -880,8 +880,11 @@ export function attentionOf(booking) {
   return bookingAttentionOf(booking) ?? coinsNotReturnedAttentionOf(booking) ?? tripRewardNotRecordedAttentionOf(booking);
 }
 
-/** Kinds the desk lists that the needs-review alarm never announces, resolved on `wallet_issue`. */
+/** Kinds the desk lists that the needs-review alarm never announces, resolved on the problem itself. */
 export const isWalletAttention = (attention) => attention?.kind === COINS_NOT_RETURNED || attention?.kind === TRIP_REWARD_NOT_RECORDED;
+
+/** The `booking_details` key a wallet entry is recorded and resolved on. */
+export const walletIssueKeyOf = (attention) => (attention?.kind === TRIP_REWARD_NOT_RECORDED ? 'voucher_issue' : 'wallet_issue');
 
 function bookingAttentionOf(booking) {
   const details = detailsOf(booking);

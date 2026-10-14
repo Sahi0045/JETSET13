@@ -69,6 +69,11 @@ export default function CustomFlightCalendar({
         if (shift) setNudge(shift)
     }, [])
 
+    useEffect(() => {
+        document.body.classList.add('date-picker-open')
+        return () => document.body.classList.remove('date-picker-open')
+    }, [])
+
     const nextMonth = addMonths(currentMonth, 1)
 
     const today = getTodayDate()

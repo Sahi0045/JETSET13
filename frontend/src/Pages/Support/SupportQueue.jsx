@@ -503,11 +503,11 @@ function SupportQueue() {
                     {attention.tickets?.length ? ` — tickets ${attention.tickets.join(', ')}` : ''}
                   </p>
                 )}
-                {booking.walletIssue && (
-                  <p className="text-sm text-gray-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
-                    {walletIssueLine(booking.walletIssue)}
+                {[booking.walletIssue, booking.voucherIssue].filter(Boolean).map((issue) => (
+                  <p key={issue.kind} className="text-sm text-gray-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
+                    {walletIssueLine(issue)}
                   </p>
-                )}
+                ))}
                 {resolved && (
                   <p className="text-sm text-gray-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 mb-3">
                     {resolved.note} — {resolved.by} on {new Date(resolved.at).toLocaleString()}

@@ -383,14 +383,19 @@ const REWARDED_STATUSES = [...EARNING_STATUSES, 'completed'];
 
 const rewardLost = (row) => row.status === 'cancelled' || REVERSED_PAYMENTS.includes(String(row.payment_status || '').toLowerCase());
 
-/** What the payout does with a trip reward, from a fresh read of its booking. Pure. */
-export function tripRewardVerdict(row, now = Date.now()) {
+/**
+ * What the payout does with a trip reward, from a fresh read of its booking. Pure.
+ * It waits out the free window: a late same-day hop from Hawaii or Alaska,
+ * booked just after midnight Pacific, falls due before that window closes.
+ */
+export function tripRewardVerdict(row, now = Date.now(), timeZone = officeTimeZoneOf()) {
   if (!row) return 'wait';
   if (rewardLost(row)) return 'void';
   if (row.travel_type !== 'flight' || !REWARDED_STATUSES.includes(row.status)) return 'wait';
   if (!PAYING_PAYMENTS.includes(String(row.payment_status || '').toLowerCase())) return 'wait';
   const details = row.booking_details || {};
   if (!isTicketed(details) || liveChainState(details.gds_chain, now) === 'cancelling') return 'wait';
+  if (!windowClosed(row, now, timeZone)) return 'wait';
   return 'pay';
 }
 
@@ -431,6 +436,7 @@ const rewardDueAt = (row) => {
 export async function payTripRewardsOnce({
   client = supabase,
   now = Date.now(),
+  timeZone = officeTimeZoneOf(),
   pay = payTripVoucher,
   voidReward = voidTripReward,
   notify = sendTripRewardEmail,
@@ -479,7 +485,7 @@ export async function payTripRewardsOnce({
     if (attempts >= limit) break;
     handled.add(bookingReference);
     const { data: booking, error } = await client.from('bookings')
-      .select('booking_reference, user_id, travel_type, status, payment_status, booking_details')
+      .select('booking_reference, user_id, travel_type, status, payment_status, created_at, booking_details')
       .eq('booking_reference', bookingReference)
       .maybeSingle();
     if (error || !booking) {
@@ -487,7 +493,7 @@ export async function payTripRewardsOnce({
       warn('the booking behind a due trip reward could not be read', { bookingReference });
       continue;
     }
-    const verdict = tripRewardVerdict(booking, now);
+    const verdict = tripRewardVerdict(booking, now, timeZone);
     if (verdict === 'wait') {
       result.waiting += 1;
       continue;
@@ -564,7 +570,7 @@ export async function tickOnce(options = {}) {
     console.error('⚠️ Wallet hold sweep failed:', error.message);
   }
   try {
-    tick.rewards = await payTripRewardsOnce({ client, now, pay, voidReward, notify });
+    tick.rewards = await payTripRewardsOnce({ client, now, timeZone, pay, voidReward, notify });
   } catch (error) {
     console.error('⚠️ Trip reward payout failed:', error.message);
   }

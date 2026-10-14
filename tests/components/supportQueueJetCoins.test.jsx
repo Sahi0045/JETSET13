@@ -221,7 +221,7 @@ describe('a trip-reward voucher the booking could not reserve', () => {
   it('says so in words, not as a Jet Coins check', async () => {
     vi.stubGlobal('fetch', deskServing([booking({
       walletCoins: 0, walletCoinsOffer: 0,
-      walletIssue: { kind: 'voucher_refused', code: 'SHUBHAM', reason: 'VOUCHER_USED_UP', at: '2026-10-13T10:00:00Z' },
+      voucherIssue: { kind: 'voucher_refused', code: 'SHUBHAM', reason: 'VOUCHER_USED_UP', at: '2026-10-13T10:00:00Z' },
     })]));
     const { container } = renderQueue();
 
@@ -230,10 +230,22 @@ describe('a trip-reward voucher the booking could not reserve', () => {
     expect(container.textContent).not.toMatch(/Jet Coins: need a check/);
   });
 
+  it('shows it beside a Jet Coins problem on the same booking', async () => {
+    vi.stubGlobal('fetch', deskServing([booking({
+      walletCoins: 500, walletCoinsOffer: 0,
+      walletIssue: { kind: 'capture_failed', coins: 500, status: 'released' },
+      voucherIssue: { kind: 'voucher_refused', code: 'SHUBHAM', reason: 'WALLET_UNAVAILABLE', at: '2026-10-13T10:00:00Z' },
+    })]));
+    const { container } = renderQueue();
+
+    await waitFor(() => expect(container.textContent).toMatch(/Voucher SHUBHAM was not reserved \(WALLET_UNAVAILABLE\)/));
+    expect(container.textContent).toMatch(/Jet Coins: could not be captured \(500 coins\)/);
+  });
+
   it('says it was handled once the desk marked it', async () => {
     vi.stubGlobal('fetch', deskServing([booking({
       walletCoins: 0, walletCoinsOffer: 0,
-      walletIssue: { kind: 'voucher_refused', code: 'SHUBHAM', reason: 'WALLET_UNAVAILABLE', at: '2026-10-13T10:00:00Z', resolved_at: '2026-10-13T11:00:00Z' },
+      voucherIssue: { kind: 'voucher_refused', code: 'SHUBHAM', reason: 'WALLET_UNAVAILABLE', at: '2026-10-13T10:00:00Z', resolved_at: '2026-10-13T11:00:00Z' },
     })]));
     const { container } = renderQueue();
 

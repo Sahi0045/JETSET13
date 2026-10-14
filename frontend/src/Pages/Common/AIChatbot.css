@@ -5,6 +5,11 @@
   z-index: 999;
 }
 
+/* Set by an open date picker, which on a phone spans the corner this button sits in. */
+body.date-picker-open .ai-chatbot-container {
+  visibility: hidden;
+}
+
 .chat-toggle-button {
   width: 60px;
   height: 60px;

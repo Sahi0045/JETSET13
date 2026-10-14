@@ -91,6 +91,29 @@ const actionHandlers = {
 
 const SUPPORTED_ACTIONS = Object.keys(actionHandlers);
 
+// Express reads `?action[]=hosted-checkout` as a list, which the limiters below
+// compare as unequal while a property lookup turns it back into the string, so
+// a list skipped every limit. Only a single action that names a handler of our
+// own goes on (`constructor` is on every object).
+const requireKnownAction = (req, res, next) => {
+    const { action } = req.query;
+    if (!action) {
+        return res.status(400).json({
+            success: false,
+            error: 'Missing action parameter',
+            supportedActions: SUPPORTED_ACTIONS
+        });
+    }
+    if (typeof action !== 'string' || !Object.hasOwn(actionHandlers, action)) {
+        return res.status(400).json({
+            success: false,
+            error: `Unknown action: ${String(action).slice(0, 64)}`,
+            supportedActions: SUPPORTED_ACTIONS
+        });
+    }
+    return next();
+};
+
 // A guest booking is cancelled with the booker's email, so wrong guesses at it
 // are capped exactly as opening one is (security.js). Only for this action:
 // checkout and payment links carry an `email` too, and a payer whose checkout
@@ -110,25 +133,9 @@ const checkoutVoucherLimiter = (req, res, next) =>
 // `optionalProtect` so the signed-in user reaches the handlers: hosted checkout
 // creates the booking row, and a row created without a user is invisible in My
 // Trips forever. It never rejects, so guest checkout is unaffected.
-router.all('/', optionalProtect, guestCancelLimiter, checkoutVoucherLimiter, async (req, res) => {
+router.all('/', requireKnownAction, optionalProtect, guestCancelLimiter, checkoutVoucherLimiter, async (req, res) => {
     const { action } = req.query;
-
-    if (!action) {
-        return res.status(400).json({
-            success: false,
-            error: 'Missing action parameter',
-            supportedActions: SUPPORTED_ACTIONS
-        });
-    }
-
     const handler = actionHandlers[action];
-    if (!handler) {
-        return res.status(400).json({
-            success: false,
-            error: `Unknown action: ${action}`,
-            supportedActions: SUPPORTED_ACTIONS
-        });
-    }
 
     // Not the query: get-pending-booking carries the payer's resultIndicator in it.
     console.log(`📥 Payment API Action: ${action}`, { method: req.method });

@@ -57,7 +57,7 @@ describe('the booking confirmation email with a trip-reward voucher', () => {
   });
 
   it('says nothing about it when the voucher was refused at booking', () => {
-    const words = text(generateBookingConfirmationTemplate({ ...base, bookingDetails: { verified_charge: charge, wallet_issue: { kind: 'voucher_refused', code: 'SHUBHAM' } } }));
+    const words = text(generateBookingConfirmationTemplate({ ...base, bookingDetails: { verified_charge: charge, voucher_issue: { kind: 'voucher_refused', code: 'SHUBHAM' } } }));
     expect(words).not.toContain('Voucher SHUBHAM');
   });
 
