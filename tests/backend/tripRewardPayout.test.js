@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { payTripRewardsOnce, sendTripRewardEmail, tickOnce, tripRewardVerdict } from '../../backend/jobs/walletEarn.job.js';
+import { tripRewardDueAt } from '../../shared/bookingItineraries.js';
 
 const HOUR = 3600 * 1000;
 const NOW = Date.parse('2026-11-20T12:00:00Z');
@@ -12,6 +13,7 @@ const flown = (over = {}) => ({
   travel_type: 'flight',
   status: 'confirmed',
   payment_status: 'paid',
+  created_at: iso(NOW - 10 * 24 * HOUR),
   booking_details: { gds: { ticketed: true }, customer_email: 'booker@example.com', origin: 'JFK', destination: 'LHR' },
   ...over,
 });
@@ -74,6 +76,60 @@ const runWith = (client, extra = {}) => {
   const used = deps(extra);
   return { used, result: payTripRewardsOnce({ client, now: NOW, ...used }) };
 };
+
+/**
+ * The payout date is 00:00 UTC two days after the last flight's local date,
+ * and the free cancel lasts until midnight Pacific after booking. A short
+ * late-evening hop in Hawaii, booked just after midnight Pacific, fell due
+ * before its free window closed: paid out, then cancelled for the airline price.
+ */
+describe('a trip reward due while its booking can still be cancelled free', () => {
+  const ZONE = 'America/Los_Angeles';
+  const BOOKED = '2026-10-15T07:30:00Z';
+  const hop = [{ segments: [{ departureDate: '2026-10-14', departureTime: '22:30', arrivalDate: '2026-10-14', arrivalTime: '23:10' }] }];
+
+  it('falls due before that window closes, for a late hop from Honolulu booked at 00:30 Pacific', () => {
+    expect(tripRewardDueAt(hop)).toBe('2026-10-16T00:00:00.000Z');
+  });
+
+  it('waits until the window closes, then pays', () => {
+    const booking = flown({ created_at: BOOKED });
+    expect(tripRewardVerdict(booking, Date.parse('2026-10-16T00:00:00Z'), ZONE)).toBe('wait');
+    expect(tripRewardVerdict(booking, Date.parse('2026-10-16T06:59:00Z'), ZONE)).toBe('wait');
+    expect(tripRewardVerdict(booking, Date.parse('2026-10-16T07:00:00Z'), ZONE)).toBe('pay');
+  });
+
+  it('waits when it cannot tell when the booking was made, as earned coins do', () => {
+    expect(tripRewardVerdict(flown({ created_at: null }), NOW, ZONE)).toBe('wait');
+  });
+
+  it('still voids a cancelled booking inside the window', () => {
+    expect(tripRewardVerdict(flown({ created_at: BOOKED, status: 'cancelled' }), Date.parse('2026-10-16T00:00:00Z'), ZONE)).toBe('void');
+  });
+
+  it('leaves it pending in a payout run, and reads when the booking was made', async () => {
+    const selected = [];
+    const base = fakeClient({
+      voucher_redemptions: [reward({ due_at: '2026-10-16T00:00:00.000Z' })],
+      bookings: [flown({ created_at: BOOKED })],
+    });
+    const client = {
+      from(table) {
+        const query = base.from(table);
+        const select = query.select;
+        query.select = (columns) => { if (table === 'bookings') selected.push(columns); return select(columns); };
+        return query;
+      },
+    };
+    const used = deps();
+
+    const result = await payTripRewardsOnce({ client, now: Date.parse('2026-10-16T01:00:00Z'), timeZone: ZONE, ...used });
+
+    expect(used.pay).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ paid: 0, waiting: 1 });
+    expect(selected.some((columns) => /\bcreated_at\b/.test(columns))).toBe(true);
+  });
+});
 
 describe('what a due trip reward is worth on a fresh read of its booking', () => {
   it('pays a ticketed flight', () => {
