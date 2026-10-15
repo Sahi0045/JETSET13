@@ -27,6 +27,26 @@ describe('a search from the landing page', () => {
     expect(landing).not.toMatch(/No hidden fees/);
     expect(landing).toMatch(/Service fee shown before you pay/);
   });
+
+  // Nothing handles a price-match request: no rules, no form, no refund path.
+  it('promises no price match, and says how the ticket arrives', () => {
+    expect(landing).not.toMatch(/price match/i);
+    expect(landing).toMatch(/'E-ticket emailed in minutes'/);
+  });
+});
+
+// The home route renders this page, and its copy is repeated in the initial
+// HTML for crawlers.
+describe('the home page text Google reads', () => {
+  const seo = readFileSync(path.resolve(process.cwd(), 'frontend/src/seo/routeSeo.js'), 'utf8');
+  const home = seo.slice(seo.indexOf("'/': {"), seo.indexOf("'/cruise': {"));
+
+  it('makes the same promises as the page', () => {
+    expect(home).toMatch(/Our lowest fares to the world's most-loved places/);
+    expect(home).not.toMatch(/price match/i);
+    expect(home).not.toMatch(/no hidden fees/i);
+    expect(home).toMatch(/e-tickets emailed in minutes/);
+  });
 });
 
 describe('the date strip at phone width', () => {

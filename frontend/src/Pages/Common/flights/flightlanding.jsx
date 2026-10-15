@@ -262,7 +262,7 @@ function FlightLanding() {
               <ul className="space-y-3.5">
                 {/* This promised there were no fees to find, over search results
                     whose prices leave out the service fee added before payment. */}
-                {['Price match guarantee', 'Service fee shown before you pay', '24/7 customer support'].map((item) => (
+                {['E-ticket emailed in minutes', 'Service fee shown before you pay', '24/7 customer support'].map((item) => (
                   <li key={item} className="flex items-center text-ink/80">
                     <span className="flex-shrink-0 mr-3 flex h-6 w-6 items-center justify-center rounded-full bg-brand-teal/10 text-brand-teal">
                       <Check className="h-3.5 w-3.5" strokeWidth={3} />
