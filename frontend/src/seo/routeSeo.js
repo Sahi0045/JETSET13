@@ -84,7 +84,7 @@ export const ROUTE_SEO = {
         },
         {
           heading: "Our lowest fares to the world's most-loved places",
-          body: 'Take advantage of our special deals and promotions to get the best value for your travel budget — the most affordable flights, without compromising on quality, with a price match guarantee, no hidden fees, and 24/7 customer support.',
+          body: 'Take advantage of our special deals and promotions to get the best value for your travel budget — the most affordable flights, without compromising on quality: e-tickets emailed in minutes, the service fee shown before you pay, and 24/7 customer support.',
         },
       ],
     },
