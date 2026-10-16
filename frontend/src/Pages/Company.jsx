@@ -39,37 +39,6 @@ const Company = () => {
     }
   ];
 
-  const leadership = [
-    {
-      name: "Sarah Mitchell",
-      position: "Chief Executive Officer",
-      image: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=1200&q=80",
-      bio: "Sarah has over 20 years of experience in the travel industry and has been instrumental in Jetsetters's growth from startup to industry leader.",
-      linkedin: "#"
-    },
-    {
-      name: "Michael Chen",
-      position: "Chief Technology Officer",
-      image: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80",
-      bio: "Michael leads our technology innovation, ensuring we stay ahead of industry trends and provide cutting-edge travel solutions.",
-      linkedin: "#"
-    },
-    {
-      name: "Emily Rodriguez",
-      position: "Chief Customer Officer",
-      image: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80",
-      bio: "Emily ensures every customer interaction exceeds expectations, driving our commitment to exceptional service.",
-      linkedin: "#"
-    },
-    {
-      name: "David Thompson",
-      position: "Chief Financial Officer",
-      image: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80",
-      bio: "David manages our financial strategy and ensures sustainable growth while maintaining our commitment to customer value.",
-      linkedin: "#"
-    }
-  ];
-
   return (
     <>
       <Navbar forceScrolled={true} />
@@ -148,34 +117,6 @@ const Company = () => {
                   </div>
                   <h3 className="text-xl font-bold text-gray-900 mb-4">{value.title}</h3>
                   <p className="text-gray-600">{value.description}</p>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          {/* Leadership Team */}
-          <section className="mb-20">
-            <div className="text-center mb-12">
-              <h2 className="text-4xl font-bold text-gray-900 mb-4">Leadership Team</h2>
-              <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-                Meet the passionate leaders who drive our mission and vision forward
-              </p>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-              {leadership.map((leader, index) => (
-                <div key={index} className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300">
-                  <div className="h-48 overflow-hidden">
-                    <img 
-                      src={leader.image} 
-                      alt={leader.name}
-                      className="w-full h-full object-cover" loading="lazy" decoding="async" />
-                  </div>
-                  <div className="p-6 text-center">
-                    <h3 className="text-xl font-bold text-gray-900 mb-2">{leader.name}</h3>
-                    <p className="text-blue-600 font-medium mb-3">{leader.position}</p>
-                    <p className="text-gray-600 text-sm">{leader.bio}</p>
-                  </div>
                 </div>
               ))}
             </div>

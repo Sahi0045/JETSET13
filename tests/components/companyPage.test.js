@@ -41,6 +41,7 @@ describe('the About page makes no claims the company cannot back', () => {
     ['founding year', /2009|Founded in/],
     ['industry ranking', /top 10|industry leader/i],
     ['made-up milestones', /First Million|garage|carbon-neutral|AI-powered/i],
+    ['made-up leadership team', /Sarah Mitchell|Michael Chen|Emily Rodriguez|David Thompson|Leadership Team/],
   ])('no %s', (_, claim) => {
     expect(company).not.toMatch(claim);
   });
