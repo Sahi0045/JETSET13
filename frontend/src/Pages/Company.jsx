@@ -1,34 +1,11 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { FaGlobe, FaHeart, FaShieldAlt, FaUsers, FaRocket, FaAward, FaHandshake, FaLightbulb, FaChartLine, FaStar } from 'react-icons/fa';
+import { FaGlobe, FaHeart, FaShieldAlt, FaRocket, FaHandshake, FaLightbulb, FaChartLine, FaStar } from 'react-icons/fa';
 import Navbar from './Common/Navbar';
 import Footer from './Common/Footer';
 import Breadcrumb from '../components/Breadcrumb';
 
 const Company = () => {
-  const companyStats = [
-    {
-      number: "15+",
-      label: "Years of Experience",
-      icon: <FaAward className="text-3xl text-blue-600" />
-    },
-    {
-      number: "2M+",
-      label: "Happy Travelers",
-      icon: <FaUsers className="text-3xl text-green-600" />
-    },
-    {
-      number: "150+",
-      label: "Countries Served",
-      icon: <FaGlobe className="text-3xl text-purple-600" />
-    },
-    {
-      number: "4.9/5",
-      label: "Customer Rating",
-      icon: <FaStar className="text-3xl text-yellow-500" />
-    }
-  ];
-
   const values = [
     {
       title: "Customer First",
@@ -59,39 +36,6 @@ const Company = () => {
       title: "Growth",
       description: "We're committed to continuous improvement and growth, both as a company and in helping our customers grow through travel.",
       icon: <FaChartLine className="text-4xl text-orange-500" />
-    }
-  ];
-
-  const milestones = [
-    {
-      year: "2009",
-      title: "Company Founded",
-      description: "Jetsetters was born from a simple idea: making world-class travel accessible to everyone."
-    },
-    {
-      year: "2012",
-      title: "First Million Customers",
-      description: "Reached our first million happy travelers, proving the demand for quality travel experiences."
-    },
-    {
-      year: "2015",
-      title: "Global Expansion",
-      description: "Expanded operations to serve customers in over 50 countries worldwide."
-    },
-    {
-      year: "2018",
-      title: "Technology Innovation",
-      description: "Launched our AI-powered travel recommendation engine and mobile app."
-    },
-    {
-      year: "2021",
-      title: "Sustainability Initiative",
-      description: "Committed to carbon-neutral operations and sustainable travel partnerships."
-    },
-    {
-      year: "2024",
-      title: "Industry Leader",
-      description: "Recognized as one of the top 10 travel companies globally with over 2 million satisfied customers."
     }
   ];
 
@@ -143,40 +87,18 @@ const Company = () => {
         </section>
 
         <div className="container mx-auto px-4 py-16">
-          {/* Company Stats */}
-          <section className="mb-20">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-              {companyStats.map((stat, index) => (
-                <div key={index} className="text-center">
-                  <div className="mb-4">
-                    {stat.icon}
-                  </div>
-                  <div className="text-3xl font-bold text-gray-900 mb-2">{stat.number}</div>
-                  <div className="text-gray-600">{stat.label}</div>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          {/* Our Story */}
+          {/* Who We Are */}
           <section className="mb-20">
             <div className="max-w-4xl mx-auto text-center">
-              <h2 className="text-4xl font-bold text-gray-900 mb-8">Our Story</h2>
+              <h2 className="text-4xl font-bold text-gray-900 mb-8">Who We Are</h2>
               <div className="prose prose-lg mx-auto text-gray-600">
                 <p className="mb-6">
-                  Founded in 2009, Jetsetters began as a small team of passionate travelers with a big dream: 
-                  to democratize luxury travel and make extraordinary experiences accessible to everyone.
-                </p>
-                <p className="mb-6">
-                  What started as a simple booking platform has evolved into a comprehensive travel ecosystem 
-                  that serves millions of travelers worldwide. We've grown from a startup in a garage to an 
-                  industry leader, but our core mission remains the same: to inspire and enable people to 
-                  explore the world.
+                  Jetsetters Corporation is a travel agency based in Tracy, California. We book flights,
+                  cruises, holiday packages and visa services, and our team is a phone call or an email
+                  away when you need help.
                 </p>
                 <p>
-                  Today, we're proud to have helped over 2 million people create memories that last a lifetime, 
-                  and we're just getting started. Our journey continues as we innovate, expand, and find new 
-                  ways to make travel more accessible, sustainable, and extraordinary.
+                  Headquarters: 513 W Bonaventure Ave, Tracy, CA 95391, USA.
                 </p>
               </div>
             </div>
@@ -228,41 +150,6 @@ const Company = () => {
                   <p className="text-gray-600">{value.description}</p>
                 </div>
               ))}
-            </div>
-          </section>
-
-          {/* Company Timeline */}
-          <section className="mb-20">
-            <div className="text-center mb-12">
-              <h2 className="text-4xl font-bold text-gray-900 mb-4">Our Journey</h2>
-              <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-                Key milestones that have shaped our company's growth and success
-              </p>
-            </div>
-            
-            <div className="max-w-4xl mx-auto">
-              <div className="relative">
-                {/* Timeline Line */}
-                <div className="absolute left-1/2 transform -translate-x-px h-full w-0.5 bg-blue-200"></div>
-                
-                {milestones.map((milestone, index) => (
-                  <div key={index} className={`relative flex items-center mb-12 ${
-                    index % 2 === 0 ? 'flex-row' : 'flex-row-reverse'
-                  }`}>
-                    {/* Timeline Dot */}
-                    <div className="absolute left-1/2 transform -translate-x-1/2 w-4 h-4 bg-blue-600 rounded-full border-4 border-white shadow-lg"></div>
-                    
-                    {/* Content */}
-                    <div className={`w-5/12 ${index % 2 === 0 ? 'pr-8 text-right' : 'pl-8 text-left'}`}>
-                      <div className="bg-white rounded-lg shadow-md p-6">
-                        <div className="text-2xl font-bold text-blue-600 mb-2">{milestone.year}</div>
-                        <h3 className="text-xl font-bold text-gray-900 mb-2">{milestone.title}</h3>
-                        <p className="text-gray-600">{milestone.description}</p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
             </div>
           </section>
 
