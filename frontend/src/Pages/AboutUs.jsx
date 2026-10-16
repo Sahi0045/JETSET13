@@ -277,18 +277,19 @@ const AboutUs = () => {
           <div className="container mx-auto px-4">
             <div className="max-w-4xl mx-auto text-center mb-16">
               <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-6">
-                Our Offices Worldwide
+                Our Headquarters
               </h2>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-1 gap-8 max-w-2xl mx-auto">
               {[
-                { city: "New York", type: "Headquarters", country: "USA" }
+                { city: "Tracy, California", type: "Headquarters", address: "513 W Bonaventure Ave, Tracy, CA 95391", country: "USA" }
               ].map((office, index) => (
                 <div key={index} className="bg-white rounded-2xl p-8 border border-gray-200 hover:border-[#055B75] transition-all duration-300 hover:shadow-lg text-center">
                   <FaGlobe className="text-4xl text-[#055B75] mx-auto mb-4" />
                   <h3 className="text-xl font-bold text-gray-900 mb-2">{office.city}</h3>
                   <p className="text-gray-600 mb-1">{office.type}</p>
+                  <p className="text-gray-600 mb-1">{office.address}</p>
                   <p className="text-sm text-gray-500">{office.country}</p>
                 </div>
               ))}
