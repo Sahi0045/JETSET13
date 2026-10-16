@@ -6,13 +6,6 @@ import Footer from './Common/Footer';
 import Breadcrumb from '../components/Breadcrumb';
 
 const AboutUs = () => {
-  const stats = [
-    { number: "2009", label: "Company Founded" },
-    { number: "2M+", label: "Happy Travelers" },
-    { number: "150+", label: "Countries Served" },
-    { number: "500+", label: "Travel Experts" }
-  ];
-
   const coreValues = [
     {
       title: "Trust and Transparency",
@@ -111,16 +104,6 @@ const AboutUs = () => {
                 us together to share our joy (or order desserts guilt free).
               </p>
             </div>
-
-            {/* Stats Grid */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-8 max-w-5xl mx-auto">
-              {stats.map((stat, index) => (
-                <div key={index} className="text-center p-6 rounded-xl bg-gradient-to-br from-gray-50 to-white border border-gray-100">
-                  <div className="text-4xl md:text-5xl font-bold text-[#055B75] mb-2">{stat.number}</div>
-                  <div className="text-gray-600 font-medium">{stat.label}</div>
-                </div>
-              ))}
-            </div>
           </div>
         </section>
 
@@ -205,13 +188,12 @@ const AboutUs = () => {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
                 <div>
                   <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-6">
-                    Our Journey Since 2009
+                    Our Journey
                   </h2>
                   <div className="space-y-4 text-gray-600 text-lg leading-relaxed">
                     <p>
                       Jetsetters began with a simple vision: to make travel accessible, affordable,
-                      and extraordinary for everyone. What started as a small team of passionate travelers
-                      has grown into a global platform serving millions.
+                      and extraordinary for everyone.
                     </p>
                     <p>
                       We've built our reputation on trust, innovation, and an unwavering commitment to
@@ -219,9 +201,7 @@ const AboutUs = () => {
                       travel experience is seamless from start to finish.
                     </p>
                     <p>
-                      Today, we're proud to be recognized as one of the leading travel platforms globally,
-                      but we're just getting started. Our mission remains the same: to inspire and enable
-                      people to explore the world.
+                      Our mission is to inspire and enable people to explore the world.
                     </p>
                   </div>
                   <div className="mt-8">
@@ -277,18 +257,19 @@ const AboutUs = () => {
           <div className="container mx-auto px-4">
             <div className="max-w-4xl mx-auto text-center mb-16">
               <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-6">
-                Our Offices Worldwide
+                Our Headquarters
               </h2>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-1 gap-8 max-w-2xl mx-auto">
               {[
-                { city: "New York", type: "Headquarters", country: "USA" }
+                { city: "Tracy, California", type: "Headquarters", address: "513 W Bonaventure Ave, Tracy, CA 95391", country: "USA" }
               ].map((office, index) => (
                 <div key={index} className="bg-white rounded-2xl p-8 border border-gray-200 hover:border-[#055B75] transition-all duration-300 hover:shadow-lg text-center">
                   <FaGlobe className="text-4xl text-[#055B75] mx-auto mb-4" />
                   <h3 className="text-xl font-bold text-gray-900 mb-2">{office.city}</h3>
                   <p className="text-gray-600 mb-1">{office.type}</p>
+                  <p className="text-gray-600 mb-1">{office.address}</p>
                   <p className="text-sm text-gray-500">{office.country}</p>
                 </div>
               ))}
@@ -304,7 +285,7 @@ const AboutUs = () => {
                 Ready to Start Your Journey?
               </h2>
               <p className="text-xl mb-10 opacity-90">
-                Join millions of travelers who trust Jetsetters for their adventures
+                Plan your next trip with Jetsetters
               </p>
 
               <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
