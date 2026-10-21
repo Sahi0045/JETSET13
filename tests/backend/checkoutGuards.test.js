@@ -83,7 +83,7 @@ describe('the booking type', () => {
   });
 
   it('still opens a page for the products the site sells', async () => {
-    for (const bookingType of ['hotel', 'cruise', 'package']) {
+    for (const bookingType of ['hotel', 'package']) {
       db = fakeBookingsTable([]);
       axios.post.mockClear();
       const res = await checkout({ amount: '291.00', orderId: `ORD${bookingType}1`, bookingType, customerEmail: 'x@example.com' });
@@ -91,5 +91,20 @@ describe('the booking type', () => {
       expect(res.statusCode, bookingType).toBe(200);
       expect(openedSession(), bookingType).toBe(true);
     }
+  });
+
+  it('refuses a cruise: our team books cruises, so no page and no row', async () => {
+    db = fakeBookingsTable([]);
+    axios.post.mockClear();
+    const res = await checkout({ amount: '291.00', orderId: 'ORDcruise1', bookingType: 'cruise', customerEmail: 'x@example.com' });
+
+    expect(res.statusCode).toBe(410);
+    expect(res.body).toMatchObject({ success: false, code: 'CRUISE_BOOKED_BY_TEAM' });
+    expect(res.body.error).toContain('(877) 538-7380');
+    expect(res.body.error).toContain('support@jetsetterss.com');
+    expect(res.body.error).toContain('Nothing has been charged');
+    expect(res.body.message, 'the Android app shows message, not error').toBe(res.body.error);
+    expect(openedSession()).toBe(false);
+    expect(db.table).toEqual([]);
   });
 });

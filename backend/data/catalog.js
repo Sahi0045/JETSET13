@@ -18,7 +18,7 @@ import packagesRaw from './packages.data.js';
 
 // ── Cruises ──────────────────────────────────────────────────
 // Source shape (cruiselines.data.js): { cruiseLines: [{ id, name, image,
-// priceValue, duration, destinations[], departurePorts[], rating, ... }] }.
+// duration, destinations[], departurePorts[], ... }] }.
 // The mobile CruiseResultsScreen reads both camelCase and snake_case with
 // fallbacks, so we expose both to be safe.
 const cruiseLinesRaw = (cruiselines || {}).cruiseLines || [];
@@ -38,11 +38,6 @@ export const cruises = cruiseLinesRaw.map((c, i) => ({
   departure_date: c.departure_date || null,
   departureDate: c.departure_date || null,
   destinations: c.destinations || [],
-  price_per_person: c.priceValue,
-  priceValue: c.priceValue,
-  price: c.price,
-  rating: c.rating,
-  reviews: c.reviews,
   description: c.longDescription || c.description,
   amenities: c.amenities || [],
   cabin_types: c.cabin_types || [],

@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { loadCruiseLines } from './data/cruiselinesLoader';
-import { FaStar, FaShip } from 'react-icons/fa';
-import Price from '../../../Components/Price';
+import { FaShip } from 'react-icons/fa';
 
 // MMT-style "Our Featured Cruise Lines": white panel with cards that have a ship
 // photo, a circular cruise-line badge overlapping the image, name and price.
@@ -28,7 +27,7 @@ const CruiseLineSection = () => {
               Our Featured Cruise Lines
             </h2>
             <p className="text-slate-500 mt-1">
-              Authorized worldwide sellers for all major cruise liners
+              Cruise lines our team books, at today's price
             </p>
           </div>
 
@@ -54,18 +53,8 @@ const CruiseLineSection = () => {
                 </div>
 
                 <div className="pt-10 pb-6 px-5 text-center">
-                  <div className="flex items-center justify-center gap-1 mb-1.5">
-                    <FaStar className="text-[#F5B301] w-3.5 h-3.5" />
-                    <span className="text-sm font-semibold text-slate-600">5.0</span>
-                  </div>
                   <h4 className="text-lg font-bold text-[#034457]">{cruiseLine.name}</h4>
-                  <p className="text-sm text-slate-500 mt-1">
-                    Starting from{' '}
-                    <span className="font-semibold text-[#055B75]">
-                      <Price amount={String(cruiseLine.price).replace(/[^0-9.]/g, '')} />
-                    </span>{' '}
-                    per person
-                  </p>
+                  <p className="text-sm text-slate-500 mt-1">Ask for today's price</p>
                   <Link
                     to={`/cruises?cruiseLine=${encodeURIComponent(cruiseLine.name)}`}
                     className="mt-4 inline-flex items-center justify-center px-6 py-2.5 rounded-full bg-gradient-to-r from-[#055B75] to-[#0890BC] text-white text-sm font-semibold hover:from-[#034457] hover:to-[#055B75] transition-all shadow-sm hover:shadow-md"

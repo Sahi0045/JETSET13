@@ -96,24 +96,6 @@ export const ROUTE_SEO = {
       breadcrumb({ name: 'Cruises' }),
       {
         '@context': 'https://schema.org',
-        '@type': 'Product',
-        name: 'Cruise Vacations',
-        description: 'Unforgettable cruise vacations with trusted cruise lines, curated itineraries, and expert planning support.',
-        brand: { '@type': 'Brand', name: 'Jetsetters' },
-        url: `${SITE_URL}/cruise`,
-        image: `${SITE_URL}/images/logos/jetsetters_3d_logo_final.png`,
-        offers: {
-          '@type': 'AggregateOffer',
-          priceCurrency: 'USD',
-          lowPrice: '299',
-          highPrice: '4999',
-          offerCount: '30',
-          url: `${SITE_URL}/cruise`,
-        },
-        aggregateRating: { '@type': 'AggregateRating', ratingValue: 4.8, reviewCount: 1850 },
-      },
-      {
-        '@context': 'https://schema.org',
         '@type': 'FAQPage',
         mainEntity: [
           {

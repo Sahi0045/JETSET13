@@ -4,7 +4,7 @@ import './HeroSection.css';
 import { FaMapMarkerAlt, FaCalendarAlt, FaShip, FaAnchor, FaDollarSign, FaSearch, FaStar, FaArrowRight, FaChevronRight, FaAngleDown } from 'react-icons/fa';
 import { loadCruiseLines } from './data/cruiselinesLoader';
 import destinationsData from './data/destinations.json';
-import { Search, MapPin, DollarSign, ChevronDown, Anchor, Ship, Navigation, Star, Users, ShieldCheck } from 'lucide-react';
+import { Search, MapPin, DollarSign, ChevronDown, Anchor, Ship, Navigation } from 'lucide-react';
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { formatDateToISO } from "../../../utils/dateUtils";
@@ -430,18 +430,6 @@ const HeroSection = () => {
             </button>
           </form>
 
-          {/* Trust badges */}
-          <div className="hero-trust-badges">
-            <span className="hero-trust-badge">
-              <Star className="w-4 h-4 fill-current" /> 4.9/5 Guest Rating
-            </span>
-            <span className="hero-trust-badge">
-              <Users className="w-4 h-4" /> 25,000+ Happy Travelers
-            </span>
-            <span className="hero-trust-badge">
-              <ShieldCheck className="w-4 h-4" /> Best Price Guarantee
-            </span>
-          </div>
         </div>
       </div>
     </section>

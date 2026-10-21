@@ -264,7 +264,7 @@ export default function PaymentCallback() {
           // Navigate to appropriate confirmation pages
           const confirmationRoutes = {
             hotel: '/hotel-booking-success',
-            cruise: '/cruise-booking-success',
+            cruise: '/my-trips',
             package: '/package-booking-success'
           };
 

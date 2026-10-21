@@ -19,8 +19,6 @@ const importers = {
   '/cruise': () => import('../Pages/Common/cruise/Homepage'),
   '/cruises': () => import('../Pages/Common/cruise/cruise-cards'),
   '/itinerary': () => import('../Pages/Common/cruise/Itinerary'),
-  '/cruise/booking': () => import('../Pages/Common/cruise/CruiseBookingSummary'),
-  '/cruise/booking-success': () => import('../Pages/Common/cruise/CruiseBookingSuccess'),
 
   '/packages': () => import('../Pages/Common/packages/planding'),
   '/packages/itinerary': () => import('../Pages/Common/packages/itp'),

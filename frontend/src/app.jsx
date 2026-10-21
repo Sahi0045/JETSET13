@@ -78,11 +78,6 @@ const Error = React.lazy(() =>
 //   </div>
 // );
 
-// // Import CruiseBookingSummary component
-// const CruiseBookingSummary = React.lazy(() => 
-//   import('./Pages/Common/cruise/CruiseBookingSummary')
-//     .catch(() => ({ default: () => <div>Loading Booking Summary...</div> })));
-
 // // Import cruise-related pages with error handling
 // const CruiseCards = React.lazy(() => 
 //   import('./Pages/Common/cruise/cruise-cards')
@@ -324,19 +319,9 @@ const Itinerary = React.lazy(() =>
     .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Itinerary..." /> }))
 );
 
-const CruiseBookingSummary = React.lazy(() =>
-  import('./Pages/Common/cruise/CruiseBookingSummary')
-    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Booking Summary..." /> }))
-);
-
 const CruiseHomepage = React.lazy(() =>
   import('./Pages/Common/cruise/Homepage')
     .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Cruise Homepage..." /> }))
-);
-
-const CruiseBookingSuccess = React.lazy(() =>
-  import('./Pages/Common/cruise/CruiseBookingSuccess')
-    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Cruise Booked..." /> }))
 );
 
 const Flights = React.lazy(() =>
@@ -720,8 +705,8 @@ const App = () => {
           <Route path="/cruise" element={<CruiseHomepage />} />
           <Route path="/cruises" element={<CruiseCards />} />
           <Route path="/itinerary" element={<Itinerary />} />
-          <Route path="/cruise-booking-summary" element={<CruiseBookingSummary />} />
-          <Route path="/cruise-booking-success" element={<CruiseBookingSuccess />} />
+          <Route path="/cruise-booking-summary" element={<Navigate to="/cruises" replace />} />
+          <Route path="/cruise-booking-success" element={<Navigate to="/cruises" replace />} />
           <Route path="/flight" element={<Flights />} />
           <Route path="/flights" element={<FlightLanding />} />
           <Route path="/flights/search" element={<FlightSearchPage />} />
