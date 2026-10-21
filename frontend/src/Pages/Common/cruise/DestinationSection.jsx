@@ -1,13 +1,16 @@
-import React, { useRef } from 'react';
+import React, { useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import destinationsData from './data/destinations.json';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { SEA_PHOTO } from './catalog';
+import { regionCards } from './searchSailings';
+import { usePublishedSailings } from './useSailings';
 
 // Cruise destinations: a horizontally scrollable row of
 // destination cards with circular carousel arrows.
 const DestinationSection = () => {
   const scrollRef = useRef(null);
-  const destinations = destinationsData.destinations.slice(0, 10);
+  const { data: sailings = [] } = usePublishedSailings();
+  const destinations = useMemo(() => regionCards(sailings), [sailings]);
 
   const scrollBy = (dir) => {
     const el = scrollRef.current;
@@ -15,15 +18,17 @@ const DestinationSection = () => {
     el.scrollBy({ left: dir * Math.min(el.clientWidth * 0.8, 640), behavior: 'smooth' });
   };
 
+  if (!destinations.length) return null;
+
   return (
-    <section className="py-10 md:py-14 bg-[#F4F7F8]">
+    <section className="py-8 md:py-10 bg-[#F4F7F8]">
       <div className="max-w-7xl mx-auto px-4">
         <div className="flex items-end justify-between mb-6">
           <div>
             <h2 className="text-2xl md:text-3xl font-bold text-[#034457] tracking-tight">
               Cruise Destinations
             </h2>
-            <p className="text-slate-500 mt-1">Where the cruise lines we book sail</p>
+            <p className="text-slate-500 mt-1">Where our listed sailings go</p>
           </div>
           <div className="hidden sm:flex items-center gap-2">
             <button
@@ -49,25 +54,24 @@ const DestinationSection = () => {
         >
           {destinations.map((destination) => (
             <Link
-              key={destination.id}
-              to={`/cruises?destination=${encodeURIComponent(destination.name)}&country=${encodeURIComponent(destination.country)}`}
-              className="group relative flex-shrink-0 w-[260px] md:w-[300px] snap-start rounded-2xl overflow-hidden shadow-sm ring-1 ring-slate-100 bg-white hover:shadow-xl transition-all duration-300"
+              key={destination.key}
+              to={`/cruises?region=${encodeURIComponent(destination.key)}`}
+              className="group relative flex-shrink-0 w-[240px] md:w-[280px] snap-start rounded-2xl overflow-hidden shadow-sm ring-1 ring-slate-100 bg-white hover:shadow-xl transition-all duration-300"
             >
-              <div className="relative h-[300px] md:h-[340px] overflow-hidden">
-                <picture className="block h-full">
-                  <source srcSet={encodeURI(destination.image.replace(/\.png$/i, '.webp'))} type="image/webp" />
-                  <img
-                    loading="lazy"
-                    decoding="async"
-                    src={destination.image}
-                    alt={destination.name}
-                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                  />
-                </picture>
+              <div className="relative h-[260px] md:h-[300px] overflow-hidden">
+                <img
+                  loading="lazy"
+                  decoding="async"
+                  src={destination.photo?.url || SEA_PHOTO}
+                  alt=""
+                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                />
                 <div className="absolute inset-0 bg-gradient-to-t from-[#034457]/90 via-[#034457]/10 to-transparent"></div>
                 <div className="absolute bottom-0 left-0 right-0 p-4 text-white">
-                  <h4 className="text-lg font-bold leading-tight">{destination.name}</h4>
-                  <p className="text-sm text-white/85 mt-1">Ask for today's price</p>
+                  <h3 className="text-lg font-bold leading-tight">{destination.name}</h3>
+                  <p className="text-xs text-white/75 mt-0.5">{destination.count} {destination.count === 1 ? 'sailing' : 'sailings'}</p>
+                  <p className="text-sm font-semibold text-white mt-1">{destination.price.amount}</p>
+                  <p className="text-[11px] leading-snug text-white/70">{destination.price.note}</p>
                 </div>
               </div>
             </Link>
@@ -79,7 +83,7 @@ const DestinationSection = () => {
             to="/cruises"
             className="inline-flex items-center gap-2 px-7 py-3 rounded-full border border-[#055B75]/30 text-[#055B75] font-semibold hover:bg-[#055B75] hover:text-white transition-colors"
           >
-            View all destinations
+            See all sailings
             <ChevronRight className="w-4 h-4" />
           </Link>
         </div>
