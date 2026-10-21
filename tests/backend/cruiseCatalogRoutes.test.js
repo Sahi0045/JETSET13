@@ -90,6 +90,28 @@ describe('public reads', () => {
     expect(res.body.data[0].next_date).toBe('2098-06-01');
   });
 
+  it('lists every date still to come on each card, earliest first', async () => {
+    fakeDb({
+      cruise_sailings: {
+        data: [{ slug: 'new', title: 'New', region: 'caribbean', nights: 2, photos: [], dates: [{ sail_date: '2099-01-01' }, { sail_date: '2020-01-01' }, { sail_date: '2098-06-01' }], days: [], line: { name: 'X' } }],
+        error: null,
+      },
+    });
+    const res = await request(app).get('/api/cruise-catalog/sailings');
+    expect(res.body.data[0].dates).toEqual(['2098-06-01', '2099-01-01']);
+  });
+
+  it('answers 404 for a published sailing whose dates have all passed', async () => {
+    fakeDb({
+      cruise_sailings: {
+        data: { slug: 'old', title: 'Old', region: 'caribbean', nights: 2, photos: [], dates: [{ sail_date: '2020-01-01' }], days: [], line: { name: 'X' } },
+        error: null,
+      },
+    });
+    const res = await request(app).get('/api/cruise-catalog/sailings/old');
+    expect(res.status).toBe(404);
+  });
+
   it('counts regions with published sailings only where there are some', async () => {
     fakeDb({ cruise_sailings: { data: [{ region: 'alaska', dates: [{ sail_date: '2099-01-01' }] }, { region: 'alaska', dates: [{ sail_date: '2099-02-01' }] }], error: null } });
     const res = await request(app).get('/api/cruise-catalog/regions');
