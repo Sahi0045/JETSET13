@@ -24,6 +24,8 @@ import BulkActions from './BulkActions';
 import AnalyticsDashboard from './AnalyticsDashboard';
 import BulkUpload from './BulkUpload';
 import TemplateManager from './TemplateManager';
+import CruiseCatalog from './CruiseCatalog';
+import CruiseSailingEdit from './CruiseSailingEdit';
 
 const AdminPanel = () => {
   return (
@@ -37,6 +39,8 @@ const AdminPanel = () => {
         <Route path="feature-flags" element={<FeatureFlags />} />
         <Route path="price-settings" element={<PriceSettings />} />
         <Route path="bookings" element={<BookingsList />} />
+        <Route path="cruises" element={<CruiseCatalog />} />
+        <Route path="cruises/:id" element={<CruiseSailingEdit />} />
         <Route path="customers" element={<CustomersList />} />
         <Route path="payment-links" element={<PaymentLinksList />} />
         <Route path="payment-links/create" element={<PaymentLinkCreate />} />

@@ -24,6 +24,7 @@ import gdprRoutes from './routes/gdpr.routes.js';
 import savedTravellersRoutes from './routes/savedTravellers.routes.js';
 import walletRoutes from './routes/wallet.routes.js';
 import voucherRoutes from './routes/vouchers.routes.js';
+import cruiseCatalogRoutes from './routes/cruiseCatalog.routes.js';
 import adminRoutes from './routes/admin.routes.js';
 import currencyRoutes from './routes/currency.routes.js';
 import { checkQuoteExpirationHandler } from './jobs/checkQuoteExpiration.js';
@@ -194,6 +195,7 @@ app.use('/api/gdpr', gdprRoutes);
 app.use('/api/users/me/travellers', savedTravellersRoutes);
 app.use('/api/wallet', walletRoutes);
 app.use('/api/vouchers', voucherRoutes);
+app.use('/api/cruise-catalog', cruiseCatalogRoutes);
 
 
 // Direct send-email endpoint (must match api/index.js implementation)
