@@ -1,9 +1,7 @@
 import React, { useRef } from 'react';
 import { Link } from 'react-router-dom';
 import destinationsData from './data/destinations.json';
-import { FaStar } from 'react-icons/fa';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import Price from '../../../Components/Price';
 
 // MMT-style "Most-booked Cruise Destinations": a horizontally scrollable row of
 // destination cards with circular carousel arrows.
@@ -67,15 +65,9 @@ const DestinationSection = () => {
                   />
                 </picture>
                 <div className="absolute inset-0 bg-gradient-to-t from-[#034457]/90 via-[#034457]/10 to-transparent"></div>
-                <div className="absolute top-3 right-3 flex items-center gap-1 bg-white/95 backdrop-blur px-2.5 py-1 rounded-full text-xs font-bold text-[#034457] shadow-sm">
-                  <FaStar className="text-[#F5B301] w-3 h-3" />
-                  {destination.rating}
-                </div>
                 <div className="absolute bottom-0 left-0 right-0 p-4 text-white">
                   <h4 className="text-lg font-bold leading-tight">{destination.name}</h4>
-                  <p className="text-sm text-white/85 mt-1">
-                    Starting from <Price amount={destination.price} /> per person
-                  </p>
+                  <p className="text-sm text-white/85 mt-1">Ask for today's price</p>
                 </div>
               </div>
             </Link>

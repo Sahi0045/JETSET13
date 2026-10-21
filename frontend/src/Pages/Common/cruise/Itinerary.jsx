@@ -10,7 +10,6 @@ import Footer from '../Footer';
 import withPageElements from '../PageWrapper';
 import callbackService from '../../../Services/callbackService';
 import { loadCruiseLines } from './data/cruiselinesLoader';
-import Price from '../../../Components/Price';
 
 const HIGHLIGHTS = [
   { title: 'Ocean-view dining', image: 'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?q=80&w=800&auto=format&fit=crop' },
@@ -175,14 +174,11 @@ const Itinerary = () => {
     const destinations = Array.isArray(cruise.destinations) ? cruise.destinations : [];
     const ports = Array.isArray(cruise.departurePorts) ? cruise.departurePorts : [];
     const amenities = Array.isArray(cruise.amenities) ? cruise.amenities : [];
-    const price = Number(cruise.priceValue) || Number.parseFloat(String(cruise.price || '').replace(/[^0-9.]/g, '')) || 0;
     return {
-      ...cruise, days, destinations, ports, amenities, price,
+      ...cruise, days, destinations, ports, amenities,
       departure: ports[0] || days[0]?.port || 'Departure port varies',
       arrival: destinations[0] || days.at(-1)?.port || 'Itinerary varies',
       nights: getNights(cruise.duration),
-      reviewCount: typeof cruise.reviews === 'number' ? cruise.reviews : 0,
-      rating: Number(cruise.rating) || 4.8,
     };
   }, [cruise]);
 
@@ -228,13 +224,8 @@ const Itinerary = () => {
         <div className="absolute inset-0 bg-gradient-to-r from-[#034457]/95 via-[#034457]/60 to-[#055B75]/25" />
         <div className="relative mx-auto flex h-full max-w-6xl flex-col items-start justify-center px-4 sm:px-6 lg:px-8">
           <Link to="/cruises" className="mb-5 inline-flex w-fit items-center gap-2 text-sm font-medium text-white/85 hover:text-white"><ArrowLeft className="h-4 w-4" /> Back to results</Link>
-          <div className="inline-flex w-fit items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs font-semibold text-white ring-1 ring-white/25 backdrop-blur"><ShieldCheck className="h-3.5 w-3.5 text-[#9FD6E8]" /> Verified cruise partner</div>
           <h1 className="mt-3 text-4xl font-extrabold tracking-tight text-white md:text-5xl">{view.name}</h1>
           <p className="mt-2 max-w-xl text-sm text-white/85 md:text-base">{view.description || 'A memorable voyage with world-class dining, entertainment and destinations.'}</p>
-          <div className="mt-3 flex items-center gap-2 text-sm text-white">
-            <span className="flex items-center gap-1 rounded-full bg-white/15 px-2.5 py-1 backdrop-blur"><Star className="h-3.5 w-3.5 fill-[#F5B301] text-[#F5B301]" /> {view.rating.toFixed(1)}</span>
-            <span className="text-white/70">{view.reviewCount.toLocaleString()} reviews</span>
-          </div>
         </div>
       </section>
 
@@ -257,9 +248,9 @@ const Itinerary = () => {
               </div>
             </div>
             <div className="shrink-0 border-t border-slate-100 pt-5 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
-              <p className="text-xs font-bold uppercase tracking-wider text-slate-400">From</p>
-              <div className="text-3xl font-extrabold text-[#055B75]"><Price amount={view.price} showCode /></div>
-              <p className="mb-3 text-xs text-slate-500">per person</p>
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Price</p>
+              <div className="text-xl font-extrabold text-[#055B75]">Ask for today's price</div>
+              <p className="mb-3 text-xs text-slate-500">Our team quotes every sailing</p>
               <div className="flex gap-2">
                 <button onClick={() => setIsCallbackOpen(true)} className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#055B75]/30 px-4 py-2.5 text-sm font-bold text-[#055B75] hover:bg-[#F1FBFD]"><Phone className="h-4 w-4" /> Callback</button>
                 <a href="tel:+18775387380" className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#055B75] to-[#0890BC] px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:from-[#034457] hover:to-[#055B75]">Call (877) 538-7380</a>
@@ -347,48 +338,20 @@ const Itinerary = () => {
             </div>
           </section>
 
-          {/* Review */}
-          <section className="rounded-2xl bg-gradient-to-br from-[#034457] to-[#055B75] p-6 text-white shadow-sm md:p-8">
-            <div className="flex items-center justify-between gap-4">
-              <h2 className="text-xl font-bold">Why guests love this cruise</h2>
-              <div className="flex gap-1">{Array.from({ length: 5 }).map((_, i) => <Star key={i} className="h-4 w-4 fill-[#F5B301] text-[#F5B301]" />)}</div>
-            </div>
-            <blockquote className="mt-4 max-w-3xl leading-7 text-white/90">“An excellent mix of destinations, onboard entertainment and helpful service. Every port offered something memorable.”</blockquote>
-            <div className="mt-5 flex items-center gap-3">
-              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/15 ring-2 ring-white/25"><User className="h-5 w-5 text-white" /></span>
-              <div><p className="font-bold">Verified traveler</p><p className="text-xs text-white/65">Booked with Jetsetters</p></div>
-            </div>
-          </section>
         </main>
 
         {/* Sticky booking card */}
         <aside>
           <div className="sticky top-24 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-100">
             <div className="bg-gradient-to-r from-[#034457] to-[#055B75] p-5 text-white">
-              <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#9FD6E8]">Reserve your voyage</p>
-              <h2 className="mt-1 text-lg font-bold">Choose your sailing</h2>
+              <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#9FD6E8]">Booked by our team</p>
+              <h2 className="mt-1 text-lg font-bold">Ask about this cruise</h2>
             </div>
             <div className="space-y-4 p-5">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-wider text-slate-400">From</p>
-                <div className="text-3xl font-extrabold text-[#055B75]"><Price amount={view.price} showCode /></div>
-                <p className="text-xs text-slate-500">per person · double occupancy</p>
-              </div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">Cabin type
-                <select className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold normal-case text-[#034457] outline-none focus:border-[#0890BC]">
-                  <option>Inside cabin</option><option>Ocean view</option><option>Balcony</option><option>Suite</option>
-                </select>
-              </label>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">Travelers
-                <select className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold normal-case text-[#034457] outline-none focus:border-[#0890BC]">
-                  <option>2 adults</option><option>1 adult</option><option>2 adults, 1 child</option><option>2 adults, 2 children</option>
-                </select>
-              </label>
+              <p className="text-sm leading-6 text-slate-600">Tell us your dates, cabin and who's travelling. We'll check today's price with the cruise line and send you a quote.</p>
               <a href={inquiryMail} className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#055B75] to-[#0890BC] px-5 py-3 font-bold text-white shadow-sm hover:from-[#034457] hover:to-[#055B75]"><Ship className="h-4 w-4" /> Email us about this cruise</a>
               <button onClick={() => setIsCallbackOpen(true)} className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#055B75]/25 px-5 py-2.5 font-bold text-[#055B75] hover:bg-[#F1FBFD]"><Phone className="h-4 w-4" /> Request call back</button>
               <div className="space-y-2 border-t border-slate-100 pt-4 text-xs text-slate-600">
-                <p className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-emerald-600" /> Secure checkout with ARC Pay</p>
-                <p className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-600" /> Authorized cruise seller</p>
                 <p className="flex items-center gap-2"><Phone className="h-4 w-4 text-[#0890BC]" /> Expert support before &amp; after booking</p>
               </div>
             </div>

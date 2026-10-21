@@ -1,33 +1,15 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import {
-  FaMapMarkerAlt, FaCalendarAlt, FaArrowLeft, FaShip, FaSearch, FaSpinner,
-  FaExclamationTriangle, FaAnchor, FaChevronRight, FaChevronDown, FaChevronUp,
-  FaSlidersH, FaRegClock, FaTags, FaGift, FaFileInvoiceDollar,
+  FaMapMarkerAlt, FaCalendarAlt, FaArrowLeft, FaShip, FaSearch, FaSpinner, FaExclamationTriangle, FaAnchor, FaChevronRight, FaChevronDown, FaChevronUp, FaSlidersH, FaRegClock,
 } from 'react-icons/fa';
 import { loadCruiseLines } from './data/cruiselinesLoader';
 import './HeroSection.css';
 import Navbar from '../Navbar';
 import Footer from '../Footer';
 import withPageElements from '../PageWrapper';
-import Price from '../../../Components/Price';
 import { useCruiseList } from '../../../hooks/queries';
 
-// Representative cabin-type multipliers applied to the per-person "from" price.
-// The API returns a single starting price; cabin-level rates are finalised on the
-// itinerary/booking page. These give the MMT-style rate table a realistic spread.
-const CABIN_TYPES = [
-  { key: 'INSIDE', mult: 1 },
-  { key: 'OUTSIDE', mult: 1.28 },
-  { key: 'BALCONY', mult: 1.7 },
-  { key: 'SUITE', mult: 3.0 },
-];
-
-const toNumber = (v) => {
-  if (typeof v === 'number') return v;
-  const n = parseFloat(String(v || '').replace(/[^0-9.]/g, ''));
-  return Number.isFinite(n) ? n : 0;
-};
 const parseNights = (duration) => {
   const n = parseInt(String(duration || '').replace(/[^0-9]/g, ''), 10);
   return Number.isFinite(n) && n > 0 ? n : null;
@@ -90,8 +72,6 @@ const CruiseCards = () => {
       description: cruise.name || cruise.description,
       destinations: cruise.destinations || [],
       departurePorts: cruise.departure_port ? [cruise.departure_port] : (cruise.departurePorts || []),
-      price: cruise.price_per_person || cruise.price,
-      priceValue: cruise.price_per_person || cruise.priceValue || cruise.price,
       departureDate: cruise.departure_date || cruise.departureDate,
     }));
   }, [apiCruises]);
@@ -103,7 +83,6 @@ const CruiseCards = () => {
         ...c,
         destinations: c.destinations || [],
         departurePorts: c.departurePorts || [],
-        priceValue: c.price,
       }))));
     }
   }, [isError, fallbackCruises.length]);
@@ -116,8 +95,7 @@ const CruiseCards = () => {
   const [selectedDestinations, setSelectedDestinations] = useState(new Set(destinationParam ? [destinationParam] : []));
   const [selectedPorts, setSelectedPorts] = useState(new Set());
   const [durationBuckets, setDurationBuckets] = useState(new Set());
-  const [maxPrice, setMaxPrice] = useState(0);
-  const [sortBy, setSortBy] = useState('price');
+  const [sortBy, setSortBy] = useState('name');
 
   const toggleInSet = (setter) => (val) =>
     setter((prev) => {
@@ -128,24 +106,20 @@ const CruiseCards = () => {
   const setSingle = (setter) => (val) => setter(val ? new Set([val]) : new Set());
 
   /* ---------- Derive filter options from data ---------- */
-  const { lineOptions, destinationOptions, portOptions, priceCeiling } = useMemo(() => {
+  const { lineOptions, destinationOptions, portOptions } = useMemo(() => {
     const lines = new Set(), dests = new Set(), ports = new Set();
-    let ceiling = 0;
     allCruises.forEach((c) => {
       if (c.name) lines.add(c.name);
       (c.destinations || []).forEach((d) => dests.add(d));
       (c.departurePorts || []).forEach((p) => ports.add(p));
-      ceiling = Math.max(ceiling, toNumber(c.priceValue));
     });
     return {
       lineOptions: [...lines].sort(),
       destinationOptions: [...dests].sort(),
       portOptions: [...ports].sort(),
-      priceCeiling: Math.ceil(ceiling) || 5000,
     };
   }, [allCruises]);
 
-  useEffect(() => { if (priceCeiling && maxPrice === 0) setMaxPrice(priceCeiling); }, [priceCeiling]);
 
   const DURATION_BUCKETS = [
     { key: '2-5', label: '2 – 5 Nights', test: (n) => n >= 2 && n <= 5 },
@@ -164,16 +138,14 @@ const CruiseCards = () => {
         const ok = n != null && [...durationBuckets].some((k) => DURATION_BUCKETS.find((b) => b.key === k)?.test(n));
         if (!ok) return false;
       }
-      if (maxPrice && toNumber(c.priceValue) > maxPrice) return false;
       return true;
     });
     out = [...out].sort((a, b) => {
-      if (sortBy === 'price') return toNumber(a.priceValue) - toNumber(b.priceValue);
       if (sortBy === 'duration') return (parseNights(a.duration) || 0) - (parseNights(b.duration) || 0);
       return String(a.name).localeCompare(String(b.name));
     });
     return out;
-  }, [allCruises, selectedLines, selectedDestinations, selectedPorts, durationBuckets, maxPrice, sortBy]);
+  }, [allCruises, selectedLines, selectedDestinations, selectedPorts, durationBuckets, sortBy]);
 
   const totalSailings = useMemo(
     () => filteredCruises.reduce((sum, c) => sum + Math.max(1, (c.departurePorts || []).length) * 3, 0),
@@ -185,7 +157,6 @@ const CruiseCards = () => {
     setSelectedDestinations(new Set());
     setSelectedPorts(new Set());
     setDurationBuckets(new Set());
-    setMaxPrice(priceCeiling);
   };
 
   const isLoading = apiLoading && !usingFallback;
@@ -255,15 +226,6 @@ const CruiseCards = () => {
               <button onClick={clearAll} className="text-xs text-white/80 hover:text-white underline">Clear</button>
             </div>
             <div className="px-5">
-              <FilterGroup title="Price Per Person" icon={FaTags} defaultOpen>
-                <div className="pt-1">
-                  <input type="range" min={0} max={priceCeiling} value={maxPrice} onChange={(e) => setMaxPrice(Number(e.target.value))} className="w-full accent-[#055B75]" />
-                  <div className="flex justify-between text-xs text-slate-500 mt-1">
-                    <span>Up to</span>
-                    <span className="font-semibold text-[#055B75]"><Price amount={maxPrice} /></span>
-                  </div>
-                </div>
-              </FilterGroup>
               <FilterGroup title="Duration" icon={FaRegClock}>
                 <div className="space-y-2">
                   {DURATION_BUCKETS.map((b) => (
@@ -296,7 +258,6 @@ const CruiseCards = () => {
             <div className="flex items-center gap-2">
               <span className="text-sm text-slate-500">Sort by</span>
               <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="text-sm font-semibold text-[#034457] border border-slate-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#0890BC]">
-                <option value="price">Price</option>
                 <option value="duration">Duration</option>
                 <option value="name">Cruise Line</option>
               </select>
@@ -350,7 +311,6 @@ const SearchField = ({ label, children, className = '' }) => (
 /* ---------- Single MMT-style result row ---------- */
 const CruiseResultRow = ({ cruise }) => {
   const nights = parseNights(cruise.duration);
-  const base = toNumber(cruise.priceValue);
   const dests = cruise.destinations || [];
   const ports = cruise.departurePorts || [];
   const from = ports[0] || dests[0] || 'Departure';
@@ -366,7 +326,7 @@ const CruiseResultRow = ({ cruise }) => {
         {nights && <span className="hidden sm:inline text-xs text-slate-400 whitespace-nowrap">{nights} Night {primaryDest} Cruise</span>}
       </div>
 
-      {/* Middle: image + details + rate table */}
+      {/* Middle: image + details + price note */}
       <div className="flex flex-col lg:flex-row gap-4 p-5">
         <div className="lg:w-56 flex-shrink-0">
           <div className="relative h-40 lg:h-full rounded-xl overflow-hidden">
@@ -398,38 +358,14 @@ const CruiseResultRow = ({ cruise }) => {
           </div>
         </div>
 
-        {/* Rate table */}
-        <div className="lg:w-64 flex-shrink-0 flex flex-col">
-          <div className="border border-slate-200 rounded-xl overflow-hidden">
-            <div className="px-3 py-1.5 bg-[#F1FBFD] text-[11px] font-bold uppercase tracking-wider text-[#055B75] border-b border-slate-200">Lowest Rate</div>
-            <div className="divide-y divide-slate-100">
-              {CABIN_TYPES.map(({ key, mult }) => (
-                <div key={key} className="flex items-center justify-between px-3 py-1.5 text-sm">
-                  <span className="text-slate-500">{key}</span>
-                  <span className="font-semibold text-[#034457]">
-                    {base ? <Price amount={Math.round(base * mult)} /> : '—'}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="text-right mt-2">
-            <div className="text-[11px] text-slate-400">From</div>
-            <div className="text-xl font-bold text-[#055B75] leading-none">
-              {base ? <Price amount={base} showCode={true} /> : 'Call for price'}
-            </div>
-            <div className="text-[11px] text-slate-400 mt-0.5">per person · excl. taxes &amp; fees</div>
-          </div>
+        <div className="lg:w-64 flex-shrink-0 flex flex-col justify-center text-right">
+          <div className="text-base font-bold text-[#055B75]">Ask for today's price</div>
+          <div className="text-[11px] text-slate-400 mt-0.5">Our team quotes every sailing</div>
         </div>
       </div>
 
       {/* Bottom offer strip */}
-      <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 border-t border-slate-100 bg-[#FAFDFE]">
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-xs text-slate-600">
-          <span className="inline-flex items-center gap-1.5"><FaGift className="text-[#0890BC]" /> Buy One Get One Offer</span>
-          <span className="inline-flex items-center gap-1.5"><FaTags className="text-[#0890BC]" /> Special Promotions</span>
-          <span className="inline-flex items-center gap-1.5"><FaFileInvoiceDollar className="text-[#0890BC]" /> Non Refundable Deposit</span>
-        </div>
+      <div className="flex flex-wrap items-center justify-end gap-3 px-5 py-3 border-t border-slate-100 bg-[#FAFDFE]">
         <Link
           to={`/itinerary?cruiseId=${cruise.id}`}
           className="inline-flex items-center gap-2 bg-gradient-to-r from-[#055B75] to-[#0890BC] hover:from-[#034457] hover:to-[#055B75] text-white px-5 py-2 rounded-lg text-sm font-semibold transition-all shadow-sm hover:shadow-md whitespace-nowrap"

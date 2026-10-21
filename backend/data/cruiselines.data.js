@@ -8,13 +8,9 @@ export default {
       "name": "Royal Caribbean",
       "logo": "/cruise/logos/royal-caribbean.png",
       "image": "https://images.unsplash.com/photo-1548574505-5e239809ee19?w=800&q=80",
-      "price": "From $69",
-      "priceValue": 69,
       "duration": "7 Nights",
       "description": "Caribbean & Bahamas Cruises",
       "longDescription": "Experience the perfect blend of adventure and relaxation aboard Royal Caribbean's innovative ships, featuring thrilling activities, world-class entertainment, and delicious dining options.",
-      "rating": 4.7,
-      "reviews": 3245,
       "destinations": [
         "Caribbean",
         "Bahamas",
@@ -46,18 +42,6 @@ export default {
         "Adult-Only Areas"
       ],
       "popular": true,
-      "promos": [
-        {
-          "title": "Summer Sale",
-          "description": "Save up to 30% on summer bookings",
-          "expiryDate": "2023-08-31"
-        },
-        {
-          "title": "Kids Sail Free",
-          "description": "Children under 12 sail free on select sailings",
-          "expiryDate": "2023-09-15"
-        }
-      ],
       "ships": [
         "Wonder of the Seas",
         "Symphony of the Seas",
@@ -121,13 +105,9 @@ export default {
       "name": "Norwegian Cruise Line",
       "logo": "/cruise/logos/norwegian.png",
       "image": "https://images.unsplash.com/photo-1599640842225-85d111c60e6b?w=800&q=80",
-      "price": "From $70",
-      "priceValue": 70,
       "duration": "5 Nights",
       "description": "Mediterranean & European Cruises",
       "longDescription": "Enjoy the freedom and flexibility of Freestyle Cruising with Norwegian Cruise Line, where you can dine when you want, wear what you want, and enjoy a variety of activities at your own pace.",
-      "rating": 4.5,
-      "reviews": 2876,
       "destinations": [
         "Mediterranean",
         "Europe",
@@ -159,18 +139,6 @@ export default {
         "Specialty Restaurants"
       ],
       "popular": true,
-      "promos": [
-        {
-          "title": "Free at Sea",
-          "description": "Choose up to 5 free offers including open bar and specialty dining",
-          "expiryDate": "2023-12-31"
-        },
-        {
-          "title": "Take All 5",
-          "description": "Get all 5 Free at Sea offers when booking a balcony or higher",
-          "expiryDate": "2023-07-31"
-        }
-      ],
       "ships": [
         "Norwegian Prima",
         "Norwegian Encore",
@@ -234,13 +202,9 @@ export default {
       "name": "Celebrity Cruises",
       "logo": "/cruise/logos/celebrity.png",
       "image": "https://images.unsplash.com/photo-1436491865332-7a61a109cc05?w=800&q=80",
-      "price": "From $71",
-      "priceValue": 71,
       "duration": "10 Nights",
       "description": "Luxury Worldwide Cruises",
       "longDescription": "Sail in modern luxury with Celebrity Cruises, featuring stunning design, globally-inspired cuisine, and immersive destination experiences for the discerning traveler.",
-      "rating": 4.8,
-      "reviews": 1853,
       "destinations": [
         "Europe",
         "Alaska",
@@ -272,18 +236,6 @@ export default {
         "Exclusive Lounges"
       ],
       "popular": true,
-      "promos": [
-        {
-          "title": "Sail Your Way",
-          "description": "Choose from drinks, Wi-Fi, onboard credit, or gratuities included",
-          "expiryDate": "2023-10-31"
-        },
-        {
-          "title": "Cruise with Confidence",
-          "description": "Flexible cancellation policy for peace of mind",
-          "expiryDate": "2023-12-31"
-        }
-      ],
       "ships": [
         "Celebrity Edge",
         "Celebrity Apex",
@@ -297,13 +249,9 @@ export default {
       "name": "Disney Cruise Line",
       "logo": "/cruise/logos/disney.png",
       "image": "https://images.unsplash.com/photo-1580541631950-7282082b53ce?w=800&q=80",
-      "price": "From $72",
-      "priceValue": 72,
       "duration": "4 Nights",
       "description": "Family-Friendly Magic at Sea",
       "longDescription": "Create magical memories with Disney Cruise Line, featuring Disney characters, Broadway-quality shows, immersive kids clubs, and exclusive adult areas for the perfect family vacation.",
-      "rating": 4.9,
-      "reviews": 2450,
       "destinations": [
         "Caribbean",
         "Mediterranean",
@@ -335,18 +283,6 @@ export default {
         "Fireworks at Sea"
       ],
       "popular": true,
-      "promos": [
-        {
-          "title": "Military Discount",
-          "description": "Special rates for active and retired military personnel",
-          "expiryDate": "2023-12-31"
-        },
-        {
-          "title": "Disney Visa Cardmember Offer",
-          "description": "Special onboard credit for Disney Visa cardholders",
-          "expiryDate": "2023-09-30"
-        }
-      ],
       "ships": [
         "Disney Wish",
         "Disney Dream",
@@ -360,13 +296,9 @@ export default {
       "name": "Princess Cruises",
       "logo": "/cruise/logos/princess.png",
       "image": "https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=800&q=80",
-      "price": "From $73",
-      "priceValue": 73,
       "duration": "7 Nights",
       "description": "Worldwide Destination Cruises",
       "longDescription": "Come back new with Princess Cruises, offering destination-focused itineraries, immersive cultural experiences, and the innovative OceanMedallion technology for a personalized cruise vacation.",
-      "rating": 4.6,
-      "reviews": 2187,
       "destinations": [
         "Alaska",
         "Caribbean",
@@ -398,18 +330,6 @@ export default {
         "Chocolate Journeys"
       ],
       "popular": false,
-      "promos": [
-        {
-          "title": "Princess Plus",
-          "description": "Drinks, Wi-Fi and crew appreciation included",
-          "expiryDate": "2023-09-30"
-        },
-        {
-          "title": "3 for Free",
-          "description": "Free stateroom location upgrade, wine and specialty dining",
-          "expiryDate": "2023-08-15"
-        }
-      ],
       "ships": [
         "Discovery Princess",
         "Enchanted Princess",
@@ -423,13 +343,9 @@ export default {
       "name": "MSC Cruises",
       "logo": "/cruise/logos/msc.png",
       "image": "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&q=80",
-      "price": "From $74",
-      "priceValue": 74,
       "duration": "7 Nights",
       "description": "European Style Cruising",
       "longDescription": "Experience European elegance and international ambiance aboard MSC Cruises, featuring Mediterranean-inspired cuisine, world-class entertainment, and modern ships with impressive amenities.",
-      "rating": 4.3,
-      "reviews": 1659,
       "destinations": [
         "Mediterranean",
         "Caribbean",
@@ -461,18 +377,6 @@ export default {
         "Kids Clubs"
       ],
       "popular": false,
-      "promos": [
-        {
-          "title": "Kids Sail Free",
-          "description": "Children 11 and under sail free on select sailings",
-          "expiryDate": "2023-11-30"
-        },
-        {
-          "title": "Drinks On Us",
-          "description": "Free drinks package on select bookings",
-          "expiryDate": "2023-07-31"
-        }
-      ],
       "ships": [
         "MSC Seashore",
         "MSC Virtuosa",
@@ -486,13 +390,9 @@ export default {
       "name": "Carnival Cruise Line",
       "logo": "/cruise/logos/carnival.png",
       "image": "https://images.unsplash.com/photo-1540541338287-41700207dee6?w=800&q=80",
-      "price": "From $75",
-      "priceValue": 75,
       "duration": "5 Nights",
       "description": "Fun for All Ages",
       "longDescription": "Choose fun with Carnival Cruise Line, offering casual, family-friendly cruising with lively atmospheres, entertaining activities, casual dining options, and affordable vacation experiences.",
-      "rating": 4.4,
-      "reviews": 3578,
       "destinations": [
         "Caribbean",
         "Mexico",
@@ -524,18 +424,6 @@ export default {
         "Sports Square"
       ],
       "popular": true,
-      "promos": [
-        {
-          "title": "Early Saver",
-          "description": "Book early and save with price protection",
-          "expiryDate": "2023-08-31"
-        },
-        {
-          "title": "Casino Offers",
-          "description": "Special rates for Carnival Players Club members",
-          "expiryDate": "2023-12-31"
-        }
-      ],
       "ships": [
         "Mardi Gras",
         "Carnival Celebration",
@@ -549,13 +437,9 @@ export default {
       "name": "Holland America Line",
       "logo": "/cruise/logos/holland-america.png",
       "image": "https://images.unsplash.com/photo-1559827260-dc66d52bef19?w=800&q=80",
-      "price": "From $76",
-      "priceValue": 76,
       "duration": "10 Nights",
       "description": "Premium Cruise Experience",
       "longDescription": "Sail with sophistication on Holland America Line, known for spacious ships, impeccable service, enriching activities, and immersive destination programming for a refined cruise experience.",
-      "rating": 4.5,
-      "reviews": 1432,
       "destinations": [
         "Alaska",
         "Europe",
@@ -587,18 +471,6 @@ export default {
         "Explorations Café"
       ],
       "popular": false,
-      "promos": [
-        {
-          "title": "Have It All",
-          "description": "Shore excursions, beverage package, specialty dining and Wi-Fi included",
-          "expiryDate": "2023-09-30"
-        },
-        {
-          "title": "Pack & Go",
-          "description": "Special last-minute savings on select sailings",
-          "expiryDate": "2023-07-15"
-        }
-      ],
       "ships": [
         "Rotterdam",
         "Nieuw Statendam",
@@ -612,13 +484,9 @@ export default {
       "name": "Azamara Club Cruises",
       "logo": "/cruise/logos/azamara.png",
       "image": "https://images.unsplash.com/photo-1520483601560-389dff434fdf?w=800&q=80",
-      "price": "From $77",
-      "priceValue": 77,
       "duration": "12 Nights",
       "description": "Boutique Luxury Cruising",
       "longDescription": "Discover the world with Azamara's destination-focused cruising, featuring longer stays, more overnights, immersive land programs, and inclusive amenities for a truly immersive travel experience.",
-      "rating": 4.7,
-      "reviews": 986,
       "destinations": [
         "Mediterranean",
         "Asia",
@@ -650,18 +518,6 @@ export default {
         "Wine Tastings"
       ],
       "popular": false,
-      "promos": [
-        {
-          "title": "Double Upgrade",
-          "description": "Book an interior room and get upgraded to a balcony",
-          "expiryDate": "2023-08-31"
-        },
-        {
-          "title": "Solo Traveler Offer",
-          "description": "Reduced single supplements on select voyages",
-          "expiryDate": "2023-10-15"
-        }
-      ],
       "ships": [
         "Azamara Onward",
         "Azamara Journey",
@@ -674,13 +530,9 @@ export default {
       "name": "Viking Cruises",
       "logo": "/cruise/logos/viking.png",
       "image": "https://images.unsplash.com/photo-1516483638261-f4dbaf036963?w=800&q=80",
-      "price": "From $78",
-      "priceValue": 78,
       "duration": "14 Nights",
       "description": "Cultural Enrichment Cruises",
       "longDescription": "Explore the world in comfort with Viking Cruises, featuring elegant Scandinavian design, culturally enriching experiences, thoughtfully designed itineraries, and inclusive value on both ocean and river voyages.",
-      "rating": 4.9,
-      "reviews": 1245,
       "destinations": [
         "Scandinavia",
         "Mediterranean",
@@ -712,18 +564,6 @@ export default {
         "Cultural Enrichment"
       ],
       "popular": true,
-      "promos": [
-        {
-          "title": "Air Plus",
-          "description": "Free or reduced airfare from select gateways",
-          "expiryDate": "2023-09-30"
-        },
-        {
-          "title": "Combo Cruise Savings",
-          "description": "Save 10% when booking back-to-back voyages",
-          "expiryDate": "2023-12-31"
-        }
-      ],
       "ships": [
         "Viking Star",
         "Viking Sea",
@@ -737,13 +577,9 @@ export default {
       "name": "Silversea Cruises",
       "logo": "/cruise/logos/silversea.png",
       "image": "https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=800&q=80",
-      "price": "From $79",
-      "priceValue": 79,
       "duration": "10 Nights",
       "description": "Ultra-Luxury Cruising",
       "longDescription": "Indulge in the ultimate luxury with Silversea Cruises, featuring spacious all-suite accommodations, personalized butler service, gourmet dining, and an all-inclusive experience for the most discerning travelers.",
-      "rating": 4.8,
-      "reviews": 765,
       "destinations": [
         "Mediterranean",
         "Caribbean",
@@ -775,18 +611,6 @@ export default {
         "Thermal Suite"
       ],
       "popular": false,
-      "promos": [
-        {
-          "title": "10% Early Booking Bonus",
-          "description": "Save 10% when you book and pay in full by a certain date",
-          "expiryDate": "2023-08-31"
-        },
-        {
-          "title": "Single Supplement Specials",
-          "description": "Reduced single supplements for solo travelers",
-          "expiryDate": "2023-10-31"
-        }
-      ],
       "ships": [
         "Silver Muse",
         "Silver Moon",
@@ -800,13 +624,9 @@ export default {
       "name": "Oceania Cruises",
       "logo": "/cruise/logos/oceania.png",
       "image": "https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=800&q=80",
-      "price": "From $69",
-      "priceValue": 69,
       "duration": "10 Nights",
       "description": "The Finest Cuisine at Sea",
       "longDescription": "Savor the world with Oceania Cruises, renowned for the finest cuisine at sea, elegant mid-size ships, destination-rich itineraries, and an extraordinary value where so much is included.",
-      "rating": 4.7,
-      "reviews": 1127,
       "destinations": [
         "Mediterranean",
         "Northern Europe",
@@ -838,18 +658,6 @@ export default {
         "Canyon Ranch Spa"
       ],
       "popular": false,
-      "promos": [
-        {
-          "title": "OLife Choice",
-          "description": "Free airfare plus choice of shore excursions, beverage package or shipboard credit",
-          "expiryDate": "2023-11-30"
-        },
-        {
-          "title": "Best Price Guarantee",
-          "description": "If you find a lower price, we'll match it plus give you onboard credit",
-          "expiryDate": "2023-12-31"
-        }
-      ],
       "ships": [
         "Oceania Vista",
         "Oceania Riviera",
