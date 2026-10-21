@@ -4,7 +4,7 @@ import {
   LuLayoutDashboard, LuMessageSquare, LuBriefcase, LuTag,
   LuCreditCard, LuRefreshCw, LuUsers, LuCloudUpload, LuFilePen,
   LuChartColumn, LuTimer, LuListChecks, LuFlag, LuSettings2, LuLogOut,
-  LuShield, LuPlane, LuHeadphones, LuWallet
+  LuShield, LuPlane, LuHeadphones, LuWallet, LuShip
 } from 'react-icons/lu';
 
 // Role visibility: ADMINS = admin + super admin; SUPER = super admin only;
@@ -30,6 +30,7 @@ const NAV_GROUPS = [
     items: [
       { to: '/admin/inquiries', icon: LuMessageSquare, label: 'Inquiries', roles: ADMINS },
       { to: '/admin/bookings', icon: LuBriefcase, label: 'Bookings', roles: ADMINS },
+      { to: '/admin/cruises', icon: LuShip, label: 'Cruise Catalog', roles: ADMINS },
       { to: '/admin/customers', icon: LuUsers, label: 'Customers', roles: ADMINS },
       { to: '/visa/admin', icon: LuPlane, label: 'Visa', roles: ADMINS },
       { to: '/admin/coupons', icon: LuTag, label: 'Coupons', roles: ADMINS },
