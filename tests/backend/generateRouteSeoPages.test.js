@@ -57,7 +57,14 @@ describe('route SEO page generator', () => {
     expect(cruisePage).toContain(`rel="canonical" href="${SITE_URL}/cruises"`);
     expect(cruisePage).toContain('name="robots" content="index, follow"');
     expect(cruisePage.match(/property="og:title"/g)).toHaveLength(1);
-    expect(cruisePage).toContain('"@type":"FAQPage"');
+    expect(cruisePage).toContain('"@type":"BreadcrumbList"');
+    expect(cruisePage).not.toContain('"@type":"FAQPage"');
+
+    // Sailing pages share one shell: indexable, with no canonical until the page names itself.
+    const cruiseShell = await readFile(join(distDirectory, 'cruise-shell.html'), 'utf8');
+    expect(cruiseShell).toContain('name="robots" content="index, follow"');
+    expect(cruiseShell).not.toContain('rel="canonical"');
+    expect(cruiseShell).not.toContain('noindex');
     expect(cruisePage).toContain('data-route-seo-navigation="true"');
     expect(cruisePage).toContain('href="/hotels"');
     expect(cruisePage).not.toContain('href="/cruises"');
@@ -227,6 +234,8 @@ describe('route SEO page generator', () => {
         .map((file) => `${SITE_URL}/${file}`);
 
       expect(new Set(declared)).toEqual(new Set(generated));
+      // The sailing pages read their data from here; a blocked request renders an error to Google.
+      expect(robots).toMatch(/^Allow: \/api\/cruise-catalog\/$/m);
     });
   });
 
@@ -256,5 +265,7 @@ describe('route SEO page generator', () => {
 
     expect(new Set([...topLevelPaths, ...visaPaths])).toEqual(new Set(expectedPaths));
     expect(spaFallbacks).toHaveLength(4);
+    expect(spaFallbacks.some((r) => r.source.includes('cruise)'))).toBe(false);
+    expect(config.rewrites).toContainEqual({ source: '/cruise/([^/]+)', destination: '/cruise-shell.html' });
   });
 });

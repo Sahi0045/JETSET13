@@ -7,6 +7,8 @@ Allow: /
 # Disallow admin and private areas
 Disallow: /admin/
 Disallow: /api/
+# Cruise pages render from this public catalog.
+Allow: /api/cruise-catalog/
 Disallow: /backend/
 Disallow: /supabase-auth-debug
 Disallow: /supabase-auth-status

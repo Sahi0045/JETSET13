@@ -88,6 +88,15 @@ describe('/cruises', () => {
     expect(within(alaska).getByText(/7 nights · Seattle to Juneau/)).toBeTruthy();
   });
 
+  it('shows on the page what it tells search engines, and promises no live prices', async () => {
+    renderPage();
+    expect(await screen.findByRole('heading', { name: 'Booked by our team' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Port by port' })).toBeTruthy();
+    const seo = (await import('../../frontend/src/seo/routeSeo.js')).ROUTE_SEO['/cruises'];
+    expect(seo.description).not.toMatch(/today's price/i);
+    expect(JSON.stringify(seo.schema)).not.toMatch(/FAQPage/);
+  });
+
   it('shows the contact empty state when nothing is published', async () => {
     serve({ sailings: [], regions: [] });
     renderPage();

@@ -31,7 +31,8 @@ export const chartFrame = ({ route, ports, width, height, padding = 40, reserveB
 
   const projection = geoMercator()
     .rotate([-centre, 0])
-    .fitExtent([[padding, padding], [width - padding, height - Math.max(padding, reserveBottom)]], target);
+    .fitExtent([[padding, padding], [width - padding, height - Math.max(padding, reserveBottom)]], target)
+    .clipExtent([[0, 0], [width, height]]);
   return { projection, path: geoPath(projection) };
 };
 

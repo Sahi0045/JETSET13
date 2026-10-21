@@ -69,6 +69,13 @@ describe('/cruise/:slug', () => {
     expect(screen.getByText(/CARIBBEAN · 4 NIGHTS · ROUND TRIP FROM MIAMI/)).toBeTruthy();
   });
 
+  it('lets a keyboard pick each day, and shows the price date on the phone bar', async () => {
+    serve({ success: true, data: DETAIL });
+    renderPage();
+    expect(await screen.findByRole('button', { name: /day 3.*Roatán/i })).toBeTruthy();
+    expect(screen.getByTestId('phone-price-bar').textContent).toMatch(/checked \d+ [A-Z][a-z]{2}/);
+  });
+
   it('calls and emails about this cruise', async () => {
     serve({ success: true, data: DETAIL });
     renderPage();
@@ -84,7 +91,7 @@ describe('/cruise/:slug', () => {
     renderPage('nope');
     expect(await screen.findByText("This cruise isn't available")).toBeTruthy();
     expect(screen.getByRole('link', { name: 'See all cruises' }).getAttribute('href')).toBe('/cruises');
-    await waitFor(() => expect(document.head.querySelector('meta[name="robots"]')?.getAttribute('content')).toBe('noindex'));
+    await waitFor(() => expect(document.head.querySelector('meta[name="robots"]')?.getAttribute('content')).toBe('noindex, follow'));
   });
 
   it('names the cruise for search engines, with its ports', async () => {

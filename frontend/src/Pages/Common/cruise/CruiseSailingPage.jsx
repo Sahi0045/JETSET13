@@ -1,11 +1,12 @@
 import React, { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
+import { SeoOverride } from '../../../seo/RouteSeo';
 import Navbar from '../Navbar';
 import Footer from '../Footer';
 import withPageElements from '../PageWrapper';
 import { regionByKey } from '../../../../../shared/cruiseRegions.js';
-import { CRUISE_PHONE, fetchSailing, inquiryMail, officeToday, priceLabel, shortDate } from './catalog';
+import { CRUISE_PHONE, dayMonth, fetchSailing, inquiryMail, officeToday, priceLabel, shortDate } from './catalog';
 import { CRUISE_FONTS } from './CruisesPage';
 import './cruisePages.css';
 
@@ -62,7 +63,7 @@ function Actions({ sailing, compact = false }) {
 function NotAvailable() {
   return (
     <div className="mx-auto max-w-xl px-4 py-32 text-center">
-      <Helmet><meta name="robots" content="noindex" /><title>Cruise not available | Jetsetters</title></Helmet>
+      <SeoOverride title="Cruise not available | Jetsetters" description="This cruise is no longer on sale. See the cruises our team books." shouldIndex={false} />
       <h1 className="cruise-display text-4xl text-white">This cruise isn&apos;t available</h1>
       <p className="mt-4 text-[#CFE8F0]">It may have sailed, or our team may have taken it down while they check the price.</p>
       <Link to="/cruises" className="mt-8 inline-block rounded-lg bg-[#0890BC] px-5 py-3 font-bold text-white">See all cruises</Link>
@@ -137,14 +138,16 @@ function CruiseSailingPage() {
 
   return (
     <div className="cruise-page min-h-screen">
+      <SeoOverride
+        title={`${sailing.title} | ${sailing.nights}-night cruise | Jetsetters`}
+        description={describe(sailing, facts)}
+        ogImage={sailing.photos[0]?.url}
+        schema={trip}
+      />
       <Helmet>
-        <title>{`${sailing.title} | ${sailing.nights}-night cruise | Jetsetters`}</title>
-        <meta name="description" content={describe(sailing, facts)} />
-        <link rel="canonical" href={url} />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link rel="stylesheet" href={CRUISE_FONTS} />
-        <script type="application/ld+json">{JSON.stringify(trip)}</script>
       </Helmet>
       <Navbar />
 
@@ -157,8 +160,8 @@ function CruiseSailingPage() {
         </header>
 
         <div className="mx-auto mt-8 grid max-w-6xl gap-6 px-4 md:grid-cols-[1.45fr_1fr]">
-          <div className="md:sticky md:top-20 md:self-start">
-            <div className="relative h-[240px] overflow-hidden rounded-2xl border border-[rgba(101,179,207,0.18)] bg-[#032B37] md:h-[430px]">
+          <div className="sticky top-14 z-10 self-start md:top-20">
+            <div className="relative h-[200px] overflow-hidden rounded-2xl border border-[rgba(101,179,207,0.18)] bg-[#032B37] md:h-[430px]">
               <Suspense fallback={<div className="h-full w-full bg-[#032B37]" />}>
                 <VoyageChart route={sailing.route} days={sailing.days} activeDay={activeDay} onPickDay={setActiveDay} />
               </Suspense>
@@ -184,14 +187,20 @@ function CruiseSailingPage() {
                   key={d.day}
                   ref={(el) => { chapters.current[i] = el; }}
                   data-day={d.day}
-                  className="relative min-h-[96px] cursor-pointer py-4 pl-6 md:min-h-[140px]"
-                  onClick={() => setActiveDay(d.day)}
+                  className="relative min-h-[96px] py-4 pl-6 md:min-h-[140px]"
                 >
                   <span className={`absolute -left-[5px] top-6 h-[9px] w-[9px] rounded-full border ${d.day === activeDay ? 'border-[#F3C58F] bg-[#F3C58F] shadow-[0_0_12px_#F3C58F]' : d.day < activeDay ? 'border-[#8FC3D3] bg-[#8FC3D3]' : 'border-[#8FC3D3] bg-[#021C25]'}`} />
-                  <p className="cruise-mono text-[11px] text-[#8FC3D3]">DAY {d.day}</p>
-                  <p className={`cruise-display text-xl ${d.day === activeDay ? 'text-white' : 'text-[#CFE8F0]'}`}>
-                    {d.port ? <>{d.port.name}<span className="text-base text-[#8FC3D3]">, {d.port.country}</span></> : 'At sea'}
-                  </p>
+                  <button
+                    type="button"
+                    aria-pressed={d.day === activeDay}
+                    onClick={() => setActiveDay(d.day)}
+                    className="block w-full rounded-md text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#F3C58F]"
+                  >
+                    <span className="cruise-mono block text-[11px] text-[#8FC3D3]">DAY {d.day}</span>
+                    <span className={`cruise-display block text-xl ${d.day === activeDay ? 'text-white' : 'text-[#CFE8F0]'}`}>
+                      {d.port ? <>{d.port.name}<span className="text-base text-[#8FC3D3]">, {d.port.country}</span></> : 'At sea'}
+                    </span>
+                  </button>
                   {d.port && <DayLine day={d} />}
                 </li>
               ))}
@@ -230,10 +239,10 @@ function CruiseSailingPage() {
         )}
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 z-30 flex items-center justify-between gap-3 border-t border-gray-200 bg-white py-3 pl-4 pr-20 md:hidden">
+      <div data-testid="phone-price-bar" className="fixed inset-x-0 bottom-0 z-30 flex items-center justify-between gap-3 border-t border-gray-200 bg-white py-3 pl-4 pr-20 md:hidden">
         <div className="min-w-0">
           <p className="cruise-display truncate text-lg text-[#034457]">{price.amount}</p>
-          <p className="cruise-mono truncate text-[10px] text-[#5B7480]">{price.kind === 'price' ? 'pp · port fees incl.' : 'call or email us'}</p>
+          <p className="cruise-mono truncate text-[10px] text-[#5B7480]">{price.kind === 'price' ? `per person · checked ${dayMonth(sailing.price_checked_on)}` : 'call or email us'}</p>
         </div>
         <Actions sailing={sailing} compact />
       </div>

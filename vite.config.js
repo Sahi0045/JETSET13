@@ -179,13 +179,22 @@ export default defineConfig(({ mode }) => {
                         //    pages load them, after first paint. The coastlines
                         //    JSON gets its own dynamic chunk.
                         if (id.includes('node_modules/world-atlas')) return;
+                        if (id.includes('node_modules/cobe')) return 'cruise-globe';
                         if (id.includes('node_modules/d3-geo') ||
                             id.includes('node_modules/d3-array') ||
                             id.includes('node_modules/internmap') ||
-                            id.includes('node_modules/topojson-client') ||
-                            id.includes('node_modules/cobe')) {
-                            return 'cruise-map';
+                            id.includes('node_modules/topojson-client')) {
+                            return 'cruise-chart';
                         }
+                        // The sailing chart is lazy: left to Rollup it gets its own
+                        // dynamic chunk instead of riding in booking-cruise.
+                        if (id.includes('/Pages/Common/cruise/map/VoyageChart') ||
+                            id.includes('/Pages/Common/cruise/map/geometry')) {
+                            return;
+                        }
+                        // Shared by the cruise pages and the admin catalog; pinned
+                        // so neither side imports the other's chunk to reach it.
+                        if (id.endsWith('/shared/cruiseRegions.js')) return 'common-shell';
                         // ── Admin section ──────────────────────────────────
                         if (id.includes('/Pages/Admin/')) {
                             return 'admin';

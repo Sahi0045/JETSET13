@@ -75,6 +75,12 @@ describe('public reads', () => {
     expect(calls).toContainEqual(['cruise_sailings', 'eq', 'status', 'published']);
   });
 
+  it('treats a published sailing whose dates have all passed as gone', async () => {
+    fakeDb({ cruise_sailings: { data: { slug: 'old', title: 'Old', region: 'caribbean', nights: 2, photos: [], dates: [{ sail_date: '2020-01-01' }], days: [], line: { name: 'X' } }, error: null } });
+    const res = await request(app).get('/api/cruise-catalog/sailings/old');
+    expect(res.status).toBe(404);
+  });
+
   it('leaves out sailings whose dates have all passed', async () => {
     fakeDb({
       cruise_sailings: {

@@ -82,7 +82,7 @@ function CruisesPage() {
     <div className="cruise-page min-h-screen">
       <Helmet>
         <title>Cruises | Jetsetters</title>
-        <meta name="description" content="Cruises our team books on the major cruise lines: real sailings, port-by-port itineraries and today's prices, paid securely on Jetsetters." />
+        <meta name="description" content="Cruises our team books on the major cruise lines: real sailings, port-by-port itineraries and prices our team checks with the cruise line." />
         <link rel="canonical" href="https://www.jetsetterss.com/cruises" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
@@ -127,6 +127,19 @@ function CruisesPage() {
               {shown.map((s) => <SailingCard key={s.slug} sailing={s} today={today} />)}
             </div>
           )}
+        </div>
+      </section>
+
+      <section className="bg-[#021C25] px-4 pb-14 pt-4">
+        <div className="mx-auto grid max-w-6xl gap-8 md:grid-cols-2">
+          <div>
+            <h2 className="cruise-display text-xl text-white">Booked by our team</h2>
+            <p className="mt-2 leading-relaxed text-[#CFE8F0]">Tell us the sailing, your dates and who is travelling. We check the cabin and today&apos;s price with the cruise line, send you a quote, and book it once you have paid on Jetsetters.</p>
+          </div>
+          <div>
+            <h2 className="cruise-display text-xl text-white">Port by port</h2>
+            <p className="mt-2 leading-relaxed text-[#CFE8F0]">Each sailing lists every day of the voyage: the port, the time the ship arrives and the time it leaves, and the days at sea in between.</p>
+          </div>
         </div>
       </section>
 

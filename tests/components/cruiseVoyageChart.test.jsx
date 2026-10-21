@@ -49,11 +49,17 @@ describe('the voyage chart', () => {
     expect(container.querySelectorAll('[data-port]')).toHaveLength(2);
   });
 
-  it('picks a day from a port', () => {
+  it('picks a day from a port with the mouse, and leaves keyboard users to the day list', () => {
     const onPickDay = vi.fn();
-    render(<VoyageChart route={ROUTE} days={DAYS} activeDay={1} onPickDay={onPickDay} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Nassau, day 3' }));
+    const { container } = render(<VoyageChart route={ROUTE} days={DAYS} activeDay={1} onPickDay={onPickDay} />);
+    fireEvent.click(container.querySelector('[data-port-name="Nassau"]'));
     expect(onPickDay).toHaveBeenCalledWith(3);
+    expect(container.querySelectorAll('[tabindex]')).toHaveLength(0);
+  });
+
+  it('clips the coastlines to what the chart shows', () => {
+    const { projection } = chartFrame({ route: ROUTE, ports: [MIAMI, NASSAU], width: 860, height: 430 });
+    expect(projection.clipExtent()).toEqual([[0, 0], [860, 430]]);
   });
 
   it('frames a single port without an endless zoom', () => {

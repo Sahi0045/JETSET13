@@ -148,7 +148,11 @@
       "destination": "/spa-shell.html"
     },
     {
-      "source": "/(manage-booking|flights/booking|visa/consultation|inquiry|pay|cruise)/([^/]+)",
+      "source": "/cruise/([^/]+)",
+      "destination": "/cruise-shell.html"
+    },
+    {
+      "source": "/(manage-booking|flights/booking|visa/consultation|inquiry|pay)/([^/]+)",
       "destination": "/spa-shell.html"
     },
     {

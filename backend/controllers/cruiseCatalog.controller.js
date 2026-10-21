@@ -49,6 +49,9 @@ export const getPublishedSailing = async (req, res) => {
     .maybeSingle();
   if (error) return failed(res, 'cruise lookup', error);
   if (!data) return refuse(res, 404, 'Cruise not found');
+  const dates = futureDates(data.dates, today);
+  // A sailing with no date left can't be booked: it is gone, not on sale.
+  if (!dates.length) return refuse(res, 404, 'Cruise not found');
 
   return ok(res, {
     slug: data.slug,
@@ -63,7 +66,7 @@ export const getPublishedSailing = async (req, res) => {
     route: data.route,
     line_name: data.line?.name ?? null,
     ship_name: data.ship?.name ?? null,
-    dates: futureDates(data.dates, today),
+    dates,
     days: [...(data.days ?? [])]
       .sort((a, b) => a.day - b.day)
       .map((d) => ({

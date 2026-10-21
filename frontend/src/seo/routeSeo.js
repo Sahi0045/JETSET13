@@ -91,56 +91,8 @@ export const ROUTE_SEO = {
   },
   '/cruises': {
     title: 'Cruises | Jetsetters',
-    description: 'Cruises our team books on the major cruise lines: real sailings, port-by-port itineraries and today\'s prices, paid securely on Jetsetters.',
-    schema: [
-      breadcrumb({ name: 'Cruises' }),
-      {
-        '@context': 'https://schema.org',
-        '@type': 'FAQPage',
-        mainEntity: [
-          {
-            '@type': 'Question',
-            name: 'What documents are required to board the cruise?',
-            acceptedAnswer: {
-              '@type': 'Answer',
-              text: 'Guests must present a valid passport or government-issued photo ID, their cruise ticket, and any visas required for the ports on their itinerary. We recommend carrying both physical and digital copies.',
-            },
-          },
-          {
-            '@type': 'Question',
-            name: 'What time do I need to check-in and board the cruise?',
-            acceptedAnswer: {
-              '@type': 'Answer',
-              text: 'For offline check-in, arrive 3–4 hours before departure. Boarding typically closes 1–2 hours before sailing. Refer to your cruise ticket for the exact timings for your ship and port.',
-            },
-          },
-          {
-            '@type': 'Question',
-            name: 'How much luggage is allowed on the cruise?',
-            acceptedAnswer: {
-              '@type': 'Answer',
-              text: 'Most cruise lines have a generous luggage allowance, but weight and size limits vary by line. Check your booking confirmation for the specific policy, and label every bag with your name and cabin number.',
-            },
-          },
-          {
-            '@type': 'Question',
-            name: 'Can I cancel or reschedule my cruise booking?',
-            acceptedAnswer: {
-              '@type': 'Answer',
-              text: 'Cancellation and rescheduling policies depend on the cruise line and fare type. Many bookings offer flexible cancellation up to a cut-off date. Contact our cruise experts for help with changes to your reservation.',
-            },
-          },
-          {
-            '@type': 'Question',
-            name: 'Are meals and activities included in the price?',
-            acceptedAnswer: {
-              '@type': 'Answer',
-              text: 'Most cruises include main dining, entertainment, and a range of onboard activities. Specialty restaurants, premium beverages, shore excursions, and spa services are usually charged separately.',
-            },
-          },
-        ],
-      },
-    ],
+    description: 'Cruises our team books on the major cruise lines: real sailings, port-by-port itineraries and prices our team checks with the cruise line.',
+    schema: [breadcrumb({ name: 'Cruises' })],
     // The page loads its sailings from the cruise catalog, so the crawled
     // document carries this text rather than a loading state.
     content: {
@@ -835,6 +787,12 @@ export const ROUTE_SEO = {
 };
 
 export const ROUTE_SEO_PATTERNS = [
+  {
+    // Each sailing page names itself once its data loads (SeoOverride).
+    path: '/cruise/:slug',
+    title: 'Cruise | Jetsetters',
+    description: 'A cruise our team books: the route, every port and the hours in each, and the price our team checks with the cruise line.',
+  },
   {
     path: '/flights/booking/:bookingId',
     title: 'Review Your Flight Booking | Jetsetters',
