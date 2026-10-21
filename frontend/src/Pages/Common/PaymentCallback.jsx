@@ -260,54 +260,14 @@ export default function PaymentCallback() {
             return;
           }
 
-          // For other booking types (hotel, cruise, package)
+          // For other booking types (hotel, package)
           // Navigate to appropriate confirmation pages
           const confirmationRoutes = {
             hotel: '/hotel-booking-success',
-            cruise: '/my-trips',
             package: '/package-booking-success'
           };
 
           const confirmationRoute = confirmationRoutes[bookingType] || '/booking-success';
-
-          // Save cruise booking to database
-          if (bookingType === 'cruise') {
-            try {
-              setStatus('Saving cruise booking...');
-              console.log('🚢 Saving cruise booking to database...');
-
-              const userId = user?.id || null;
-
-              const saveResponse = await fetch(getApiUrl('cruises/bookings'), {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  orderId,
-                  cruiseName: bookingData.cruiseName || '',
-                  cruiseImage: bookingData.cruiseImage || '',
-                  duration: bookingData.duration || '',
-                  departure: bookingData.departure || '',
-                  arrival: bookingData.arrival || '',
-                  departureDate: bookingData.departureDate || '',
-                  returnDate: bookingData.returnDate || '',
-                  basePrice: bookingData.basePrice || 0,
-                  taxesAndFees: bookingData.taxesAndFees || 0,
-                  portCharges: bookingData.portCharges || 0,
-                  totalAmount: bookingData.totalAmount || sessionData?.amount || 0,
-                  passengerDetails: bookingData.passengerDetails || {},
-                  transactionId: resultIndicator || '',
-                  sessionId: sessionId || sessionData?.sessionId || '',
-                  userId: userId
-                })
-              });
-
-              const saveResult = await saveResponse.json();
-              console.log('🚢 Database save result:', saveResult);
-            } catch (saveError) {
-              console.error('⚠️ Failed to save cruise booking to database:', saveError);
-              // Continue even if DB save fails - we still redirect to success
-            }
-          }
 
           // Save hotel booking to database
           if (bookingType === 'hotel') {
@@ -366,9 +326,7 @@ export default function PaymentCallback() {
               orderCreatedAt: new Date().toISOString()
             };
 
-            if (bookingType === 'cruise') {
-              localStorage.setItem('completedBooking', JSON.stringify(completedBooking));
-            } else if (bookingType === 'hotel') {
+            if (bookingType === 'hotel') {
               localStorage.setItem('completedHotelBooking', JSON.stringify(completedBooking));
             } else if (bookingType === 'package') {
               localStorage.setItem('completedPackageBooking', JSON.stringify(completedBooking));

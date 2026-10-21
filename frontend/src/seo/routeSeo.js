@@ -89,9 +89,9 @@ export const ROUTE_SEO = {
       ],
     },
   },
-  '/cruise': {
-    title: 'Luxury Cruise Vacations | Jetsetters',
-    description: 'Discover unforgettable cruise vacations with trusted cruise lines, curated itineraries, and expert planning support from Jetsetters.',
+  '/cruises': {
+    title: 'Cruises | Jetsetters',
+    description: 'Cruises our team books on the major cruise lines: real sailings, port-by-port itineraries and today\'s prices, paid securely on Jetsetters.',
     schema: [
       breadcrumb({ name: 'Cruises' }),
       {
@@ -141,33 +141,22 @@ export const ROUTE_SEO = {
         ],
       },
     ],
-  },
-  '/cruises': {
-    title: 'Browse Cruise Deals | Jetsetters',
-    description: 'Compare cruise itineraries, departure dates, and destinations to find the right sailing and the best value for your vacation.',
-    schema: [breadcrumb({ name: 'Cruises', url: '/cruise' }, { name: 'Browse Deals' })],
-    // Mirrors cruise-cards.jsx, whose own <h1> is "Find Your Perfect Cruise".
-    // Sailings load from the API, so without this the crawled document showed
-    // nothing but a loading state.
+    // The page loads its sailings from the cruise catalog, so the crawled
+    // document carries this text rather than a loading state.
     content: {
-      heading: 'Find Your Perfect Cruise',
-      intro: 'Compare cruise itineraries, departure dates and destinations to find the right sailing and the best value for your vacation.',
+      heading: 'Pick a sea. We\'ll plot the voyage.',
+      intro: 'Cruises our team books on the major cruise lines. Every sailing shows its route, its ports and the hours in each, with a price our team has checked with the cruise line.',
       sections: [
         {
-          heading: 'Filter by departure port',
-          body: 'Narrow the list to sailings leaving from the ports you can reach easily, then compare itineraries side by side across cruise lines and trip lengths.',
+          heading: 'Booked by our team',
+          body: 'Tell us the sailing, your dates and who is travelling. We check the cabin and today\'s price with the cruise line, send you a quote, and book it once you have paid on Jetsetters.',
         },
         {
-          heading: 'Compare before you commit',
-          body: 'Each sailing lists its route, duration and departure date so you can weigh cabin options and value before moving to booking.',
+          heading: 'Port by port',
+          body: 'Each sailing lists every day of the voyage: the port, the time the ship arrives and the time it leaves, and the days at sea in between.',
         },
       ],
     },
-  },
-  '/itinerary': {
-    title: 'Cruise Itinerary Details | Jetsetters',
-    description: 'Review full cruise itinerary details including ports of call, onboard experiences, excursion options, and booking information.',
-    shouldIndex: false,
   },
   '/flights': {
     title: 'Find Flight Deals | Jetsetters',

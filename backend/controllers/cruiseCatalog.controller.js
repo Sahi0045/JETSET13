@@ -2,6 +2,8 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import supabase from '../config/supabase.js';
 import { CRUISE_REGIONS } from '../../shared/cruiseRegions.js';
 import { makeSlug, sailingInput, stampPrice, todayInOffice } from '../services/cruiseCatalog/sailingInput.js';
+import { listPublished } from '../services/cruiseCatalog/publishedSailings.js';
+import { renderSailingSitemap } from '../services/cruiseCatalog/sitemap.js';
 // Loaded on first use: every API route shares one Vercel function, and the sea
 // network would add its load time to every cold start.
 const seaRoutes = () => import('../services/cruiseCatalog/seaRoute.js');
@@ -26,46 +28,15 @@ const hhmm = (time) => (time ? String(time).slice(0, 5) : null);
 // ── Public: published sailings only ─────────────────────────
 
 export const listPublishedSailings = async (req, res) => {
-  const today = todayInOffice();
-  let query = supabase
-    .from('cruise_sailings')
-    .select('slug, title, headline, region, nights, from_price_usd, price_checked_on, photos, route, line:cruise_lines(name), ship:cruise_ships(name), dates:cruise_sailing_dates(sail_date), days:cruise_sailing_days(day, port:cruise_ports(name, country, lat, lon))')
-    .eq('status', 'published');
-  if (req.query.region) query = query.eq('region', String(req.query.region));
-  const { data, error } = await query;
+  const { data, error } = await listPublished({ region: req.query.region });
   if (error) return failed(res, 'cruise list', error);
+  return ok(res, data.map(({ updated_at: _updated, ...card }) => card));
+};
 
-  const sailings = (data ?? [])
-    .map((s) => {
-      const dates = futureDates(s.dates, today);
-      const portDays = [...(s.days ?? [])].sort((a, b) => a.day - b.day).filter((d) => d.port);
-      const ports = portDays
-        .map((d) => ({ name: d.port.name, country: d.port.country, lat: d.port.lat, lon: d.port.lon }))
-        .filter((p, i, all) => all.findIndex((q) => q.name === p.name && q.country === p.country) === i);
-      const portNames = ports.map((p) => p.name);
-      return {
-        slug: s.slug,
-        title: s.title,
-        headline: s.headline,
-        region: s.region,
-        nights: s.nights,
-        from_price_usd: s.from_price_usd === null || s.from_price_usd === undefined ? null : Number(s.from_price_usd),
-        price_checked_on: s.price_checked_on,
-        photo: s.photos?.[0] ?? null,
-        line_name: s.line?.name ?? null,
-        ship_name: s.ship?.name ?? null,
-        port_names: portNames,
-        ports,
-        start_port: portDays[0]?.port.name ?? null,
-        end_port: portDays[portDays.length - 1]?.port.name ?? null,
-        route: s.route ?? null,
-        next_date: dates[0] ?? null,
-        date_count: dates.length,
-      };
-    })
-    .filter((s) => s.next_date)
-    .sort((a, b) => a.next_date.localeCompare(b.next_date));
-  return ok(res, sailings);
+export const sailingSitemap = async (_req, res) => {
+  const { data, error } = await listPublished();
+  if (error) return failed(res, 'sitemap', error);
+  res.type('application/xml').send(renderSailingSitemap(data));
 };
 
 export const getPublishedSailing = async (req, res) => {

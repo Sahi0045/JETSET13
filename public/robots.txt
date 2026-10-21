@@ -42,6 +42,7 @@ Sitemap: https://www.jetsetterss.com/sitemap.xml
 Sitemap: https://www.jetsetterss.com/sitemap-flights.xml
 Sitemap: https://www.jetsetterss.com/sitemap-hotels.xml
 Sitemap: https://www.jetsetterss.com/sitemap-cruises.xml
+Sitemap: https://www.jetsetterss.com/sitemap-cruise-sailings.xml
 
 # Googlebot and Bingbot inherit the complete User-agent: * privacy policy above.
 

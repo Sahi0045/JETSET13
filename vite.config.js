@@ -192,8 +192,7 @@ export default defineConfig(({ mode }) => {
                         }
                         // ── Lazily-loaded data files: let Rollup put them in their
                         //    own dynamic chunks instead of folding into the flow bundles.
-                        if (id.endsWith('/flights/data-mock-booking.js') ||
-                            id.endsWith('/cruise/data/cruiselines.json')) {
+                        if (id.endsWith('/flights/data-mock-booking.js')) {
                             return; // undefined → Rollup chooses dynamic chunk
                         }
                         // ── Booking flows (per-flow so users only download what they visit) ──
