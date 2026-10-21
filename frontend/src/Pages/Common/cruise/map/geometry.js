@@ -10,7 +10,7 @@ const centreLongitude = ([[west], [east]]) => {
 };
 
 /** A Mercator projection fitted to the voyage, centred on it so a Pacific crossing stays in one piece. */
-export const chartFrame = ({ route, ports, width, height, padding = 40 }) => {
+export const chartFrame = ({ route, ports, width, height, padding = 40, reserveBottom = 0 }) => {
   const points = [
     ...(route?.coordinates ?? []),
     ...ports.map((p) => [p.lon, p.lat]),
@@ -31,7 +31,7 @@ export const chartFrame = ({ route, ports, width, height, padding = 40 }) => {
 
   const projection = geoMercator()
     .rotate([-centre, 0])
-    .fitExtent([[padding, padding], [width - padding, height - padding]], target);
+    .fitExtent([[padding, padding], [width - padding, height - Math.max(padding, reserveBottom)]], target);
   return { projection, path: geoPath(projection) };
 };
 

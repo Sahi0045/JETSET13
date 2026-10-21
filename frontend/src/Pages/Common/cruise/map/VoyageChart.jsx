@@ -3,6 +3,8 @@ import { chartFrame, loadLand, portStops, shipPosition } from './geometry';
 
 const WIDTH = 860;
 const HEIGHT = 430;
+// The day card sits over the bottom-left of the chart; ports stay above it.
+const CARD_SPACE = 120;
 
 const reducedMotion = () => typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
@@ -16,7 +18,7 @@ export default function VoyageChart({ route, days, activeDay, onPickDay }) {
 
   const stops = useMemo(() => portStops(days), [days]);
   const { projection, path } = useMemo(
-    () => chartFrame({ route, ports: stops.map((s) => s.port), width: WIDTH, height: HEIGHT }),
+    () => chartFrame({ route, ports: stops.map((s) => s.port), width: WIDTH, height: HEIGHT, reserveBottom: CARD_SPACE }),
     [route, stops],
   );
   const activePort = days.find((d) => d.day === activeDay)?.port ?? null;

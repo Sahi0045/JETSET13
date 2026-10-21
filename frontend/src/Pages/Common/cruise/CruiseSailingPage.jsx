@@ -49,10 +49,12 @@ function DayLine({ day }) {
 }
 
 function Actions({ sailing, compact = false }) {
+  const call = `Call ${CRUISE_PHONE.text}`;
+  const email = 'Email us about this cruise';
   return (
-    <div className={compact ? 'flex gap-2' : 'mt-3 flex flex-col gap-2'}>
-      <a href={CRUISE_PHONE.href} className="rounded-lg bg-[#0890BC] px-4 py-2.5 text-center text-sm font-bold text-white hover:bg-[#055B75]">Call {CRUISE_PHONE.text}</a>
-      <a href={inquiryMail(sailing.title)} className="rounded-lg border border-[#0890BC] px-4 py-2.5 text-center text-sm font-bold text-[#055B75] hover:bg-[#F1FBFD]">Email us about this cruise</a>
+    <div className={compact ? 'flex shrink-0 gap-2' : 'mt-3 flex flex-col gap-2'}>
+      <a href={CRUISE_PHONE.href} aria-label={call} className={`rounded-lg bg-[#0890BC] text-center text-sm font-bold text-white hover:bg-[#055B75] ${compact ? 'px-3 py-2' : 'px-4 py-2.5'}`}>{compact ? 'Call' : call}</a>
+      <a href={inquiryMail(sailing.title)} aria-label={email} className={`rounded-lg border border-[#0890BC] text-center text-sm font-bold text-[#055B75] hover:bg-[#F1FBFD] ${compact ? 'px-3 py-2' : 'px-4 py-2.5'}`}>{compact ? 'Email' : email}</a>
     </div>
   );
 }
@@ -161,7 +163,7 @@ function CruiseSailingPage() {
                 <VoyageChart route={sailing.route} days={sailing.days} activeDay={activeDay} onPickDay={setActiveDay} />
               </Suspense>
               {active && (
-                <div className="absolute bottom-3 left-3 max-w-[280px] rounded-xl border border-[rgba(101,179,207,0.25)] bg-[rgba(2,28,37,0.88)] px-4 py-3">
+                <div className="absolute bottom-3 left-3 hidden max-w-[280px] rounded-xl md:block border border-[rgba(101,179,207,0.25)] bg-[rgba(2,28,37,0.88)] px-4 py-3">
                   <p className="cruise-mono text-[11px] text-[#F3C58F]">DAY {String(active.day).padStart(2, '0')}{active.port ? ` · ${active.port.country.toUpperCase()}` : ''}</p>
                   <p className="cruise-display text-2xl text-white">{active.port ? active.port.name : 'At sea'}</p>
                   {active.port && <DayLine day={active} />}
@@ -228,7 +230,7 @@ function CruiseSailingPage() {
         )}
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 z-30 flex items-center justify-between gap-3 border-t border-gray-200 bg-white px-4 py-3 md:hidden">
+      <div className="fixed inset-x-0 bottom-0 z-30 flex items-center justify-between gap-3 border-t border-gray-200 bg-white py-3 pl-4 pr-20 md:hidden">
         <div className="min-w-0">
           <p className="cruise-display truncate text-lg text-[#034457]">{price.amount}</p>
           <p className="cruise-mono truncate text-[10px] text-[#5B7480]">{price.kind === 'price' ? 'pp · port fees incl.' : 'call or email us'}</p>

@@ -64,6 +64,12 @@ describe('the voyage chart', () => {
     expect(x).toBeLessThan(400);
   });
 
+  it('keeps every port clear of the day card at the bottom of the chart', () => {
+    const ROATAN = { name: 'Roatán', country: 'Honduras', lat: 16.32, lon: -86.54 };
+    const { projection } = chartFrame({ route: null, ports: [MIAMI, ROATAN], width: 860, height: 430, reserveBottom: 120 });
+    for (const port of [MIAMI, ROATAN]) expect(projection([port.lon, port.lat])[1]).toBeLessThanOrEqual(430 - 120 + 1e-6);
+  });
+
   it('finds the route point nearest a port', () => {
     expect(nearestRouteIndex(ROUTE, NASSAU)).toBe(2);
   });

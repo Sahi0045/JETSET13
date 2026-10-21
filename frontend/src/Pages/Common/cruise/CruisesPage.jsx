@@ -35,10 +35,8 @@ function SailingCard({ sailing, today }) {
         <h3 className="text-base font-bold text-white">{sailing.title}</h3>
         <p className="cruise-mono mt-1 text-[11.5px] text-[#8FC3D3]">{voyageLine(sailing)}</p>
         <p className="cruise-mono mt-1 text-[11.5px] text-[#8FC3D3]">Next sailing {shortDate(sailing.next_date)}{more}</p>
-        <div className="mt-3 flex items-baseline justify-between gap-3">
-          <span className="cruise-display text-xl text-white">{price.amount}</span>
-          <span className="cruise-mono text-right text-[10.5px] text-[#8FC3D3]">{price.kind === 'price' ? price.note.replace('per person, ', '') : ''}</span>
-        </div>
+        <p className="cruise-display mt-3 text-xl text-white">{price.amount}</p>
+        {price.kind === 'price' && <p className="cruise-mono mt-0.5 text-[10.5px] text-[#8FC3D3]">{price.note}</p>}
       </div>
     </Link>
   );
