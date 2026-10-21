@@ -39,7 +39,7 @@ describe('a search from the landing page', () => {
 // HTML for crawlers.
 describe('the home page text Google reads', () => {
   const seo = readFileSync(path.resolve(process.cwd(), 'frontend/src/seo/routeSeo.js'), 'utf8');
-  const home = seo.slice(seo.indexOf("'/': {"), seo.indexOf("'/cruises': {"));
+  const home = seo.slice(seo.indexOf("'/': {"), seo.indexOf("'/cruise': {"));
 
   it('makes the same promises as the page', () => {
     expect(home).toMatch(/Our lowest fares to the world's most-loved places/);

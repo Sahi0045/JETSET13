@@ -16,7 +16,9 @@ const importers = {
   '/hotels/details': () => import('../Pages/Common/hotels/HotelDetailsPage'),
   '/hotels/booking': () => import('../Pages/Common/hotels/HotelBookingSummary'),
 
-  '/cruises': () => import('../Pages/Common/cruise/CruisesPage'),
+  '/cruise': () => import('../Pages/Common/cruise/Homepage'),
+  '/cruises': () => import('../Pages/Common/cruise/cruise-cards'),
+  '/itinerary': () => import('../Pages/Common/cruise/Itinerary'),
 
   '/packages': () => import('../Pages/Common/packages/planding'),
   '/packages/itinerary': () => import('../Pages/Common/packages/itp'),

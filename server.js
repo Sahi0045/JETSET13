@@ -39,7 +39,6 @@ import savedTravellersRoutes from "./backend/routes/savedTravellers.routes.js";
 import walletRoutes from "./backend/routes/wallet.routes.js";
 import voucherRoutes from "./backend/routes/vouchers.routes.js";
 import cruiseCatalogRoutes from "./backend/routes/cruiseCatalog.routes.js";
-import { sailingSitemap } from "./backend/controllers/cruiseCatalog.controller.js";
 import supabase from "./backend/config/supabase.js";
 // Shared stability modules (same behavior across all 3 entry points)
 import "./backend/bootstrap/httpDefaults.js"; // global axios timeout safety net
@@ -145,7 +144,6 @@ app.use("/api/users/me/travellers", savedTravellersRoutes);
 app.use("/api/wallet", walletRoutes);
 app.use("/api/vouchers", voucherRoutes);
 app.use("/api/cruise-catalog", cruiseCatalogRoutes);
-app.get("/sitemap-cruise-sailings.xml", sailingSitemap);
 app.use("/api/users", userRoutes);
 app.use("/api/hotels", hotelRoutes);
 app.use("/api/flights", flightRoutes);

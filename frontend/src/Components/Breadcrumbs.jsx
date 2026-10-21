@@ -25,10 +25,6 @@ const LABELS = {
   'my-trips': 'My Trips',
 };
 
-// A cruise page lives at /cruise/<slug>; the list it belongs to is /cruises,
-// and the slug ends in "-7-nights-ab12", which is no one's idea of a name.
-const CRUISE_SLUG_TAIL = /-\d+-nights?-[0-9a-f]{4}$/i;
-
 const prettify = (s) =>
   decodeURIComponent(s)
     .replace(/-/g, ' ')
@@ -70,11 +66,8 @@ export default function Breadcrumbs() {
     acc += `/${seg}`;
     const key = seg.toLowerCase();
     let label = LABELS[key] || (isId(seg) ? 'Details' : prettify(seg));
-    let to = acc;
     if (isAgentOnVisaPanel && key === 'admin') label = 'Agent';
-    if (segments[0] === 'cruise' && i === 0) { label = 'Cruises'; to = '/cruises'; }
-    if (segments[0] === 'cruise' && i === 1) label = prettify(seg.replace(CRUISE_SLUG_TAIL, ''));
-    return { label, to, last: i === segments.length - 1 };
+    return { label, to: acc, last: i === segments.length - 1 };
   });
 
   return (
