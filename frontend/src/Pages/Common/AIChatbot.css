@@ -10,6 +10,19 @@ body.date-picker-open .ai-chatbot-container {
   visibility: hidden;
 }
 
+/* Set while a page shows its own action bar along the bottom of a phone screen. */
+@media (max-width: 1023px) {
+  body.phone-action-bar .ai-chatbot-container {
+    bottom: 88px;
+  }
+}
+
+@media (max-width: 640px) {
+  body.phone-action-bar .ai-chatbot-container {
+    bottom: 80px;
+  }
+}
+
 .chat-toggle-button {
   width: 60px;
   height: 60px;

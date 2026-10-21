@@ -18,9 +18,8 @@ export const queryKeys = {
   },
   cruises: {
     all: ['cruises'],
-    list: () => ['cruises', 'list'],
-    search: (params) => ['cruises', 'search', params],
-    details: (id) => ['cruises', 'details', id],
+    published: () => ['cruises', 'published'],
+    sailing: (slug) => ['cruises', 'sailing', slug],
   },
   packages: {
     all: ['packages'],

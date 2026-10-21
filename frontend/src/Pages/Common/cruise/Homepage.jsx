@@ -7,7 +7,7 @@ import Footer from '../Footer';
 import withPageElements from '../PageWrapper';
 import CruiseFeatureBanner from './CruiseFeatureBanner';
 import CruiseFAQ from './CruiseFAQ';
-import { Sparkles } from 'lucide-react';
+import { Ship } from 'lucide-react';
 
 // CSS for page and section styling
 const styles = {
@@ -104,13 +104,12 @@ const HomePage = () => {
       <div className="home-page-wrapper" style={styles.homePageWrapper}>
 
 
-        {/* Special Offer Banner - positioned with absolute for better placement */}
         <div className="relative">
-          <div className={`w-full text-center bg-gradient-to-r from-[#055B75] to-[#034457] py-2 backdrop-blur-sm z-20 border-y border-white/10 ${isMobileView ? 'px-3' : ''}`}>
+          <div className={`w-full text-center bg-gradient-to-r from-[#055B75] to-[#034457] py-2 z-20 border-y border-white/10 ${isMobileView ? 'px-3' : ''}`}>
             <div className="container mx-auto px-4 py-1 flex justify-center items-center">
-              <Sparkles className="h-4 w-4 text-yellow-300 mr-2 flex-shrink-0" />
-              <p className={`text-white ${isMobileView ? 'text-[10px]' : 'text-sm'} font-medium tracking-wide text-center leading-tight`}>
-                <span className="font-bold">Self-Service Portal Coming Soon!</span> For bookings, call <span className="text-yellow-300 font-bold">(877) 538-7380</span> or email <a href="mailto:support@jetsetterss.com" className="underline text-yellow-300 font-bold">support@jetsetterss.com</a>.
+              <Ship className="h-4 w-4 text-[#9FD6E8] mr-2 flex-shrink-0" />
+              <p className={`text-white ${isMobileView ? 'text-[11px]' : 'text-sm'} font-medium tracking-wide text-center leading-tight`}>
+                <span className="font-bold">Cruises are booked by our team.</span> Call <a href="tel:+18775387380" className="underline font-bold">(877) 538-7380</a> or email <a href="mailto:support@jetsetterss.com" className="underline font-bold">support@jetsetterss.com</a>.
               </p>
             </div>
           </div>

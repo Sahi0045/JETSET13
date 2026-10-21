@@ -24,8 +24,11 @@ describe('the cruise checkout is gone from the web', () => {
 
   it('asks the customer to call or email instead of booking', () => {
     const itinerary = read('frontend/src/Pages/Common/cruise/Itinerary.jsx');
+    const contacts = read('frontend/src/Pages/Common/cruise/catalog.js');
     expect(itinerary).not.toMatch(/cruise-booking-summary|bookingUrl/);
-    expect(itinerary).toContain('tel:+18775387380');
-    expect(itinerary).toContain('mailto:support@jetsetterss.com');
+    expect(itinerary).toMatch(/CRUISE_PHONE\.href/);
+    expect(itinerary).toMatch(/inquiryMail\(/);
+    expect(contacts).toContain('tel:+18775387380');
+    expect(contacts).toContain("CRUISE_EMAIL = 'support@jetsetterss.com'");
   });
 });

@@ -41,6 +41,19 @@ body.date-picker-open .contact-us-container {
   visibility: hidden;
 }
 
+/* Set while a page shows its own action bar along the bottom of a phone screen. */
+@media (max-width: 1023px) {
+  body.phone-action-bar .contact-us-container {
+    bottom: 158px;
+  }
+}
+
+@media (max-width: 640px) {
+  body.phone-action-bar .contact-us-container {
+    bottom: 132px;
+  }
+}
+
 /* WhatsApp Button */
 .whatsapp-button {
   width: 50px;
