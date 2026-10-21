@@ -175,6 +175,17 @@ export default defineConfig(({ mode }) => {
                             id.includes('/frontend/src/contexts/SupabaseAuthContext')) {
                             return 'common-shell';
                         }
+                        // ── Cruise globe and chart: heavy, and only the cruise
+                        //    pages load them, after first paint. The coastlines
+                        //    JSON gets its own dynamic chunk.
+                        if (id.includes('node_modules/world-atlas')) return;
+                        if (id.includes('node_modules/d3-geo') ||
+                            id.includes('node_modules/d3-array') ||
+                            id.includes('node_modules/internmap') ||
+                            id.includes('node_modules/topojson-client') ||
+                            id.includes('node_modules/cobe')) {
+                            return 'cruise-map';
+                        }
                         // ── Admin section ──────────────────────────────────
                         if (id.includes('/Pages/Admin/')) {
                             return 'admin';
