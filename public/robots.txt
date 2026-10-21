@@ -7,6 +7,8 @@ Allow: /
 # Disallow admin and private areas
 Disallow: /admin/
 Disallow: /api/
+# Cruise pages render from this public catalog.
+Allow: /api/cruise-catalog/
 Disallow: /backend/
 Disallow: /supabase-auth-debug
 Disallow: /supabase-auth-status
@@ -42,6 +44,7 @@ Sitemap: https://www.jetsetterss.com/sitemap.xml
 Sitemap: https://www.jetsetterss.com/sitemap-flights.xml
 Sitemap: https://www.jetsetterss.com/sitemap-hotels.xml
 Sitemap: https://www.jetsetterss.com/sitemap-cruises.xml
+Sitemap: https://www.jetsetterss.com/sitemap-cruise-sailings.xml
 
 # Googlebot and Bingbot inherit the complete User-agent: * privacy policy above.
 

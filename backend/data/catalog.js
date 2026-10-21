@@ -1,5 +1,6 @@
 /**
- * catalog.js — static travel-catalog inventory (cruises & vacation packages).
+ * catalog.js — static travel-catalog inventory (vacation packages). Cruises
+ * come from the cruise catalog in the database (services/cruiseCatalog).
  * ─────────────────────────────────────────────────────────────
  * The cruise/package catalogs have always been static data shipped with the
  * web frontend (cruiselines.json / packages.json) — there was never a real API
@@ -13,35 +14,7 @@
  * always bundled.
  */
 
-import cruiselines from './cruiselines.data.js';
 import packagesRaw from './packages.data.js';
-
-// ── Cruises ──────────────────────────────────────────────────
-// Source shape (cruiselines.data.js): { cruiseLines: [{ id, name, image,
-// duration, destinations[], departurePorts[], ... }] }.
-// The mobile CruiseResultsScreen reads both camelCase and snake_case with
-// fallbacks, so we expose both to be safe.
-const cruiseLinesRaw = (cruiselines || {}).cruiseLines || [];
-
-export const cruises = cruiseLinesRaw.map((c, i) => ({
-  id: c.id || i + 1,
-  name: c.description || c.name,
-  cruise_line: c.name,
-  cruiseLine: c.name,
-  ship: c.ship || null,
-  image: c.image,
-  logo: c.logo || null,
-  duration: c.duration,
-  departure_port: (c.departurePorts && c.departurePorts[0]) || 'Various Ports',
-  departurePort: (c.departurePorts && c.departurePorts[0]) || 'Various Ports',
-  departurePorts: c.departurePorts || [],
-  departure_date: c.departure_date || null,
-  departureDate: c.departure_date || null,
-  destinations: c.destinations || [],
-  description: c.longDescription || c.description,
-  amenities: c.amenities || [],
-  cabin_types: c.cabin_types || [],
-}));
 
 // ── Packages ─────────────────────────────────────────────────
 // Source shape (packages.data.js): { stats, dubai:{packages:[...]}, europe:{...},

@@ -7,6 +7,7 @@ import {
   DEFAULT_OG_IMAGE,
   DEFAULT_ROUTE_SEO,
   INDEXABLE_ROUTE_SEO,
+  ROUTE_SEO_PATTERNS,
   MAX_DESCRIPTION_LENGTH,
   MAX_TITLE_LENGTH,
   SITE_URL,
@@ -22,7 +23,7 @@ const CRAWL_NAVIGATION = Object.freeze([
   { pathname: '/', label: 'Home' },
   { pathname: '/flights', label: 'Flights' },
   { pathname: '/hotels', label: 'Hotels' },
-  { pathname: '/cruise', label: 'Cruises' },
+  { pathname: '/cruises', label: 'Cruises' },
   { pathname: '/packages', label: 'Vacation Packages' },
   { pathname: '/visa', label: 'Visa Services' },
   { pathname: '/destinations', label: 'Destinations' },
@@ -98,7 +99,7 @@ const validateIndexableRoutes = () => {
   }
 };
 
-export const renderRouteSeoHead = (pathname, seo, { shouldIndex = true } = {}) => {
+export const renderRouteSeoHead = (pathname, seo, { shouldIndex = true, canonical = true } = {}) => {
   const title = truncateSeoText(seo.title, MAX_TITLE_LENGTH);
   const description = truncateSeoText(seo.description, MAX_DESCRIPTION_LENGTH);
   const canonicalUrl = getCanonicalUrl(pathname);
@@ -108,13 +109,15 @@ export const renderRouteSeoHead = (pathname, seo, { shouldIndex = true } = {}) =
     ? [...SITE_WIDE_SCHEMA, ...seo.schema]
     : SITE_WIDE_SCHEMA;
 
-  return `  <title data-rh="true">${escapeHtmlAttribute(title)}</title>
-  <meta data-rh="true" name="description" content="${escapeHtmlAttribute(description)}">
-  <meta data-rh="true" name="robots" content="${robots}">
+  const located = canonical ? `
   <link data-rh="true" rel="canonical" href="${escapeHtmlAttribute(canonicalUrl)}">
   <link data-rh="true" rel="alternate" hrefLang="en" href="${escapeHtmlAttribute(canonicalUrl)}">
   <link data-rh="true" rel="alternate" hrefLang="x-default" href="${escapeHtmlAttribute(canonicalUrl)}">
-  <meta data-rh="true" property="og:url" content="${escapeHtmlAttribute(canonicalUrl)}">
+  <meta data-rh="true" property="og:url" content="${escapeHtmlAttribute(canonicalUrl)}">` : '';
+
+  return `  <title data-rh="true">${escapeHtmlAttribute(title)}</title>
+  <meta data-rh="true" name="description" content="${escapeHtmlAttribute(description)}">
+  <meta data-rh="true" name="robots" content="${robots}">${located}
   <meta data-rh="true" property="og:title" content="${escapeHtmlAttribute(title)}">
   <meta data-rh="true" property="og:description" content="${escapeHtmlAttribute(description)}">
   <meta data-rh="true" property="og:type" content="website">
@@ -259,6 +262,15 @@ export const generateRouteSeoPages = async ({ distDirectory = DEFAULT_DIST_DIREC
   await writeFile(
     spaShellPath,
     injectRouteSeoHead(template, renderRouteSeoHead('/', DEFAULT_ROUTE_SEO, { shouldIndex: false })),
+    'utf8',
+  );
+
+  // Every /cruise/<slug> is served this shell: indexable, but with no canonical,
+  // because one file can't name every sailing; the page adds its own once loaded.
+  const cruiseSeo = ROUTE_SEO_PATTERNS.find(({ path }) => path === '/cruise/:slug');
+  await writeFile(
+    resolve(distDirectory, 'cruise-shell.html'),
+    injectRouteSeoHead(template, renderRouteSeoHead('/cruises', cruiseSeo, { shouldIndex: true, canonical: false })),
     'utf8',
   );
 

@@ -57,38 +57,6 @@ const Error = React.lazy(() =>
     .catch(() => ({ default: ErrorFallback }))
 );
 
-// // Cruise fallback components
-// const CruiseCardsFallback = () => (
-//   <div style={{ padding: '50px', textAlign: 'center' }}>
-//     <h1>Cruise Options</h1>
-//     <p>Available cruise options will appear here.</p>
-//     <a href="/" style={{ display: 'inline-block', marginTop: '20px', padding: '10px 20px', background: '#0066B2', color: 'white', textDecoration: 'none', borderRadius: '4px' }}>
-//       Back to Home
-//     </a>
-//   </div>
-// );
-
-// const ItineraryFallback = () => (
-//   <div style={{ padding: '50px', textAlign: 'center' }}>
-//     <h1>Cruise Itinerary</h1>
-//     <p>Detailed itinerary will appear here.</p>
-//     <a href="/cruises" style={{ display: 'inline-block', marginTop: '20px', padding: '10px 20px', background: '#0066B2', color: 'white', textDecoration: 'none', borderRadius: '4px' }}>
-//       Back to Cruises
-//     </a>
-//   </div>
-// );
-
-// // Import cruise-related pages with error handling
-// const CruiseCards = React.lazy(() => 
-//   import('./Pages/Common/cruise/cruise-cards')
-//     .catch(() => ({ default: CruiseCardsFallback }))
-// );
-
-// const Itinerary = React.lazy(() => 
-//   import('./Pages/Common/cruise/Itinerary')
-//     .catch(() => ({ default: ItineraryFallback }))
-// );
-
 // // Additional placeholder components for nav links
 // const FlightsFallback = () => (
 //   <div style={{ padding: '50px', textAlign: 'center' }}>
@@ -309,19 +277,14 @@ const BookingConfirmation = React.lazy(() =>
 );
 
 // Import the actual components
-const CruiseCards = React.lazy(() =>
-  import('./Pages/Common/cruise/cruise-cards')
+const CruisesPage = React.lazy(() =>
+  import('./Pages/Common/cruise/CruisesPage')
     .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Cruises..." /> }))
 );
 
-const Itinerary = React.lazy(() =>
-  import('./Pages/Common/cruise/Itinerary')
-    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Itinerary..." /> }))
-);
-
-const CruiseHomepage = React.lazy(() =>
-  import('./Pages/Common/cruise/Homepage')
-    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Cruise Homepage..." /> }))
+const CruiseSailingPage = React.lazy(() =>
+  import('./Pages/Common/cruise/CruiseSailingPage')
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Cruise..." /> }))
 );
 
 const Flights = React.lazy(() =>
@@ -702,9 +665,10 @@ const App = () => {
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/booking-confirmation" element={<BookingConfirmation />} />
-          <Route path="/cruise" element={<CruiseHomepage />} />
-          <Route path="/cruises" element={<CruiseCards />} />
-          <Route path="/itinerary" element={<Itinerary />} />
+          <Route path="/cruise" element={<Navigate to="/cruises" replace />} />
+          <Route path="/cruises" element={<CruisesPage />} />
+          <Route path="/cruise/:slug" element={<CruiseSailingPage />} />
+          <Route path="/itinerary" element={<Navigate to="/cruises" replace />} />
           <Route path="/cruise-booking-summary" element={<Navigate to="/cruises" replace />} />
           <Route path="/cruise-booking-success" element={<Navigate to="/cruises" replace />} />
           <Route path="/flight" element={<Flights />} />

@@ -20,6 +20,7 @@ describe('SPA route contract', () => {
     '/visa/consultation/consultation-123',
     '/inquiry/inquiry-123',
     '/pay/payment-token',
+    '/cruise/western-caribbean-7-nights-ab12',
   ])('recognizes dynamic client route %s', (pathname) => {
     expect(isSpaRoute(pathname)).toBe(true);
   });
@@ -49,6 +50,8 @@ describe('SPA route contract', () => {
     ['/rentals', '/hotels'],
     ['/pricing', '/membership'],
     ['/destinations/paris', '/cruises'],
+    ['/cruise', '/cruises'],
+    ['/itinerary', '/cruises'],
     // Search Console reported /about as a soft 404 from 26 Oct 2024: the About
     // page lives at /company, and /about was never mapped or routed.
     ['/about', '/company'],

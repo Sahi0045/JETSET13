@@ -21,7 +21,7 @@ const crawlNavigationPaths = [
   '/',
   '/flights',
   '/hotels',
-  '/cruise',
+  '/cruises',
   '/packages',
   '/visa',
   '/destinations',
@@ -50,17 +50,24 @@ describe('route SEO page generator', () => {
     const { generatedPaths, spaShellPath } = await generateRouteSeoPages({ distDirectory });
 
     expect(generatedPaths).toHaveLength(INDEXABLE_ROUTE_SEO.length);
-    expect(INDEXABLE_ROUTE_SEO).toHaveLength(27);
+    expect(INDEXABLE_ROUTE_SEO).toHaveLength(26);
+    expect(INDEXABLE_ROUTE_SEO.map(({ pathname }) => pathname)).not.toContain('/cruise');
 
-    const cruisePage = await readFile(join(distDirectory, 'cruise', 'index.html'), 'utf8');
-    expect(cruisePage).toContain('<title data-rh="true">Luxury Cruise Vacations | Jetsetters</title>');
-    expect(cruisePage).toContain(`rel="canonical" href="${SITE_URL}/cruise"`);
+    const cruisePage = await readFile(join(distDirectory, 'cruises', 'index.html'), 'utf8');
+    expect(cruisePage).toContain(`rel="canonical" href="${SITE_URL}/cruises"`);
     expect(cruisePage).toContain('name="robots" content="index, follow"');
     expect(cruisePage.match(/property="og:title"/g)).toHaveLength(1);
-    expect(cruisePage.match(/type="application\/ld\+json"/g)).toHaveLength(1);
+    expect(cruisePage).toContain('"@type":"BreadcrumbList"');
+    expect(cruisePage).not.toContain('"@type":"FAQPage"');
+
+    // Sailing pages share one shell: indexable, with no canonical until the page names itself.
+    const cruiseShell = await readFile(join(distDirectory, 'cruise-shell.html'), 'utf8');
+    expect(cruiseShell).toContain('name="robots" content="index, follow"');
+    expect(cruiseShell).not.toContain('rel="canonical"');
+    expect(cruiseShell).not.toContain('noindex');
     expect(cruisePage).toContain('data-route-seo-navigation="true"');
     expect(cruisePage).toContain('href="/hotels"');
-    expect(cruisePage).not.toContain('href="/cruise"');
+    expect(cruisePage).not.toContain('href="/cruises"');
 
     const destinationsPage = await readFile(join(distDirectory, 'destinations', 'index.html'), 'utf8');
     expect(destinationsPage).toContain('href="/help"');
@@ -204,7 +211,7 @@ describe('route SEO page generator', () => {
       expect(entries['sitemap-hotels.xml']).toContain(`${SITE_URL}/hotels`);
       expect(entries['sitemap-flights.xml']).toContain(`${SITE_URL}/flights`);
       expect(entries['sitemap-cruises.xml']).toContain(`${SITE_URL}/cruises`);
-      expect(entries['sitemap-cruises.xml']).toContain(`${SITE_URL}/cruise`);
+      expect(entries['sitemap-cruises.xml']).not.toContain(`${SITE_URL}/cruise`);
     });
 
     it('emits valid XML with escaped locs and no faked metadata', () => {
@@ -222,10 +229,13 @@ describe('route SEO page generator', () => {
     it('keeps robots.txt declaring exactly the generated sitemaps', async () => {
       const robots = await readFile('public/robots.txt', 'utf8');
       const declared = [...robots.matchAll(/^Sitemap:\s*(\S+)\s*$/gim)].map(([, url]) => url);
-      const generated = ['sitemap.xml', 'sitemap-flights.xml', 'sitemap-hotels.xml', 'sitemap-cruises.xml']
+      // sitemap-cruise-sailings.xml is served live by the API: sailings come and go between builds.
+      const generated = ['sitemap.xml', 'sitemap-flights.xml', 'sitemap-hotels.xml', 'sitemap-cruises.xml', 'sitemap-cruise-sailings.xml']
         .map((file) => `${SITE_URL}/${file}`);
 
       expect(new Set(declared)).toEqual(new Set(generated));
+      // The sailing pages read their data from here; a blocked request renders an error to Google.
+      expect(robots).toMatch(/^Allow: \/api\/cruise-catalog\/$/m);
     });
   });
 
@@ -255,5 +265,7 @@ describe('route SEO page generator', () => {
 
     expect(new Set([...topLevelPaths, ...visaPaths])).toEqual(new Set(expectedPaths));
     expect(spaFallbacks).toHaveLength(4);
+    expect(spaFallbacks.some((r) => r.source.includes('cruise)'))).toBe(false);
+    expect(config.rewrites).toContainEqual({ source: '/cruise/([^/]+)', destination: '/cruise-shell.html' });
   });
 });

@@ -102,6 +102,16 @@
       "source": "/destinations/([^/]+)",
       "destination": "/cruises",
       "permanent": true
+    },
+    {
+      "source": "/cruise",
+      "destination": "/cruises",
+      "permanent": true
+    },
+    {
+      "source": "/itinerary",
+      "destination": "/cruises",
+      "permanent": true
     }
   ],
   "rewrites": [
@@ -118,7 +128,11 @@
       "destination": "/api/index.js"
     },
     {
-      "source": "/(cruise|cruises|flights|packages|hotels|visa|resources|destinations|travel-blog|support|faqs|company|contact|careers|privacy-policy|cookies|terms-conditions|request|membership|help)",
+      "source": "/sitemap-cruise-sailings.xml",
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/(cruises|flights|packages|hotels|visa|resources|destinations|travel-blog|support|faqs|company|contact|careers|privacy-policy|cookies|terms-conditions|request|membership|help)",
       "destination": "/$1/index.html"
     },
     {
@@ -126,12 +140,16 @@
       "destination": "/visa/$1/index.html"
     },
     {
-      "source": "/(dashboard|login|signup|profiledashboard|complete-profile|help|supabase-login|supabase-signup|supabase-profile|supabase-auth-debug|supabase-auth-status|auth/callback|my-trips|manage-booking|forgot-password|reset-password|booking-confirmation|cruise|cruises|itinerary|cruise-booking-summary|cruise-booking-success|flight|flights|flight-payment|flight-create-orders|packages|hotels|hotel-booking-success|membership|request|quote-detail|payment/callback|payment/success|payment/failed|admin|agent|desk|visa/agent|visa/admin|cookies|careers|resources|destinations|travel-blog|support|faqs|company|contact|privacy-policy|terms-conditions)",
+      "source": "/(dashboard|login|signup|profiledashboard|complete-profile|help|supabase-login|supabase-signup|supabase-profile|supabase-auth-debug|supabase-auth-status|auth/callback|my-trips|manage-booking|forgot-password|reset-password|booking-confirmation|cruises|cruise-booking-summary|cruise-booking-success|flight|flights|flight-payment|flight-create-orders|packages|hotels|hotel-booking-success|membership|request|quote-detail|payment/callback|payment/success|payment/failed|admin|agent|desk|visa/agent|visa/admin|cookies|careers|resources|destinations|travel-blog|support|faqs|company|contact|privacy-policy|terms-conditions)",
       "destination": "/spa-shell.html"
     },
     {
       "source": "/(profile/privacy|profile/notifications|flights/search|flights/booking-confirmation|hotels/search|hotels/details|hotels/booking-summary|packages/itinerary|packages/booking-summary|visa|visa/documents|visa/apply|visa/success|visa/track|visa/status|visa/booking|visa/refund-policy|visa/terms|visa/privacy|visa/agent/set-password)",
       "destination": "/spa-shell.html"
+    },
+    {
+      "source": "/cruise/([^/]+)",
+      "destination": "/cruise-shell.html"
     },
     {
       "source": "/(manage-booking|flights/booking|visa/consultation|inquiry|pay)/([^/]+)",

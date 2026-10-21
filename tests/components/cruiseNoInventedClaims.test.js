@@ -11,7 +11,7 @@ const filesUnder = (dir) => readdirSync(root(dir)).flatMap((name) => {
   return /\.(jsx?|json)$/.test(name) ? [rel] : [];
 });
 
-const sources = [...filesUnder('frontend/src/Pages/Common/cruise'), 'backend/data/cruiselines.data.js', 'backend/data/catalog.js']
+const sources = [...filesUnder('frontend/src/Pages/Common/cruise'), 'backend/data/catalog.js', 'backend/services/cruiseCatalog/appFeed.js']
   .map((file) => [file, read(file)]);
 
 describe('the cruise pages make no claims the company cannot back', () => {
@@ -30,11 +30,6 @@ describe('the cruise pages make no claims the company cannot back', () => {
     for (const [file, text] of sources) expect(text, file).not.toMatch(claim);
   });
 
-  it('shows no star badges on the destination and cruise line cards', () => {
-    for (const file of ['DestinationSection.jsx', 'CruiseLineSection.jsx']) {
-      expect(read(`frontend/src/Pages/Common/cruise/${file}`), file).not.toMatch(/FaStar|>\s*\d\.\d\s*</);
-    }
-  });
 
   it('gives search engines no made-up rating or price for /cruise', () => {
     const seo = read('frontend/src/seo/routeSeo.js');

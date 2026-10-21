@@ -89,85 +89,26 @@ export const ROUTE_SEO = {
       ],
     },
   },
-  '/cruise': {
-    title: 'Luxury Cruise Vacations | Jetsetters',
-    description: 'Discover unforgettable cruise vacations with trusted cruise lines, curated itineraries, and expert planning support from Jetsetters.',
-    schema: [
-      breadcrumb({ name: 'Cruises' }),
-      {
-        '@context': 'https://schema.org',
-        '@type': 'FAQPage',
-        mainEntity: [
-          {
-            '@type': 'Question',
-            name: 'What documents are required to board the cruise?',
-            acceptedAnswer: {
-              '@type': 'Answer',
-              text: 'Guests must present a valid passport or government-issued photo ID, their cruise ticket, and any visas required for the ports on their itinerary. We recommend carrying both physical and digital copies.',
-            },
-          },
-          {
-            '@type': 'Question',
-            name: 'What time do I need to check-in and board the cruise?',
-            acceptedAnswer: {
-              '@type': 'Answer',
-              text: 'For offline check-in, arrive 3–4 hours before departure. Boarding typically closes 1–2 hours before sailing. Refer to your cruise ticket for the exact timings for your ship and port.',
-            },
-          },
-          {
-            '@type': 'Question',
-            name: 'How much luggage is allowed on the cruise?',
-            acceptedAnswer: {
-              '@type': 'Answer',
-              text: 'Most cruise lines have a generous luggage allowance, but weight and size limits vary by line. Check your booking confirmation for the specific policy, and label every bag with your name and cabin number.',
-            },
-          },
-          {
-            '@type': 'Question',
-            name: 'Can I cancel or reschedule my cruise booking?',
-            acceptedAnswer: {
-              '@type': 'Answer',
-              text: 'Cancellation and rescheduling policies depend on the cruise line and fare type. Many bookings offer flexible cancellation up to a cut-off date. Contact our cruise experts for help with changes to your reservation.',
-            },
-          },
-          {
-            '@type': 'Question',
-            name: 'Are meals and activities included in the price?',
-            acceptedAnswer: {
-              '@type': 'Answer',
-              text: 'Most cruises include main dining, entertainment, and a range of onboard activities. Specialty restaurants, premium beverages, shore excursions, and spa services are usually charged separately.',
-            },
-          },
-        ],
-      },
-    ],
-  },
   '/cruises': {
-    title: 'Browse Cruise Deals | Jetsetters',
-    description: 'Compare cruise itineraries, departure dates, and destinations to find the right sailing and the best value for your vacation.',
-    schema: [breadcrumb({ name: 'Cruises', url: '/cruise' }, { name: 'Browse Deals' })],
-    // Mirrors cruise-cards.jsx, whose own <h1> is "Find Your Perfect Cruise".
-    // Sailings load from the API, so without this the crawled document showed
-    // nothing but a loading state.
+    title: 'Cruises | Jetsetters',
+    description: 'Cruises our team books on the major cruise lines: real sailings, port-by-port itineraries and prices our team checks with the cruise line.',
+    schema: [breadcrumb({ name: 'Cruises' })],
+    // The page loads its sailings from the cruise catalog, so the crawled
+    // document carries this text rather than a loading state.
     content: {
-      heading: 'Find Your Perfect Cruise',
-      intro: 'Compare cruise itineraries, departure dates and destinations to find the right sailing and the best value for your vacation.',
+      heading: 'Pick a sea. We\'ll plot the voyage.',
+      intro: 'Cruises our team books on the major cruise lines. Every sailing shows its route, its ports and the hours in each, with a price our team has checked with the cruise line.',
       sections: [
         {
-          heading: 'Filter by departure port',
-          body: 'Narrow the list to sailings leaving from the ports you can reach easily, then compare itineraries side by side across cruise lines and trip lengths.',
+          heading: 'Booked by our team',
+          body: 'Tell us the sailing, your dates and who is travelling. We check the cabin and today\'s price with the cruise line, send you a quote, and book it once you have paid on Jetsetters.',
         },
         {
-          heading: 'Compare before you commit',
-          body: 'Each sailing lists its route, duration and departure date so you can weigh cabin options and value before moving to booking.',
+          heading: 'Port by port',
+          body: 'Each sailing lists every day of the voyage: the port, the time the ship arrives and the time it leaves, and the days at sea in between.',
         },
       ],
     },
-  },
-  '/itinerary': {
-    title: 'Cruise Itinerary Details | Jetsetters',
-    description: 'Review full cruise itinerary details including ports of call, onboard experiences, excursion options, and booking information.',
-    shouldIndex: false,
   },
   '/flights': {
     title: 'Find Flight Deals | Jetsetters',
@@ -846,6 +787,12 @@ export const ROUTE_SEO = {
 };
 
 export const ROUTE_SEO_PATTERNS = [
+  {
+    // Each sailing page names itself once its data loads (SeoOverride).
+    path: '/cruise/:slug',
+    title: 'Cruise | Jetsetters',
+    description: 'A cruise our team books: the route, every port and the hours in each, and the price our team checks with the cruise line.',
+  },
   {
     path: '/flights/booking/:bookingId',
     title: 'Review Your Flight Booking | Jetsetters',

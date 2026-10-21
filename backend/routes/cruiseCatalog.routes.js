@@ -3,7 +3,7 @@ import { admin, protect } from '../middleware/auth.middleware.js';
 import {
   createLine, createPort, createSailing, createShip, getPublishedSailing, getSailingAdmin,
   listLines, listPorts, listPublishedSailings, listRegions, listSailingsAdmin, listShips,
-  photoUploadUrl, portSearch, updatePort, updateSailing,
+  photoUploadUrl, portSearch, sailingSitemap, updatePort, updateSailing,
 } from '../controllers/cruiseCatalog.controller.js';
 
 const router = express.Router();
@@ -18,6 +18,7 @@ const safe = (handler) => (req, res, next) => Promise.resolve(handler(req, res, 
 router.get('/sailings', safe(listPublishedSailings));
 router.get('/sailings/:slug', safe(getPublishedSailing));
 router.get('/regions', safe(listRegions));
+router.get('/sitemap.xml', safe(sailingSitemap));
 
 router.get('/admin/sailings', protect, admin, safe(listSailingsAdmin));
 router.get('/admin/sailings/:id', protect, admin, safe(getSailingAdmin));

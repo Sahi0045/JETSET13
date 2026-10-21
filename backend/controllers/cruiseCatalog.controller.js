@@ -2,6 +2,8 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import supabase from '../config/supabase.js';
 import { CRUISE_REGIONS } from '../../shared/cruiseRegions.js';
 import { makeSlug, sailingInput, stampPrice, todayInOffice } from '../services/cruiseCatalog/sailingInput.js';
+import { listPublished } from '../services/cruiseCatalog/publishedSailings.js';
+import { renderSailingSitemap } from '../services/cruiseCatalog/sitemap.js';
 // Loaded on first use: every API route shares one Vercel function, and the sea
 // network would add its load time to every cold start.
 const seaRoutes = () => import('../services/cruiseCatalog/seaRoute.js');
@@ -26,41 +28,15 @@ const hhmm = (time) => (time ? String(time).slice(0, 5) : null);
 // ── Public: published sailings only ─────────────────────────
 
 export const listPublishedSailings = async (req, res) => {
-  const today = todayInOffice();
-  let query = supabase
-    .from('cruise_sailings')
-    .select('slug, title, headline, region, nights, from_price_usd, price_checked_on, photos, line:cruise_lines(name), ship:cruise_ships(name), dates:cruise_sailing_dates(sail_date), days:cruise_sailing_days(day, port:cruise_ports(name))')
-    .eq('status', 'published');
-  if (req.query.region) query = query.eq('region', String(req.query.region));
-  const { data, error } = await query;
+  const { data, error } = await listPublished({ region: req.query.region });
   if (error) return failed(res, 'cruise list', error);
+  return ok(res, data.map(({ updated_at: _updated, ...card }) => card));
+};
 
-  const sailings = (data ?? [])
-    .map((s) => {
-      const dates = futureDates(s.dates, today);
-      const portNames = [...(s.days ?? [])]
-        .sort((a, b) => a.day - b.day)
-        .map((d) => d.port?.name)
-        .filter((name, i, all) => name && all.indexOf(name) === i);
-      return {
-        slug: s.slug,
-        title: s.title,
-        headline: s.headline,
-        region: s.region,
-        nights: s.nights,
-        from_price_usd: s.from_price_usd === null || s.from_price_usd === undefined ? null : Number(s.from_price_usd),
-        price_checked_on: s.price_checked_on,
-        photo: s.photos?.[0] ?? null,
-        line_name: s.line?.name ?? null,
-        ship_name: s.ship?.name ?? null,
-        port_names: portNames,
-        next_date: dates[0] ?? null,
-        date_count: dates.length,
-      };
-    })
-    .filter((s) => s.next_date)
-    .sort((a, b) => a.next_date.localeCompare(b.next_date));
-  return ok(res, sailings);
+export const sailingSitemap = async (_req, res) => {
+  const { data, error } = await listPublished();
+  if (error) return failed(res, 'sitemap', error);
+  res.type('application/xml').send(renderSailingSitemap(data));
 };
 
 export const getPublishedSailing = async (req, res) => {
@@ -73,6 +49,9 @@ export const getPublishedSailing = async (req, res) => {
     .maybeSingle();
   if (error) return failed(res, 'cruise lookup', error);
   if (!data) return refuse(res, 404, 'Cruise not found');
+  const dates = futureDates(data.dates, today);
+  // A sailing with no date left can't be booked: it is gone, not on sale.
+  if (!dates.length) return refuse(res, 404, 'Cruise not found');
 
   return ok(res, {
     slug: data.slug,
@@ -87,7 +66,7 @@ export const getPublishedSailing = async (req, res) => {
     route: data.route,
     line_name: data.line?.name ?? null,
     ship_name: data.ship?.name ?? null,
-    dates: futureDates(data.dates, today),
+    dates,
     days: [...(data.days ?? [])]
       .sort((a, b) => a.day - b.day)
       .map((d) => ({

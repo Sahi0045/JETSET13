@@ -75,6 +75,12 @@ describe('public reads', () => {
     expect(calls).toContainEqual(['cruise_sailings', 'eq', 'status', 'published']);
   });
 
+  it('treats a published sailing whose dates have all passed as gone', async () => {
+    fakeDb({ cruise_sailings: { data: { slug: 'old', title: 'Old', region: 'caribbean', nights: 2, photos: [], dates: [{ sail_date: '2020-01-01' }], days: [], line: { name: 'X' } }, error: null } });
+    const res = await request(app).get('/api/cruise-catalog/sailings/old');
+    expect(res.status).toBe(404);
+  });
+
   it('leaves out sailings whose dates have all passed', async () => {
     fakeDb({
       cruise_sailings: {
@@ -88,6 +94,33 @@ describe('public reads', () => {
     const res = await request(app).get('/api/cruise-catalog/sailings');
     expect(res.body.data.map((s) => s.slug)).toEqual(['new']);
     expect(res.body.data[0].next_date).toBe('2098-06-01');
+  });
+
+  it('gives each card its route, its ports in order and where it starts and ends', async () => {
+    fakeDb({
+      cruise_sailings: {
+        data: [{
+          slug: 'w', title: 'W', region: 'caribbean', nights: 2, photos: [], line: { name: 'X' },
+          route: { type: 'LineString', coordinates: [[-80.17, 25.77], [-77.35, 25.08], [-80.17, 25.77]] },
+          dates: [{ sail_date: '2099-01-01' }],
+          days: [
+            { day: 3, port: { name: 'Miami', country: 'United States', lat: 25.77, lon: -80.17 } },
+            { day: 1, port: { name: 'Miami', country: 'United States', lat: 25.77, lon: -80.17 } },
+            { day: 2, port: { name: 'Nassau', country: 'Bahamas', lat: 25.08, lon: -77.35 } },
+          ],
+        }],
+        error: null,
+      },
+    });
+    const res = await request(app).get('/api/cruise-catalog/sailings');
+    const [card] = res.body.data;
+    expect(card.route.type).toBe('LineString');
+    expect(card.ports).toEqual([
+      { name: 'Miami', country: 'United States', lat: 25.77, lon: -80.17 },
+      { name: 'Nassau', country: 'Bahamas', lat: 25.08, lon: -77.35 },
+    ]);
+    expect(card.start_port).toBe('Miami');
+    expect(card.end_port).toBe('Miami');
   });
 
   it('counts regions with published sailings only where there are some', async () => {
