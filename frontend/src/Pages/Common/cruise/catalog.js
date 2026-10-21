@@ -41,7 +41,7 @@ const ASK = { kind: 'ask', amount: "Ask for today's price", note: 'Our team chec
  * not shown: cruise fares move daily, and an old figure would be a promise.
  */
 export const priceLabel = ({ from_price_usd: price, price_checked_on: checkedOn }, today = officeToday()) => {
-  if (!price || price <= 0 || !checkedOn || daysBetween(checkedOn, today) > STALE_DAYS) return ASK;
+  if (!price || price <= 0 || !checkedOn || !(daysBetween(checkedOn, today) <= STALE_DAYS)) return ASK;
   return { kind: 'price', amount: `From ${dollars(Number(price))}`, note: `per person, port fees included · price checked ${dayMonth(checkedOn)}` };
 };
 

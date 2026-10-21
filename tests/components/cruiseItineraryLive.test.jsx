@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -10,6 +10,7 @@ vi.mock('../../frontend/src/Pages/Common/PageWrapper', () => ({ default: (Page) 
 vi.mock('../../frontend/src/Services/callbackService', () => ({ default: { createCallbackRequest: vi.fn() } }));
 
 import Itinerary from '../../frontend/src/Pages/Common/cruise/Itinerary.jsx';
+import callbackService from '../../frontend/src/Services/callbackService';
 import { officeToday } from '../../frontend/src/Pages/Common/cruise/catalog.js';
 
 const daysAgo = (n) => officeToday(new Date(Date.now() - n * 86400000));
@@ -102,6 +103,28 @@ describe('the itinerary page', () => {
     expect(document.body.classList.contains('phone-action-bar')).toBe(true);
     unmount();
     expect(document.body.classList.contains('phone-action-bar')).toBe(false);
+  });
+
+  it('tells our team which cruise a call back is about', async () => {
+    serve({ success: true, data: SAILING });
+    show(`?sailing=${SAILING.slug}`);
+    fireEvent.click((await screen.findAllByRole('button', { name: /Callback|Request a call back/ }))[0]);
+    fireEvent.change(screen.getByPlaceholderText('John Doe'), { target: { value: 'Ann Lee' } });
+    fireEvent.change(screen.getByPlaceholderText('john@example.com'), { target: { value: 'ann@example.com' } });
+    fireEvent.change(screen.getByPlaceholderText('+1 234 567 890'), { target: { value: '+1 555 0100' } });
+    fireEvent.change(screen.getByPlaceholderText('Preferred dates or cabin'), { target: { value: 'Balcony please' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Request call back' }));
+    await waitFor(() => expect(callbackService.createCallbackRequest).toHaveBeenCalled());
+    const sent = callbackService.createCallbackRequest.mock.calls[0][0].message;
+    expect(sent).toContain('Balcony please');
+    expect(sent).toContain(`Cruise: Western Caribbean (${SAILING.slug})`);
+  });
+
+  it('says one night, not one nights', async () => {
+    serve({ success: true, data: { ...SAILING, nights: 1 } });
+    show(`?sailing=${SAILING.slug}`);
+    expect(await screen.findByRole('heading', { name: 'Your 1-night itinerary' })).toBeTruthy();
+    expect(screen.queryByText(/1 nights/)).toBeNull();
   });
 
   it("asks for today's price when the price is old", async () => {

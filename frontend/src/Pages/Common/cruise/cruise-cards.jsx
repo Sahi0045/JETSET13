@@ -10,7 +10,7 @@ import Footer from '../Footer';
 import withPageElements from '../PageWrapper';
 import { CRUISE_EMAIL, CRUISE_PHONE, SEA_PHOTO, priceLabel, shortDate } from './catalog';
 import {
-  NIGHT_RANGES, criteriaFrom, departurePort, matchesSearch, monthName, regionName, searchOptions, searchQuery,
+  NIGHT_RANGES, criteriaFrom, departurePort, matchesSearch, monthName, nightsLabel, regionName, searchOptions, searchQuery,
 } from './searchSailings';
 import { usePublishedSailings } from './useSailings';
 
@@ -26,8 +26,12 @@ const byPrice = (a, b) => {
   return pa - pb;
 };
 
-const sortSailings = (sailings, sortBy) => {
-  const out = [...sailings].sort((a, b) => a.next_date.localeCompare(b.next_date));
+/** The date a card shows: the first one in the chosen month, or the next one. */
+const shownDate = (sailing, month) =>
+  (month && (sailing.dates ?? []).find((date) => date.startsWith(month))) || sailing.next_date;
+
+const sortSailings = (sailings, sortBy, month) => {
+  const out = [...sailings].sort((a, b) => shownDate(a, month).localeCompare(shownDate(b, month)));
   if (sortBy === 'price') return out.sort(byPrice);
   if (sortBy === 'nights') return out.sort((a, b) => a.nights - b.nights);
   return out;
@@ -104,13 +108,23 @@ const Notice = ({ icon: Icon, title, children }) => (
 
 const CruiseCards = () => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const criteria = useMemo(() => criteriaFrom(searchParams), [searchParams]);
   const [sortBy, setSortBy] = useState('date');
   const { data: sailings = [], isLoading, isError } = usePublishedSailings();
 
   const options = useMemo(() => searchOptions(sailings), [sailings]);
+  // A line, port or month from an old link that nothing sails any more is dropped,
+  // or the list would sit empty behind a select that reads "Any".
+  const criteria = useMemo(() => {
+    const asked = criteriaFrom(searchParams);
+    return {
+      ...asked,
+      line: options.lines.includes(asked.line) ? asked.line : '',
+      port: options.ports.includes(asked.port) ? asked.port : '',
+      month: options.months.includes(asked.month) ? asked.month : '',
+    };
+  }, [searchParams, options]);
   const results = useMemo(
-    () => sortSailings(sailings.filter((s) => matchesSearch(s, criteria)), sortBy),
+    () => sortSailings(sailings.filter((s) => matchesSearch(s, criteria)), sortBy, criteria.month),
     [sailings, criteria, sortBy],
   );
 
@@ -162,7 +176,7 @@ const CruiseCards = () => {
   } else {
     body = (
       <div className="space-y-5">
-        {results.map((sailing) => <SailingCard key={sailing.slug} sailing={sailing} />)}
+        {results.map((sailing) => <SailingCard key={sailing.slug} sailing={sailing} month={criteria.month} />)}
       </div>
     );
   }
@@ -251,9 +265,12 @@ const CruiseCards = () => {
 };
 
 /* ---------- One sailing ---------- */
-const SailingCard = ({ sailing }) => {
+const SailingCard = ({ sailing, month }) => {
   const price = priceLabel(sailing);
-  const moreDates = Math.max(0, (sailing.date_count ?? 1) - 1);
+  const otherDates = Math.max(0, (sailing.date_count ?? 1) - 1);
+  const dateLine = month
+    ? `Sails ${shortDate(shownDate(sailing, month))}${otherDates ? ` · ${otherDates} other ${otherDates === 1 ? 'date' : 'dates'}` : ''}`
+    : `Next sailing ${shortDate(sailing.next_date)}${otherDates ? ` · ${otherDates} more ${otherDates === 1 ? 'date' : 'dates'}` : ''}`;
   const route = sailing.port_names?.length ? sailing.port_names.join(' → ') : 'Ports listed on the itinerary';
   const from = departurePort(sailing);
 
@@ -271,11 +288,11 @@ const SailingCard = ({ sailing }) => {
           <span className="truncate">{sailing.line_name}{sailing.ship_name ? ` · ${sailing.ship_name}` : ''}</span>
         </p>
         <ul className="mt-3 space-y-1.5 text-sm text-slate-600">
-          <li className="flex items-center gap-2"><FaRegClock className="w-3.5 h-3.5 shrink-0 text-[#0890BC]" /> {sailing.nights} nights{from ? ` from ${from}` : ''}</li>
+          <li className="flex items-center gap-2"><FaRegClock className="w-3.5 h-3.5 shrink-0 text-[#0890BC]" /> {nightsLabel(sailing.nights)}{from ? ` from ${from}` : ''}</li>
           <li className="flex items-start gap-2"><FaMapMarkerAlt className="w-3.5 h-3.5 shrink-0 mt-0.5 text-[#0890BC]" /> <span>{route}</span></li>
           <li className="flex items-center gap-2">
             <FaCalendarAlt className="w-3.5 h-3.5 shrink-0 text-[#0890BC]" />
-            {`Next sailing ${shortDate(sailing.next_date)}${moreDates ? ` · ${moreDates} more ${moreDates === 1 ? 'date' : 'dates'}` : ''}`}
+            {dateLine}
           </li>
         </ul>
       </div>

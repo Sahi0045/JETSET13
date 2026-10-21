@@ -103,6 +103,27 @@ describe('the cruise results', () => {
     await waitFor(() => expect(titles()).toEqual(['Inside Passage']));
   });
 
+  it('shows the date in the chosen month, not an earlier one', async () => {
+    serve(SAILINGS);
+    show('/cruises?month=2100-01');
+    const card = (await screen.findByRole('heading', { name: 'Western Caribbean' })).closest('article');
+    expect(card.textContent).toMatch(/Sails 9 Jan 2100 · 2 other dates/);
+  });
+
+  it('ignores a filter for something no longer listed, so the list is not stuck empty', async () => {
+    serve(SAILINGS);
+    show('/cruises?cruiseLine=Azamara&port=Atlantis&month=2001-01');
+    await waitFor(() => expect(titles()).toHaveLength(3));
+    expect(screen.getByLabelText('Cruise line').value).toBe('');
+  });
+
+  it('says one night, not one nights', async () => {
+    serve([{ ...SAILINGS[0], nights: 1 }]);
+    show();
+    const card = (await screen.findByRole('heading', { name: 'Eastern Caribbean' })).closest('article');
+    expect(card.textContent).toMatch(/1 night from Port Canaveral/);
+  });
+
   it('sorts by price with the unpriced sailings last', async () => {
     serve(SAILINGS);
     show();

@@ -9,7 +9,7 @@ import Footer from '../Footer';
 import withPageElements from '../PageWrapper';
 import callbackService from '../../../Services/callbackService';
 import { CRUISE_EMAIL, CRUISE_PHONE, SEA_PHOTO, inquiryMail, priceLabel, shortDate } from './catalog';
-import { regionName } from './searchSailings';
+import { nightsLabel, regionName } from './searchSailings';
 import { usePublishedSailing } from './useSailings';
 
 const clock = (time) => {
@@ -41,7 +41,7 @@ const Field = ({ label, icon: Icon, active, children }) => (
   </label>
 );
 
-const CallbackModal = ({ isOpen, onClose, cruiseLine }) => {
+const CallbackModal = ({ isOpen, onClose, cruiseLine, about }) => {
   const [form, setForm] = useState({ name: '', email: '', phone: '', preferredTime: '', message: '' });
   const [activeField, setActiveField] = useState(null);
   const [status, setStatus] = useState('idle');
@@ -67,7 +67,8 @@ const CallbackModal = ({ isOpen, onClose, cruiseLine }) => {
     try {
       await callbackService.createCallbackRequest({
         name: form.name.trim(), email: form.email.trim(), phone: form.phone.trim(),
-        preferredTime: form.preferredTime.trim(), message: form.message.trim(),
+        preferredTime: form.preferredTime.trim(),
+        message: [form.message.trim(), about].filter(Boolean).join('\n\n'),
       });
       setStatus('success');
       setForm({ name: '', email: '', phone: '', preferredTime: '', message: '' });
@@ -223,15 +224,15 @@ const Itinerary = () => {
   return (
     <div className="min-h-screen bg-[#F4F7F8] pb-24 text-slate-800 lg:pb-0">
       <Navbar forceScrolled />
-      <CallbackModal isOpen={isCallbackOpen} onClose={() => setIsCallbackOpen(false)} cruiseLine={sailing.title} />
+      <CallbackModal isOpen={isCallbackOpen} onClose={() => setIsCallbackOpen(false)} cruiseLine={sailing.title} about={`Cruise: ${sailing.title} (${sailing.slug})`} />
 
       {/* Hero */}
-      <section className="relative h-[300px] w-full overflow-hidden bg-[#034457]">
+      <section className="relative min-h-[300px] w-full overflow-hidden bg-[#034457]">
         <img src={hero?.url || SEA_PHOTO} alt="" className="absolute inset-0 h-full w-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-r from-[#034457]/95 via-[#034457]/60 to-[#055B75]/25" />
-        <div className="relative mx-auto flex h-full max-w-6xl flex-col items-start justify-center px-4 sm:px-6 lg:px-8">
+        <div className="relative mx-auto flex min-h-[300px] max-w-6xl flex-col items-start justify-center px-4 py-10 sm:px-6 lg:px-8">
           <Link to="/cruises" className="mb-4 inline-flex w-fit items-center gap-2 text-sm font-medium text-white/85 hover:text-white"><ArrowLeft className="h-4 w-4" /> Back to results</Link>
-          <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#9FD6E8]">{regionName(sailing.region)} · {sailing.nights} nights</p>
+          <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#9FD6E8]">{regionName(sailing.region)} · {nightsLabel(sailing.nights)}</p>
           <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-white md:text-5xl">{sailing.title}</h1>
           {sailing.headline && <p className="mt-2 max-w-xl text-sm text-white/85 md:text-base">{sailing.headline}</p>}
         </div>
@@ -245,7 +246,7 @@ const Itinerary = () => {
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
                 {trip && <span className="text-xl font-extrabold text-[#034457] md:text-2xl">{trip}</span>}
-                <span className="rounded-full bg-[#F1FBFD] px-3 py-1 text-sm font-bold text-[#055B75]">{sailing.nights} nights</span>
+                <span className="rounded-full bg-[#F1FBFD] px-3 py-1 text-sm font-bold text-[#055B75]">{nightsLabel(sailing.nights)}</span>
               </div>
               <div className="mt-5 grid gap-4 sm:grid-cols-2">
                 <Fact icon={Ship} label="Cruise line" value={sailing.line_name} />

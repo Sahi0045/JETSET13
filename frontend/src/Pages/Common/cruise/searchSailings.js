@@ -29,6 +29,8 @@ export const monthName = (month) => {
 
 export const departurePort = (sailing) => sailing.port_names?.[0] ?? null;
 
+export const nightsLabel = (nights) => `${nights} ${nights === 1 ? 'night' : 'nights'}`;
+
 export const lineLogo = (name) => LOGOS.find(([pattern]) => pattern.test(name ?? ''))?.[1] ?? null;
 
 const sorted = (values) => [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b));

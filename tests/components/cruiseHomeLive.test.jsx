@@ -92,6 +92,7 @@ describe('the cruise lines on the cruise home', () => {
     expect(royal.textContent).toMatch(/2 sailings/);
     expect(container.querySelector('img[alt="Royal Caribbean logo"]').getAttribute('src')).toBe('/images/logos/royal_caribbean.webp');
     expect(screen.getByRole('link', { name: /Carnival Cruise Line/ })).toBeTruthy();
+    expect(royal.textContent).toMatch(/per person, port fees included · price checked/);
     expect(container.textContent).not.toMatch(broken);
   });
 

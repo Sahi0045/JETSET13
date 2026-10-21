@@ -55,6 +55,7 @@ const CruiseLineSection = () => {
                   <h3 className="text-sm sm:text-base md:text-lg font-bold text-[#034457] leading-tight">{cruiseLine.name}</h3>
                   <p className="text-xs text-slate-400 mt-1">{cruiseLine.count} {cruiseLine.count === 1 ? 'sailing' : 'sailings'}</p>
                   <p className="text-sm font-semibold text-[#055B75] mt-1">{cruiseLine.price.amount}</p>
+                  <p className="text-[11px] leading-snug text-slate-400">{cruiseLine.price.note}</p>
                   <span className="mt-3 md:mt-4 inline-flex items-center justify-center px-4 md:px-6 py-2 rounded-full bg-gradient-to-r from-[#055B75] to-[#0890BC] text-white text-xs md:text-sm font-semibold group-hover:from-[#034457] group-hover:to-[#055B75] transition-all shadow-sm">
                     See sailings
                   </span>

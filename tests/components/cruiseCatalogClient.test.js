@@ -22,6 +22,10 @@ describe('the price customers see', () => {
     expect(priceLabel({ from_price_usd: 1299, price_checked_on: '2026-09-21' }, '2026-10-21').kind).toBe('price');
   });
 
+  it("asks for today's price when the checked date cannot be read", () => {
+    expect(priceLabel({ from_price_usd: 1299, price_checked_on: 'not a date' }, '2026-10-21').kind).toBe('ask');
+  });
+
   it("asks for today's price when there is none", () => {
     expect(priceLabel({ from_price_usd: null, price_checked_on: null }, '2026-10-21'))
       .toEqual({ kind: 'ask', amount: "Ask for today's price", note: 'Our team checks it with the cruise line' });
