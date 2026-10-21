@@ -175,14 +175,16 @@ export default defineConfig(({ mode }) => {
                             id.includes('/frontend/src/contexts/SupabaseAuthContext')) {
                             return 'common-shell';
                         }
+                        // Shared by the cruise pages and the admin catalog; pinned
+                        // so neither side imports the other's chunk to reach it.
+                        if (id.endsWith('/shared/cruiseRegions.js')) return 'common-shell';
                         // ── Admin section ──────────────────────────────────
                         if (id.includes('/Pages/Admin/')) {
                             return 'admin';
                         }
                         // ── Lazily-loaded data files: let Rollup put them in their
                         //    own dynamic chunks instead of folding into the flow bundles.
-                        if (id.endsWith('/flights/data-mock-booking.js') ||
-                            id.endsWith('/cruise/data/cruiselines.json')) {
+                        if (id.endsWith('/flights/data-mock-booking.js')) {
                             return; // undefined → Rollup chooses dynamic chunk
                         }
                         // ── Booking flows (per-flow so users only download what they visit) ──

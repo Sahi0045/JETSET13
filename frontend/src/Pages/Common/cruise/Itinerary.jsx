@@ -1,27 +1,34 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
   AlertTriangle, Anchor, ArrowLeft, CalendarDays, CheckCircle2, ChevronDown,
-  Clock3, Info, LoaderCircle, Mail, MapPin, MessageSquare, Phone, ShieldCheck,
-  Ship, Sparkles, Star, User, Users, Utensils, Waves, X,
+  Clock3, Info, LoaderCircle, Mail, MapPin, MessageSquare, Phone, Ship, User, Waves, X,
 } from 'lucide-react';
 import Navbar from '../Navbar';
 import Footer from '../Footer';
 import withPageElements from '../PageWrapper';
 import callbackService from '../../../Services/callbackService';
-import { loadCruiseLines } from './data/cruiselinesLoader';
+import { CRUISE_EMAIL, CRUISE_PHONE, SEA_PHOTO, inquiryMail, priceLabel, shortDate } from './catalog';
+import { regionName } from './searchSailings';
+import { usePublishedSailing } from './useSailings';
 
-const HIGHLIGHTS = [
-  { title: 'Ocean-view dining', image: 'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?q=80&w=800&auto=format&fit=crop' },
-  { title: 'World-class entertainment', image: 'https://images.unsplash.com/photo-1503095396549-807759245b35?q=80&w=800&auto=format&fit=crop' },
-  { title: 'Resort-style relaxation', image: 'https://images.unsplash.com/photo-1540202404-a2f29016b523?q=80&w=800&auto=format&fit=crop' },
-];
+const clock = (time) => {
+  const [hours, minutes] = time.split(':').map(Number);
+  return `${hours % 12 || 12}:${String(minutes).padStart(2, '0')} ${hours >= 12 ? 'PM' : 'AM'}`;
+};
 
-const AMENITY_ICONS = [Utensils, Waves, Sparkles, Ship, Users, Anchor, ShieldCheck, Star];
+const tripLine = (days) => {
+  const calls = days.filter((d) => d.port);
+  const first = calls[0]?.port;
+  const last = calls[calls.length - 1]?.port;
+  if (!first) return null;
+  if (first.name === last.name && first.country === last.country) return `Round trip from ${first.name}`;
+  return `${first.name} to ${last.name}`;
+};
 
-const getNights = (duration) => {
-  const value = Number.parseInt(String(duration || '').match(/\d+/)?.[0], 10);
-  return Number.isFinite(value) ? value : null;
+const portsOfCall = (days) => {
+  const calls = days.filter((d) => d.port).map((d) => d.port.name);
+  return [...new Set(calls.slice(1, -1))].filter((name) => name !== calls[0]);
 };
 
 const Field = ({ label, icon: Icon, active, children }) => (
@@ -142,49 +149,33 @@ const Accordion = ({ title, children, defaultOpen = false }) => {
   );
 };
 
+const ContactLinks = () => (
+  <>
+    Call <a href={CRUISE_PHONE.href} className="font-semibold text-[#055B75] underline">{CRUISE_PHONE.text}</a> or email{' '}
+    <a href={`mailto:${CRUISE_EMAIL}`} className="font-semibold text-[#055B75] underline">{CRUISE_EMAIL}</a>
+  </>
+);
+
+const PageNotice = ({ title, children }) => (
+  <div className="min-h-screen bg-[#F4F7F8]">
+    <Navbar forceScrolled />
+    <div className="mx-auto flex min-h-[60vh] max-w-lg flex-col items-center justify-center px-4 text-center">
+      <span className="flex h-20 w-20 items-center justify-center rounded-3xl bg-[#F1FBFD] text-[#055B75]"><AlertTriangle className="h-9 w-9" /></span>
+      <h2 className="mt-5 text-2xl font-bold text-[#034457]">{title}</h2>
+      <div className="mt-2 text-slate-600">{children}</div>
+      <Link to="/cruises" className="mt-6 inline-flex items-center gap-2 rounded-xl bg-[#055B75] px-6 py-3 font-semibold text-white"><ArrowLeft className="h-4 w-4" /> See all cruises</Link>
+    </div>
+    <Footer />
+  </div>
+);
+
 const Itinerary = () => {
   const [searchParams] = useSearchParams();
-  const cruiseId = searchParams.get('cruiseId');
-  const cruiseLine = searchParams.get('cruiseLine');
+  const slug = searchParams.get('sailing');
   const [isCallbackOpen, setIsCallbackOpen] = useState(false);
-  const [status, setStatus] = useState('loading');
-  const [error, setError] = useState('');
-  const [cruise, setCruise] = useState(null);
+  const { data: sailing, isLoading, isError } = usePublishedSailing(slug);
 
-  useEffect(() => {
-    let cancelled = false;
-    setStatus('loading'); setError(''); setCruise(null);
-    loadCruiseLines()
-      .then((data) => {
-        if (cancelled) return;
-        const cruises = data?.cruiseLines || [];
-        const selected = cruiseId
-          ? cruises.find((c) => String(c.id) === String(cruiseId))
-          : cruises.find((c) => c.name?.toLowerCase() === cruiseLine?.toLowerCase());
-        if (!selected) { setStatus('not-found'); return; }
-        setCruise(selected); setStatus('ready');
-      })
-      .catch(() => { if (!cancelled) { setError('We could not load this cruise right now.'); setStatus('error'); } });
-    return () => { cancelled = true; };
-  }, [cruiseId, cruiseLine]);
-
-  const view = useMemo(() => {
-    if (!cruise) return null;
-    const days = Array.isArray(cruise.itinerary) ? cruise.itinerary : [];
-    const destinations = Array.isArray(cruise.destinations) ? cruise.destinations : [];
-    const ports = Array.isArray(cruise.departurePorts) ? cruise.departurePorts : [];
-    const amenities = Array.isArray(cruise.amenities) ? cruise.amenities : [];
-    return {
-      ...cruise, days, destinations, ports, amenities,
-      departure: ports[0] || days[0]?.port || 'Departure port varies',
-      arrival: destinations[0] || days.at(-1)?.port || 'Itinerary varies',
-      nights: getNights(cruise.duration),
-    };
-  }, [cruise]);
-
-  const inquiryMail = `mailto:support@jetsetterss.com?subject=${encodeURIComponent(`Cruise inquiry: ${view?.name || 'cruise'}`)}`;
-
-  if (status === 'loading') {
+  if (slug && isLoading) {
     return (
       <div className="min-h-screen bg-[#F4F7F8]">
         <Navbar forceScrolled />
@@ -196,64 +187,73 @@ const Itinerary = () => {
     );
   }
 
-  if (status !== 'ready' || !view) {
+  if (slug && isError) {
     return (
-      <div className="min-h-screen bg-[#F4F7F8]">
-        <Navbar forceScrolled />
-        <div className="mx-auto flex min-h-[60vh] max-w-lg flex-col items-center justify-center px-4 text-center">
-          <span className="flex h-20 w-20 items-center justify-center rounded-3xl bg-amber-50 text-amber-600"><AlertTriangle className="h-9 w-9" /></span>
-          <h2 className="mt-5 text-2xl font-bold text-[#034457]">{status === 'not-found' ? 'Cruise not found' : 'Unable to load cruise'}</h2>
-          <p className="mt-2 text-slate-600">{error || 'This cruise may no longer be available.'}</p>
-          <Link to="/cruises" className="mt-6 inline-flex items-center gap-2 rounded-xl bg-[#055B75] px-6 py-3 font-semibold text-white"><ArrowLeft className="h-4 w-4" /> Back to cruises</Link>
-        </div>
-        <Footer />
-      </div>
+      <PageNotice title="We couldn't load this cruise">
+        Please try again in a minute. <ContactLinks /> and our team will help you straight away.
+      </PageNotice>
     );
   }
 
-  const visitingPorts = view.days.map((d) => d.port).filter(Boolean).join(' · ') || view.destinations.slice(0, 3).join(' · ') || 'Multiple ports';
+  if (!sailing) {
+    return (
+      <PageNotice title="This cruise isn't available">
+        It may have sailed, or our team has taken it off the list.
+      </PageNotice>
+    );
+  }
+
+  const price = priceLabel(sailing);
+  const days = sailing.days ?? [];
+  const dates = sailing.dates ?? [];
+  const photos = sailing.photos ?? [];
+  const hero = photos[0];
+  const trip = tripLine(days);
+  const calls = portsOfCall(days);
+  const mail = inquiryMail(sailing.title);
+  const moreDates = dates.length - 1;
 
   return (
-    <div className="min-h-screen bg-[#F4F7F8] text-slate-800">
+    <div className="min-h-screen bg-[#F4F7F8] pb-24 text-slate-800 lg:pb-0">
       <Navbar forceScrolled />
-      <CallbackModal isOpen={isCallbackOpen} onClose={() => setIsCallbackOpen(false)} cruiseLine={view.name} />
+      <CallbackModal isOpen={isCallbackOpen} onClose={() => setIsCallbackOpen(false)} cruiseLine={sailing.title} />
 
       {/* Hero */}
-      <section className="relative h-[300px] w-full overflow-hidden">
-        <img src={view.image || 'https://images.unsplash.com/photo-1548574505-5e239809ee19?q=80&w=1600&auto=format&fit=crop'} alt={view.name} className="absolute inset-0 h-full w-full object-cover" />
+      <section className="relative h-[300px] w-full overflow-hidden bg-[#034457]">
+        <img src={hero?.url || SEA_PHOTO} alt="" className="absolute inset-0 h-full w-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-r from-[#034457]/95 via-[#034457]/60 to-[#055B75]/25" />
         <div className="relative mx-auto flex h-full max-w-6xl flex-col items-start justify-center px-4 sm:px-6 lg:px-8">
-          <Link to="/cruises" className="mb-5 inline-flex w-fit items-center gap-2 text-sm font-medium text-white/85 hover:text-white"><ArrowLeft className="h-4 w-4" /> Back to results</Link>
-          <h1 className="mt-3 text-4xl font-extrabold tracking-tight text-white md:text-5xl">{view.name}</h1>
-          <p className="mt-2 max-w-xl text-sm text-white/85 md:text-base">{view.description || 'A memorable voyage with world-class dining, entertainment and destinations.'}</p>
+          <Link to="/cruises" className="mb-4 inline-flex w-fit items-center gap-2 text-sm font-medium text-white/85 hover:text-white"><ArrowLeft className="h-4 w-4" /> Back to results</Link>
+          <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#9FD6E8]">{regionName(sailing.region)} · {sailing.nights} nights</p>
+          <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-white md:text-5xl">{sailing.title}</h1>
+          {sailing.headline && <p className="mt-2 max-w-xl text-sm text-white/85 md:text-base">{sailing.headline}</p>}
         </div>
+        {hero?.credit && <p className="absolute bottom-2 right-3 text-[10px] text-white/70">Photo: {hero.credit}</p>}
       </section>
 
-      {/* Summary bar (below hero, no overlap) */}
+      {/* Summary bar */}
       <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
         <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-100">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-2xl font-extrabold text-[#034457]">{view.departure}</span>
-                <span className="text-xl text-[#0890BC]">→</span>
-                <span className="text-2xl font-extrabold text-[#034457]">{view.arrival}</span>
-                <span className="rounded-full bg-[#F1FBFD] px-3 py-1 text-sm font-bold text-[#055B75]">{view.duration || 'Multiple durations'}</span>
+                {trip && <span className="text-xl font-extrabold text-[#034457] md:text-2xl">{trip}</span>}
+                <span className="rounded-full bg-[#F1FBFD] px-3 py-1 text-sm font-bold text-[#055B75]">{sailing.nights} nights</span>
               </div>
               <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                <Fact icon={Ship} label="Cruise line" value={view.name} />
-                <Fact icon={Anchor} label="Departure port" value={view.departure} />
-                <Fact icon={CalendarDays} label="Sailing dates" value="Choose a date" />
-                <Fact icon={MapPin} label="Visiting ports" value={visitingPorts} />
+                <Fact icon={Ship} label="Cruise line" value={sailing.line_name} />
+                <Fact icon={Anchor} label="Ship" value={sailing.ship_name || 'Confirmed with your quote'} />
+                <Fact icon={CalendarDays} label="Next sailing" value={`${shortDate(dates[0])}${moreDates > 0 ? ` · ${moreDates} more` : ''}`} />
+                <Fact icon={MapPin} label="Ports of call" value={calls.join(' · ') || 'No other stops'} />
               </div>
             </div>
-            <div className="shrink-0 border-t border-slate-100 pt-5 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
+            <div className="shrink-0 border-t border-slate-100 pt-5 lg:max-w-[260px] lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
               <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Price</p>
-              <div className="text-xl font-extrabold text-[#055B75]">Ask for today's price</div>
-              <p className="mb-3 text-xs text-slate-500">Our team quotes every sailing</p>
+              <div className="text-xl font-extrabold text-[#055B75]">{price.amount}</div>
+              <p className="mb-3 text-xs text-slate-500">{price.note}</p>
               <div className="flex gap-2">
-                <button onClick={() => setIsCallbackOpen(true)} className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#055B75]/30 px-4 py-2.5 text-sm font-bold text-[#055B75] hover:bg-[#F1FBFD]"><Phone className="h-4 w-4" /> Callback</button>
-                <a href="tel:+18775387380" className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#055B75] to-[#0890BC] px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:from-[#034457] hover:to-[#055B75]">Call (877) 538-7380</a>
+                <button type="button" onClick={() => setIsCallbackOpen(true)} className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#055B75]/30 px-4 py-2.5 text-sm font-bold text-[#055B75] hover:bg-[#F1FBFD]"><Phone className="h-4 w-4" /> Callback</button>
+                <a href={CRUISE_PHONE.href} className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#055B75] to-[#0890BC] px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:from-[#034457] hover:to-[#055B75]">Call {CRUISE_PHONE.text}</a>
               </div>
             </div>
           </div>
@@ -263,69 +263,67 @@ const Itinerary = () => {
       {/* Two-column content */}
       <div className="mx-auto grid max-w-6xl gap-6 px-4 pb-12 sm:px-6 lg:grid-cols-[1fr_320px] lg:px-8">
         <main className="min-w-0 space-y-6">
-          {/* Itinerary */}
           <section className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-100">
-            <h2 className="text-2xl font-bold text-[#034457]">Your {view.nights ? `${view.nights}-night ` : ''}itinerary</h2>
-            <p className="mt-1 text-sm text-slate-500">Times are local and may vary by sailing date.</p>
-            <div className="mt-6 space-y-4">
-              {view.days.length ? view.days.map((day) => (
-                <article key={`${day.day}-${day.port}`} className="rounded-xl border border-slate-100 bg-[#FAFDFE] p-5">
+            <h2 className="text-2xl font-bold text-[#034457]">Your {sailing.nights}-night itinerary</h2>
+            <p className="mt-1 text-sm text-slate-500">Times are local and can change with the cruise line.</p>
+            <ol aria-label="Day by day" className="mt-6 space-y-3">
+              {days.map((day) => (
+                <li key={day.day} className={`rounded-xl border p-4 ${day.port ? 'border-slate-100 bg-[#FAFDFE]' : 'border-[#65B3CF]/30 bg-[#F1FBFD]'}`}>
                   <div className="flex items-start gap-4">
                     <div className="flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-xl bg-gradient-to-br from-[#055B75] to-[#0890BC] text-white">
-                      <span className="text-[9px] font-bold uppercase">Day</span>
+                      <span className="text-[9px] font-bold uppercase">{'Day '}</span>
                       <span className="text-base font-extrabold leading-none">{day.day}</span>
                     </div>
                     <div className="min-w-0 flex-1">
-                      <h3 className="text-lg font-bold text-[#034457]">{day.port || 'At sea'}</h3>
-                      <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
-                        <span className="inline-flex items-center gap-1.5"><Clock3 className="h-3.5 w-3.5 text-[#0890BC]" /> Arrival: {day.arrival || 'At sea'}</span>
-                        <span className="inline-flex items-center gap-1.5"><Ship className="h-3.5 w-3.5 text-[#0890BC]" /> Departure: {day.departure || 'At sea'}</span>
-                      </div>
-                      {day.activities?.length > 0 && (
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          {day.activities.map((a) => <span key={a} className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-600 ring-1 ring-slate-200">{a}</span>)}
-                        </div>
+                      {day.port ? (
+                        <>
+                          <h3 className="text-lg font-bold text-[#034457]">{day.port.name}, <span className="font-medium text-slate-500">{day.port.country}</span></h3>
+                          <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
+                            {day.arrive && <span className="inline-flex items-center gap-1.5"><Clock3 className="h-3.5 w-3.5 text-[#0890BC]" /> Arrive {clock(day.arrive)}</span>}
+                            {day.depart && <span className="inline-flex items-center gap-1.5"><Ship className="h-3.5 w-3.5 text-[#0890BC]" /> Depart {clock(day.depart)}</span>}
+                          </div>
+                        </>
+                      ) : (
+                        <h3 className="flex items-center gap-2 text-lg font-bold text-[#034457]"><Waves className="h-4 w-4 text-[#0890BC]" /> At sea</h3>
                       )}
                     </div>
                   </div>
-                </article>
-              )) : <p className="rounded-xl bg-[#F1FBFD] p-5 text-sm text-slate-600">The detailed port schedule is confirmed when you choose a sailing date.</p>}
-            </div>
-          </section>
-
-          {/* Highlights — equal 3-column */}
-          <section className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-100">
-            <h2 className="text-2xl font-bold text-[#034457]">Cruise highlights</h2>
-            <div className="mt-5 grid gap-4 sm:grid-cols-3">
-              {HIGHLIGHTS.map((h) => (
-                <article key={h.title} className="group overflow-hidden rounded-xl ring-1 ring-slate-100">
-                  <div className="relative h-40 overflow-hidden">
-                    <img src={h.image} alt={h.title} loading="lazy" className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#034457]/70 to-transparent" />
-                  </div>
-                  <p className="p-3 text-sm font-semibold text-[#034457]">{h.title}</p>
-                </article>
+                </li>
               ))}
-            </div>
+            </ol>
           </section>
 
-          {/* Amenities */}
           <section className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-100">
-            <h2 className="text-2xl font-bold text-[#034457]">Onboard amenities</h2>
-            <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-              {(view.amenities.length ? view.amenities : ['Dining', 'Entertainment', 'Pool & deck', 'Fitness center']).map((a, i) => {
-                const Icon = AMENITY_ICONS[i % AMENITY_ICONS.length];
-                return (
-                  <div key={a} className="flex items-center gap-3 rounded-xl bg-[#FAFDFE] p-3.5 ring-1 ring-slate-100">
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#F1FBFD] text-[#055B75]"><Icon className="h-4 w-4" /></span>
-                    <span className="truncate text-sm font-semibold text-[#034457]">{a}</span>
-                  </div>
-                );
-              })}
-            </div>
+            <h2 className="text-2xl font-bold text-[#034457]">Sailing dates</h2>
+            <p className="mt-1 text-sm text-slate-500">Tell us which one suits you and we'll check the cabins and today's price.</p>
+            <ul className="mt-5 flex flex-wrap gap-2">
+              {dates.map((date) => (
+                <li key={date} className="rounded-full bg-[#F1FBFD] px-4 py-2 text-sm font-semibold text-[#055B75] ring-1 ring-[#65B3CF]/30">{shortDate(date)}</li>
+              ))}
+            </ul>
           </section>
 
-          {/* Important information */}
+          {sailing.inclusions && (
+            <section className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-100">
+              <h2 className="text-2xl font-bold text-[#034457]">What's included</h2>
+              <p className="mt-3 whitespace-pre-line text-sm leading-6 text-slate-600">{sailing.inclusions}</p>
+            </section>
+          )}
+
+          {photos.length > 1 && (
+            <section className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-100">
+              <h2 className="text-2xl font-bold text-[#034457]">Photos</h2>
+              <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                {photos.slice(1).map((photo) => (
+                  <figure key={photo.url} className="overflow-hidden rounded-xl ring-1 ring-slate-100">
+                    <img src={photo.url} alt="" loading="lazy" className="h-48 w-full object-cover" />
+                    {photo.credit && <figcaption className="px-3 py-2 text-xs text-slate-500">Photo: {photo.credit}</figcaption>}
+                  </figure>
+                ))}
+              </div>
+            </section>
+          )}
+
           <section className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-100">
             <div className="flex items-center gap-3">
               <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#F1FBFD] text-[#055B75]"><Info className="h-5 w-5" /></span>
@@ -333,14 +331,12 @@ const Itinerary = () => {
             </div>
             <div className="mt-4">
               <Accordion title="Travel documents and visa requirements" defaultOpen>Carry a valid passport and any visas required for the ports on your itinerary. Requirements vary by nationality and sailing.</Accordion>
-              <Accordion title="What is included in the fare?">Fares generally include accommodation, main dining, entertainment and standard onboard facilities. Specialty dining, excursions and premium services may cost extra.</Accordion>
-              <Accordion title="Cancellation and change policy">Policies depend on the selected sailing and fare type. Review final conditions during booking or request a call back before payment.</Accordion>
+              <Accordion title="How booking works">Tell us your date, cabin and who's travelling. We check today's price with the cruise line and send you a quote; you pay only once you accept it, and we book the cruise for you.</Accordion>
+              <Accordion title="Cancellation and change policy">Each cruise line sets its own rules, and they depend on the sailing and fare. We send them with your quote, before you pay.</Accordion>
             </div>
           </section>
-
         </main>
 
-        {/* Sticky booking card */}
         <aside>
           <div className="sticky top-24 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-100">
             <div className="bg-gradient-to-r from-[#034457] to-[#055B75] p-5 text-white">
@@ -348,15 +344,28 @@ const Itinerary = () => {
               <h2 className="mt-1 text-lg font-bold">Ask about this cruise</h2>
             </div>
             <div className="space-y-4 p-5">
-              <p className="text-sm leading-6 text-slate-600">Tell us your dates, cabin and who's travelling. We'll check today's price with the cruise line and send you a quote.</p>
-              <a href={inquiryMail} className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#055B75] to-[#0890BC] px-5 py-3 font-bold text-white shadow-sm hover:from-[#034457] hover:to-[#055B75]"><Ship className="h-4 w-4" /> Email us about this cruise</a>
-              <button onClick={() => setIsCallbackOpen(true)} className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#055B75]/25 px-5 py-2.5 font-bold text-[#055B75] hover:bg-[#F1FBFD]"><Phone className="h-4 w-4" /> Request call back</button>
-              <div className="space-y-2 border-t border-slate-100 pt-4 text-xs text-slate-600">
-                <p className="flex items-center gap-2"><Phone className="h-4 w-4 text-[#0890BC]" /> Expert support before &amp; after booking</p>
+              <div>
+                <div className="text-2xl font-extrabold text-[#055B75]">{price.amount}</div>
+                <p className="text-xs text-slate-500">{price.note}</p>
               </div>
+              <p className="text-sm leading-6 text-slate-600">Tell us your date, cabin and who's travelling. We'll check today's price with the cruise line and send you a quote.</p>
+              <a href={mail} className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#055B75] to-[#0890BC] px-5 py-3 font-bold text-white shadow-sm hover:from-[#034457] hover:to-[#055B75]"><Mail className="h-4 w-4" /> Email us about this cruise</a>
+              <a href={CRUISE_PHONE.href} className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#055B75]/25 px-5 py-2.5 font-bold text-[#055B75] hover:bg-[#F1FBFD]"><Phone className="h-4 w-4" /> Call {CRUISE_PHONE.text}</a>
+              <button type="button" onClick={() => setIsCallbackOpen(true)} className="w-full text-center text-sm font-semibold text-[#055B75] underline">Request a call back</button>
             </div>
           </div>
         </aside>
+      </div>
+
+      <div data-testid="phone-price-bar" className="fixed inset-x-0 bottom-0 z-40 flex items-center justify-between gap-3 border-t border-slate-200 bg-white/95 px-4 py-3 shadow-[0_-8px_24px_-12px_rgba(3,68,87,0.35)] backdrop-blur lg:hidden">
+        <div className="min-w-0">
+          <div className="text-base font-extrabold leading-tight text-[#055B75]">{price.amount}</div>
+          <div className="truncate text-[11px] text-slate-500">{price.kind === 'price' ? 'per person, port fees included' : price.note}</div>
+        </div>
+        <div className="flex shrink-0 gap-2">
+          <a href={mail} className="rounded-lg border border-[#055B75]/30 px-3 py-2 text-sm font-bold text-[#055B75]">Email</a>
+          <a href={CRUISE_PHONE.href} className="rounded-lg bg-gradient-to-r from-[#055B75] to-[#0890BC] px-4 py-2 text-sm font-bold text-white">Call</a>
+        </div>
       </div>
 
       <Footer />
