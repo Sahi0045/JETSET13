@@ -578,6 +578,17 @@ export async function handleHostedCheckout(req, res) {
             });
         }
 
+        // Nobody books a cruise paid here: the price came from the page and no
+        // cabin is held with the line. Our team quotes and books cruises.
+        if (bookingType === 'cruise') {
+            console.warn('⛔ Checkout refused: cruise', { orderId });
+            return res.status(410).json({
+                success: false,
+                code: 'CRUISE_BOOKED_BY_TEAM',
+                error: 'Cruises are booked by our team. Call (877) 538-7380 or email support@jetsetterss.com and we will quote your sailing. Nothing has been charged.'
+            });
+        }
+
         // The reference is the caller's, and the row below is saved under it and
         // owned by them. One shaped like a record locator could be another
         // customer's: bookings are also looked up by locator, so the caller
