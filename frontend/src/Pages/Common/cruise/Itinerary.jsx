@@ -132,7 +132,7 @@ const Fact = ({ icon: Icon, label, value }) => (
     <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#F1FBFD] text-[#055B75]"><Icon className="h-4 w-4" /></span>
     <span className="min-w-0">
       <span className="block text-[10px] font-bold uppercase tracking-[0.1em] text-slate-400">{label}</span>
-      <span className="mt-0.5 block truncate text-sm font-semibold text-[#034457]">{value}</span>
+      <span className="mt-0.5 block text-sm font-semibold leading-snug text-[#034457] [overflow-wrap:anywhere]">{value}</span>
     </span>
   </div>
 );
@@ -174,6 +174,13 @@ const Itinerary = () => {
   const slug = searchParams.get('sailing');
   const [isCallbackOpen, setIsCallbackOpen] = useState(false);
   const { data: sailing, isLoading, isError } = usePublishedSailing(slug);
+  const showsPhoneBar = Boolean(sailing);
+
+  useEffect(() => {
+    if (!showsPhoneBar) return undefined;
+    document.body.classList.add('phone-action-bar');
+    return () => document.body.classList.remove('phone-action-bar');
+  }, [showsPhoneBar]);
 
   if (slug && isLoading) {
     return (
@@ -240,20 +247,20 @@ const Itinerary = () => {
                 {trip && <span className="text-xl font-extrabold text-[#034457] md:text-2xl">{trip}</span>}
                 <span className="rounded-full bg-[#F1FBFD] px-3 py-1 text-sm font-bold text-[#055B75]">{sailing.nights} nights</span>
               </div>
-              <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="mt-5 grid gap-4 sm:grid-cols-2">
                 <Fact icon={Ship} label="Cruise line" value={sailing.line_name} />
                 <Fact icon={Anchor} label="Ship" value={sailing.ship_name || 'Confirmed with your quote'} />
                 <Fact icon={CalendarDays} label="Next sailing" value={`${shortDate(dates[0])}${moreDates > 0 ? ` · ${moreDates} more` : ''}`} />
                 <Fact icon={MapPin} label="Ports of call" value={calls.join(' · ') || 'No other stops'} />
               </div>
             </div>
-            <div className="shrink-0 border-t border-slate-100 pt-5 lg:max-w-[260px] lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
+            <div className="shrink-0 border-t border-slate-100 pt-5 lg:max-w-[320px] lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
               <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Price</p>
               <div className="text-xl font-extrabold text-[#055B75]">{price.amount}</div>
               <p className="mb-3 text-xs text-slate-500">{price.note}</p>
               <div className="flex gap-2">
-                <button type="button" onClick={() => setIsCallbackOpen(true)} className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#055B75]/30 px-4 py-2.5 text-sm font-bold text-[#055B75] hover:bg-[#F1FBFD]"><Phone className="h-4 w-4" /> Callback</button>
-                <a href={CRUISE_PHONE.href} className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#055B75] to-[#0890BC] px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:from-[#034457] hover:to-[#055B75]">Call {CRUISE_PHONE.text}</a>
+                <button type="button" onClick={() => setIsCallbackOpen(true)} className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-[#055B75]/30 px-4 py-2.5 text-sm font-bold text-[#055B75] hover:bg-[#F1FBFD]"><Phone className="h-4 w-4" /> Callback</button>
+                <a href={CRUISE_PHONE.href} className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-gradient-to-r from-[#055B75] to-[#0890BC] px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:from-[#034457] hover:to-[#055B75]">Call {CRUISE_PHONE.text}</a>
               </div>
             </div>
           </div>

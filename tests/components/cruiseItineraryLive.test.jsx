@@ -95,6 +95,15 @@ describe('the itinerary page', () => {
     expect(within(bar).getByRole('link', { name: /Call/ }).getAttribute('href')).toBe('tel:+18775387380');
   });
 
+  it('moves the floating chat and contact buttons above the phone bar while it shows', async () => {
+    serve({ success: true, data: SAILING });
+    const { unmount } = show(`?sailing=${SAILING.slug}`);
+    await screen.findByTestId('phone-price-bar');
+    expect(document.body.classList.contains('phone-action-bar')).toBe(true);
+    unmount();
+    expect(document.body.classList.contains('phone-action-bar')).toBe(false);
+  });
+
   it("asks for today's price when the price is old", async () => {
     serve({ success: true, data: { ...SAILING, price_checked_on: daysAgo(40) } });
     show(`?sailing=${SAILING.slug}`);
