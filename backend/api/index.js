@@ -38,6 +38,7 @@ import gdprRoutes from "../routes/gdpr.routes.js";
 import savedTravellersRoutes from "../routes/savedTravellers.routes.js";
 import walletRoutes from "../routes/wallet.routes.js";
 import voucherRoutes from "../routes/vouchers.routes.js";
+import cruiseCatalogRoutes from "../routes/cruiseCatalog.routes.js";
 import chatRoutes from "./chat/index.js";
 
 // Shared stability modules (same behavior across all 3 entry points)
@@ -84,6 +85,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/users/me/travellers", savedTravellersRoutes);
 app.use("/api/wallet", walletRoutes);
 app.use("/api/vouchers", voucherRoutes);
+app.use("/api/cruise-catalog", cruiseCatalogRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/email", emailRoutes);
 app.use("/api/flights", flightRoutes);
@@ -130,6 +132,7 @@ app.use("/currency", currencyRoutes);
 app.use("/coupons", couponRoutes);
 app.use("/wallet", walletRoutes);
 app.use("/vouchers", voucherRoutes);
+app.use("/cruise-catalog", cruiseCatalogRoutes);
 app.use("/subscription", subscriptionRoutes);
 app.use("/visa", visaRoutes);
 app.use("/analytics", analyticsRoutes);
