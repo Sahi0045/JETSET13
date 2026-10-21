@@ -119,12 +119,11 @@ beforeEach(() => {
 });
 
 describe("a stranger holding only a flight booking's reference", () => {
-  it('cannot take the booking over through the old cruise save, which is gone', async () => {
+  it('cannot take the booking over through the unauthenticated cruise save', async () => {
     const server = await app();
 
     // No session at all: just the reference and the stranger's own account id.
     const save = await request(server).post('/api/cruises/bookings').send({ orderId: REF, userId: ATTACKER, totalAmount: 1 });
-    expect(save.status).toBe(404);
 
     // The stranger now reads the victim's booking and live PNR as its owner...
     const read = await request(server).get(`/api/flights/bookings/${REF}`).set('x-test-user', as(ATTACKER));
@@ -195,14 +194,16 @@ describe("the payer of this product's own checkout", () => {
     booking_details: { order_id: ref, success_indicator: 'SI-OK', session_id: 'SESSION1' },
   });
 
-  it('can no longer confirm a cruise here: our team books cruises', async () => {
+  it('confirms a cruise with the indicator ARC gave it, keeping checkout\'s owner and amount', async () => {
     rows.push(checkoutRow('CRZ0A1B2C3D4E5F6', 'cruise', VICTIM));
     const server = await app();
     const res = await request(server).post('/api/cruises/bookings').send({
       orderId: 'CRZ0A1B2C3D4E5F6', transactionId: 'SI-OK', userId: ATTACKER, totalAmount: 1, cruiseName: 'Caribbean',
     });
-    expect(res.status).toBe(404);
-    expect(rows.find((r) => r.booking_reference === 'CRZ0A1B2C3D4E5F6')).toMatchObject({ status: 'pending', payment_status: 'unpaid' });
+    expect(res.status).toBe(200);
+    const row = rows.find((r) => r.booking_reference === 'CRZ0A1B2C3D4E5F6');
+    expect(row).toMatchObject({ status: 'confirmed', payment_status: 'paid', user_id: VICTIM, total_amount: 500, travel_type: 'cruise' });
+    expect(row.booking_details.success_indicator).toBe('SI-OK');
   });
 
   it('confirms a hotel with the indicator ARC gave it; a guest checkout stays unowned', async () => {
@@ -220,7 +221,7 @@ describe("the payer of this product's own checkout", () => {
     rows.push(checkoutRow('CRZ0FFFFFFFFFFFF', 'cruise', VICTIM));
     const server = await app();
     const res = await request(server).post('/api/cruises/bookings').send({ orderId: 'CRZ0FFFFFFFFFFFF', transactionId: 'NOPE' });
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(400);
     expect(rows.find((r) => r.booking_reference === 'CRZ0FFFFFFFFFFFF')).toMatchObject({ status: 'pending', payment_status: 'unpaid', user_id: VICTIM });
   });
 });

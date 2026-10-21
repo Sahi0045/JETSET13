@@ -19,7 +19,9 @@ const EXACT_SPA_ROUTES = new Set([
   '/forgot-password',
   '/reset-password',
   '/booking-confirmation',
+  '/cruise',
   '/cruises',
+  '/itinerary',
   '/cruise-booking-summary',
   '/cruise-booking-success',
   '/flight',
@@ -74,7 +76,6 @@ const DYNAMIC_SPA_ROUTE_PATTERNS = [
   /^\/visa\/consultation\/[^/]+$/,
   /^\/inquiry\/[^/]+$/,
   /^\/pay\/[^/]+$/,
-  /^\/cruise\/[^/]+$/,
 ];
 
 const WILDCARD_SPA_ROUTE_PREFIXES = [
@@ -99,8 +100,6 @@ const LEGACY_REDIRECTS = new Map([
   ['/blog', '/travel-blog'],
   ['/faq', '/faqs'],
   ['/cruise-booking', '/cruises'],
-  ['/cruise', '/cruises'],
-  ['/itinerary', '/cruises'],
   ['/reviews', '/'],
   ['/covid-updates', '/'],
   ['/special-offers', '/'],

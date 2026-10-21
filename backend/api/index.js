@@ -39,7 +39,6 @@ import savedTravellersRoutes from "../routes/savedTravellers.routes.js";
 import walletRoutes from "../routes/wallet.routes.js";
 import voucherRoutes from "../routes/vouchers.routes.js";
 import cruiseCatalogRoutes from "../routes/cruiseCatalog.routes.js";
-import { sailingSitemap } from "../controllers/cruiseCatalog.controller.js";
 import chatRoutes from "./chat/index.js";
 
 // Shared stability modules (same behavior across all 3 entry points)
@@ -87,8 +86,6 @@ app.use("/api/users/me/travellers", savedTravellersRoutes);
 app.use("/api/wallet", walletRoutes);
 app.use("/api/vouchers", voucherRoutes);
 app.use("/api/cruise-catalog", cruiseCatalogRoutes);
-// vercel.json rewrites the public sitemap address straight to this function.
-app.get("/sitemap-cruise-sailings.xml", sailingSitemap);
 app.use("/api/users", userRoutes);
 app.use("/api/email", emailRoutes);
 app.use("/api/flights", flightRoutes);
