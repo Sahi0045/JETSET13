@@ -29,7 +29,7 @@ export const listPublishedSailings = async (req, res) => {
   const today = todayInOffice();
   let query = supabase
     .from('cruise_sailings')
-    .select('slug, title, headline, region, nights, from_price_usd, price_checked_on, photos, line:cruise_lines(name), ship:cruise_ships(name), dates:cruise_sailing_dates(sail_date), days:cruise_sailing_days(day, port:cruise_ports(name))')
+    .select('slug, title, headline, region, nights, from_price_usd, price_checked_on, photos, route, line:cruise_lines(name), ship:cruise_ships(name), dates:cruise_sailing_dates(sail_date), days:cruise_sailing_days(day, port:cruise_ports(name, country, lat, lon))')
     .eq('status', 'published');
   if (req.query.region) query = query.eq('region', String(req.query.region));
   const { data, error } = await query;
@@ -38,10 +38,11 @@ export const listPublishedSailings = async (req, res) => {
   const sailings = (data ?? [])
     .map((s) => {
       const dates = futureDates(s.dates, today);
-      const portNames = [...(s.days ?? [])]
-        .sort((a, b) => a.day - b.day)
-        .map((d) => d.port?.name)
-        .filter((name, i, all) => name && all.indexOf(name) === i);
+      const portDays = [...(s.days ?? [])].sort((a, b) => a.day - b.day).filter((d) => d.port);
+      const ports = portDays
+        .map((d) => ({ name: d.port.name, country: d.port.country, lat: d.port.lat, lon: d.port.lon }))
+        .filter((p, i, all) => all.findIndex((q) => q.name === p.name && q.country === p.country) === i);
+      const portNames = ports.map((p) => p.name);
       return {
         slug: s.slug,
         title: s.title,
@@ -54,6 +55,10 @@ export const listPublishedSailings = async (req, res) => {
         line_name: s.line?.name ?? null,
         ship_name: s.ship?.name ?? null,
         port_names: portNames,
+        ports,
+        start_port: portDays[0]?.port.name ?? null,
+        end_port: portDays[portDays.length - 1]?.port.name ?? null,
+        route: s.route ?? null,
         next_date: dates[0] ?? null,
         date_count: dates.length,
       };
