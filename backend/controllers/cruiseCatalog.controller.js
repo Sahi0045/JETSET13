@@ -251,12 +251,20 @@ export const createShip = async (req, res) => {
   return insertOne(res, 'cruise_ships', { name, line_id: lineId }, 'That ship is already in the list for this line.');
 };
 
+// Number('') and Number(null) are both 0: a blank field would place the port
+// off West Africa and the sea router would happily route to it.
+const coordinate = (value) => {
+  if (typeof value === 'number') return value;
+  if (typeof value !== 'string' || value.trim() === '') return Number.NaN;
+  return Number(value.trim());
+};
+
 const portInput = (body = {}) => {
   const name = nameOf(body.name, 2, 80);
   const country = nameOf(body.country, 2, 60);
-  const lat = Number(body.lat);
-  const lon = Number(body.lon);
-  const valid = name && country && body.lat !== '' && body.lon !== ''
+  const lat = coordinate(body.lat);
+  const lon = coordinate(body.lon);
+  const valid = name && country
     && Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180;
   if (!valid) return null;
   const unlocode = typeof body.unlocode === 'string' && /^[A-Z]{2}[A-Z0-9]{3}$/.test(body.unlocode) ? body.unlocode : null;
@@ -277,13 +285,46 @@ export const createPort = async (req, res) => {
   return insertOne(res, 'cruise_ports', row, 'That port is already in the list.');
 };
 
+// A moved port moves every route that calls there; the stored lines would
+// otherwise keep passing the old position while the day markers move.
+const redrawRoutesThrough = async (portId) => {
+  const { data: calls, error } = await supabase.from('cruise_sailing_days').select('sailing_id').eq('port_id', portId);
+  if (error) return error;
+  const sailingIds = [...new Set((calls ?? []).map((c) => c.sailing_id))];
+  if (!sailingIds.length) return null;
+
+  const { data: days, error: daysError } = await supabase
+    .from('cruise_sailing_days')
+    .select('sailing_id, day, port_id')
+    .in('sailing_id', sailingIds);
+  if (daysError) return daysError;
+  const portIds = [...new Set((days ?? []).map((d) => d.port_id).filter(Boolean))];
+  const { data: ports, error: portsError } = await supabase.from('cruise_ports').select('id, lat, lon').in('id', portIds);
+  if (portsError) return portsError;
+  const byId = new Map((ports ?? []).map((p) => [p.id, p]));
+
+  const { routeForPorts } = await seaRoutes();
+  for (const sailingId of sailingIds) {
+    const stops = (days ?? [])
+      .filter((d) => d.sailing_id === sailingId && d.port_id && byId.has(d.port_id))
+      .sort((a, b) => a.day - b.day)
+      .map((d) => byId.get(d.port_id));
+    const { error: updateError } = await supabase.from('cruise_sailings').update({ route: routeForPorts(stops) }).eq('id', sailingId);
+    if (updateError) return updateError;
+  }
+  return null;
+};
+
 export const updatePort = async (req, res) => {
   const row = portInput(req.body);
   if (!row) return refuse(res, 400, PORT_REFUSAL);
-  const { data, error } = await supabase.from('cruise_ports').update(row).eq('id', String(req.params.id)).select().maybeSingle();
+  const portId = String(req.params.id);
+  const { data, error } = await supabase.from('cruise_ports').update(row).eq('id', portId).select().maybeSingle();
   if (error?.code === '23505') return refuse(res, 409, 'That port is already in the list.');
   if (error) return failed(res, 'port save', error);
   if (!data) return refuse(res, 404, 'Port not found');
+  const redrawError = await redrawRoutesThrough(portId);
+  if (redrawError) return failed(res, 'route redraw', redrawError);
   return ok(res, data);
 };
 

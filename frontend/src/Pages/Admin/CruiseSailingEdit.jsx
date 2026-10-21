@@ -8,12 +8,20 @@ const PRICE_NOTE = 'All-in per person: fare plus port fees, taxes and every mand
 
 const blankDay = (day) => ({ day, portId: '', arrive: '', depart: '' });
 
-const resizeDays = (days, nights) => Array.from({ length: nights + 1 }, (_, i) => days[i] ?? blankDay(i + 1))
-  .map((d, i) => ({ ...d, day: i + 1 }));
+// Days are only ever added, never dropped: typing "10" over "7" passes through
+// "1", and dropping rows there would wipe the itinerary staff had entered.
+const growDays = (days, nights) => (days.length >= nights + 1
+  ? days
+  : [...days, ...Array.from({ length: nights + 1 - days.length }, (_, i) => blankDay(days.length + i + 1))]);
+
+const validNights = (value) => {
+  const nights = Number(value);
+  return Number.isInteger(nights) && nights >= 1 && nights <= 60 ? nights : null;
+};
 
 const EMPTY = {
   title: '', headline: '', region: 'caribbean', lineId: '', shipId: '', nights: '7', inclusions: '', status: 'draft',
-  days: resizeDays([], 7), dates: [], fromPriceUsd: '', recheckedToday: false, photos: [],
+  days: growDays([], 7), shownNights: 7, dates: [], fromPriceUsd: '', recheckedToday: false, photos: [],
 };
 
 export default function CruiseSailingEdit() {
@@ -45,8 +53,9 @@ export default function CruiseSailingEdit() {
       setForm({
         title: s.title ?? '', headline: s.headline ?? '', region: s.region, lineId: s.line_id ?? '', shipId: s.ship_id ?? '',
         nights: String(s.nights), inclusions: s.inclusions ?? '', status: s.status,
-        days: resizeDays((s.days ?? []).map((d) => ({ day: d.day, portId: d.portId ?? '', arrive: d.arrive ?? '', depart: d.depart ?? '' })), s.nights),
-        dates: s.dates ?? [], fromPriceUsd: s.from_price_usd ?? '', recheckedToday: false, photos: s.photos ?? [],
+        days: growDays((s.days ?? []).map((d) => ({ day: d.day, portId: d.portId ?? '', arrive: d.arrive ?? '', depart: d.depart ?? '' })), s.nights),
+        shownNights: s.nights,
+        dates: s.dates ?? [], fromPriceUsd: s.from_price_usd === null || s.from_price_usd === undefined ? '' : String(s.from_price_usd), recheckedToday: false, photos: s.photos ?? [],
       });
     })();
   }, [id, isNew]);
@@ -61,18 +70,25 @@ export default function CruiseSailingEdit() {
   const set = (patch) => setForm((current) => ({ ...current, ...patch }));
 
   const setNights = (value) => {
-    const nights = Number(value);
+    const nights = validNights(value);
     setForm((current) => ({
       ...current,
       nights: value,
-      days: Number.isInteger(nights) && nights >= 1 && nights <= 60 ? resizeDays(current.days, nights) : current.days,
+      shownNights: nights ?? current.shownNights,
+      days: nights ? growDays(current.days, nights) : current.days,
     }));
   };
 
   const setDay = (index, patch) => setForm((current) => ({
     ...current,
-    days: current.days.map((d, i) => (i === index ? { ...d, ...patch } : d)),
+    days: current.days.map((d, i) => {
+      if (i !== index) return d;
+      const next = { ...d, ...patch };
+      return next.portId ? next : { ...next, arrive: '', depart: '' };
+    }),
   }));
+
+  const shownDays = form.days.slice(0, form.shownNights + 1);
 
   const addDate = () => {
     if (!newDate || form.dates.includes(newDate)) return;
@@ -107,9 +123,9 @@ export default function CruiseSailingEdit() {
       nights: Number(form.nights),
       inclusions: form.inclusions,
       status: form.status,
-      days: form.days.map((d) => ({ day: d.day, portId: d.portId || null, arrive: d.arrive || null, depart: d.depart || null })),
+      days: shownDays.map((d) => ({ day: d.day, portId: d.portId || null, arrive: d.arrive || null, depart: d.depart || null })),
       dates: form.dates,
-      fromPriceUsd: form.fromPriceUsd === '' ? null : Number(form.fromPriceUsd),
+      fromPriceUsd: String(form.fromPriceUsd).trim() === '' ? null : String(form.fromPriceUsd).trim(),
       recheckedToday: form.recheckedToday,
       photos: form.photos,
     };
@@ -155,7 +171,7 @@ export default function CruiseSailingEdit() {
       <section className="space-y-2 rounded-xl border border-gray-200 bg-white p-5">
         <h2 className="font-semibold text-[#034457]">Itinerary</h2>
         <p className="text-sm text-gray-500">One row per day. The first and last day must be a port. Add missing ports on the catalog's Ports tab.</p>
-        {form.days.map((d, i) => (
+        {shownDays.map((d, i) => (
           <div key={d.day} data-testid="day-row" className="grid items-end gap-2 sm:grid-cols-[4rem_1fr_7rem_7rem]">
             <span className="pb-2 text-sm font-semibold text-[#055B75]">Day {d.day}</span>
             <label className="text-xs">Port

@@ -175,18 +175,34 @@ function Ports() {
     if (!result.body.data?.length) setNotice({ tone: 'error', text: `No port called “${query}” in the list. Add it by hand below.` });
   };
 
-  const add = async (port) => {
-    const result = await send('ports', { method: 'POST', body: JSON.stringify(port) });
+  const use = (port) => {
+    setForm({ name: port.name, country: port.country, lat: String(port.lat), lon: String(port.lon), unlocode: port.unlocode ?? null });
+    setNotice({ tone: 'ok', text: 'Check the name and position, then add the port.' });
+  };
+
+  const edit = (port) => {
+    setForm({ id: port.id, name: port.name, country: port.country, lat: String(port.lat), lon: String(port.lon), unlocode: port.unlocode ?? null });
+    setNotice(null);
+  };
+
+  // The coordinates go as typed: the server refuses a blank or unreadable one
+  // instead of reading it as 0.
+  const save = async (event) => {
+    event.preventDefault();
+    const { id, ...port } = form;
+    const result = await send(id ? `ports/${encodeURIComponent(id)}` : 'ports', { method: id ? 'PUT' : 'POST', body: JSON.stringify(port) });
     if (result.error) { setNotice({ tone: 'error', text: result.error }); return; }
-    setNotice({ tone: 'ok', text: `${result.body.data.name} added.` });
+    setNotice({ tone: 'ok', text: `${result.body.data.name} ${id ? 'saved' : 'added'}.` });
     setForm(EMPTY_PORT);
+    setMatches([]);
     load();
   };
 
   return (
     <section className="space-y-5">
       <div className="rounded-xl border border-gray-200 bg-white p-5">
-        <h3 className="font-semibold text-[#034457]">Add a port</h3>
+        <h3 className="font-semibold text-[#034457]">{form.id ? 'Edit a port' : 'Add a port'}</h3>
+        {form.id && <p className="text-sm text-gray-500">Moving a port redraws the route of every sailing that calls there.</p>}
         <form onSubmit={search} className="mt-3 flex gap-2">
           <label className="flex-1 text-sm">Search 1,600 ports by name<input className={FIELD} value={query} onChange={(e) => setQuery(e.target.value)} /></label>
           <button type="submit" className={`${SECONDARY} self-end`}>Search</button>
@@ -196,26 +212,33 @@ function Ports() {
             {matches.map((port) => (
               <li key={port.unlocode} className="flex items-center justify-between py-2">
                 <span>{port.name}, {port.country} <span className="text-gray-400">({port.lat.toFixed(2)}, {port.lon.toFixed(2)})</span></span>
-                <button type="button" className={SECONDARY} onClick={() => add(port)}>Add</button>
+                <button type="button" className={SECONDARY} onClick={() => use(port)}>Use</button>
               </li>
             ))}
           </ul>
         )}
-        <form onSubmit={(e) => { e.preventDefault(); add({ ...form, lat: Number(form.lat), lon: Number(form.lon) }); }} className="mt-4 grid gap-2 sm:grid-cols-5">
+        <form onSubmit={save} className="mt-4 grid gap-2 sm:grid-cols-5">
           <label className="text-sm sm:col-span-2">Port name<input className={FIELD} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></label>
           <label className="text-sm">Country<input className={FIELD} value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} /></label>
           <label className="text-sm">Latitude<input className={FIELD} inputMode="decimal" value={form.lat} onChange={(e) => setForm({ ...form, lat: e.target.value })} /></label>
           <label className="text-sm">Longitude<input className={FIELD} inputMode="decimal" value={form.lon} onChange={(e) => setForm({ ...form, lon: e.target.value })} /></label>
-          <div className="sm:col-span-5"><button type="submit" className={SECONDARY}>Add by hand</button></div>
+          <div className="flex gap-2 sm:col-span-5">
+            <button type="submit" className={SECONDARY}>{form.id ? 'Save port' : 'Add port'}</button>
+            {(form.id || form.name) && <button type="button" className="text-sm text-gray-500 hover:underline" onClick={() => setForm(EMPTY_PORT)}>Cancel</button>}
+          </div>
         </form>
       </div>
       <Notice notice={notice} />
       <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
         <table className="min-w-full text-sm">
-          <thead className="bg-[#F1FBFD] text-left text-xs uppercase tracking-wide text-[#034457]"><tr><th className="px-4 py-3">Port</th><th className="px-4 py-3">Country</th><th className="px-4 py-3">Position</th></tr></thead>
+          <thead className="bg-[#F1FBFD] text-left text-xs uppercase tracking-wide text-[#034457]"><tr><th className="px-4 py-3">Port</th><th className="px-4 py-3">Country</th><th className="px-4 py-3">Position</th><th className="px-4 py-3"><span className="sr-only">Edit</span></th></tr></thead>
           <tbody className="divide-y divide-gray-100">
             {ports.map((port) => (
-              <tr key={port.id}><td className="px-4 py-2">{port.name}</td><td className="px-4 py-2">{port.country}</td><td className="px-4 py-2 text-gray-500">{Number(port.lat).toFixed(2)}, {Number(port.lon).toFixed(2)}</td></tr>
+              <tr key={port.id}>
+                <td className="px-4 py-2">{port.name}</td><td className="px-4 py-2">{port.country}</td>
+                <td className="px-4 py-2 text-gray-500">{Number(port.lat).toFixed(2)}, {Number(port.lon).toFixed(2)}</td>
+                <td className="px-4 py-2 text-right"><button type="button" aria-label={`Edit ${port.name}`} className="text-sm font-semibold text-[#055B75] hover:underline" onClick={() => edit(port)}>Edit</button></td>
+              </tr>
             ))}
           </tbody>
         </table>

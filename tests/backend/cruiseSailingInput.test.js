@@ -79,6 +79,31 @@ describe('a sailing staff save', () => {
     expect(sailingInput(valid({ fromPriceUsd: 849.5 }), { today }).price).toBe(849.5);
   });
 
+  it('takes real cent prices that floating point gets wrong', () => {
+    for (const fromPriceUsd of [2499.99, 512.95, 19.99, 4.35]) {
+      expect(sailingInput(valid({ fromPriceUsd }), { today }).price, String(fromPriceUsd)).toBe(fromPriceUsd);
+    }
+  });
+
+  it('reads a price typed with a dollar sign or thousands commas', () => {
+    expect(sailingInput(valid({ fromPriceUsd: '1,299' }), { today }).price).toBe(1299);
+    expect(sailingInput(valid({ fromPriceUsd: '$849.50' }), { today }).price).toBe(849.5);
+    expect(sailingInput(valid({ fromPriceUsd: '2499.99' }), { today }).price).toBe(2499.99);
+  });
+
+  it('refuses a price it cannot read rather than dropping it', () => {
+    const message = 'The price must be a positive amount in dollars, like 849 or 849.50.';
+    for (const fromPriceUsd of ['12,34', 'about 800', '849.505', 1e12, Number.NaN]) {
+      expect(errorFor({ fromPriceUsd }), String(fromPriceUsd)).toBe(message);
+    }
+  });
+
+  it('drops arrival and departure times on days at sea', () => {
+    const atSea = days([1, 2, 3, 4]);
+    atSea[1] = { day: 2, portId: null, arrive: '08:00', depart: '17:00' };
+    expect(sailingInput(valid({ days: atSea }), { today }).days[1]).toEqual({ day: 2, port_id: null, arrive_time: null, depart_time: null });
+  });
+
   it('needs every photo uploaded here, with a credit', () => {
     const message = 'Each photo needs a credit, and must be uploaded here.';
     expect(errorFor({ photos: [{ url: photo(), credit: '' }] })).toBe(message);

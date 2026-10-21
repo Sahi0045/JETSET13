@@ -15,11 +15,20 @@ const isRealDate = (value) => {
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 };
 
+const MAX_PRICE_USD = 1000000;
+const TYPED_PRICE = /^\$?\s*(\d{1,3}(,\d{3})+|\d+)(\.\d{1,2})?$/;
+
+// Staff type prices as "1,299" or "$849.50"; anything else is refused rather
+// than read as "no price", which would quietly wipe the stored one.
 const priceOf = (value) => {
-  if (value === null || value === undefined || value === '') return { ok: true, price: null };
-  const price = typeof value === 'number' ? value : Number.NaN;
-  if (!Number.isFinite(price) || price <= 0 || Math.round(price * 100) !== price * 100) return { ok: false };
-  return { ok: true, price };
+  if (value === null || value === undefined || (typeof value === 'string' && value.trim() === '')) return { ok: true, price: null };
+  let price;
+  if (typeof value === 'number') price = value;
+  else if (typeof value === 'string' && TYPED_PRICE.test(value.trim())) price = Number(value.trim().replace(/[$,\s]/g, ''));
+  else return { ok: false };
+  const cents = price * 100;
+  if (!Number.isFinite(price) || price <= 0 || price > MAX_PRICE_USD || Math.abs(cents - Math.round(cents)) > 1e-6) return { ok: false };
+  return { ok: true, price: Math.round(cents) / 100 };
 };
 
 const photoPrefix = () => `${process.env.SUPABASE_URL}/storage/v1/object/public/cruise-photos/`;
@@ -116,8 +125,8 @@ export const sailingInput = (body = {}, { today }) => {
     days: ordered.map((d) => ({
       day: d.day,
       port_id: d.portId || null,
-      arrive_time: d.arrive || null,
-      depart_time: d.depart || null,
+      arrive_time: (d.portId && d.arrive) || null,
+      depart_time: (d.portId && d.depart) || null,
     })),
     dates: [...dates].sort(),
     price: price.price,

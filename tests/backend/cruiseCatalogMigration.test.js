@@ -23,6 +23,31 @@ describe('the cruise catalog migration', () => {
   it('only allows draft or published', () => expect(sql).toMatch(/status in \('draft', ?'published'\)/i));
 });
 
+describe('the starter port list', () => {
+  const seeded = [...sql.matchAll(/\('((?:[^']|'')+)', '((?:[^']|'')+)', (-?\d+\.\d+), (-?\d+\.\d+)\)/g)]
+    .map(([, name, country, lat, lon]) => ({ name: name.replace(/''/g, "'"), country: country.replace(/''/g, "'"), lat: Number(lat), lon: Number(lon) }));
+
+  it('seeds at least 100 cruise ports, once each, without overwriting staff edits', () => {
+    expect(seeded.length).toBeGreaterThanOrEqual(100);
+    expect(new Set(seeded.map((p) => `${p.name}|${p.country}`)).size).toBe(seeded.length);
+    expect(sql).toMatch(/on conflict \(name, country\) do nothing/i);
+  });
+
+  it('places every seeded port on the globe', () => {
+    for (const port of seeded) {
+      expect(Math.abs(port.lat), port.name).toBeLessThanOrEqual(90);
+      expect(Math.abs(port.lon), port.name).toBeLessThanOrEqual(180);
+    }
+  });
+
+  it('covers the ports the sea-route list lacks', () => {
+    const names = seeded.map((p) => p.name);
+    for (const name of ['Juneau', 'Skagway', 'Ketchikan', 'Cozumel', 'Costa Maya', 'Key West', 'Grand Cayman', 'Labadee', 'CocoCay', 'Puerto Vallarta', 'Cabo San Lucas', 'Hilo', 'Santorini', 'Mykonos', 'Kotor', 'Naples', 'Copenhagen']) {
+      expect(names, name).toContain(name);
+    }
+  });
+});
+
 describe('cruise regions', () => {
   it('lists 15 regions with coordinates', () => {
     expect(CRUISE_REGIONS).toHaveLength(15);

@@ -23,7 +23,10 @@ const officeDay = (ms) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/
 const lists = (url) => {
   if (url.includes('/admin/lines')) return answer({ success: true, data: [{ id: 'line-1', name: 'Royal Caribbean' }] });
   if (url.includes('/admin/ships')) return answer({ success: true, data: [] });
-  if (url.includes('/admin/ports')) return answer({ success: true, data: [{ id: 'miami', name: 'Miami', country: 'United States', lat: 25.77, lon: -80.17 }] });
+  if (url.includes('/admin/ports')) return answer({ success: true, data: [
+    { id: 'miami', name: 'Miami', country: 'United States', lat: 25.77, lon: -80.17 },
+    { id: 'nassau', name: 'Nassau', country: 'Bahamas', lat: 25.08, lon: -77.35 },
+  ] });
   return null;
 };
 
@@ -85,6 +88,84 @@ describe('the sailing editor', () => {
       { day: 1, portId: null, arrive: null, depart: null },
       { day: 2, portId: null, arrive: null, depart: null },
     ]);
+  });
+});
+
+describe('the sailing editor keeps what staff typed', () => {
+  beforeEach(() => {
+    adminFetch.mockReset();
+    adminFetch.mockImplementation(async (url, options = {}) => {
+      if (options.method === 'POST') return answer({ success: true, data: { id: 's1', slug: 'x' } });
+      return lists(url) ?? answer({ success: true, data: [] });
+    });
+  });
+
+  it('keeps typed ports when Nights is changed through a smaller number', async () => {
+    renderEditor();
+    const nights = await screen.findByLabelText('Nights');
+    await screen.findAllByRole('option', { name: 'Nassau, Bahamas' });
+    fireEvent.change(nights, { target: { value: '3' } });
+    const ports = () => screen.getAllByLabelText('Port');
+    fireEvent.change(ports()[0], { target: { value: 'miami' } });
+    fireEvent.change(ports()[2], { target: { value: 'nassau' } });
+    fireEvent.change(nights, { target: { value: '1' } });
+    fireEvent.change(nights, { target: { value: '10' } });
+    expect(screen.getAllByTestId('day-row')).toHaveLength(11);
+    expect(ports()[0].value).toBe('miami');
+    expect(ports()[2].value).toBe('nassau');
+  });
+
+  it('sends a price exactly as typed, so the server can refuse what it cannot read', async () => {
+    renderEditor();
+    fireEvent.change(await screen.findByLabelText('From price per person (USD)'), { target: { value: '1,299' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(adminFetch.mock.calls.some(([, o]) => o?.method === 'POST')).toBe(true));
+    const [, options] = adminFetch.mock.calls.find(([, o]) => o?.method === 'POST');
+    expect(JSON.parse(options.body).fromPriceUsd).toBe('1,299');
+  });
+});
+
+describe('the ports tab', () => {
+  beforeEach(() => { adminFetch.mockReset(); });
+
+  const portsTab = async () => {
+    render(<MemoryRouter><CruiseCatalog /></MemoryRouter>);
+    fireEvent.click(await screen.findByRole('tab', { name: 'Ports' }));
+  };
+
+  it('fills the form from a search result so staff can check it before adding', async () => {
+    adminFetch.mockImplementation(async (url, options = {}) => {
+      if (url.includes('port-search')) return answer({ success: true, data: [{ name: 'Napoli', country: 'Italy', unlocode: 'ITNAP', lat: 40.84, lon: 14.25 }] });
+      if (options.method === 'POST') return answer({ success: true, data: { id: 'p1', name: 'Naples' } });
+      return answer({ success: true, data: [] });
+    });
+    await portsTab();
+    fireEvent.change(screen.getByLabelText('Search 1,600 ports by name'), { target: { value: 'napoli' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Search' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Use' }));
+    expect(adminFetch.mock.calls.some(([, o]) => o?.method === 'POST')).toBe(false);
+    expect(screen.getByLabelText('Port name').value).toBe('Napoli');
+    fireEvent.change(screen.getByLabelText('Port name'), { target: { value: 'Naples' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add port' }));
+    await waitFor(() => expect(adminFetch.mock.calls.some(([, o]) => o?.method === 'POST')).toBe(true));
+    const [, options] = adminFetch.mock.calls.find(([, o]) => o?.method === 'POST');
+    expect(JSON.parse(options.body)).toMatchObject({ name: 'Naples', country: 'Italy', lat: '40.84', lon: '14.25', unlocode: 'ITNAP' });
+  });
+
+  it('edits a port in place', async () => {
+    adminFetch.mockImplementation(async (url, options = {}) => {
+      if (options.method === 'PUT') return answer({ success: true, data: { id: 'cozumel', name: 'Cozumel' } });
+      if (url.includes('/admin/ports')) return answer({ success: true, data: [{ id: 'cozumel', name: 'Cozumel', country: 'Mexico', lat: 20.5, lon: -86.9 }] });
+      return answer({ success: true, data: [] });
+    });
+    await portsTab();
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit Cozumel' }));
+    fireEvent.change(screen.getByLabelText('Longitude'), { target: { value: '-86.97' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save port' }));
+    await waitFor(() => expect(adminFetch.mock.calls.some(([, o]) => o?.method === 'PUT')).toBe(true));
+    const [url, options] = adminFetch.mock.calls.find(([, o]) => o?.method === 'PUT');
+    expect(url).toMatch(/\/admin\/ports\/cozumel$/);
+    expect(JSON.parse(options.body)).toMatchObject({ name: 'Cozumel', lon: '-86.97' });
   });
 });
 

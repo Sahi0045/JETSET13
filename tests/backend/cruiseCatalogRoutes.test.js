@@ -21,11 +21,12 @@ const fakeDb = (answers) => {
   const calls = [];
   supabaseMock.from.mockImplementation((table) => {
     const chain = {};
-    const record = (op) => (...args) => { calls.push([table, op, ...args]); return chain; };
+    const own = [];
+    const record = (op) => (...args) => { calls.push([table, op, ...args]); own.push([table, op, ...args]); return chain; };
     for (const op of ['select', 'eq', 'in', 'order', 'insert', 'update', 'gte', 'limit']) chain[op] = record(op);
     const answer = () => {
       const a = answers[table];
-      return typeof a === 'function' ? a(calls.filter(([t]) => t === table)) : (a ?? { data: [], error: null });
+      return typeof a === 'function' ? a(own) : (a ?? { data: [], error: null });
     };
     chain.single = async () => answer();
     chain.maybeSingle = async () => answer();
@@ -146,6 +147,14 @@ describe('saving a sailing', () => {
   });
 });
 
+describe('when something unexpected throws', () => {
+  it('answers 500 instead of leaving the request hanging', async () => {
+    supabaseMock.from.mockImplementation(() => { throw new Error('connection reset'); });
+    const res = await request(app).get('/api/cruise-catalog/admin/sailings').timeout(3000);
+    expect(res.status).toBe(500);
+  });
+});
+
 describe('photos and ports', () => {
   it('refuses a photo that is not an image', async () => {
     const res = await request(app).post('/api/cruise-catalog/admin/photo-upload-url').send({ filename: 'brochure.pdf' });
@@ -170,6 +179,39 @@ describe('photos and ports', () => {
   it('finds ports to add by name', async () => {
     const res = await request(app).get('/api/cruise-catalog/admin/port-search?q=nassau');
     expect(res.body.data[0]).toMatchObject({ name: 'Nassau', country: 'Bahamas' });
+  });
+
+  it('refuses a port with blank coordinates instead of saving it at 0, 0', async () => {
+    fakeDb({});
+    for (const coords of [{ lat: '', lon: '' }, { lat: null, lon: null }, {}]) {
+      const res = await request(app).post('/api/cruise-catalog/admin/ports').send({ name: 'Juneau', country: 'United States', ...coords });
+      expect(res.status, JSON.stringify(coords)).toBe(400);
+    }
+  });
+
+  it('redraws the routes of every sailing that calls at a port when the port moves', async () => {
+    fakeDb({
+      cruise_ports: (calls) => (calls.some(([, op]) => op === 'update')
+        ? { data: { id: 'cozumel', name: 'Cozumel', country: 'Mexico', lat: 20.49, lon: -86.97 }, error: null }
+        : { data: [{ id: 'miami', lat: 25.77, lon: -80.17 }, { id: 'cozumel', lat: 20.49, lon: -86.97 }], error: null }),
+      cruise_sailing_days: (calls) => (calls.some(([, op, col]) => op === 'eq' && col === 'port_id')
+        ? { data: [{ sailing_id: 's1' }, { sailing_id: 's1' }], error: null }
+        : { data: [{ sailing_id: 's1', day: 1, port_id: 'miami' }, { sailing_id: 's1', day: 2, port_id: 'cozumel' }, { sailing_id: 's1', day: 3, port_id: 'miami' }], error: null }),
+      cruise_sailings: { data: null, error: null },
+    });
+    const calls = [];
+    const original = supabaseMock.from.getMockImplementation();
+    supabaseMock.from.mockImplementation((table) => {
+      const chain = original(table);
+      const update = chain.update;
+      chain.update = (row) => { calls.push([table, row]); return update(row); };
+      return chain;
+    });
+    const res = await request(app).put('/api/cruise-catalog/admin/ports/cozumel').send({ name: 'Cozumel', country: 'Mexico', lat: '20.49', lon: '-86.97' });
+    expect(res.status).toBe(200);
+    const redraw = calls.find(([table]) => table === 'cruise_sailings');
+    expect(redraw[1].route.type).toBe('LineString');
+    expect(redraw[1].route.coordinates).toContainEqual([-86.97, 20.49]);
   });
 
   it('refuses a port with impossible coordinates', async () => {

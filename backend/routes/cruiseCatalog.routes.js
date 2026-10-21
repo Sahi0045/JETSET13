@@ -8,22 +8,29 @@ import {
 
 const router = express.Router();
 
-router.get('/sailings', listPublishedSailings);
-router.get('/sailings/:slug', getPublishedSailing);
-router.get('/regions', listRegions);
+// Express 4 never answers a request whose async handler throws: the admin
+// editor would spin forever instead of showing "try again".
+const safe = (handler) => (req, res, next) => Promise.resolve(handler(req, res, next)).catch((error) => {
+  console.error('Cruise catalog: unexpected error', error?.message ?? error);
+  if (!res.headersSent) res.status(500).json({ success: false, error: 'Something went wrong on our side. Try again.' });
+});
 
-router.get('/admin/sailings', protect, admin, listSailingsAdmin);
-router.get('/admin/sailings/:id', protect, admin, getSailingAdmin);
-router.post('/admin/sailings', protect, admin, createSailing);
-router.put('/admin/sailings/:id', protect, admin, updateSailing);
-router.get('/admin/lines', protect, admin, listLines);
-router.post('/admin/lines', protect, admin, createLine);
-router.get('/admin/ships', protect, admin, listShips);
-router.post('/admin/ships', protect, admin, createShip);
-router.get('/admin/ports', protect, admin, listPorts);
-router.post('/admin/ports', protect, admin, createPort);
-router.put('/admin/ports/:id', protect, admin, updatePort);
-router.get('/admin/port-search', protect, admin, portSearch);
-router.post('/admin/photo-upload-url', protect, admin, photoUploadUrl);
+router.get('/sailings', safe(listPublishedSailings));
+router.get('/sailings/:slug', safe(getPublishedSailing));
+router.get('/regions', safe(listRegions));
+
+router.get('/admin/sailings', protect, admin, safe(listSailingsAdmin));
+router.get('/admin/sailings/:id', protect, admin, safe(getSailingAdmin));
+router.post('/admin/sailings', protect, admin, safe(createSailing));
+router.put('/admin/sailings/:id', protect, admin, safe(updateSailing));
+router.get('/admin/lines', protect, admin, safe(listLines));
+router.post('/admin/lines', protect, admin, safe(createLine));
+router.get('/admin/ships', protect, admin, safe(listShips));
+router.post('/admin/ships', protect, admin, safe(createShip));
+router.get('/admin/ports', protect, admin, safe(listPorts));
+router.post('/admin/ports', protect, admin, safe(createPort));
+router.put('/admin/ports/:id', protect, admin, safe(updatePort));
+router.get('/admin/port-search', protect, admin, safe(portSearch));
+router.post('/admin/photo-upload-url', protect, admin, safe(photoUploadUrl));
 
 export default router;
