@@ -186,9 +186,7 @@ const Itinerary = () => {
     };
   }, [cruise]);
 
-  const bookingUrl = view
-    ? `/cruise-booking-summary?cruiseId=${encodeURIComponent(view.id)}&cruiseLine=${encodeURIComponent(view.name)}`
-    : '/cruises';
+  const inquiryMail = `mailto:support@jetsetterss.com?subject=${encodeURIComponent(`Cruise inquiry: ${view?.name || 'cruise'}`)}`;
 
   if (status === 'loading') {
     return (
@@ -264,7 +262,7 @@ const Itinerary = () => {
               <p className="mb-3 text-xs text-slate-500">per person</p>
               <div className="flex gap-2">
                 <button onClick={() => setIsCallbackOpen(true)} className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#055B75]/30 px-4 py-2.5 text-sm font-bold text-[#055B75] hover:bg-[#F1FBFD]"><Phone className="h-4 w-4" /> Callback</button>
-                <Link to={bookingUrl} className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#055B75] to-[#0890BC] px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:from-[#034457] hover:to-[#055B75]">Book now</Link>
+                <a href="tel:+18775387380" className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#055B75] to-[#0890BC] px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:from-[#034457] hover:to-[#055B75]">Call (877) 538-7380</a>
               </div>
             </div>
           </div>
@@ -386,7 +384,7 @@ const Itinerary = () => {
                   <option>2 adults</option><option>1 adult</option><option>2 adults, 1 child</option><option>2 adults, 2 children</option>
                 </select>
               </label>
-              <Link to={bookingUrl} className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#055B75] to-[#0890BC] px-5 py-3 font-bold text-white shadow-sm hover:from-[#034457] hover:to-[#055B75]"><Ship className="h-4 w-4" /> Continue to book</Link>
+              <a href={inquiryMail} className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#055B75] to-[#0890BC] px-5 py-3 font-bold text-white shadow-sm hover:from-[#034457] hover:to-[#055B75]"><Ship className="h-4 w-4" /> Email us about this cruise</a>
               <button onClick={() => setIsCallbackOpen(true)} className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#055B75]/25 px-5 py-2.5 font-bold text-[#055B75] hover:bg-[#F1FBFD]"><Phone className="h-4 w-4" /> Request call back</button>
               <div className="space-y-2 border-t border-slate-100 pt-4 text-xs text-slate-600">
                 <p className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-emerald-600" /> Secure checkout with ARC Pay</p>
