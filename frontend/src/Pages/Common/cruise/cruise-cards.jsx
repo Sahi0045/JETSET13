@@ -147,11 +147,6 @@ const CruiseCards = () => {
     return out;
   }, [allCruises, selectedLines, selectedDestinations, selectedPorts, durationBuckets, sortBy]);
 
-  const totalSailings = useMemo(
-    () => filteredCruises.reduce((sum, c) => sum + Math.max(1, (c.departurePorts || []).length) * 3, 0),
-    [filteredCruises]
-  );
-
   const clearAll = () => {
     setSelectedLines(new Set());
     setSelectedDestinations(new Set());
@@ -264,7 +259,6 @@ const CruiseCards = () => {
             </div>
             <div className="flex items-center gap-4 text-sm">
               <span><span className="font-bold text-[#055B75]">{filteredCruises.length.toLocaleString()}</span> <span className="text-slate-500">Itineraries Found</span></span>
-              <span><span className="font-bold text-[#0890BC]">{totalSailings.toLocaleString()}</span> <span className="text-slate-500">Sailings Found</span></span>
             </div>
           </div>
 

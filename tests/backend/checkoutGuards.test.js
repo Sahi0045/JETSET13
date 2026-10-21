@@ -103,6 +103,7 @@ describe('the booking type', () => {
     expect(res.body.error).toContain('(877) 538-7380');
     expect(res.body.error).toContain('support@jetsetterss.com');
     expect(res.body.error).toContain('Nothing has been charged');
+    expect(res.body.message, 'the Android app shows message, not error').toBe(res.body.error);
     expect(openedSession()).toBe(false);
     expect(db.table).toEqual([]);
   });

@@ -24,6 +24,8 @@ describe('the cruise pages make no claims the company cannot back', () => {
     ['made-up prices', /From \$\d|Starting from|priceValue|"price"\s*:\s*"|CABIN_TYPES/],
     ['made-up offers', /Buy One Get One|\$50 OFF|Kids sail free|up to 30% off|Best Price Guarantee/i],
     ['past sailing dates', /\b2025\b/],
+    ['invented counts and popularity', /Sailings Found|totalSailings|Most-booked|travell?ers love most/i],
+    ['partnership claims', /Cruise Line Partners|amadeus\.svg/i],
   ])('no %s', (_, claim) => {
     for (const [file, text] of sources) expect(text, file).not.toMatch(claim);
   });

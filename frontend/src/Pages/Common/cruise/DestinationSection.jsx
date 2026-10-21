@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import destinationsData from './data/destinations.json';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
-// MMT-style "Most-booked Cruise Destinations": a horizontally scrollable row of
+// Cruise destinations: a horizontally scrollable row of
 // destination cards with circular carousel arrows.
 const DestinationSection = () => {
   const scrollRef = useRef(null);
@@ -21,9 +21,9 @@ const DestinationSection = () => {
         <div className="flex items-end justify-between mb-6">
           <div>
             <h2 className="text-2xl md:text-3xl font-bold text-[#034457] tracking-tight">
-              Most-booked Cruise Destinations
+              Cruise Destinations
             </h2>
-            <p className="text-slate-500 mt-1">Handpicked voyages travelers love most</p>
+            <p className="text-slate-500 mt-1">Where the cruise lines we book sail</p>
           </div>
           <div className="hidden sm:flex items-center gap-2">
             <button

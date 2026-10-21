@@ -232,7 +232,7 @@ router.get('/bookings', protect, admin, async (req, res) => {
 // Search / filter the catalog. No filters → full list, so the mobile
 // CruiseResultsScreen (searchCruises with empty params) gets everything.
 router.get('/search', (req, res) => {
-  const { destination, departurePort, cruiseLine, minPrice, maxPrice } = req.query;
+  const { destination, departurePort, cruiseLine } = req.query;
   let results = [...cruises];
 
   if (destination) results = results.filter(
@@ -243,8 +243,6 @@ router.get('/search', (req, res) => {
            (c.departurePorts || []).some((p) => norm(p).includes(norm(departurePort)))
   );
   if (cruiseLine) results = results.filter((c) => norm(c.cruise_line).includes(norm(cruiseLine)));
-  if (minPrice) results = results.filter((c) => Number(c.priceValue || 0) >= Number(minPrice));
-  if (maxPrice) results = results.filter((c) => Number(c.priceValue || 0) <= Number(maxPrice));
 
   res.json({ success: true, data: results, meta: { total: results.length } });
 });

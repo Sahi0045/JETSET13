@@ -582,11 +582,8 @@ export async function handleHostedCheckout(req, res) {
         // cabin is held with the line. Our team quotes and books cruises.
         if (bookingType === 'cruise') {
             console.warn('⛔ Checkout refused: cruise', { orderId });
-            return res.status(410).json({
-                success: false,
-                code: 'CRUISE_BOOKED_BY_TEAM',
-                error: 'Cruises are booked by our team. Call (877) 538-7380 or email support@jetsetterss.com and we will quote your sailing. Nothing has been charged.'
-            });
+            const refusal = 'Cruises are booked by our team. Call (877) 538-7380 or email support@jetsetterss.com and we will quote your sailing. Nothing has been charged.';
+            return res.status(410).json({ success: false, code: 'CRUISE_BOOKED_BY_TEAM', error: refusal, message: refusal });
         }
 
         // The reference is the caller's, and the row below is saved under it and

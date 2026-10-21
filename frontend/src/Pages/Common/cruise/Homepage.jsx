@@ -36,7 +36,6 @@ const styles = {
 
 const TrustIndicators = () => {
   const logos = [
-    { src: '/images/logos/amadeus.svg', alt: 'Amadeus' },
     { src: '/images/logos/arc-pay-gateway.png', alt: 'ARC Pay Gateway' },
     { src: '/images/logos/royal_caribbean.png', webp: '/images/logos/royal_caribbean.webp', alt: 'Royal Caribbean' },
     { src: '/images/logos/carnival.png', webp: '/images/logos/carnival.webp', alt: 'Carnival' },
@@ -50,7 +49,7 @@ const TrustIndicators = () => {
         <div className="flex items-center justify-center gap-3 md:gap-5 mb-7 md:mb-9">
           <span className="flex-1 max-w-[48px] sm:max-w-[80px] md:max-w-[140px] h-px bg-gradient-to-r from-transparent to-[#055B75]/40"></span>
           <p className="text-[11px] sm:text-sm md:text-base font-extrabold text-[#055B75] uppercase tracking-[0.12em] md:tracking-[0.2em] text-center leading-snug">
-            Trusted Payment &amp; Cruise Line Partners
+            Payment by ARC Pay · Cruise lines we book
           </p>
           <span className="flex-1 max-w-[48px] sm:max-w-[80px] md:max-w-[140px] h-px bg-gradient-to-l from-transparent to-[#055B75]/40"></span>
         </div>
@@ -129,7 +128,7 @@ const HomePage = () => {
             <CruiseFeatureBanner />
           </section>
 
-          {/* Most-booked Cruise Destinations */}
+          {/* Cruise destinations */}
           <section id="destinations">
             <DestinationSection />
           </section>
