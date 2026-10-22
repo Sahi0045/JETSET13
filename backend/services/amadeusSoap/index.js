@@ -16,7 +16,7 @@ import { buildFlightInfoBody, readFlightInfoError, readFlightInfoReply } from '.
 import { applyPricingToOffer } from './mappers/pricing.js';
 import { attributeTickets } from './mappers/flightOrder.js';
 import { cancelBooking, confirmSeats, retrieveBooking, runBookingChain } from './bookingChain.js';
-import { unwrapEnvelope } from './parseXml.js';
+import { arr, unwrapEnvelope } from './parseXml.js';
 import { callStateless, withSession } from './session.js';
 import {
   cannotTicket, interlineNotAllowed, interlinePairsOf, ticketingCarrierOf,
@@ -126,15 +126,23 @@ const searchFlights = async (params) => {
 
   const { reply } = soapReply(result);
   const status = inspectReply(reply, 'Fare_MasterPricerTravelBoardSearch');
+  const hasFares = arr(reply?.recommendation).length > 0;
 
   // "No itinerary found" is a successful search with no results. Both clients
   // depend on that staying success:true with an empty array.
-  if (status.empty) {
+  if (status.empty && !hasFares) {
     return { success: true, data: [], meta: { count: 0, source: 'GDS', searchParams: request }, dictionaries: {} };
   }
-  if (status.error) {
+  // Production sends 9209 NO NDC OFFER FROM SOME NDC PROVIDERS, and warningInfo
+  // codes, alongside a full set of fares. Read as a refusal, that blanked most
+  // searches on 22 Oct 2026, so a reply with fares is a result and its messages
+  // are only logged.
+  if (status.error && !hasFares) {
     reportIfAlerting(status.error);
     throw status.error;
+  }
+  if (status.error) {
+    log.warn({ notices: status.error.technicalError }, 'search: fares came with notices from Amadeus');
   }
 
   const { offers: mapped, dictionaries, currency } = mapMasterPricerReply(reply, { config });
