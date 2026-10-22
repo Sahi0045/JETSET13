@@ -2390,7 +2390,7 @@ function FlightBookingConfirmation() {
                     flightOffer={reviewState.flightData.originalOffer}
                     rules={fareRulesCheck}
                   />
-                  <CancellationPolicyNote cancellationFee={priceConfig?.flight_cancellation_fee ?? priceConfig?.cancellation_fee} freeUntil={cancelPolicy?.freeUntil} />
+                  <CancellationPolicyNote cancellationFee={priceConfig?.flight_cancellation_fee ?? priceConfig?.cancellation_fee} cancellationFeePercent={priceConfig?.flight_cancellation_fee_percent} freeUntil={cancelPolicy?.freeUntil} />
                 </div>
               </div>
             )}

@@ -234,6 +234,15 @@ describe('cancelPolicyLines', () => {
     );
   });
 
+  it('names the saved percentage instead of the fixed fee', () => {
+    expect(cancelPolicyLines({ cancellationFee: 50, cancellationFeePercent: 10, money })[1]).toBe(
+      "After that the airline's fare rules apply: a refundable fare returns the airline price less the airline's penalty and our cancellation fee of 10% of what you paid; a non-refundable fare returns only unused taxes.",
+    );
+    expect(cancelPolicyLines({ cancellationFee: 50, cancellationFeePercent: 0, money })[1]).toBe(
+      "After that the airline's fare rules apply: a refundable fare returns the airline price less the airline's penalty; a non-refundable fare returns only unused taxes.",
+    );
+  });
+
   it('leaves out a fee of 0', () => {
     expect(cancelPolicyLines({ cancellationFee: 0, money })[1]).toBe(
       "After that the airline's fare rules apply: a refundable fare returns the airline price less the airline's penalty; a non-refundable fare returns only unused taxes.",

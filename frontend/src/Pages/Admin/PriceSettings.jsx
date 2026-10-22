@@ -17,7 +17,8 @@ const PriceSettings = () => {
     package_markup_percentage: 10.0,
     service_fee_percentage: 2.5,
     cancellation_fee: 50.00,
-    flight_cancellation_fee: 50.00
+    flight_cancellation_fee: 50.00,
+    flight_cancellation_fee_percent: null
   });
   
   const [loading, setLoading] = useState(true);
@@ -103,7 +104,8 @@ const PriceSettings = () => {
       package_markup_percentage: 10.0,
       service_fee_percentage: 2.5,
       cancellation_fee: 50.00,
-      flight_cancellation_fee: 50.00
+      flight_cancellation_fee: 50.00,
+      flight_cancellation_fee_percent: null
     });
     setMessage({ type: 'info', text: 'Settings reset to defaults. Click Save to apply.' });
   };
@@ -266,11 +268,16 @@ const PriceSettings = () => {
                 />
                 <InputField
                   label="Cancellation Fee"
-                  value={settings.flight_cancellation_fee}
-                  onChange={(value) => handleInputChange('flight_cancellation_fee', value)}
-                  suffix="USD"
-                  description="Kept when a customer cancels a flight after the first 24 hours, on top of the airline's own penalty"
+                  value={settings.flight_cancellation_fee_percent ?? ''}
+                  onChange={(value) => handleInputChange('flight_cancellation_fee_percent', value)}
+                  suffix="%"
+                  description="Kept when a customer cancels a flight after the free cancellation time: this percentage of what they paid, on top of the airline's own penalty"
                 />
+                {settings.flight_cancellation_fee_percent == null && (
+                  <p style={{ fontSize: '12px', color: '#92400e', margin: '-16px 0 24px' }}>
+                    Until you save a percentage, the fixed {formatCurrency(settings.flight_cancellation_fee)} fee applies.
+                  </p>
+                )}
               </div>
               <div style={{
                 padding: '20px',
