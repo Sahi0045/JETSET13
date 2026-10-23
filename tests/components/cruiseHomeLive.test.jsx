@@ -137,4 +137,13 @@ describe('the cruise home', () => {
     const banner = await screen.findByText(/Cruises are booked by our team/);
     expect(banner.closest('div').querySelector('a[href="tel:+18775387380"]')).toBeTruthy();
   });
+
+  it('links to the full sailing list even when nothing is published, so /cruises is never an orphan page', async () => {
+    serve([]);
+    const { container } = show(<CruiseHomepage />);
+    await waitFor(() => expect(fetch).toHaveBeenCalled());
+    const link = await screen.findByRole('link', { name: 'Browse all sailings' });
+    expect(link.getAttribute('href')).toBe('/cruises');
+    expect(container.querySelector('a[href="/cruises"]')).toBeTruthy();
+  });
 });
