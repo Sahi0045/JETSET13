@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { CalendarDays, ChevronDown, Clock3, MapPin, Search, Ship } from 'lucide-react';
 import './HeroSection.css';
 import { NIGHT_RANGES, monthName, searchOptions, searchQuery } from './searchSailings';
@@ -82,6 +82,11 @@ const HeroSection = () => {
               <span>Search Cruises</span>
             </button>
           </form>
+          <p className="mt-4 text-center">
+            <Link to="/cruises" className="text-sm font-semibold text-white underline underline-offset-4 decoration-white/60 hover:decoration-white drop-shadow">
+              Browse all sailings
+            </Link>
+          </p>
         </div>
       </div>
     </section>

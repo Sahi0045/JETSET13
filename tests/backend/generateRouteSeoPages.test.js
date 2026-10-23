@@ -22,6 +22,7 @@ const crawlNavigationPaths = [
   '/flights',
   '/hotels',
   '/cruise',
+  '/cruises',
   '/packages',
   '/visa',
   '/destinations',

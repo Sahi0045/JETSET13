@@ -23,6 +23,7 @@ const CRAWL_NAVIGATION = Object.freeze([
   { pathname: '/flights', label: 'Flights' },
   { pathname: '/hotels', label: 'Hotels' },
   { pathname: '/cruise', label: 'Cruises' },
+  { pathname: '/cruises', label: 'Cruise Deals' },
   { pathname: '/packages', label: 'Vacation Packages' },
   { pathname: '/visa', label: 'Visa Services' },
   { pathname: '/destinations', label: 'Destinations' },
