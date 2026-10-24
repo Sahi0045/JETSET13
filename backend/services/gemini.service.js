@@ -77,6 +77,70 @@ class GeminiService {
     }
   }
 
+  async generateWithTools(prompt, context = {}, history = [], { tools = [], onCall } = {}) {
+    this._init();
+
+    const contents = this._formatHistory(history);
+    contents.push({
+      role: "user",
+      parts: [{ text: `${this._buildSystemContext(context)}\n\nUser: ${prompt}` }],
+    });
+    const config = {
+      temperature: chatbotConfig.model.temperature,
+      maxOutputTokens: chatbotConfig.model.maxOutputTokens,
+      topP: chatbotConfig.model.topP,
+      topK: chatbotConfig.model.topK,
+    };
+    const ask = (request) => this._retryWithBackoff(() =>
+      this._client.models.generateContent({ model: chatbotConfig.model.name, ...request }),
+    );
+
+    try {
+      const first = await ask({ contents, config: { ...config, tools: [{ functionDeclarations: tools }] } });
+      const call = first.functionCalls?.[0];
+      let answer = first;
+      let toolResult = null;
+
+      if (call && onCall) {
+        const outcome = await onCall(call.name, call.args || {});
+        toolResult = outcome?.toolResult ?? null;
+        // The model's own turn goes back whole: Gemini 2.5 carries its thought
+        // signature in it, and a turn rebuilt from the call alone is refused.
+        answer = await ask({
+          contents: [
+            ...contents,
+            first.candidates[0].content,
+            {
+              role: "user",
+              parts: [{
+                functionResponse: {
+                  ...(call.id ? { id: call.id } : {}),
+                  name: call.name,
+                  response: { result: outcome?.modelResult ?? {} },
+                },
+              }],
+            },
+          ],
+          config,
+        });
+      }
+
+      const text = answer.text ?? "";
+      return {
+        text,
+        tokensUsed: this._estimateTokens(text),
+        metadata: {
+          model: chatbotConfig.model.name,
+          finishReason: answer.candidates?.[0]?.finishReason ?? "STOP",
+        },
+        toolResult,
+      };
+    } catch (error) {
+      console.error("Gemini generateWithTools error:", error.message);
+      throw new Error(`Failed to generate response: ${error.message}`);
+    }
+  }
+
   /**
    * Generate a streaming response from Gemini via an async generator.
    * @param {string} prompt - User message
@@ -164,7 +228,7 @@ class GeminiService {
    * @private
    */
   _buildSystemContext(context) {
-    let systemContext = chatbotConfig.context.systemPrompt;
+    let systemContext = chatbotConfig.context.systemPrompt.replace("{today}", context.today || new Date().toISOString().slice(0, 10));
 
     // Authentication status
     if (context.authenticated === false) {

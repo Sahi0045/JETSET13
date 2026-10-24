@@ -5,6 +5,26 @@ import responseGenerator from '../services/response-generator.js';
 import bookingDataService from '../services/booking-data.service.js';
 import chatSecurityService from '../services/chat-security.service.js';
 import chatbotConfig from '../config/chatbot.js';
+import {
+  SEARCH_FLIGHTS_DECLARATION,
+  cardSummary,
+  normalizeSearchArgs,
+  pickCards,
+  runFlightSearch,
+} from '../services/chat/flightSearchTool.js';
+import { allowedAmounts, guardPrices } from '../services/chat/priceGuard.js';
+import { takeSearchSlot } from '../services/chat/chatSearchLimit.js';
+
+const CARDS_FALLBACK = 'Here are the best flights I found. Prices are the airline fare plus our service fee, confirmed at checkout.';
+const SEARCH_FAILED = "I couldn't search flights just now. You can search on our flights page: /flights";
+const CHAT_EVENTS = ['flight_book_clicked', 'flight_see_all_clicked'];
+
+const chatToday = (clientDate, now = new Date()) => {
+  const server = now.toISOString().slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(clientDate || ''))) return server;
+  const gap = Math.abs(Date.parse(`${clientDate}T00:00:00Z`) - Date.parse(`${server}T00:00:00Z`));
+  return gap <= 864e5 ? clientDate : server;
+};
 
 class ChatController {
   /**
@@ -86,16 +106,26 @@ class ChatController {
 
       // Build context with booking data for authenticated users
       const context = await this._buildContext(userId, req.user?.authUserId, userEmail, userName, classification, route);
+      context.today = chatToday(req.body.clientDate);
 
-      // Generate response from Gemini
-      const aiResponse = await geminiService.generateResponse(
-        sanitizedMessage,
-        context,
-        history
-      );
+      let searchFailed = false;
+      const aiResponse = await geminiService.generateWithTools(sanitizedMessage, context, history, {
+        tools: [SEARCH_FLIGHTS_DECLARATION],
+        onCall: async (_name, args) => {
+          const outcome = await this._searchFlights(args, { today: context.today, sessionId: session.id, ip: req.ip });
+          searchFailed = Boolean(outcome.failed);
+          return outcome;
+        },
+      });
 
       // Sanitize AI response — strip any accidentally leaked secrets/tokens
-      aiResponse.text = chatSecurityService.sanitizeResponse(aiResponse.text);
+      const cards = aiResponse.toolResult?.offers || [];
+      const guarded = guardPrices(chatSecurityService.sanitizeResponse(aiResponse.text), allowedAmounts({
+        cards,
+        context,
+        customerTexts: [sanitizedMessage, ...history.filter((turn) => turn.role === 'user').map((turn) => turn.content)],
+      }));
+      aiResponse.text = guarded.text || (cards.length ? CARDS_FALLBACK : (searchFailed ? SEARCH_FAILED : guarded.text));
 
       // Format response
       const formattedResponse = responseGenerator.format(aiResponse.text, {
@@ -135,6 +165,7 @@ class ChatController {
         sessionId: session.id,
         message: formattedResponse.content,
         messageId: assistantMessageId,
+        ...(cards.length ? { flightResults: aiResponse.toolResult } : {}),
         metadata: {
           intent: classification.intent,
           confidence: classification.confidence,
@@ -256,6 +287,42 @@ class ChatController {
       res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
       res.end();
     }
+  }
+
+  async _searchFlights(args, { today, sessionId, ip }) {
+    const normalized = normalizeSearchArgs(args, { today });
+    if (!normalized.ok) {
+      return { modelResult: { needs: normalized.missing, ...(normalized.reason ? { reason: normalized.reason } : {}) } };
+    }
+    if (!(await takeSearchSlot({ sessionId, ip }))) return { modelResult: { limited: true } };
+
+    const result = await runFlightSearch(normalized.search, { visitorIp: ip });
+    const cards = result.ok ? pickCards(result.offers, normalized.refine) : [];
+    if (sessionId && !String(sessionId).startsWith('temp-')) {
+      chatModel.logAnalytics(sessionId, 'flight_search', { ok: result.ok, total: result.total ?? 0, cards: cards.length })
+        .catch((err) => console.warn('Failed to log flight search:', err.message));
+    }
+    if (!result.ok) {
+      return { failed: true, modelResult: { failed: result.code || result.status, message: result.message } };
+    }
+    return {
+      modelResult: { total: result.total, summary: cardSummary(cards, normalized.search) },
+      toolResult: cards.length
+        ? { offers: cards, total: result.total, search: result.resolved, searchedAt: new Date().toISOString() }
+        : null,
+    };
+  }
+
+  async logEvent(req, res) {
+    const sessionId = chatSecurityService.validateSessionId(req.body?.sessionId);
+    const { event } = req.body || {};
+    if (!sessionId || !CHAT_EVENTS.includes(event)) {
+      return res.status(400).json({ error: 'Unknown chat event' });
+    }
+    const offerId = typeof req.body.offerId === 'string' ? req.body.offerId.slice(0, 64) : undefined;
+    chatModel.logAnalytics(sessionId, event, { offerId })
+      .catch((err) => console.warn('Failed to log chat event:', err.message));
+    return res.status(204).end();
   }
 
   /**

@@ -27,6 +27,7 @@ import voucherRoutes from './routes/vouchers.routes.js';
 import cruiseCatalogRoutes from './routes/cruiseCatalog.routes.js';
 import adminRoutes from './routes/admin.routes.js';
 import currencyRoutes from './routes/currency.routes.js';
+import chatRoutes from './api/chat/index.js';
 import { checkQuoteExpirationHandler } from './jobs/checkQuoteExpiration.js';
 import { startWorkflowEngine } from './jobs/workflowEngine.js';
 import { startDataRetentionJob } from './jobs/dataRetention.job.js';
@@ -148,6 +149,7 @@ app.post('/api/jobs/check-quote-expiration', checkQuoteExpirationHandler);
 app.use('/api/auth', authRoutes);
 app.use('/api/hotels', hotelRoutes);
 app.use('/api/flights', flightRoutes);
+app.use('/api/chat', chatRoutes);
 // Back-office accounts: invite a support person, and the link they open.
 app.use('/api/staff', staffRoutes);
 app.use('/api/cruises', cruiseRoutes);
