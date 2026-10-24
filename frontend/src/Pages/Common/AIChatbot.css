@@ -241,3 +241,8 @@ body.date-picker-open .ai-chatbot-container {
     right: 12px;
   }
 }
+
+.chatbot-input button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

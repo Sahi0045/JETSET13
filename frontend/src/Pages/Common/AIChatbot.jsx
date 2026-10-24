@@ -1,14 +1,27 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useSupabaseAuth } from '../../contexts/SupabaseAuthContext';
+import { getTodayDate } from '../../utils/dateUtils';
+import ChatFlightCards from './chat/ChatFlightCards';
 import './AIChatbot.css';
 
 const MAX_MESSAGE_LENGTH = 2000;
+const STORE_KEY = 'jetsetters.chat.v1';
+const KEPT_MESSAGES = 30;
+
+const savedMessages = () => {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(STORE_KEY) || 'null');
+    return Array.isArray(saved?.messages) ? saved.messages : [];
+  } catch {
+    return [];
+  }
+};
 
 // Strip HTML tags client-side before sending to backend
 const sanitizeInput = (text) => text.replace(/<[^>]*>/g, '').trim();
 
 const AIChatbot = ({ isOpen, onClose }) => {
-  const [messages, setMessages] = useState([]);
+  const [messages, setMessages] = useState(savedMessages);
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const messagesContainerRef = useRef(null);
@@ -27,6 +40,7 @@ const AIChatbot = ({ isOpen, onClose }) => {
   useEffect(() => {
     if (!initializedRef.current) {
       initializedRef.current = true;
+      if (messages.length) return;
       const isLoggedIn = checkAuth();
 
       const welcomeMessage = isLoggedIn && userName
@@ -47,6 +61,14 @@ const AIChatbot = ({ isOpen, onClose }) => {
   // Auto-scroll to bottom of messages
   useEffect(() => {
     scrollToBottom();
+  }, [messages]);
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(STORE_KEY, JSON.stringify({ messages: messages.slice(-KEPT_MESSAGES) }));
+    } catch {
+      return undefined;
+    }
   }, [messages]);
 
   const scrollToBottom = () => {
@@ -96,6 +118,7 @@ const AIChatbot = ({ isOpen, onClose }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    if (isTyping) return;
     if (!inputValue.trim()) return;
     if (inputValue.length > MAX_MESSAGE_LENGTH) return;
 
@@ -134,9 +157,10 @@ const AIChatbot = ({ isOpen, onClose }) => {
         headers,
         body: JSON.stringify({
           sessionId: sessionId || undefined,
-          message: cleanMessage
+          message: cleanMessage,
+          clientDate: getTodayDate(),
         })
-      }, { timeout: 28000, retries: 1 });
+      }, { timeout: 55000, retries: 0 });
 
       // Handle security validation errors from backend
       if (response.status === 400) {
@@ -162,7 +186,8 @@ const AIChatbot = ({ isOpen, onClose }) => {
 
       const botResponse = {
         type: 'bot',
-        content: data.message || 'I\'m sorry, I couldn\'t process that right now.'
+        content: data.message || 'I\'m sorry, I couldn\'t process that right now.',
+        ...(data.flightResults ? { flightResults: data.flightResults } : {}),
       };
 
       setMessages(prev => [...prev, botResponse]);
@@ -223,7 +248,12 @@ const AIChatbot = ({ isOpen, onClose }) => {
                     </svg>
                   </div>
                 )}
-                <div className="message-content">{message.content}</div>
+                <div className="message-content">
+                  {message.content}
+                  {message.flightResults && (
+                    <ChatFlightCards results={message.flightResults} sessionId={localStorage.getItem('chatSessionId')} />
+                  )}
+                </div>
               </div>
             ))}
 
@@ -263,7 +293,7 @@ const AIChatbot = ({ isOpen, onClose }) => {
                 </span>
               )}
             </div>
-            <button type="submit">
+            <button type="submit" disabled={isTyping}>
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="22" y1="2" x2="11" y2="13"></line>
                 <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>

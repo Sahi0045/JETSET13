@@ -251,7 +251,7 @@ function SegmentList({ segments = [], stopDetails = [], cityMap = {} }) {
 //
 // And the price is the airline's fare: the service fee is added on the review
 // page, so the card says so rather than sit under "No hidden fees".
-const pricedForLabel = (offer) => {
+export const pricedForLabel = (offer) => {
   const travellers = offer?.travelerPricings?.length || 0;
   if (travellers > 1) return `for ${travellers} travellers + service fee`;
   if (travellers === 1) return 'for 1 traveller + service fee';
