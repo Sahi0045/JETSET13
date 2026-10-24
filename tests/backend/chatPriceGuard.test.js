@@ -57,6 +57,18 @@ describe('guardPrices', () => {
     expect(result).toEqual({ text: 'Options:\n- United, see the cards', removed: 1 });
   });
 
+  it('reads Rs. as one amount, not the end of a sentence', () => {
+    const result = guardPrices('The fare is Rs. 500 per person. Book now.', allowedAmounts({}));
+
+    expect(result).toEqual({ text: 'Book now.', removed: 1 });
+  });
+
+  it('does not leave an abbreviation behind', () => {
+    const result = guardPrices('Flights are approx. $250 one way. Here are options.', allowedAmounts({}));
+
+    expect(result).toEqual({ text: 'Here are options.', removed: 1 });
+  });
+
   it('text with no money is untouched', () => {
     expect(guardPrices('One way or return, and how many people?', allowedAmounts({})))
       .toEqual({ text: 'One way or return, and how many people?', removed: 0 });

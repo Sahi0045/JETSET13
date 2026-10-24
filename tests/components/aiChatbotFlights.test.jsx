@@ -1,4 +1,6 @@
 import React from 'react';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -66,6 +68,30 @@ describe('the chat bot and flights', () => {
 
     expect(screen.getByText('Delhi to Mumbai one way, 2 adults')).toBeTruthy();
     expect(screen.getByTestId('chat-cards')).toBeTruthy();
+    expect(screen.getAllByText(/I'm the Jetsetters AI assistant/)).toHaveLength(1);
+  });
+
+  it('loads the flight cards only when a reply has them', () => {
+    const source = readFileSync(path.resolve(process.cwd(), 'frontend/src/Pages/Common/AIChatbot.jsx'), 'utf8');
+
+    expect(source).not.toMatch(/^import ChatFlightCards/m);
+    expect(source).toMatch(/lazy\(\(\) => import\('\.\/chat\/ChatFlightCards'\)/);
+  });
+
+  it('links to the flights page when the search could not run', async () => {
+    fetch.mockImplementation(() => reply({ sessionId: 'chat-session-1', message: "I couldn't search flights just now.", searchLink: '/flights' }));
+    renderChat();
+    type('Delhi to Mumbai one way, 2 adults');
+
+    const link = await screen.findByRole('link', { name: 'Search flights' });
+    expect(link.getAttribute('href')).toBe('/flights');
+  });
+
+  it("does not show another person's saved chat", () => {
+    sessionStorage.setItem('jetsetters.chat.v1', JSON.stringify({ owner: 'user-1', messages: [{ type: 'user', content: 'my PNR ABC123' }] }));
+    renderChat();
+
+    expect(screen.queryByText('my PNR ABC123')).toBeNull();
     expect(screen.getAllByText(/I'm the Jetsetters AI assistant/)).toHaveLength(1);
   });
 

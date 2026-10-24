@@ -96,33 +96,42 @@ class GeminiService {
     );
 
     try {
-      const first = await ask({ contents, config: { ...config, tools: [{ functionDeclarations: tools }] } });
-      const call = first.functionCalls?.[0];
+      const declared = { ...config, tools: [{ functionDeclarations: tools }] };
+      const first = await ask({ contents, config: declared });
+      const calls = first.functionCalls || [];
       let answer = first;
       let toolResult = null;
 
-      if (call && onCall) {
-        const outcome = await onCall(call.name, call.args || {});
+      if (calls.length && onCall) {
+        const outcome = await onCall(calls[0].name, calls[0].args || {});
         toolResult = outcome?.toolResult ?? null;
-        // The model's own turn goes back whole: Gemini 2.5 carries its thought
-        // signature in it, and a turn rebuilt from the call alone is refused.
-        answer = await ask({
-          contents: [
-            ...contents,
-            first.candidates[0].content,
-            {
-              role: "user",
-              parts: [{
-                functionResponse: {
-                  ...(call.id ? { id: call.id } : {}),
-                  name: call.name,
-                  response: { result: outcome?.modelResult ?? {} },
-                },
-              }],
-            },
-          ],
-          config,
-        });
+        // Every call in the turn needs its own response or Gemini refuses the
+        // request; only the first one runs, so one message is one search.
+        const results = [outcome?.modelResult ?? {}, ...calls.slice(1).map(() => ({ skipped: "one search per message" }))];
+        try {
+          // The model's own turn goes back whole: Gemini 2.5 carries its thought
+          // signature in it, and a turn rebuilt from the call alone is refused.
+          answer = await ask({
+            contents: [
+              ...contents,
+              first.candidates[0].content,
+              {
+                role: "user",
+                parts: calls.map((call, index) => ({
+                  functionResponse: {
+                    ...(call.id ? { id: call.id } : {}),
+                    name: call.name,
+                    response: { result: results[index] },
+                  },
+                })),
+              },
+            ],
+            config: { ...declared, toolConfig: { functionCallingConfig: { mode: "NONE" } } },
+          });
+        } catch (error) {
+          console.error("Gemini reply after a tool call failed:", error.message);
+          answer = { text: "", candidates: [] };
+        }
       }
 
       const text = answer.text ?? "";
@@ -228,7 +237,9 @@ class GeminiService {
    * @private
    */
   _buildSystemContext(context) {
-    let systemContext = chatbotConfig.context.systemPrompt.replace("{today}", context.today || new Date().toISOString().slice(0, 10));
+    const today = context.today || new Date().toISOString().slice(0, 10);
+    const weekday = new Date(`${today}T00:00:00Z`).toLocaleDateString("en-US", { weekday: "long", timeZone: "UTC" });
+    let systemContext = chatbotConfig.context.systemPrompt.replace("{today}", `${weekday} ${today}`);
 
     // Authentication status
     if (context.authenticated === false) {

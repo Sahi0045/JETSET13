@@ -1,35 +1,60 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
+import { Link } from 'react-router-dom';
 import { useSupabaseAuth } from '../../contexts/SupabaseAuthContext';
 import { getTodayDate } from '../../utils/dateUtils';
-import ChatFlightCards from './chat/ChatFlightCards';
 import './AIChatbot.css';
+
+// Loaded only when a reply carries flights: the cards pull in the flight
+// pages' chunk, which every other page would otherwise download.
+const ChatFlightCards = lazy(() => import('./chat/ChatFlightCards').catch(() => ({ default: () => null })));
 
 const MAX_MESSAGE_LENGTH = 2000;
 const STORE_KEY = 'jetsetters.chat.v1';
 const KEPT_MESSAGES = 30;
 
-const savedMessages = () => {
+const savedChat = () => {
   try {
     const saved = JSON.parse(sessionStorage.getItem(STORE_KEY) || 'null');
-    return Array.isArray(saved?.messages) ? saved.messages : [];
+    return Array.isArray(saved?.messages) ? saved : null;
   } catch {
-    return [];
+    return null;
   }
 };
+
+const welcomeText = (isLoggedIn, userName) => (isLoggedIn && userName
+  ? `Hi ${userName}! I'm the Jetsetters AI assistant. I can help you with your bookings, travel plans, and more. What would you like to know?`
+  : 'Hi there! I\'m the Jetsetters AI assistant. How can I help you today?');
 
 // Strip HTML tags client-side before sending to backend
 const sanitizeInput = (text) => text.replace(/<[^>]*>/g, '').trim();
 
 const AIChatbot = ({ isOpen, onClose }) => {
-  const [messages, setMessages] = useState(savedMessages);
+  const { user, session, isAuthenticated, loading } = useSupabaseAuth();
+  const owner = user?.id || 'guest';
+  const ownerRef = useRef(null);
+  // A saved chat can hold the bot's answers about someone's bookings, so it is
+  // shown only to the account (or guest) it was saved for.
+  const [messages, setMessages] = useState(() => {
+    const saved = savedChat();
+    if (saved && (loading || saved.owner === owner)) {
+      ownerRef.current = saved.owner;
+      return saved.messages;
+    }
+    ownerRef.current = owner;
+    return [];
+  });
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const messagesContainerRef = useRef(null);
   const initializedRef = useRef(false);
 
-  const { user, session, isAuthenticated } = useSupabaseAuth();
-
   const userName = user?.user_metadata?.first_name || user?.user_metadata?.full_name?.split(' ')[0] || user?.email?.split('@')[0] || '';
+
+  useEffect(() => {
+    if (loading || ownerRef.current === owner) return;
+    ownerRef.current = owner;
+    setMessages([{ type: 'bot', content: welcomeText(isAuthenticated, userName) }]);
+  }, [loading, owner, isAuthenticated, userName]);
 
   // Check authentication status — returns current state for callers
   const checkAuth = useCallback(() => {
@@ -41,13 +66,7 @@ const AIChatbot = ({ isOpen, onClose }) => {
     if (!initializedRef.current) {
       initializedRef.current = true;
       if (messages.length) return;
-      const isLoggedIn = checkAuth();
-
-      const welcomeMessage = isLoggedIn && userName
-        ? `Hi ${userName}! I'm the Jetsetters AI assistant. I can help you with your bookings, travel plans, and more. What would you like to know?`
-        : 'Hi there! I\'m the Jetsetters AI assistant. How can I help you today?';
-
-      setMessages([{ type: 'bot', content: welcomeMessage }]);
+      setMessages([{ type: 'bot', content: welcomeText(checkAuth(), userName) }]);
     }
   }, [checkAuth, userName]);
 
@@ -65,7 +84,7 @@ const AIChatbot = ({ isOpen, onClose }) => {
 
   useEffect(() => {
     try {
-      sessionStorage.setItem(STORE_KEY, JSON.stringify({ messages: messages.slice(-KEPT_MESSAGES) }));
+      sessionStorage.setItem(STORE_KEY, JSON.stringify({ owner: ownerRef.current, messages: messages.slice(-KEPT_MESSAGES) }));
     } catch {
       return undefined;
     }
@@ -188,6 +207,7 @@ const AIChatbot = ({ isOpen, onClose }) => {
         type: 'bot',
         content: data.message || 'I\'m sorry, I couldn\'t process that right now.',
         ...(data.flightResults ? { flightResults: data.flightResults } : {}),
+        ...(data.searchLink ? { searchLink: data.searchLink } : {}),
       };
 
       setMessages(prev => [...prev, botResponse]);
@@ -250,8 +270,13 @@ const AIChatbot = ({ isOpen, onClose }) => {
                 )}
                 <div className="message-content">
                   {message.content}
+                  {message.searchLink && (
+                    <Link to={message.searchLink} className="chat-search-link">Search flights</Link>
+                  )}
                   {message.flightResults && (
-                    <ChatFlightCards results={message.flightResults} sessionId={localStorage.getItem('chatSessionId')} />
+                    <Suspense fallback={null}>
+                      <ChatFlightCards results={message.flightResults} sessionId={localStorage.getItem('chatSessionId')} />
+                    </Suspense>
                   )}
                 </div>
               </div>

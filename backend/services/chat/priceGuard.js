@@ -34,11 +34,16 @@ export function guardPrices(text, allowed) {
   let removed = 0;
   const lines = String(text ?? '').split('\n').flatMap((line) => {
     if (isAllowed(line, allowed)) return [line];
-    const kept = line.split(/(?<=[.!?])\s+/).filter((sentence) => {
+    const before = removed;
+    const kept = line.split(/(?<=[.!?])\s+(?=[A-Z"'(\[])/).filter((sentence) => {
       if (isAllowed(sentence, allowed)) return true;
       removed += 1;
       return false;
     });
+    if (removed === before) {
+      removed += 1;
+      return [];
+    }
     return kept.length ? [kept.join(' ')] : [];
   });
   return { text: lines.join('\n').trim(), removed };

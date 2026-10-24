@@ -127,7 +127,60 @@ describe('the bot searches flights', () => {
     expect(contents[contents.length - 2]).toBe(first.candidates[0].content);
     expect(functionResponse().name).toBe('search_flights');
     expect(functionResponse().response.result.summary).toContain('+ service fee');
-    expect(config.tools).toBeUndefined();
+    expect(functionResponse().response.result.searched).toEqual({ from: 'DEL', to: 'BOM', departDate: inDays(30) });
+    expect(config.tools[0].functionDeclarations[0].name).toBe('search_flights');
+    expect(config.toolConfig.functionCallingConfig.mode).toBe('NONE');
+  });
+
+  it('answers every function call in the turn and searches once', async () => {
+    const goa = { ...complete(), to: 'GOI' };
+    const both = {
+      functionCalls: [{ name: 'search_flights', args: complete() }, { name: 'search_flights', args: goa }],
+      candidates: [{ content: { role: 'model', parts: [{ functionCall: { name: 'search_flights', args: complete() } }, { functionCall: { name: 'search_flights', args: goa } }] } }],
+    };
+    generateContent.mockResolvedValueOnce(both).mockResolvedValueOnce(say('Here is Mumbai. Ask me for Goa next.'));
+    found();
+
+    const res = await send('Delhi to Mumbai or Goa, one way, 2 adults');
+
+    const parts = generateContent.mock.calls[1][0].contents.at(-1).parts;
+    expect(parts).toHaveLength(2);
+    expect(parts[0].functionResponse.response.result.summary).toContain('+ service fee');
+    expect(parts[1].functionResponse.response.result).toEqual({ skipped: 'one search per message' });
+    expect(axios.post).toHaveBeenCalledTimes(1);
+    expect(res.body.flightResults.offers.length).toBeGreaterThan(0);
+  });
+
+  it('a failed second call still shows the cards', async () => {
+    generateContent.mockResolvedValueOnce(callTool(complete())).mockRejectedValue(new Error('500 INTERNAL'));
+    found();
+
+    const res = await send('Delhi to Mumbai one way, 2 adults');
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.message).toBe('Here are the best flights I found. Prices are the airline fare plus our service fee, confirmed at checkout.');
+    expect(res.body.flightResults.offers.length).toBeGreaterThan(0);
+  });
+
+  it('ignores a tool it does not know', async () => {
+    generateContent
+      .mockResolvedValueOnce({ functionCalls: [{ name: 'book_flight', args: {} }], candidates: [{ content: { role: 'model', parts: [{ functionCall: { name: 'book_flight', args: {} } }] } }] })
+      .mockResolvedValueOnce(say('I can search flights for you.'));
+
+    await send('book it');
+
+    expect(axios.post).not.toHaveBeenCalled();
+    expect(functionResponse().response.result).toEqual({ error: 'unknown tool' });
+  });
+
+  it('tells Gemini when the filters leave nothing', async () => {
+    generateContent.mockResolvedValueOnce(callTool({ ...complete(), airlines: ['ZZ'] })).mockResolvedValueOnce(say('No ZZ flights that day.'));
+    found();
+
+    const res = await send('only ZZ airline');
+
+    expect(functionResponse().response.result).toMatchObject({ total: offers.length, matching: 0, summary: '' });
+    expect(res.body.flightResults).toBeUndefined();
   });
 
   it('asks for what is missing without searching', async () => {
@@ -153,13 +206,15 @@ describe('the bot searches flights', () => {
   });
 
   it('apologises and shows no cards when the search fails', async () => {
-    generateContent.mockResolvedValueOnce(callTool(complete())).mockResolvedValueOnce(say(''));
-    searchAnswers(503, { success: false, error: 'Flight search failed' });
+    generateContent.mockResolvedValueOnce(callTool(complete())).mockResolvedValueOnce(say('Let me look at other dates for you.'));
+    searchAnswers(503, { success: false, error: 'timeout of 20000ms exceeded' });
 
     const res = await send('Delhi to Mumbai one way, 2 adults');
 
-    expect(res.body.message).toBe("I couldn't search flights just now. You can search on our flights page: /flights");
+    expect(res.body.message).toBe("I couldn't search flights just now. You can search on our flights page.");
+    expect(res.body.searchLink).toBe('/flights');
     expect(res.body.flightResults).toBeUndefined();
+    expect(functionResponse().response.result.message).toBe('The flight search is busy right now.');
   });
 
   it('says so when no flights are found', async () => {
@@ -168,7 +223,7 @@ describe('the bot searches flights', () => {
 
     const res = await send('Delhi to Mumbai one way, 2 adults');
 
-    expect(functionResponse().response.result).toEqual({ total: 0, summary: '' });
+    expect(functionResponse().response.result).toMatchObject({ total: 0, matching: 0, summary: '' });
     expect(res.body.flightResults).toBeUndefined();
   });
 
@@ -193,13 +248,15 @@ describe('the bot searches flights', () => {
 
   it("stops searching after the session's limit", async () => {
     found();
+    let last;
     for (let i = 0; i < 11; i += 1) {
       generateContent.mockResolvedValueOnce(callTool(complete())).mockResolvedValueOnce(say('Here you go.'));
-      await send('Delhi to Mumbai one way, 2 adults', { sessionId: 'limit-session', ip: '192.0.2.77' });
+      last = await send('Delhi to Mumbai one way, 2 adults', { sessionId: 'limit-session', ip: '192.0.2.77' });
     }
 
     expect(axios.post).toHaveBeenCalledTimes(10);
     expect(functionResponse(21).response.result.limited).toBe(true);
+    expect(last.body.searchLink).toBe('/flights');
   });
 
   it("uses the customer's date only when it is close to the server's", async () => {
@@ -210,8 +267,10 @@ describe('the bot searches flights', () => {
     await send('hi', { clientDate: inDays(1) });
 
     const promptOf = (index) => generateContent.mock.calls[index][0].contents.at(-1).parts[0].text;
-    expect(promptOf(0)).toContain(`Today is ${serverDay}.`);
-    expect(promptOf(1)).toContain(`Today is ${inDays(1)}.`);
+    const weekday = (day) => new Date(`${day}T00:00:00Z`).toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' });
+    expect(promptOf(0)).toContain(`Today is ${weekday(serverDay)} ${serverDay}.`);
+    expect(promptOf(1)).toContain(`Today is ${weekday(inDays(1))} ${inDays(1)}.`);
+    expect(promptOf(0)).toContain('say which airports and date you searched');
   });
 });
 

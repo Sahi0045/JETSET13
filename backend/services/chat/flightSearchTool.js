@@ -145,12 +145,24 @@ const HOURS = {
   night: (hour) => hour >= 21 || hour <= 4,
 };
 
+const legStops = (itinerary) => (itinerary?.segments || []).reduce(
+  (count, segment, index, all) => count + (segment?.stops?.length || 0) + (index < all.length - 1 ? 1 : 0),
+  0,
+);
+
+const returnStops = (offer) => {
+  const back = offer?.originalOffer?.itineraries?.[1];
+  return back ? legStops(back) : null;
+};
+
+const isNonstop = (offer) => offer.stops === 0 && !(returnStops(offer) > 0);
+
 const cheapest = (list) => list.reduce((best, offer) => (best && priceOf(best) <= priceOf(offer) ? best : offer), null);
 
 export function pickCards(offers = [], refine = {}) {
   const wanted = offers.filter((offer) => (
     Number.isFinite(priceOf(offer))
-    && (!refine.nonStop || offer.stops === 0)
+    && (!refine.nonStop || isNonstop(offer))
     && (!refine.airlines?.length || refine.airlines.includes(offer.airlineCode))
     && (!refine.timeOfDay || HOURS[refine.timeOfDay](departureHour(offer)))
     && (!refine.maxPrice || priceOf(offer) <= refine.maxPrice)
@@ -160,7 +172,7 @@ export function pickCards(offers = [], refine = {}) {
     best && best.durationMinutes <= offer.durationMinutes ? best : offer
   ), null);
   const byPrice = [...wanted].sort((a, b) => priceOf(a) - priceOf(b));
-  const picked = [cheapest(wanted), fastest, cheapest(wanted.filter((offer) => offer.stops === 0)), ...byPrice];
+  const picked = [cheapest(wanted), fastest, cheapest(wanted.filter(isNonstop)), ...byPrice];
 
   const seen = new Set();
   return picked.filter((offer) => {
@@ -178,7 +190,9 @@ const stopsLabel = (stops) => (stops === 0 ? 'nonstop' : `${stops} stop${stops =
 export function cardSummary(cards, search) {
   return cards.map((offer, index) => {
     const travellers = travellersOf(offer, search);
-    return `${index + 1}. ${offer.airline}, ${offer.departure?.time}–${offer.arrival?.time}, ${stopsLabel(offer.stops)}, ${offer.duration}, `
+    const back = returnStops(offer);
+    const stops = back === null ? stopsLabel(offer.stops) : `${stopsLabel(offer.stops)} out, ${stopsLabel(back)} back`;
+    return `${index + 1}. ${offer.airline}, ${offer.departure?.time}–${offer.arrival?.time}, ${stops}, ${offer.duration}, `
       + `USD ${offer.price?.total} for ${travellers} traveller${travellers === 1 ? '' : 's'} + service fee`;
   }).join('\n');
 }

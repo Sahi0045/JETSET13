@@ -16,7 +16,11 @@ import { allowedAmounts, guardPrices } from '../services/chat/priceGuard.js';
 import { takeSearchSlot } from '../services/chat/chatSearchLimit.js';
 
 const CARDS_FALLBACK = 'Here are the best flights I found. Prices are the airline fare plus our service fee, confirmed at checkout.';
-const SEARCH_FAILED = "I couldn't search flights just now. You can search on our flights page: /flights";
+const SEARCH_FAILED = "I couldn't search flights just now. You can search on our flights page.";
+const SEARCH_LINK = '/flights';
+const BUSY_MESSAGE = 'The flight search is busy right now.';
+
+const searchIsBusy = (result) => result.status >= 500 || result.status === 429 || ['NO_ANSWER', 'RATE_LIMITED'].includes(result.code);
 const CHAT_EVENTS = ['flight_book_clicked', 'flight_see_all_clicked'];
 
 const chatToday = (clientDate, now = new Date()) => {
@@ -108,13 +112,13 @@ class ChatController {
       const context = await this._buildContext(userId, req.user?.authUserId, userEmail, userName, classification, route);
       context.today = chatToday(req.body.clientDate);
 
-      let searchFailed = false;
+      let searchOutcome = null;
       const aiResponse = await geminiService.generateWithTools(sanitizedMessage, context, history, {
         tools: [SEARCH_FLIGHTS_DECLARATION],
-        onCall: async (_name, args) => {
-          const outcome = await this._searchFlights(args, { today: context.today, sessionId: session.id, ip: req.ip });
-          searchFailed = Boolean(outcome.failed);
-          return outcome;
+        onCall: async (name, args) => {
+          if (name !== SEARCH_FLIGHTS_DECLARATION.name) return { modelResult: { error: 'unknown tool' } };
+          searchOutcome = await this._searchFlights(args, { today: context.today, sessionId: session.id, ip: req.ip });
+          return searchOutcome;
         },
       });
 
@@ -125,7 +129,16 @@ class ChatController {
         context,
         customerTexts: [sanitizedMessage, ...history.filter((turn) => turn.role === 'user').map((turn) => turn.content)],
       }));
-      aiResponse.text = guarded.text || (cards.length ? CARDS_FALLBACK : (searchFailed ? SEARCH_FAILED : guarded.text));
+      if (searchOutcome?.busy) {
+        aiResponse.text = SEARCH_FAILED;
+      } else if (!guarded.text && cards.length) {
+        aiResponse.text = CARDS_FALLBACK;
+      } else if (!guarded.text && searchOutcome?.refusal) {
+        aiResponse.text = searchOutcome.refusal;
+      } else {
+        aiResponse.text = guarded.text;
+      }
+      const searchLink = searchOutcome?.busy || searchOutcome?.limited ? SEARCH_LINK : null;
 
       // Format response
       const formattedResponse = responseGenerator.format(aiResponse.text, {
@@ -166,6 +179,7 @@ class ChatController {
         message: formattedResponse.content,
         messageId: assistantMessageId,
         ...(cards.length ? { flightResults: aiResponse.toolResult } : {}),
+        ...(searchLink ? { searchLink } : {}),
         metadata: {
           intent: classification.intent,
           confidence: classification.confidence,
@@ -294,7 +308,7 @@ class ChatController {
     if (!normalized.ok) {
       return { modelResult: { needs: normalized.missing, ...(normalized.reason ? { reason: normalized.reason } : {}) } };
     }
-    if (!(await takeSearchSlot({ sessionId, ip }))) return { modelResult: { limited: true } };
+    if (!(await takeSearchSlot({ sessionId, ip }))) return { limited: true, modelResult: { limited: true } };
 
     const result = await runFlightSearch(normalized.search, { visitorIp: ip });
     const cards = result.ok ? pickCards(result.offers, normalized.refine) : [];
@@ -303,10 +317,21 @@ class ChatController {
         .catch((err) => console.warn('Failed to log flight search:', err.message));
     }
     if (!result.ok) {
-      return { failed: true, modelResult: { failed: result.code || result.status, message: result.message } };
+      const busy = searchIsBusy(result);
+      return {
+        busy,
+        refusal: busy ? null : result.message,
+        modelResult: { failed: result.code || result.status, message: busy ? BUSY_MESSAGE : result.message },
+      };
     }
+    const { from, to, departDate, returnDate } = result.resolved || {};
     return {
-      modelResult: { total: result.total, summary: cardSummary(cards, normalized.search) },
+      modelResult: {
+        total: result.total,
+        matching: cards.length,
+        summary: cardSummary(cards, normalized.search),
+        searched: { from, to, departDate, ...(returnDate ? { returnDate } : {}) },
+      },
       toolResult: cards.length
         ? { offers: cards, total: result.total, search: result.resolved, searchedAt: new Date().toISOString() }
         : null,

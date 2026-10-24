@@ -197,6 +197,30 @@ describe('the cards', () => {
   });
 });
 
+describe('round trips', () => {
+  const roundTrip = (id, outStops, backSegments, price) => ({
+    ...offer(id, { price, stops: outStops }),
+    originalOffer: {
+      itineraries: [{ segments: [{}] }, { segments: Array.from({ length: backSegments }, () => ({})) }],
+      travelerPricings: [{}],
+    },
+  });
+
+  it('nonstop means nonstop both ways', () => {
+    expect(pickCards([roundTrip('x', 0, 2, 100), roundTrip('y', 0, 1, 200)], { nonStop: true }).map((c) => c.id)).toEqual(['y']);
+  });
+
+  it('the cheapest nonstop pick counts the return too', () => {
+    const cards = pickCards([roundTrip('x', 0, 2, 100), roundTrip('y', 0, 1, 200), roundTrip('z', 1, 1, 150)], {});
+
+    expect(cards.map((c) => c.id)).toEqual(['x', 'y', 'z']);
+  });
+
+  it('the summary says the stops each way', () => {
+    expect(cardSummary([roundTrip('x', 0, 2, 100)], { adults: 1 })).toContain('nonstop out, 1 stop back');
+  });
+});
+
 describe('the declaration', () => {
   it('names the tool and requires what the bot must ask for', () => {
     expect(SEARCH_FLIGHTS_DECLARATION.name).toBe('search_flights');

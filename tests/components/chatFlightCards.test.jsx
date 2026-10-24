@@ -88,6 +88,29 @@ describe('flight cards in the chat', () => {
     expect(landed.state.searchData).toEqual(searchFromQuery(searchToQuery(search)));
   });
 
+  it('names the route, date and travellers it searched', () => {
+    renderCards();
+
+    expect(screen.getByText('Delhi (DEL) → Mumbai (BOM)')).toBeTruthy();
+    expect(screen.getByText('Mon, Nov 23 · 2 adults · Economy')).toBeTruthy();
+  });
+
+  it('shows the return flight of a round trip', () => {
+    const homeward = (itinerary) => ({
+      ...itinerary,
+      segments: [...itinerary.segments].reverse().map((segment) => ({ ...segment, departure: segment.arrival, arrival: segment.departure })),
+    });
+    const roundTrip = {
+      ...offers[0],
+      id: 'rt-1',
+      originalOffer: { ...offers[0].originalOffer, itineraries: [offers[0].originalOffer.itineraries[0], homeward(offers[1].originalOffer.itineraries[0])] },
+    };
+    renderCards({ offers: [roundTrip], total: 1, search: { ...search, returnDate: '2026-11-27' } });
+
+    expect(screen.getByText('Mon, Nov 23 – Fri, Nov 27 · 2 adults · Economy')).toBeTruthy();
+    expect(screen.getByText(/^Return .* · 1 stop$/)).toBeTruthy();
+  });
+
   it('restored cards show the time their prices were found', () => {
     const searchedAt = new Date(Date.now() - 3 * 3600 * 1000).toISOString();
     renderCards({ searchedAt });
