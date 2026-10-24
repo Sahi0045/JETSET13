@@ -47,6 +47,7 @@ exports[`the search page hands checkout the flight it showed > BOOK hands checko
     "isRoundTrip": false,
     "isUpsellOffer": false,
     "lastTicketingDate": "2026-10-24",
+    "laterLegs": [],
     "numberOfBookableSeats": 4,
     "operatingAirlineName": "Air India Express",
     "operatingCarrier": "IX",
