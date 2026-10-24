@@ -2,7 +2,7 @@ import express from 'express';
 import request from 'supertest';
 import { describe, expect, it, vi } from 'vitest';
 import { fakeBookingsTable } from './helpers/fakeBookings.js';
-import { flightCancellationFeeFrom } from '../../backend/config/priceDefaults.js';
+import { flightCancellationFeeFor, flightCancellationFeeFrom } from '../../backend/config/priceDefaults.js';
 
 /**
  * Flights have their own cancellation fee. Until an admin saves one, a flight
@@ -54,7 +54,74 @@ describe('flightCancellationFeeFrom', () => {
   });
 });
 
+describe('flightCancellationFeeFor', () => {
+  it('is that percentage of what was paid once a percentage is saved', () => {
+    expect(flightCancellationFeeFor({ flight_cancellation_fee_percent: 10 }, 500)).toBe(50);
+    expect(flightCancellationFeeFor({ flight_cancellation_fee_percent: '12.5', flight_cancellation_fee: 20 }, 291)).toBe(36.38);
+    expect(flightCancellationFeeFor({ flight_cancellation_fee_percent: 0, cancellation_fee: 75 }, 300)).toBe(0);
+  });
+
+  it('is the fixed fee until a percentage is saved', () => {
+    expect(flightCancellationFeeFor({ cancellation_fee: 50 }, 500)).toBe(50);
+    expect(flightCancellationFeeFor({ flight_cancellation_fee: 20, flight_cancellation_fee_percent: null }, 500)).toBe(20);
+  });
+
+  it('ignores a percentage that is not between 0 and 100', () => {
+    for (const percent of [-5, 101, '', 'abc']) {
+      expect(flightCancellationFeeFor({ cancellation_fee: 30, flight_cancellation_fee_percent: percent }, 500)).toBe(30);
+    }
+  });
+
+  it('is unknown when a percentage is saved but what was paid is not known', () => {
+    expect(flightCancellationFeeFor({ flight_cancellation_fee_percent: 10 }, null)).toBeNull();
+    expect(flightCancellationFeeFor({ flight_cancellation_fee_percent: 10 }, undefined)).toBeNull();
+  });
+});
+
 describe('the price settings routes', () => {
+  it('answer no flight percentage until one is saved, and the saved one after', async () => {
+    const unset = await appWith({ cancellation_fee: 50 });
+    expect((await request(unset).get('/api/admin/price-settings')).body.data.flight_cancellation_fee_percent).toBeNull();
+
+    const saved = await appWith({ cancellation_fee: 50, flight_cancellation_fee_percent: 10 });
+    const all = await request(saved).get('/api/admin/price-settings');
+    const flights = await request(saved).get('/api/admin/price-config/flights');
+
+    expect(all.body.data.flight_cancellation_fee_percent).toBe(10);
+    expect(flights.body.data.cancellation_fee_percent).toBe(10);
+  });
+
+  it('save a flight percentage', async () => {
+    const app = await appWith({ cancellation_fee: 50 });
+
+    const res = await request(app).put('/api/admin/price-settings').send({ flight_cancellation_fee_percent: 12.5 });
+
+    expect(res.status).toBe(200);
+    const { data } = await table.from('price_settings').single();
+    expect(data.settings).toEqual({ cancellation_fee: 50, flight_cancellation_fee_percent: 12.5 });
+  });
+
+  it('save the rest of the page when the percentage is left empty', async () => {
+    const app = await appWith({ cancellation_fee: 50 });
+
+    const res = await request(app).put('/api/admin/price-settings').send({ flight_taxes_fees: 30, flight_cancellation_fee_percent: null });
+
+    expect(res.status).toBe(200);
+    const { data } = await table.from('price_settings').single();
+    expect(data.settings).toEqual({ cancellation_fee: 50, flight_taxes_fees: 30 });
+  });
+
+  it('refuse a percentage over 100 and save nothing', async () => {
+    const app = await appWith({ cancellation_fee: 50 });
+
+    const res = await request(app).put('/api/admin/price-settings').send({ flight_taxes_fees: 30, flight_cancellation_fee_percent: 150 });
+
+    expect(res.status).toBe(400);
+    expect(res.body.fields).toEqual(['flight_cancellation_fee_percent']);
+    const { data } = await table.from('price_settings').single();
+    expect(data.settings).toEqual({ cancellation_fee: 50 });
+  });
+
   it('answer the general fee as the flight fee until one is saved', async () => {
     const app = await appWith({ flight_taxes_fees: 1, cancellation_fee: 30 });
 

@@ -34,7 +34,7 @@ const ticketed = { gds: { ticketed: true }, tickets: [{ number: '057-2412345678'
 
 let getBookedFeeTable;
 
-const makeApp = async (stored, feeTable = nonRefundable) => {
+const makeApp = async (stored, feeTable = nonRefundable, settings = { cancellation_fee: 50, flight_cancellation_fee: 40 }) => {
   vi.resetModules();
   getBookedFeeTable = vi.fn(async () => feeTable);
   vi.doMock('../../backend/services/flightProvider.js', () => ({
@@ -45,7 +45,7 @@ const makeApp = async (stored, feeTable = nonRefundable) => {
   supabase.from.mockImplementation((table) => {
     const chain = {};
     for (const m of ['select', 'eq', 'or', 'order', 'limit']) chain[m] = vi.fn(() => chain);
-    const data = table === 'price_settings' ? { settings: { cancellation_fee: 50, flight_cancellation_fee: 40 } } : stored;
+    const data = table === 'price_settings' ? { settings } : stored;
     chain.maybeSingle = vi.fn().mockResolvedValue({ data, error: null });
     chain.single = chain.maybeSingle;
     return chain;
@@ -111,6 +111,13 @@ describe('the cancel quote', () => {
     const res = await ask(await makeApp(row({ created_at: hoursAgo(30) }, ticketed), refundable));
 
     expect(res.body.quote).toMatchObject({ policy: 'refundable', penalty: 150, penaltyCurrency: 'USD', cancellationFee: 40, airlinePrice: 287.5 });
+  });
+
+  it('names the saved percentage of what was paid as the cancellation fee', async () => {
+    const settings = { cancellation_fee: 50, flight_cancellation_fee_percent: 10 };
+    const res = await ask(await makeApp(row({ created_at: hoursAgo(30) }, ticketed), refundable, settings));
+
+    expect(res.body.quote).toMatchObject({ policy: 'refundable', cancellationFee: 30, airlinePrice: 287.5 });
   });
 
   it('returns everything for a booking the airline never had', async () => {
