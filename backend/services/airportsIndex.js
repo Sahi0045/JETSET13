@@ -174,6 +174,12 @@ export const countryOfAirport = (code) => {
   return byCode.get(String(code || '').toUpperCase())?.countryCode ?? null;
 };
 
+/** The city an airport or city code is in, or null when it is unknown. */
+export const cityOfAirport = (code) => {
+  load();
+  return byCode.get(String(code || '').toUpperCase())?.cityName ?? null;
+};
+
 /** True when a code is a metropolitan code, which searches a whole city. */
 export const isCityCode = (code) => {
   load();

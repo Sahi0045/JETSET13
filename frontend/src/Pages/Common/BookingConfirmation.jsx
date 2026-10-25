@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { CheckCircle, Ship, Plane, Calendar, CreditCard, ArrowLeft, Clock, MapPin, Users, XCircle } from 'lucide-react';
+import { CheckCircle, Ship, Plane, Calendar, CreditCard, ArrowLeft, Clock, MapPin, Users, XCircle, Download } from 'lucide-react';
 import Navbar from './Navbar';
 import { attentionMessage, paymentReturned, refundStatus } from '../../utils/bookingStatus';
 import {
-  documentState, hasNoConfirmedSeat, isCancellationUnrecorded, isCommitUnknown, isPaid, isVoidedTicket, ticketState, ticketsVoided,
+  canDownloadDocument, documentState, hasNoConfirmedSeat, isCancellationUnrecorded, isCommitUnknown, isPaid, isVoidedTicket, ticketState, ticketsVoided,
   voidedTicketDigits,
 } from '../../utils/eTicket';
+import { downloadTicketPdf } from '../../utils/ticketDownload';
 import { daysUntilDate, formatCalendarDate } from '../../utils/dateUtils';
 import { cancellationMessage } from '../../../../shared/cancellationOutcome';
 import { bookingItineraries, returnDateOf } from '../../../../shared/bookingItineraries';
@@ -32,6 +33,8 @@ function BookingConfirmation() {
   const location = useLocation();
   const [bookingData, setBookingData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState(null);
 
   useEffect(() => {
     // First check if data was passed via navigation state
@@ -80,6 +83,20 @@ function BookingConfirmation() {
   const isCruise = bookingData.type === 'cruise';
   const isHotel = bookingData.type === 'hotel';
   const isFlight = bookingData.type === 'flight';
+
+  const downloadDocument = async () => {
+    setDownloadError(null);
+    setDownloading(true);
+    try {
+      await downloadTicketPdf(bookingData.bookingReference || bookingData.orderId, {
+        email: bookingData.email || bookingData.bookingDetails?.contact?.email || null,
+      });
+    } catch (err) {
+      setDownloadError(err.message);
+    } finally {
+      setDownloading(false);
+    }
+  };
   const isPackage = bookingData.type === 'package';
 
   // Every leg and flight. This page read a `returnDate` nothing set and the
@@ -701,6 +718,16 @@ function BookingConfirmation() {
 
           {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            {isFlight && canDownloadDocument(bookingData) && (
+              <button
+                onClick={downloadDocument}
+                disabled={downloading}
+                className="flex items-center justify-center gap-2 px-6 py-3 bg-[#055B75] text-white font-semibold rounded-xl hover:bg-[#034457] transition-colors shadow-lg disabled:opacity-60"
+              >
+                <Download className="w-4 h-4" />
+                {downloading ? 'Preparing your PDF…' : (ticketState(bookingData) === 'issued' ? 'Download E-Ticket' : 'Download Booking Confirmation')}
+              </button>
+            )}
             <button
               onClick={() => navigate('/my-trips')}
               className="flex items-center justify-center gap-2 px-6 py-3 bg-gray-100 text-gray-700 font-semibold rounded-xl hover:bg-gray-200 transition-colors"
@@ -716,6 +743,8 @@ function BookingConfirmation() {
               Book Another {tripType}
             </button>
           </div>
+
+          {downloadError && <p role="alert" className="text-center text-sm text-red-700 mt-4">{downloadError}</p>}
 
           <p className="text-center text-sm text-gray-500 mt-6">
             📧 {copy.mail}
