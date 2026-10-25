@@ -4,11 +4,12 @@ import React, { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { daysUntilDate, formatCalendarDate, formatIsoDuration } from "../../../utils/dateUtils"
 import { bookingStatusBadge, needsAttention, cancellationMessage, refundStatus, attentionMessage, isCompletedTrip } from "../../../utils/bookingStatus"
-import { canDownloadDocument, documentState, hasNoConfirmedSeat, isCommitUnknown, liveTickets, ticketState, ticketsVoided } from "../../../utils/eTicket"
+import { bookingCodeOf, canDownloadDocument, documentState, hasNoConfirmedSeat, isCommitUnknown, liveTickets, ticketState, ticketsVoided } from "../../../utils/eTicket"
 import { downloadTicketPdf } from "../../../utils/ticketDownload"
 import { bookingItineraries, multiCityRoute, tripTypeOf } from "../../../../../shared/bookingItineraries"
 import { isAwaitingTicketOnly } from "../../../../../shared/reviewQueue"
 import BookingItinerary from "../flights/BookingItinerary"
+import CheckInLinks from "../flights/CheckInLinks"
 import { formatUsd } from "../../../utils/bookingCharge"
 import { authHeaders } from "../../../utils/authHeaders"
 import {
@@ -743,6 +744,8 @@ export default function TravelDashboard() {
       neutral: 'bg-[#F0FAFC] text-[#055B75] border-[#B9D0DC]',
     };
 
+    const bookingCode = bookingCodeOf(booking) || {};
+
     const DetailCell = ({ label, children }) => (
       <div className="bg-white rounded-lg p-2.5 border border-[#D1E9F0] min-w-0">
         <p className="text-[10px] font-semibold uppercase tracking-wider text-[#0890BC] mb-0.5">{label}</p>
@@ -891,7 +894,14 @@ export default function TravelDashboard() {
                 {/* PNR, Cabin Class, Baggage, Fare Type */}
                 {(booking.pnr || booking.cabinClass || booking.baggage || booking.brandedFareLabel) && (
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-3">
-                    {booking.pnr && <DetailCell label="PNR"><span className="tracking-wider">{booking.pnr}</span></DetailCell>}
+                    {booking.pnr && (
+                      <DetailCell label={bookingCode.label}>
+                        <span className="tracking-wider">{bookingCode.value}</span>
+                        {bookingCode.amadeusReference && (
+                          <span className="block text-[11px] font-medium text-gray-500">{`Amadeus reference ${bookingCode.amadeusReference}`}</span>
+                        )}
+                      </DetailCell>
+                    )}
                     {/* A PNR alone is a reservation. It used to be the only
                         thing shown, identical for ticketed and unticketed. */}
                     {booking.pnr && (
@@ -1087,6 +1097,7 @@ export default function TravelDashboard() {
           {ticketDownload.failed && ticketDownload.failed === tripReference && (
             <p role="alert" className="w-full text-sm text-red-700">{ticketDownload.error}</p>
           )}
+          {isFlightBooking && <CheckInLinks booking={booking} />}
           {/* Cancel Booking Button — only for non-cancelled upcoming bookings.
               Not one whose cancel went through and could not be recorded
               (ticketState 'cancelled'): the customer was told not to try again.

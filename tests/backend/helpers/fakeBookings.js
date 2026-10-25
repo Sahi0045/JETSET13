@@ -53,6 +53,10 @@ const passes = (row, [op, column, expected]) => {
     case 'lte': return actual !== undefined && actual !== null && actual <= expected;
     case 'gt': return actual !== undefined && actual !== null && actual > expected;
     case 'lt': return actual !== undefined && actual !== null && actual < expected;
+    case 'in': {
+      const list = Array.isArray(expected) ? expected : String(expected).replace(/^\(|\)$/g, '').split(',');
+      return actual !== undefined && actual !== null && list.map(String).includes(String(actual));
+    }
     default: return true;
   }
 };
@@ -189,7 +193,7 @@ export function fakeBookingsTable(rows = [], { tables = {}, fail } = {}) {
     };
 
     const chain = {};
-    for (const op of ['eq', 'neq', 'is', 'ilike']) {
+    for (const op of ['eq', 'neq', 'is', 'ilike', 'in']) {
       chain[op] = (column, value) => { filters.push([op, column, value]); return chain; };
     }
     // `.filter(column, 'eq', value)` is the long form of `.eq`, which the cancel

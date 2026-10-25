@@ -785,6 +785,7 @@ const createFlightOrder = async (orderData, options = {}) => {
     // names a PNR tattoo, not a traveller - and an infant's names its adult's -
     // so it is matched through the PNR's own passenger list (attributeTickets).
     tickets: attributeTickets(result.tickets, result.order?.travelers, travelers),
+    airlineLocators: result.order?.airlineLocators ?? [],
     gds: {
       wsap: getWsConfig().wsap,
       node: getWsConfig().node,

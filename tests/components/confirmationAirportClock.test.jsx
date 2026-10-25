@@ -78,7 +78,7 @@ async function confirmationFor(orderData) {
   await flush();
   await flush(2500);
 
-  expect(container.textContent).toMatch(/Airline Reference/);
+  expect(container.textContent).toMatch(/Booking code \(PNR\)/);
   // The route card at the top of the page: origin, time, then destination, time.
   const route = container.querySelector('.backdrop-blur-sm');
   expect(route).toBeTruthy();

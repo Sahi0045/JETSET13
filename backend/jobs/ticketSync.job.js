@@ -39,8 +39,11 @@ import { patchBookingDetails } from '../routes/flight.routes.js';
 import { queueEnvironment } from '../utils/queueEnvironment.js';
 import { TICKET_NUMBERS_MISSING, heldAfterIssueOf, liveTicketNumbersMissingOf } from '../../shared/reviewQueue.js';
 import { attributeTickets } from '../services/amadeusSoap/mappers/flightOrder.js';
+import { getWsConfig } from '../services/amadeusSoap/config.js';
 
 const DEFAULT_INTERVAL_MS = 5 * 60 * 1000;
+
+const AIRLINE_CODES_PER_TICK = 5;
 
 /**
  * How many PNRs are retrieved per tick.
@@ -553,6 +556,7 @@ export async function syncOne(row, { provider = FlightProvider, sendEmail = send
         ? attributeTickets(tickets, order.travelers, Array.isArray(row.passenger_details) ? row.passenger_details : (details.travelers || []))
         : tickets,
       gds: { ...(current.gds || {}), ticketed: true },
+      ...(order.airlineLocators?.length > 0 ? { airline_locators: order.airlineLocators } : {}),
       ticket_synced_at: at,
       ...(claimed ? { ticket_issued_emailed: true, ticket_email_claimed_at: at, ticket_email_key: key } : {}),
       // Every number is in: the flag has nothing left to ask for, so it is
@@ -601,6 +605,66 @@ export async function syncOne(row, { provider = FlightProvider, sendEmail = send
   return { reference, pnr, outcome: 'recorded', tickets, emailed: true };
 }
 
+const currentNode = () => {
+  try { return getWsConfig().node || ''; } catch { return ''; }
+};
+
+// Only PNRs made on the Amadeus system this server talks to: a test-system
+// locator looked up on production could name someone else's booking.
+export async function findMissingAirlineCode({
+  limit = AIRLINE_CODES_PER_TICK,
+  today = new Date().toISOString().slice(0, 10),
+  node = currentNode(),
+} = {}) {
+  if (!node) return [];
+  const { data, error } = await supabase
+    .from('bookings')
+    .select(SELECT)
+    .in('payment_status', PAID)
+    .not('booking_details->>pnr', 'is', null)
+    .eq('booking_details->gds->>ticketed', 'true')
+    .eq('booking_details->gds->>node', node)
+    .is('booking_details->>airline_locators_checked_at', null)
+    .gte('booking_details->>departure_date', today)
+    .not('status', 'in', `(${CLOSED.join(',')})`)
+    .order('booking_details->>departure_date', { ascending: true })
+    .limit(limit * 5);
+  if (error) throw new Error(`could not read bookings: ${error.message}`);
+  return (data || [])
+    .filter(open)
+    .filter((row) => !(row.booking_details?.airline_locators?.length > 0))
+    .slice(0, limit);
+}
+
+export async function fillAirlineCode(row, { provider = FlightProvider } = {}) {
+  const reference = row.booking_reference;
+  const pnr = row.booking_details?.pnr;
+  const asked = { airline_locators_checked_at: new Date().toISOString() };
+  let order;
+  try {
+    order = (await provider.getFlightOrderDetails(pnr))?.data;
+  } catch (error) {
+    log('could not retrieve for the airline booking code', { booking: reference, pnr, reason: error?.technicalError || error?.message });
+    await patchBookingDetails(reference, asked);
+    return { reference, pnr, outcome: 'unreadable' };
+  }
+  const locators = Array.isArray(order?.airlineLocators) ? order.airlineLocators : [];
+  await patchBookingDetails(reference, locators.length > 0 ? { airline_locators: locators, ...asked } : asked);
+  return { reference, pnr, outcome: locators.length > 0 ? 'airline-code-recorded' : 'no-airline-code' };
+}
+
+async function fillAirlineCodes({ provider }) {
+  try {
+    const rows = await findMissingAirlineCode();
+    const filled = [];
+    for (const row of rows) filled.push(await fillAirlineCode(row, { provider }));
+    return filled;
+  } catch (error) {
+    log('could not fill airline booking codes', { error: error.message });
+    return [];
+  }
+}
+
 export async function runOnce({ limit = MAX_PER_TICK, provider = FlightProvider, sendEmail = sendTicketIssuedEmail } = {}) {
   const rows = await findUnticketed({ limit });
   const results = [];
@@ -625,11 +689,13 @@ export async function runOnce({ limit = MAX_PER_TICK, provider = FlightProvider,
     announced.push(await announceOne(row, { sendEmail }));
   }
 
+  const airlineCodes = await fillAirlineCodes({ provider });
+
   const ticketed = results.filter((r) => r.outcome === 'recorded').length;
   const told = announced.filter((r) => r.outcome === 'announced').length;
   if (ticketed > 0) log(`recorded ${ticketed} newly issued ticket(s)`);
   if (told > 0) log(`sent ${told} e-ticket email(s)`);
-  return { checked: rows.length, ticketed, announced: told, results, owed: announced };
+  return { checked: rows.length, ticketed, announced: told, results, owed: announced, airlineCodes };
 }
 
 export function startTicketSyncJob({ intervalMs = DEFAULT_INTERVAL_MS, env = process.env } = {}) {

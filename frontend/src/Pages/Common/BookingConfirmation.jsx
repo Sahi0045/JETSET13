@@ -4,8 +4,8 @@ import { CheckCircle, Ship, Plane, Calendar, CreditCard, ArrowLeft, Clock, MapPi
 import Navbar from './Navbar';
 import { attentionMessage, paymentReturned, refundStatus } from '../../utils/bookingStatus';
 import {
-  canDownloadDocument, documentState, hasNoConfirmedSeat, isCancellationUnrecorded, isCommitUnknown, isPaid, isVoidedTicket, ticketState, ticketsVoided,
-  voidedTicketDigits,
+  bookingCodeOf, canDownloadDocument, documentState, hasNoConfirmedSeat, isCancellationUnrecorded, isCommitUnknown, isPaid, isVoidedTicket, ticketState,
+  ticketsVoided, voidedTicketDigits,
 } from '../../utils/eTicket';
 import { downloadTicketPdf } from '../../utils/ticketDownload';
 import { daysUntilDate, formatCalendarDate } from '../../utils/dateUtils';
@@ -598,12 +598,15 @@ function BookingConfirmation() {
                 </div>
                 {bookingData.pnr ? (
                   <div className="border-r-0 md:border-r border-gray-200 pr-0 md:pr-6">
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Airline Reference (PNR)</p>
-                    <p className="text-lg font-bold text-blue-600 font-mono">{bookingData.pnr}</p>
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">{bookingCodeOf(bookingData).label}</p>
+                    <p className="text-lg font-bold text-[#055B75] font-mono">{bookingCodeOf(bookingData).value}</p>
+                    {bookingCodeOf(bookingData).amadeusReference && (
+                      <p className="mt-1 text-xs text-gray-500">{`Amadeus reference ${bookingCodeOf(bookingData).amadeusReference}`}</p>
+                    )}
                   </div>
                 ) : isFlight && (
                   <div className="border-r-0 md:border-r border-gray-200 pr-0 md:pr-6">
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Airline Reference (PNR)</p>
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Booking code (PNR)</p>
                     <p className="text-sm font-semibold text-gray-500">
                       {outcome === 'queued' ? 'Assigned once the airline confirms' : 'Not yet assigned'}
                     </p>

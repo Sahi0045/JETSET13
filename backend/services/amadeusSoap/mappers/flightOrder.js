@@ -45,6 +45,34 @@ export const readRecordLocator = (reply) => {
   return /^[A-Z0-9]{6}$/i.test(value.trim()) ? value.trim() : '';
 };
 
+const AIRLINE_LOCATOR = /^[A-Z0-9-]{1,19}$/;
+
+const airlineLocatorOf = (reservation) => {
+  const carrierCode = atTxt(reservation, 'companyId').trim().toUpperCase();
+  const locator = atTxt(reservation, 'controlNumber').trim().toUpperCase();
+  return carrierCode && carrierCode !== '1A' && AIRLINE_LOCATOR.test(locator) ? { carrierCode, locator } : null;
+};
+
+// An airline hosted outside Amadeus keeps its own booking code, and its
+// check-in asks for that one. The flights carry it once the airline confirms;
+// a commit can carry it in the PNR header instead (Asiana, PDT 15 Sep 2026).
+export const readAirlineLocators = (reply) => {
+  const flights = arr(at(reply, 'originDestinationDetails'))
+    .flatMap((details) => arr(at(details, 'itineraryInfo')))
+    .filter((item) => atTxt(item, 'elementManagementItinerary.segmentName') === 'AIR')
+    .map((item) => airlineLocatorOf(at(item, 'itineraryReservationInfo.reservation')));
+  const header = arr(at(reply, 'pnrHeader'))
+    .flatMap((entry) => arr(at(entry, 'reservationInfo.reservation')))
+    .map(airlineLocatorOf);
+  const seen = new Set();
+  return [...flights, ...header].filter((entry) => {
+    const key = entry && `${entry.carrierCode}:${entry.locator}`;
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
+
 /** Creation date, when the reply carries one (DDMMYY). */
 const readCreationDate = (reply) => atTxt(amadeusReservation(reply), 'date') || '';
 
@@ -249,6 +277,7 @@ export const buildFlightOrder = (reply, { flightOffers = [], bookingReference } 
     flightOffers,
     travelers: readTravelers(reply),
     tickets,
+    airlineLocators: readAirlineLocators(reply),
     bookingReference,
   };
 };
