@@ -39,7 +39,30 @@ function cabinsBySegment(offer) {
   return cabins;
 }
 
-const directionOf = (index, count) => (index === 0 ? 'outbound' : count === 2 ? 'return' : 'onward');
+/**
+ * 'oneWay', 'roundTrip' or 'multiCity'. A saved direction decides; legs saved
+ * without one are a round trip only when the second flies back to where the
+ * first left from. Two legs used to be a round trip by count alone, so an
+ * open-jaw trip (Delhi to Dubai, London to Delhi) was labelled "Return".
+ */
+export function tripTypeOf(legs) {
+  const list = Array.isArray(legs) ? legs : [];
+  if (list.length <= 1) return 'oneWay';
+  if (list.some((leg) => leg?.direction === 'onward')) return 'multiCity';
+  if (list.length !== 2) return 'multiCity';
+  if (list[1]?.direction === 'return') return 'roundTrip';
+  const [out, back] = list;
+  return text(back?.destination) && text(back?.destination) === text(out?.origin)
+    && text(back?.origin) === text(out?.destination) ? 'roundTrip' : 'multiCity';
+}
+
+const directionsFor = (legs) => {
+  const tripType = tripTypeOf(legs);
+  return legs.map((_, index) => {
+    if (tripType === 'multiCity') return 'onward';
+    return index === 0 ? 'outbound' : 'return';
+  });
+};
 
 /**
  * The legs of an Amadeus offer (`offer.itineraries[].segments[]`), in the shape
@@ -53,7 +76,7 @@ export function itinerariesFromOffer(offer) {
   const legs = Array.isArray(offer?.itineraries) ? offer.itineraries : [];
   const cabins = cabinsBySegment(offer);
 
-  return legs.map((leg, index) => {
+  const built = legs.map((leg) => {
     const segments = (Array.isArray(leg?.segments) ? leg.segments : []).map((segment) => {
       const departure = splitLocalDateTime(segment?.departure?.at);
       const arrival = splitLocalDateTime(segment?.arrival?.at);
@@ -82,7 +105,6 @@ export function itinerariesFromOffer(offer) {
     const first = segments[0];
     const last = segments[segments.length - 1];
     return {
-      direction: directionOf(index, legs.length),
       duration: text(leg?.duration),
       origin: first?.origin || '',
       destination: last?.destination || '',
@@ -92,6 +114,8 @@ export function itinerariesFromOffer(offer) {
       segments,
     };
   }).filter((leg) => leg.segments.length > 0);
+  const directions = directionsFor(built);
+  return built.map((leg, index) => ({ direction: directions[index], ...leg }));
 }
 
 /**
@@ -148,6 +172,7 @@ export function bookingItineraries(booking) {
 /** "Outbound", "Return", or "Flight 2" on a multi-city trip; "Flight" for a one-way trip. */
 export function legLabel(leg, index, count) {
   if (count <= 1) return 'Flight';
+  if (leg?.direction === 'onward') return `Flight ${index + 1}`;
   if (leg?.direction === 'outbound' || index === 0) return 'Outbound';
   if (leg?.direction === 'return' || count === 2) return 'Return';
   return `Flight ${index + 1}`;
@@ -187,7 +212,7 @@ export function layoverBetween(arriving, departing) {
 
 /** The day the return leg departs, for a trip with exactly one return leg. */
 export function returnDateOf(legs) {
-  return Array.isArray(legs) && legs.length === 2 ? legs[1]?.departureDate || '' : '';
+  return tripTypeOf(legs) === 'roundTrip' ? legs[1]?.departureDate || '' : '';
 }
 
 /** 'YYYY-MM-DD' -> its 00:00 UTC in milliseconds, or null for anything else. */
