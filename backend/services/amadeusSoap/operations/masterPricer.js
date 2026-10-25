@@ -113,6 +113,12 @@ const buildTravelFlightInfo = ({ travelClass, nonStop, includedAirlineCodes, exc
 
 /** The legs of a trip. A metro code (LON, NYC) is qualified 'C', an airport 'A'. */
 const buildLegs = (p) => {
+  if (Array.isArray(p.legs) && p.legs.length > 0) {
+    return p.legs.map((leg) => ({
+      origin: leg.from, destination: leg.to, date: leg.departDate,
+      originIsCity: Boolean(leg.fromIsCity), destinationIsCity: Boolean(leg.toIsCity),
+    }));
+  }
   const fromIsCity = Boolean(p.fromIsCity);
   const toIsCity = Boolean(p.toIsCity);
   const legs = [{
@@ -154,7 +160,11 @@ const buildItinerary = (leg, index, dayInterval = null) => wrap('itinerary', [
 ]);
 
 const normalize = (p) => {
-  if (!p.from || !p.to || !p.departDate) throw new Error('from, to and departDate are required');
+  const legsGiven = Array.isArray(p.legs) && p.legs.length > 0;
+  if (legsGiven && p.legs.some((leg) => !leg?.from || !leg?.to || !leg?.departDate)) {
+    throw new Error('every leg needs from, to and departDate');
+  }
+  if (!legsGiven && (!p.from || !p.to || !p.departDate)) throw new Error('from, to and departDate are required');
   const group = {
     adults: Number(p.adults ?? 1) || 1,
     children: Number(p.children ?? 0) || 0,

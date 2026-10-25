@@ -72,20 +72,31 @@ const soapReply = (result) => {
  * Search flights.
  * @throws {AmadeusSoapError} shaped as {success:false, error, code} for the route
  */
-const searchFlights = async (params) => {
-  const config = getWsConfig();
+const unknownPlace = (text) => new AmadeusSoapError({
+  error: `Unknown airport or city: ${text}`,
+  code: 400,
+  operation: 'Fare_MasterPricerTravelBoardSearch',
+});
 
+/**
+ * The Master Pricer request for a search: one leg, a round trip, or the legs
+ * of a multi-city trip.
+ * @throws {AmadeusSoapError} 400 for a place or a group it cannot search
+ */
+export const searchRequestFor = (params, { currency } = {}) => {
   // The clients send free text as well as codes ("New York", "Delhi"), and the
   // WSAP has no location-search operation, so resolution happens locally.
-  const from = resolveToIata(params.from ?? params.originLocationCode);
-  const to = resolveToIata(params.to ?? params.destinationLocationCode);
-  if (!from || !to) {
-    throw new AmadeusSoapError({
-      error: `Unknown airport or city: ${!from ? params.from : params.to}`,
-      code: 400,
-      operation: 'Fare_MasterPricerTravelBoardSearch',
-    });
-  }
+  const legs = Array.isArray(params.legs) && params.legs.length > 0
+    ? params.legs.map((leg) => {
+      const from = resolveToIata(leg.from);
+      const to = resolveToIata(leg.to);
+      if (!from || !to) throw unknownPlace(!from ? leg.from : leg.to);
+      return { from, to, departDate: leg.departDate, fromIsCity: isCityCode(from), toIsCity: isCityCode(to) };
+    })
+    : null;
+  const from = legs ? legs[0].from : resolveToIata(params.from ?? params.originLocationCode);
+  const to = legs ? legs[legs.length - 1].to : resolveToIata(params.to ?? params.destinationLocationCode);
+  if (!from || !to) throw unknownPlace(!from ? params.from : params.to);
 
   // A group Amadeus cannot book together is refused here, in words the customer
   // can act on, rather than sent and answered with a bare 955 or 926.
@@ -98,13 +109,14 @@ const searchFlights = async (params) => {
     throw new AmadeusSoapError({ error: groupProblem, code: 400, operation: 'Fare_MasterPricerTravelBoardSearch' });
   }
 
-  const request = {
+  return {
     from,
     to,
     fromIsCity: isCityCode(from),
     toIsCity: isCityCode(to),
-    departDate: params.departDate ?? params.departureDate,
-    returnDate: params.returnDate || undefined,
+    departDate: legs ? legs[0].departDate : (params.departDate ?? params.departureDate),
+    returnDate: legs ? undefined : (params.returnDate || undefined),
+    ...(legs ? { legs } : {}),
     adults: Number(params.adults ?? params.travelers ?? 1) || 1,
     children: Number(params.children ?? 0) || 0,
     infants: Number(params.infants ?? 0) || 0,
@@ -113,8 +125,13 @@ const searchFlights = async (params) => {
     includedAirlineCodes: params.includedAirlineCodes,
     excludedAirlineCodes: params.excludedAirlineCodes,
     max: Number(params.max ?? SEARCH_RECOMMENDATIONS) || SEARCH_RECOMMENDATIONS,
-    currency: config.currency,
+    currency,
   };
+};
+
+const searchFlights = async (params) => {
+  const config = getWsConfig();
+  const request = searchRequestFor(params, { currency: config.currency });
 
   let result;
   try {
