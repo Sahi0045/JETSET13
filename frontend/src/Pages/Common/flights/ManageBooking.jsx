@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import Navbar from '../Navbar';
 import Footer from '../Footer';
-import FlightETicket from './FlightETicket';
+import { downloadTicketPdf } from '../../../utils/ticketDownload';
 import BookingItinerary from './BookingItinerary';
 import BookingCancelRules from './BookingCancelRules';
 import CancelQuote from './CancelQuote';
@@ -221,7 +221,8 @@ function ManageBooking() {
     }
   };
 
-  const ticketRef = React.useRef(null);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState(null);
 
   // The cancel's outcome takes focus and scrolls into view when it arrives. It
   // rendered at the bottom of the page - below the fold on a phone - so the
@@ -243,48 +244,15 @@ function ManageBooking() {
   const itineraryLegs = bookingItineraries(bookingData);
 
   const downloadETicket = async () => {
-    // Only a booking the airline holds has a document to hand out: not a
-    // cancelled one, and not one with no PNR (see canDownloadDocument).
     if (!canDownloadDocument(bookingData)) return;
-    if (!ticketRef.current) {
-      alert("Ticket template not ready. Please wait and try again.");
-      return;
-    }
-    const input = ticketRef.current;
-
+    setDownloadError(null);
+    setDownloading(true);
     try {
-      const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
-        import('html2canvas'),
-        import('jspdf'),
-      ]);
-
-      // Wait a bit for any images to fully load
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      const canvas = await html2canvas(input, {
-        scale: 2,
-        logging: false,
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: '#ffffff',
-        imageTimeout: 0,
-        removeContainer: true
-      });
-
-      // Use JPEG format to avoid PNG signature issues
-      const imgData = canvas.toDataURL('image/jpeg', 0.95);
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-
-      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
-      // The file is named for what it is. A "Ticket" file that is not a
-      // ticket makes the same false claim the fake number did, on disk.
-      const label = ticketState(bookingData) === 'issued' ? 'ETicket' : 'BookingConfirmation';
-      pdf.save(`Jetsetters_${label}_${bookingData?.orderId || bookingData?.bookingReference || 'Booking'}.pdf`);
+      await downloadTicketPdf(bookingData?.bookingReference || bookingId, { email: submittedEmail });
     } catch (err) {
-      console.error("Error generating ticket:", err);
-      alert("Failed to generate ticket. Please try again.");
+      setDownloadError(err.message);
+    } finally {
+      setDownloading(false);
     }
   };
 
@@ -638,15 +606,17 @@ function ManageBooking() {
             {canDownloadDocument(bookingData) && (
               <button
                 onClick={downloadETicket}
-                className="flex items-center bg-[#055B75] text-white px-4 py-2 rounded-lg hover:bg-[#034457] transition"
+                disabled={downloading}
+                className="flex items-center bg-[#055B75] text-white px-4 py-2 rounded-lg hover:bg-[#034457] transition disabled:opacity-60"
               >
                 <Download className="w-4 h-4 mr-2" />
                 {/* The document names itself honestly, so the button that offers
                     it must too - clicking "E-Ticket" and receiving a reservation
                     is the same misrepresentation in a different place. */}
-                {ticketState(bookingData) === 'issued' ? 'Download E-Ticket' : 'Download Booking Confirmation'}
+                {downloading ? 'Preparing your PDF…' : (ticketState(bookingData) === 'issued' ? 'Download E-Ticket' : 'Download Booking Confirmation')}
               </button>
             )}
+            {downloadError && <p role="alert" className="w-full text-sm text-red-700">{downloadError}</p>}
 
             {bookingData?.status?.toUpperCase() !== 'CANCELLED' && 
              // Nor a cancel that went through and could not be recorded
@@ -1071,12 +1041,6 @@ function ManageBooking() {
 
       <Footer />
 
-      {/* The document a customer downloads. A second, inline template used to
-          live here - 300 lines that printed "328" + the PNR + a counter as a
-          per-passenger ticket number, a CSS barcode, and a green "your flight
-          is booked" banner with no status check - so the honest FlightETicket
-          component, imported above, was never the one on this page. It is now. */}
-      <FlightETicket ref={ticketRef} bookingData={bookingData} />
     </div>
   );
 }

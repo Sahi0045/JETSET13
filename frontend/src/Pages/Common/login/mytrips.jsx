@@ -4,7 +4,8 @@ import React, { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { daysUntilDate, formatCalendarDate, formatIsoDuration } from "../../../utils/dateUtils"
 import { bookingStatusBadge, needsAttention, cancellationMessage, refundStatus, attentionMessage, isCompletedTrip } from "../../../utils/bookingStatus"
-import { documentState, hasNoConfirmedSeat, isCommitUnknown, liveTickets, ticketState, ticketsVoided } from "../../../utils/eTicket"
+import { canDownloadDocument, documentState, hasNoConfirmedSeat, isCommitUnknown, liveTickets, ticketState, ticketsVoided } from "../../../utils/eTicket"
+import { downloadTicketPdf } from "../../../utils/ticketDownload"
 import { bookingItineraries } from "../../../../../shared/bookingItineraries"
 import { isAwaitingTicketOnly } from "../../../../../shared/reviewQueue"
 import BookingItinerary from "../flights/BookingItinerary"
@@ -16,6 +17,7 @@ import {
   FaCalendarAlt, FaMapMarkerAlt, FaLock,
   FaSyncAlt, FaInfoCircle, FaFileInvoiceDollar, FaExclamationTriangle,
   FaClock, FaShieldAlt,
+  FaDownload,
 } from 'react-icons/fa'
 import { getApiUrl } from '../../../utils/apiHelper'
 import Navbar from '../Navbar'
@@ -163,6 +165,17 @@ export default function TravelDashboard() {
   const [showCancelConfirm, setShowCancelConfirm] = useState(null)
   // What a cancel from this page did, shown in a dialog rather than a browser alert box
   const [cancelOutcome, setCancelOutcome] = useState(null)
+  const [ticketDownload, setTicketDownload] = useState({ busy: null, failed: null, error: null })
+
+  const downloadTrip = async (reference) => {
+    setTicketDownload({ busy: reference, failed: null, error: null })
+    try {
+      await downloadTicketPdf(reference, {})
+      setTicketDownload({ busy: null, failed: null, error: null })
+    } catch (err) {
+      setTicketDownload({ busy: null, failed: reference, error: err.message })
+    }
+  }
 
   useEffect(() => {
     // Wait for the Supabase session (cookie/in-memory) to resolve before deciding.
@@ -693,6 +706,7 @@ export default function TravelDashboard() {
   // ---- Booking card ----
   const renderBookingCard = (booking) => {
     const isFlightBooking = booking.type === 'flight'
+    const tripReference = booking.bookingReference || booking.booking_reference || booking.orderId
     const isCruiseBooking = booking.type === 'cruise'
     const isHotelBooking = booking.type === 'hotel'
     const isPackageBooking = booking.type === 'package'
@@ -1057,6 +1071,21 @@ export default function TravelDashboard() {
             >
               <FaCog className="w-4 h-4" /> Manage Booking
             </button>
+          )}
+          {isFlightBooking && canDownloadDocument(booking) && tripReference && (
+            <button
+              onClick={() => downloadTrip(tripReference)}
+              disabled={ticketDownload.busy === tripReference}
+              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-white text-[#055B75] text-sm font-semibold rounded-lg border-2 border-[#B9D0DC] hover:bg-[#F0FAFC] hover:border-[#055B75] transition-all disabled:opacity-60"
+            >
+              <FaDownload className="w-4 h-4" />
+              {ticketDownload.busy === tripReference
+                ? 'Preparing your PDF…'
+                : (ticketState(booking) === 'issued' ? 'Download E-Ticket' : 'Download Booking Confirmation')}
+            </button>
+          )}
+          {ticketDownload.failed && ticketDownload.failed === tripReference && (
+            <p role="alert" className="w-full text-sm text-red-700">{ticketDownload.error}</p>
           )}
           {/* Cancel Booking Button — only for non-cancelled upcoming bookings.
               Not one whose cancel went through and could not be recorded

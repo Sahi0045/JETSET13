@@ -52,8 +52,9 @@ describe('the review page has nothing to fall back to', () => {
 describe('Manage Booking downloads the honest document', () => {
   const src = page('ManageBooking.jsx');
 
-  it('renders FlightETicket into the ref the download captures', () => {
-    expect(src).toMatch(/<FlightETicket\s+ref=\{ticketRef\}/);
+  it('downloads the PDF the server draws, not a screenshot', () => {
+    expect(src).toMatch(/downloadTicketPdf\(/);
+    expect(src).not.toMatch(/html2canvas/);
   });
 
   // The inline template, by its most damning line.
@@ -63,7 +64,8 @@ describe('Manage Booking downloads the honest document', () => {
   });
 
   it('names the saved file for what it is', () => {
-    expect(src).toMatch(/ticketState\(bookingData\) === 'issued' \? 'ETicket' : 'BookingConfirmation'/);
+    const route = readFileSync(path.resolve(process.cwd(), 'backend/routes/flight.routes.js'), 'utf8');
+    expect(route).toMatch(/documentTitleOf\(booking\) === 'E-Ticket' \? 'ETicket' : 'BookingConfirmation'/);
   });
 });
 
