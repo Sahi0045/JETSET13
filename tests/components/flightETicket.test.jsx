@@ -43,6 +43,16 @@ describe('the travel document', () => {
     expect(text).toMatch(/Ticket #: 057-2000000002/);
   });
 
+  it('prints a conjunction ticket as the whole set', () => {
+    const text = textOf({
+      status: 'confirmed', pnr: '2IZOI8', bookingReference: 'FLT1', payment_status: 'paid',
+      travelers: [travellers[0]],
+      tickets: [{ number: '057-7513754072', conjunctionTo: '057-7513754073', travelerId: '1' }],
+    });
+
+    expect(text).toMatch(/Ticket #: 057-7513754072-73/);
+  });
+
   it('prints "number pending" rather than a number that could be another traveller\'s', () => {
     // Saved before infant tickets were told apart: both name the adult.
     const ambiguous = [
