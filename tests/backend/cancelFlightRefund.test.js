@@ -135,6 +135,10 @@ describe('decideFlightRefund', () => {
   };
   const decide = async (over) => (await handlers()).decideFlightRefund({ ...base, ...over });
 
+  it('sends voided tickets to review when the fee could not be worked out', async () => {
+    expect(await decide({ gds: ticketsVoided, fee: null })).toMatchObject({ action: 'review', refundAmount: 0, reason: 'the cancellation fee could not be read' });
+  });
+
   it('returns everything, with no fee, for a reservation released before a ticket existed', async () => {
     expect(await decide({})).toMatchObject({ action: 'refund_all', fee: 0, refundAmount: 291 });
   });
@@ -264,6 +268,15 @@ describe('cancelling a flight', () => {
 
     expect(sent('REFUND')[0].transaction.amount).toBe('271.00');
     expect(res.body.cancellation).toMatchObject({ paymentAction: 'PARTIAL_REFUND', cancellationFee: 20, refundAmount: 271 });
+  });
+
+  it('keeps the saved percentage of what was paid', async () => {
+    cancelFlightOrder.mockResolvedValue(ticketsVoided);
+
+    const res = await cancel(flight(), { settings: { cancellation_fee: 75, flight_cancellation_fee_percent: 10 }, user: STAFF });
+
+    expect(sent('REFUND')[0].transaction.amount).toBe('261.90');
+    expect(res.body.cancellation).toMatchObject({ paymentAction: 'PARTIAL_REFUND', cancellationFee: 29.1, refundAmount: 261.9 });
   });
 
   it('keeps the fee the admin set', async () => {

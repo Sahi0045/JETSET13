@@ -72,8 +72,10 @@ const BookingsList = () => {
                     credentials: 'include'
                 });
                 const data = await response.json();
-                if (data.success && data.data?.cancellation_fee != null) {
-                    setCancellationFeeConfig(data.data.cancellation_fee);
+                if (data.success && data.data?.cancellation_fee_percent != null) {
+                    setCancellationFeeConfig(`${data.data.cancellation_fee_percent}% of what was paid`);
+                } else if (data.success && data.data?.cancellation_fee != null) {
+                    setCancellationFeeConfig(formatCurrency(data.data.cancellation_fee));
                 }
             } catch (e) {
                 console.warn('Could not fetch cancellation fee config, using default');
@@ -935,7 +937,7 @@ const BookingsList = () => {
                                 marginBottom: '16px', border: '1px solid #fbbf24', fontSize: '13px', color: '#92400e'
                             }}>
                                 💰 <strong>The refund is worked out when the booking is cancelled.</strong> ARC Pay is asked what it holds, and that is what can go back:
-                                in full if no ticket was issued; less the {cancellationFeeConfig != null ? formatCurrency(cancellationFeeConfig) : 'configured'} cancellation fee if tickets were voided or the fare is refundable.
+                                in full if no ticket was issued; less the {cancellationFeeConfig ?? 'configured'} cancellation fee if tickets were voided or the fare is refundable.
                                 A non-refundable ticket, or one the airline and the booking disagree about, goes to review instead. The result is shown after cancelling.
                             </div>
                         )}

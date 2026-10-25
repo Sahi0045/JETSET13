@@ -166,8 +166,11 @@ function policyLines(terms, { money, time }) {
 }
 
 /** `freeUntil`: when a booking made now stops being free to cancel, when known. */
-export function cancelPolicyLines({ cancellationFee = null, freeUntil = null, money = usd, time = clock } = {}) {
-  const fee = Number(cancellationFee) > 0 ? ` and our ${money(cancellationFee)} cancellation fee` : '';
+export function cancelPolicyLines({ cancellationFee = null, cancellationFeePercent = null, freeUntil = null, money = usd, time = clock } = {}) {
+  const percent = known(cancellationFeePercent) ? Number(cancellationFeePercent) : NaN;
+  const fixedFee = Number(cancellationFee) > 0 ? ` and our ${money(cancellationFee)} cancellation fee` : '';
+  const percentFee = percent > 0 ? ` and our cancellation fee of ${percent}% of what you paid` : '';
+  const fee = Number.isFinite(percent) ? percentFee : fixedFee;
   return [
     freeUntil
       ? `Book now and you can cancel free until ${time(freeUntil)}: you get back the airline price. The service fee is not refundable.`
