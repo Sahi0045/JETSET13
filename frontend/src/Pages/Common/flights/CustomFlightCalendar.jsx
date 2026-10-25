@@ -41,7 +41,7 @@ export default function CustomFlightCalendar({
     travelClass = 'ECONOMY',
     showPrices = true,
 }) {
-    const [currentMonth, setCurrentMonth] = useState(new Date())
+    const [currentMonth, setCurrentMonth] = useState(() => (minDate instanceof Date && minDate > new Date() ? minDate : new Date()))
     const [prices, setPrices] = useState({})
     const [currency, setCurrency] = useState('USD')
     const [loading, setLoading] = useState(false)

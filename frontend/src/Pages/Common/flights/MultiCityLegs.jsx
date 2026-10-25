@@ -127,7 +127,15 @@ function DateField({ number, value, minDate, error, onPick }) {
 const subtitleOf = (code, country) => (code ? `${code}${country ? `, ${country}` : ''}` : '');
 
 export default function MultiCityLegs({ legs, errors = [], onChange }) {
-  const update = (index, patch) => onChange(legs.map((leg, i) => (i === index ? { ...leg, ...patch } : leg)));
+  const update = (index, patch) => onChange(legs.map((leg, i) => {
+    if (i === index) return { ...leg, ...patch };
+    // The next flight starts where this one lands, until it is given a start of its own.
+    const changed = legs[index];
+    if (i === index + 1 && 'to' in patch && (!leg.from || leg.from === changed.to)) {
+      return { ...leg, from: patch.to, fromCode: patch.toCode, fromCountry: patch.toCountry };
+    }
+    return leg;
+  }));
   const typed = (index, field, text) => update(index, { [field]: text, [`${field}Code`]: undefined, [`${field}Country`]: undefined });
   const picked = (index, field, city) => update(index, {
     [field]: `${city.name} (${city.code})`,

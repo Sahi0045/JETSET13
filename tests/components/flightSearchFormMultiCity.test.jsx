@@ -100,6 +100,25 @@ describe('the multi-city search form', () => {
     expect(screen.getByText('Please enter where flight 2 goes')).toBeTruthy();
   });
 
+  it("fills the next flight's start with where this one lands, until it is typed over", () => {
+    renderForm({ initialData: { tripType: 'multiCity', legs: [{ from: 'DEL', to: '', departDate: inDays(30) }, { from: '', to: 'LHR', departDate: inDays(34) }] } });
+
+    fireEvent.change(screen.getByLabelText('Flight 1 to'), { target: { value: 'DXB' } });
+    expect(screen.getByLabelText('Flight 2 from').value).toBe('DXB');
+
+    fireEvent.change(screen.getByLabelText('Flight 2 from'), { target: { value: 'BOM' } });
+    fireEvent.change(screen.getByLabelText('Flight 1 to'), { target: { value: 'DOH' } });
+    expect(screen.getByLabelText('Flight 2 from').value).toBe('BOM');
+  });
+
+  it("opens a later flight's calendar at the month it can start in", () => {
+    const { container } = renderForm({ initialData: { tripType: 'multiCity', legs: [{ ...legs()[0], departDate: inDays(80) }, { ...legs()[1], departDate: '' }] } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Select date of flight 2' }));
+
+    expect(container.querySelector(`[data-date="${inDays(82)}"]`)).toBeTruthy();
+  });
+
   it('says how many flights the trip has', () => {
     renderForm({ initialData: { tripType: 'multiCity', legs: legs() } });
 
