@@ -10,7 +10,20 @@
  * without rendering it.
  */
 
+import { tripTypeOf } from '../../../shared/bookingItineraries';
+
 const segmentsOf = (itinerary) => (Array.isArray(itinerary?.segments) ? itinerary.segments : []);
+
+const itinerariesOf = (flightData) => (Array.isArray(flightData?.originalOffer?.itineraries) ? flightData.originalOffer.itineraries : []);
+
+const isMultiCityOffer = (flightData) => tripTypeOf(itinerariesOf(flightData).map((itinerary) => ({
+  origin: segmentsOf(itinerary)[0]?.departure?.iataCode,
+  destination: segmentsOf(itinerary).at(-1)?.arrival?.iataCode,
+}))) === 'multiCity';
+
+/** Changes of plane, and technical stops inside a flight. */
+const stopsOf = (segments) => Math.max(0, segments.length - 1)
+  + segments.reduce((count, segment) => count + (Array.isArray(segment?.stops) ? segment.stops.length : 0), 0);
 
 /**
  * An Amadeus segment in the shape the results page gives a flight's segments,
@@ -47,6 +60,7 @@ const displaySegment = (segment) => {
  * @returns {{ segments: object[], duration: string }|null}
  */
 export function returnLegOf(flightData) {
+  if (isMultiCityOffer(flightData)) return null;
   const itinerary = flightData?.originalOffer?.itineraries?.[1];
   const described = Array.isArray(flightData?.returnLeg?.segments) ? flightData.returnLeg.segments : [];
   const segments = described.length > 0 ? described : segmentsOf(itinerary).map(displaySegment);
@@ -55,6 +69,26 @@ export function returnLegOf(flightData) {
     segments,
     duration: flightData?.returnLeg?.duration || itinerary?.duration || '',
   };
+}
+
+/**
+ * Flights 2 to N of a multi-city trip, in the results page's segment shape,
+ * or none for any other trip.
+ *
+ * @param {object} flightData the flight the results page handed over
+ * @returns {{ segments: object[], duration: string, stops: number }[]}
+ */
+export function laterLegsOf(flightData) {
+  if (!isMultiCityOffer(flightData)) return [];
+  return itinerariesOf(flightData).slice(1).map((itinerary, index) => {
+    const described = flightData?.laterLegs?.[index];
+    const segments = described?.segments?.length ? described.segments : segmentsOf(itinerary).map(displaySegment);
+    return {
+      segments,
+      duration: described?.duration || itinerary?.duration || '',
+      stops: Number.isFinite(described?.stops) ? described.stops : stopsOf(segmentsOf(itinerary)),
+    };
+  }).filter((leg) => leg.segments.length > 0);
 }
 
 const arcSegment = (segment) => ({

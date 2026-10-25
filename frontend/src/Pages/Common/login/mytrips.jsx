@@ -6,7 +6,7 @@ import { daysUntilDate, formatCalendarDate, formatIsoDuration } from "../../../u
 import { bookingStatusBadge, needsAttention, cancellationMessage, refundStatus, attentionMessage, isCompletedTrip } from "../../../utils/bookingStatus"
 import { canDownloadDocument, documentState, hasNoConfirmedSeat, isCommitUnknown, liveTickets, ticketState, ticketsVoided } from "../../../utils/eTicket"
 import { downloadTicketPdf } from "../../../utils/ticketDownload"
-import { bookingItineraries } from "../../../../../shared/bookingItineraries"
+import { bookingItineraries, multiCityRoute, tripTypeOf } from "../../../../../shared/bookingItineraries"
 import { isAwaitingTicketOnly } from "../../../../../shared/reviewQueue"
 import BookingItinerary from "../flights/BookingItinerary"
 import { formatUsd } from "../../../utils/bookingCharge"
@@ -837,7 +837,7 @@ export default function TravelDashboard() {
               <>
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                   {(booking.origin || booking.destination) && (
-                    <DetailCell label="Route">{booking.origin || 'N/A'} {legs.length === 2 ? '⇄' : '→'} {booking.destination || 'N/A'}</DetailCell>
+                    <DetailCell label="Route">{multiCityRoute(legs) || `${booking.origin || 'N/A'} ${tripTypeOf(legs) === 'roundTrip' ? '⇄' : '→'} ${booking.destination || 'N/A'}`}</DetailCell>
                   )}
                   {booking.departureDate && <DetailCell label="Departure">{fmtDate(booking.departureDate)}</DetailCell>}
                   {booking.returnDate && <DetailCell label="Return">{fmtDate(booking.returnDate)}</DetailCell>}

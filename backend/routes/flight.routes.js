@@ -73,15 +73,52 @@ const searchDateProblem = ({ departDate, returnDate }, now = Date.now()) => {
   return null;
 };
 
+const MULTI_CITY_LEGS = { min: 2, max: 6 };
+
+const legsProblem = (legs, returnDate, now = Date.now()) => {
+  if (!Array.isArray(legs) || legs.length < MULTI_CITY_LEGS.min || legs.length > MULTI_CITY_LEGS.max) {
+    return { field: 'legs', message: 'A multi-city trip has 2 to 6 flights.' };
+  }
+  if (returnDate) {
+    return { field: 'returnDate', message: 'A multi-city trip has no return date. Add the way back as another flight.' };
+  }
+  const yesterday = new Date(now - DAY_MS).toISOString().slice(0, 10);
+  for (const [index, leg] of legs.entries()) {
+    const n = index + 1;
+    const date = String(leg?.departDate ?? '').trim();
+    if (!String(leg?.from ?? '').trim() || !String(leg?.to ?? '').trim() || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return { field: 'legs', message: `Flight ${n} needs where from, where to and a date.` };
+    }
+    if (String(leg.from).trim().toUpperCase() === String(leg.to).trim().toUpperCase()) {
+      return { field: 'legs', message: `Flight ${n} starts and ends in the same place.` };
+    }
+    if (date < yesterday) {
+      return { field: 'legs', message: `Flight ${n}: the date has already passed. Please choose today or a later date.` };
+    }
+    if (index > 0 && date < String(legs[index - 1].departDate).trim()) {
+      return { field: 'legs', message: `Flight ${n} leaves before flight ${n - 1}. Please put the flights in date order.` };
+    }
+  }
+  return null;
+};
+
 // Only the fields the handler genuinely requires; passthrough keeps the rest.
 const flightSearchSchema = z
   .object({
-    from: z.string().min(1, 'from is required'),
-    to: z.string().min(1, 'to is required'),
-    departDate: z.string().min(1, 'departDate is required'),
+    from: z.string().optional(),
+    to: z.string().optional(),
+    departDate: z.string().optional(),
   })
   .passthrough()
   .superRefine((body, ctx) => {
+    if (body.legs !== undefined) {
+      const problem = legsProblem(body.legs, body.returnDate);
+      if (problem) ctx.addIssue({ code: 'custom', path: [problem.field], message: problem.message });
+    } else {
+      for (const field of ['from', 'to', 'departDate']) {
+        if (!String(body[field] ?? '').trim()) ctx.addIssue({ code: 'custom', path: [field], message: `${field} is required` });
+      }
+    }
     const problem = searchDateProblem(body);
     if (problem) ctx.addIssue({ code: 'custom', path: [problem.field], message: problem.message });
     // This WSAP's Master Pricer request has no price ceiling. maxPrice was
@@ -2427,20 +2464,29 @@ router.post('/search', validate({ body: flightSearchSchema }), async (req, res) 
   try {
     console.log('🔍 Flight search request received:', req.body);
 
-    const { from, to, departDate, returnDate, tripType, travelers } = req.body;
+    const { returnDate, travelers } = req.body;
+    const isCode = (code) => /^[A-Z]{3}$/.test(String(code || ''));
+    const legs = Array.isArray(req.body.legs)
+      ? req.body.legs.map((leg) => ({ text: leg, from: resolveToIATACode(leg.from), to: resolveToIATACode(leg.to), departDate: String(leg.departDate).trim() }))
+      : null;
+    const from = legs ? legs[0].text.from : req.body.from;
+    const to = legs ? legs[legs.length - 1].text.to : req.body.to;
+    const departDate = legs ? legs[0].departDate : req.body.departDate;
 
     // Resolve city names to IATA codes (handles cases like "New York" -> "JFK")
-    const resolvedFrom = resolveToIATACode(from);
-    const resolvedTo = resolveToIATACode(to);
+    const resolvedFrom = legs ? legs[0].from : resolveToIATACode(from);
+    const resolvedTo = legs ? legs[legs.length - 1].to : resolveToIATACode(to);
     console.log(`📍 Resolved locations: from="${from}" -> "${resolvedFrom}", to="${to}" -> "${resolvedTo}"`);
 
     // Text that names no place is not searched as a guess. It used to go to
     // Amadeus as typed - or, before that, as the first suggestion for its first
     // word - and the page headed "Flights from San Francisco, CA" listed
     // departures from Ouagadougou.
-    const unknownPlace = !/^[A-Z]{3}$/.test(String(resolvedFrom || '')) ? from
-      : !/^[A-Z]{3}$/.test(String(resolvedTo || '')) ? to
-        : null;
+    const unplacedLeg = legs?.find((leg) => !isCode(leg.from) || !isCode(leg.to));
+    const unknownPlace = unplacedLeg ? (!isCode(unplacedLeg.from) ? unplacedLeg.text.from : unplacedLeg.text.to)
+      : !isCode(resolvedFrom) ? from
+        : !isCode(resolvedTo) ? to
+          : null;
     if (unknownPlace) {
       return res.status(400).json({
         success: false,
@@ -2454,7 +2500,8 @@ router.post('/search', validate({ body: flightSearchSchema }), async (req, res) 
       from: resolvedFrom,
       to: resolvedTo,
       departDate,
-      returnDate: returnDate && returnDate.trim() !== '' ? returnDate : undefined,
+      returnDate: !legs && returnDate && returnDate.trim() !== '' ? returnDate : undefined,
+      ...(legs ? { legs: legs.map(({ from: legFrom, to: legTo, departDate: legDate }) => ({ from: legFrom, to: legTo, departDate: legDate })) } : {}),
       adults: parseInt(req.body.adults || travelers) || 1,
       children: parseInt(req.body.children) || 0,
       infants: parseInt(req.body.infants) || 0,
@@ -2484,7 +2531,9 @@ router.post('/search', validate({ body: flightSearchSchema }), async (req, res) 
       const flightCacheKey = CacheKeys.flightSearch(
         searchParams.from,
         searchParams.to,
-        `${searchParams.departDate}|${searchParams.returnDate || 'ow'}`,
+        searchParams.legs
+          ? `mc|${searchParams.legs.map((leg) => `${leg.from}-${leg.to}-${leg.departDate}`).join('~')}`
+          : `${searchParams.departDate}|${searchParams.returnDate || 'ow'}`,
         `${searchParams.adults}-${searchParams.children}-${searchParams.infants}-${searchParams.travelClass || 'any'}-${searchParams.nonStop ? 'ns' : 'any'}-${filterKey}`
       );
       let amadeusResponse = await cacheGet(flightCacheKey);

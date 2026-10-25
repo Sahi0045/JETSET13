@@ -9,6 +9,7 @@ import AirportService from "../../../Services/AirportService";
 import { getTodayDate, getNextDay, getSafeDate } from "../../../utils/dateUtils";
 import { useLocationContext } from '../../../Context/LocationContext';
 import CustomFlightCalendar from "./CustomFlightCalendar";
+import MultiCityLegs, { MIN_LEGS, nextLegAfter } from "./MultiCityLegs";
 import { fieldCode, normalizeTripType } from './searchQuery';
 import { format, parseISO, isValid } from 'date-fns';
 
@@ -88,6 +89,21 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
   }, [loaded, city, initialData]);
 
   const handleTripTypeChange = (type) => {
+    if (type === "multiCity") {
+      setFormData((prev) => {
+        if (Array.isArray(prev.legs) && prev.legs.length >= MIN_LEGS) {
+          return { ...prev, tripType: "multiCity", returnDate: '' };
+        }
+        const first = {
+          from: prev.from || '', fromCode: prev.fromCode, fromCountry: prev.fromCountry,
+          to: prev.to || '', toCode: prev.toCode, toCountry: prev.toCountry,
+          departDate: prev.departDate || '',
+        };
+        return { ...prev, tripType: "multiCity", returnDate: '', legs: [first, nextLegAfter(first)] };
+      });
+      setFormErrors({});
+      return;
+    }
     if (type === "roundTrip") {
       const currentDepart = formData.departDate || getTodayDate();
 
@@ -283,7 +299,30 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
     }, 200);
   };
 
+  const multiCityErrors = (legs) => legs.map((leg, index) => {
+    const n = index + 1;
+    const problem = {};
+    if (!String(leg.from || '').trim()) problem.from = `Please enter where flight ${n} leaves from`;
+    if (!String(leg.to || '').trim()) problem.to = `Please enter where flight ${n} goes`;
+    if (!leg.departDate) problem.departDate = `Please select the date of flight ${n}`;
+    const fromCode = leg.fromCode || fieldCode(leg.from);
+    if (!problem.from && !problem.to && fromCode && fromCode === (leg.toCode || fieldCode(leg.to))) {
+      problem.to = `Flight ${n} starts and ends in the same place.`;
+    }
+    if (!problem.departDate && index > 0 && legs[index - 1].departDate && leg.departDate < legs[index - 1].departDate) {
+      problem.departDate = `Flight ${n} leaves before flight ${n - 1}.`;
+    }
+    return problem;
+  });
+
   const validateForm = () => {
+    if (formData.tripType === "multiCity") {
+      const legErrors = multiCityErrors(formData.legs || []);
+      const hasProblem = legErrors.some((problem) => Object.keys(problem).length > 0);
+      setFormErrors(hasProblem ? { legs: legErrors } : {});
+      return !hasProblem;
+    }
+
     const errors = {};
 
     if (!formData.from) {
@@ -317,6 +356,26 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
       const match = str && str.match(/\(([A-Z]{3})\)$/);
       return match ? match[1] : null;
     };
+
+    if (formData.tripType === "multiCity") {
+      const legs = formData.legs.map((leg) => ({
+        ...leg,
+        fromCode: leg.fromCode || extractCode(leg.from) || cityCodeMap[leg.from],
+        toCode: leg.toCode || extractCode(leg.to) || cityCodeMap[leg.to],
+      }));
+      const first = legs[0];
+      const last = legs[legs.length - 1];
+      const multiCitySearch = {
+        ...formData,
+        legs,
+        from: first.from, fromCode: first.fromCode,
+        to: last.to, toCode: last.toCode,
+        departDate: first.departDate,
+        returnDate: '',
+      };
+      if (onSearch) onSearch(multiCitySearch);
+      return;
+    }
 
     // Ensure we have the city codes
     const searchData = {
@@ -454,6 +513,7 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
             {[
               { key: 'oneWay', label: 'One Way' },
               { key: 'roundTrip', label: 'Round Trip' },
+              { key: 'multiCity', label: 'Multi City' },
             ].map(({ key, label }) => {
               const checked = formData.tripType === key;
               return (
@@ -465,15 +525,20 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
                 </button>
               );
             })}
-            <span className="flex items-center gap-2 opacity-50 cursor-not-allowed" title="Coming soon">
-              <span className="h-4 w-4 rounded-full border border-gray-300" />
-              <span className="text-sm text-gray-500">Multi City</span>
-            </span>
             <p className="ml-auto hidden md:block text-sm text-gray-500">Book International &amp; Domestic Flights</p>
           </div>
 
           {/* Fields */}
           <div className={`flex flex-col lg:flex-row border-y border-gray-100 -mx-4 sm:-mx-6 ${anyCalendarOpen ? 'relative z-20' : ''}`}>
+            {formData.tripType === 'multiCity' ? (
+              <div className="flex-[4] min-w-0">
+                <MultiCityLegs
+                  legs={formData.legs || []}
+                  errors={formErrors.legs || []}
+                  onChange={(legs) => { setFormData((prev) => ({ ...prev, legs })); setFormErrors({}); }}
+                />
+              </div>
+            ) : (<>
             {/* From */}
             <label className="relative flex-[1.4] px-5 py-4 cursor-text hover:bg-[#055B75]/[0.03] focus-within:bg-[#055B75]/[0.04] focus-within:ring-2 focus-within:ring-inset focus-within:ring-[#055B75]/30 transition-colors block">
               <span className="block text-[10.5px] font-bold uppercase tracking-[0.14em] text-gray-400 mb-1.5">From</span>
@@ -598,6 +663,7 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
               )}
               {formErrors.returnDate && <span className="block text-red-500 text-xs mt-1">{formErrors.returnDate}</span>}
             </div>
+            </>)}
 
             {/* Travellers & Class */}
             <div ref={travellersRef}
@@ -660,7 +726,9 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
             order, rather than hanging off the bottom edge */}
         <div className="flex flex-wrap items-center gap-3 px-4 sm:px-6 py-4">
           <p className="text-[13px] text-gray-500">
-            {formData.tripType === 'roundTrip' ? 'Round trip' : 'One way'}
+            {formData.tripType === 'multiCity'
+              ? `Multi-city · ${(formData.legs || []).length} flights`
+              : formData.tripType === 'roundTrip' ? 'Round trip' : 'One way'}
             {' · '}{totalTravellers} {totalTravellers > 1 ? 'travellers' : 'traveller'}
             {' · '}{classLabels[formData.travelClass || 'ECONOMY']}
           </p>

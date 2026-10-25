@@ -10,7 +10,7 @@ import {
 import { downloadTicketPdf } from '../../utils/ticketDownload';
 import { daysUntilDate, formatCalendarDate } from '../../utils/dateUtils';
 import { cancellationMessage } from '../../../../shared/cancellationOutcome';
-import { bookingItineraries, returnDateOf } from '../../../../shared/bookingItineraries';
+import { bookingItineraries, multiCityRoute, returnDateOf } from '../../../../shared/bookingItineraries';
 import BookingItinerary from './flights/BookingItinerary';
 import { bookingChargeLines, formatUsd, tripRewardLine } from '../../utils/bookingCharge';
 
@@ -443,6 +443,9 @@ function BookingConfirmation() {
               {/* Visual Route Display for Flights */}
               {isFlight && (bookingData.origin || bookingData.destination || bookingData.flightData) && (
                 <div className="bg-white/10 rounded-xl p-4 backdrop-blur-sm">
+                  {multiCityRoute(legs) && (
+                    <p className="mb-3 text-center text-sm font-semibold">{`Multi-city: ${multiCityRoute(legs)}`}</p>
+                  )}
                   <div className="flex items-center justify-between">
                     <div className="text-center">
                       <p className="text-xl sm:text-3xl font-bold">{bookingData.origin || bookingData.flightData?.origin || 'DEP'}</p>

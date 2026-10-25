@@ -22,8 +22,8 @@ export const parseDurationMin = (duration) => {
 
 const minutesOf = (leg) => (Number.isFinite(leg?.durationMinutes) ? leg.durationMinutes : parseDurationMin(leg?.duration));
 
-/** The outbound leg and, on a round trip, the return. */
-export const legsOf = (f) => [f, f?.returnLeg].filter(Boolean);
+/** The outbound leg, the later flights of a multi-city trip, or a round trip's return. */
+export const legsOf = (f) => [f, ...(f?.laterLegs || []), f?.returnLeg].filter(Boolean);
 
 /** The outbound duration in minutes - the one the card shows. */
 export const legMinutes = (f) => minutesOf(f);

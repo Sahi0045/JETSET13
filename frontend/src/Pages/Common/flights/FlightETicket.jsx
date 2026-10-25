@@ -18,6 +18,7 @@ import { formatCalendarDate } from '../../../utils/dateUtils';
 import { bookingItineraries } from '../../../../../shared/bookingItineraries';
 import { documentNoticeOf, documentTitleOf } from '../../../../../shared/ticketDocument';
 import BookingItinerary from './BookingItinerary';
+import { printedTicketNumber } from '../../../../../shared/ticketNumber';
 
 /**
  * The travel document a customer downloads and may carry to an airport.
@@ -131,7 +132,7 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
         const match = ticketForTraveler(tickets, traveler, index);
         // A void number printed as "Ticket #" reads as a ticket to fly on.
         if (match?.number && isVoidedTicket(match, voided)) return 'Ticket voided — not valid for travel';
-        if (match?.number) return `Ticket #: ${match.number}`;
+        if (match?.number) return `Ticket #: ${printedTicketNumber(match)}`;
         // Tickets exist, but none can be tied to this traveller for certain
         // (see ticketForTraveler). Another traveller's number would be worse
         // than none, and "not yet issued" would be untrue.

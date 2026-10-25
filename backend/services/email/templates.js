@@ -17,6 +17,7 @@ import {
   REFUND_STUCK_ACTIONS, REFUND_DONE_ACTIONS, coinsSentence, customerReviewSentence, feeCoversSentence, refundOutcome, serviceFeeKeptBy,
 } from '../../../shared/cancellationOutcome.js';
 import { clockTime, itinerariesFromOffer, layoverBetween, legLabel } from '../../../shared/bookingItineraries.js';
+import { printedTicketNumber } from '../../../shared/ticketNumber.js';
 
 const money = (amount, currency = 'USD') =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(Number(amount) || 0);
@@ -547,7 +548,7 @@ export function generateBookingConfirmationTemplate(data) {
       .filter((ticket) => ticket?.number)
       .map((ticket, index, all) => [
         all.length === 1 ? 'E-ticket number' : `E-ticket · ${ticket.travelerName || ticket.passengerName || `Traveller ${index + 1}`}`,
-        ticket.number,
+        printedTicketNumber(ticket),
       ]),
     d.Cabin || d.cabin ? ['Cabin', d.Cabin || d.cabin] : null,
   ].filter(Boolean);
@@ -715,7 +716,7 @@ export function generateTicketIssuedTemplate(data = {}) {
 
   const named = issued.map((ticket) => [
     ticket.travelerName || ticket.passengerName || 'Traveller',
-    `<span style="letter-spacing:1px;">${ticket.number}</span>`,
+    `<span style="letter-spacing:1px;">${printedTicketNumber(ticket)}</span>`,
   ]);
 
   const opening = issued.length === 1
@@ -728,7 +729,7 @@ export function generateTicketIssuedTemplate(data = {}) {
     ${paragraph(opening)}
     ${figureBlock([
     issued.length === 1
-      ? { label: 'E-ticket number', value: issued[0].number, mono: true, note: statusPill('Issued', 'success') }
+      ? { label: 'E-ticket number', value: printedTicketNumber(issued[0]), mono: true, note: statusPill('Issued', 'success') }
       : { label: 'E-tickets issued', value: String(issued.length), note: statusPill('Issued', 'success') },
     { label: 'Booking reference', value: bookingReference, mono: true, small: true },
   ])}
