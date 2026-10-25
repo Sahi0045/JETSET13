@@ -40,18 +40,29 @@ export const fieldCode = (label, code) => String(extractIata(label) || code || '
  * search built its own and sent the display label, "New Delhi (DEL)", which
  * the server matched as text - to New York.
  */
+export const isMultiCity = (sd) => normalizeTripType(sd?.tripType, sd?.returnDate) === 'multiCity'
+  && Array.isArray(sd?.legs) && sd.legs.length >= 2;
+
+/** Each leg of a multi-city search as the search route takes it. */
+export const legsPayload = (sd) => sd.legs.map((leg) => ({
+  from: fieldCode(leg.from, leg.fromCode),
+  to: fieldCode(leg.to, leg.toCode),
+  departDate: leg.departDate,
+}));
+
 export const buildSearchPayload = (sd) => {
+  const route = isMultiCity(sd)
+    ? { legs: legsPayload(sd) }
+    : { from: fieldCode(sd.from, sd.fromCode), to: fieldCode(sd.to, sd.toCode), departDate: sd.departDate };
   const payload = {
-    from: fieldCode(sd.from, sd.fromCode),
-    to: fieldCode(sd.to, sd.toCode),
-    departDate: sd.departDate,
+    ...route,
     adults: parseInt(sd.adults) || parseInt(sd.travelers) || 1,
     children: parseInt(sd.children) || 0,
     infants: parseInt(sd.infants) || 0,
     travelClass: sd.travelClass || 'ECONOMY',
     max: 50,
   };
-  if (sd.returnDate) payload.returnDate = sd.returnDate;
+  if (sd.returnDate && !route.legs) payload.returnDate = sd.returnDate;
   if (sd.maxPrice) payload.maxPrice = sd.maxPrice;
   if (sd.nonStop) payload.nonStop = sd.nonStop;
   if (sd.includedAirlineCodes) payload.includedAirlineCodes = sd.includedAirlineCodes;
@@ -66,6 +77,7 @@ export const buildSearchPayload = (sd) => {
  * rewritten with the same criteria.
  */
 export const searchKeyOf = (sd) => (sd ? JSON.stringify([
+  isMultiCity(sd) ? legsPayload(sd) : null,
   fieldCode(sd.from, sd.fromCode),
   fieldCode(sd.to, sd.toCode),
   sd.departDate,
@@ -83,19 +95,30 @@ export const searchKeyOf = (sd) => (sd ? JSON.stringify([
  * from/to/date, so refreshing after picking a date on a three-passenger
  * business search came back as one passenger in economy.
  */
+const LEG_SEPARATOR = '|';
+
+const withTravellers = (q, sd) => {
+  const adults = parseInt(sd.adults) || parseInt(sd.travelers) || 1;
+  if (adults !== 1) q.set('adults', String(adults));
+  if (parseInt(sd.children)) q.set('children', String(parseInt(sd.children)));
+  if (parseInt(sd.infants)) q.set('infants', String(parseInt(sd.infants)));
+  if (sd.travelClass && sd.travelClass !== 'ECONOMY') q.set('travelClass', sd.travelClass);
+  return q;
+};
+
 export const searchToQuery = (sd, isoDate) => {
+  if (isMultiCity(sd)) {
+    const q = new URLSearchParams({ tripType: 'multiCity' });
+    legsPayload(sd).forEach((leg) => q.append('leg', [leg.from, leg.to, leg.departDate].join(LEG_SEPARATOR)));
+    return withTravellers(q, sd).toString();
+  }
   const q = new URLSearchParams({
     from: fieldCode(sd.from, sd.fromCode),
     to: fieldCode(sd.to, sd.toCode),
     date: isoDate || sd.departDate,
   });
   if (sd.returnDate) q.set('returnDate', sd.returnDate);
-  const adults = parseInt(sd.adults) || parseInt(sd.travelers) || 1;
-  if (adults !== 1) q.set('adults', String(adults));
-  if (parseInt(sd.children)) q.set('children', String(parseInt(sd.children)));
-  if (parseInt(sd.infants)) q.set('infants', String(parseInt(sd.infants)));
-  if (sd.travelClass && sd.travelClass !== 'ECONOMY') q.set('travelClass', sd.travelClass);
-  return q.toString();
+  return withTravellers(q, sd).toString();
 };
 
 /**
@@ -110,29 +133,52 @@ export const normalizeTripType = (tripType, returnDate) => {
   const type = String(tripType ?? '').replace(/[^a-z]/gi, '').toLowerCase();
   if (type === 'roundtrip') return 'roundTrip';
   if (type === 'oneway') return 'oneWay';
+  if (type === 'multicity') return 'multiCity';
   return returnDate ? 'roundTrip' : 'oneWay';
 };
 
 /** Reverse of the above. Returns null unless the URL describes a whole search. */
+const travellersFromQuery = (q) => {
+  const adults = parseInt(q.get('adults')) || 1;
+  return {
+    adults,
+    travelers: adults,
+    children: parseInt(q.get('children')) || 0,
+    infants: parseInt(q.get('infants')) || 0,
+    travelClass: q.get('travelClass') || 'ECONOMY',
+  };
+};
+
 export const searchFromQuery = (search) => {
   const q = new URLSearchParams(search);
+  if (normalizeTripType(q.get('tripType')) === 'multiCity') {
+    const legs = q.getAll('leg').map((value) => {
+      const [from, to, departDate] = value.split(LEG_SEPARATOR);
+      return { from, to, departDate };
+    });
+    if (legs.length < 2 || legs.some((leg) => !leg.from || !leg.to || !leg.departDate)) return null;
+    return {
+      tripType: 'multiCity',
+      legs,
+      from: legs[0].from,
+      to: legs[legs.length - 1].to,
+      departDate: legs[0].departDate,
+      returnDate: '',
+      ...travellersFromQuery(q),
+    };
+  }
   const from = q.get('from');
   const to = q.get('to');
   const departDate = q.get('date') || q.get('departDate');
   if (!from || !to || !departDate) return null;
 
   const returnDate = q.get('returnDate') || '';
-  const adults = parseInt(q.get('adults')) || 1;
   return {
     from,
     to,
     departDate,
     returnDate,
     tripType: normalizeTripType(null, returnDate),
-    adults,
-    travelers: adults,
-    children: parseInt(q.get('children')) || 0,
-    infants: parseInt(q.get('infants')) || 0,
-    travelClass: q.get('travelClass') || 'ECONOMY',
+    ...travellersFromQuery(q),
   };
 };
