@@ -262,6 +262,25 @@ export function pnrOf(bookingData) {
   return bookingData?.pnr || bookingData?.booking_details?.pnr || bookingData?.bookingDetails?.pnr || null;
 }
 
+export function airlineLocatorsOf(bookingData) {
+  const list = bookingData?.airlineLocators ?? bookingData?.airline_locators
+    ?? bookingData?.booking_details?.airline_locators ?? bookingData?.bookingDetails?.airline_locators;
+  return Array.isArray(list) ? list.filter((entry) => entry?.carrierCode && entry?.locator) : [];
+}
+
+// Until the airline sends its own code, ours is only called a PNR: for an
+// airline hosted outside Amadeus it is not what the airline's check-in takes.
+export function bookingCodeOf(bookingData) {
+  const pnr = pnrOf(bookingData);
+  const airline = airlineLocatorsOf(bookingData);
+  if (airline.length === 0) return pnr ? { label: 'Booking code (PNR)', value: pnr, amadeusReference: null } : null;
+  return {
+    label: airline.length === 1 ? 'Airline booking code' : 'Airline booking codes',
+    value: airline.length === 1 ? airline[0].locator : airline.map((entry) => `${entry.carrierCode} ${entry.locator}`).join(' · '),
+    amadeusReference: pnr && airline.some((entry) => entry.locator !== pnr) ? pnr : null,
+  };
+}
+
 /**
  * What the downloadable document may truthfully call this booking.
  *

@@ -2022,6 +2022,7 @@ export function buildBookingRow(bookingData, userId) {
       // whether it ticketed and what it priced at.
       gds: bookingData.gds || null,
       tickets: bookingData.tickets || [],
+      airline_locators: bookingData.airlineLocators || [],
       // Fare breakdown for itemized display & refund support
       fare_breakdown: bookingData.fareBreakdown || null,
       // Store the original userId in booking_details so we can identify the user
@@ -4237,6 +4238,7 @@ router.post('/order', optionalProtect, async (req, res) => {
       // numbers the customer's document prints.
       gds: orderResponse.gds || null,
       tickets: orderResponse.tickets || [],
+      airlineLocators: orderResponse.airlineLocators || [],
       ticketed: orderResponse.ticketed === true,
       // The chain's "issued, but the numbers had not surfaced" verdict. It was
       // returned in the HTTP body and never written, so the alarm that watches
@@ -4389,6 +4391,7 @@ router.post('/order', optionalProtect, async (req, res) => {
       mode: orderResponse.mode,
       ticketed: orderResponse.ticketed ?? false,
       tickets: orderResponse.tickets || [],
+      airlineLocators: orderResponse.airlineLocators || [],
       transactionId: payment?.arcReceipt || null,
       savedToDatabase: !!dbBooking,
       ...(tripReward ? { tripReward } : {}),
@@ -5100,6 +5103,7 @@ export function toClientBooking(booking, { showPassports = false } = {}) {
     bookingDate: booking.created_at,
     // Core booking_details
     pnr: booking.booking_details?.pnr,
+    airlineLocators: Array.isArray(booking.booking_details?.airline_locators) ? booking.booking_details.airline_locators : [],
     orderId: booking.booking_details?.order_id,
     amadeusOrderId: booking.booking_details?.amadeus_order_id || booking.booking_details?.order_id || null,
     // Only the bank's reference. Older rows hold ARC's per-order count ("1"),

@@ -2,9 +2,10 @@ import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { jsPDF } from 'jspdf';
 import QRCode from 'qrcode';
+import { checkInOpensText, checkInsOf } from '../../shared/airlineCheckIn.js';
 import { bookingItineraries, clockTime, layoverBetween, legLabel } from '../../shared/bookingItineraries.js';
 import {
-  canDownloadDocument, isPaid, issueDate, isVoidedTicket, liveTickets, pnrOf, resolveTickets, ticketForTraveler, ticketState, voidedTicketDigits,
+  bookingCodeOf, canDownloadDocument, isPaid, issueDate, isVoidedTicket, liveTickets, resolveTickets, ticketForTraveler, ticketState, voidedTicketDigits,
 } from '../../shared/eTicket.js';
 import { documentNoticeOf, documentTitleOf } from '../../shared/ticketDocument.js';
 import { printedTicketNumber } from '../../shared/ticketNumber.js';
@@ -34,7 +35,7 @@ const COLOR = {
 };
 
 const NOTICES = [
-  'Check in online on the airline\'s website or app with your airline booking code. Most airlines open online check-in 24 to 48 hours before departure.',
+  'Check in online on the airline\'s website or app with your booking code or ticket number. Most airlines open online check-in 24 to 48 hours before departure.',
   'Be at the airport at least 3 hours before an international flight and 2 hours before a domestic flight.',
   'Carry a valid passport or government photo ID in the same name as on this document, and any visa your trip needs.',
   'Baggage allowances and fees are set by the airline. Check them with the airline before you travel.',
@@ -172,11 +173,13 @@ function header(t, booking, { title, issued }) {
   if (issued) t.text(`Issued ${day(issued)}`, PAGE.width - PAGE.margin, t.y + 15.5, { align: 'right' });
   t.y += logoWidth * LOGO_RATIO + 5;
 
-  const boxHeight = 19;
+  const code = bookingCodeOf(booking);
+  const boxHeight = code?.amadeusReference ? 21 : 19;
   doc.setFillColor(...COLOR.teal);
   doc.roundedRect(PAGE.margin, t.y, CONTENT_WIDTH, boxHeight, 2, 2, 'F');
+  const codeValue = code?.value || 'Not yet assigned';
   const columns = [
-    ['AIRLINE BOOKING CODE (PNR)', pnrOf(booking) || 'Not yet assigned', 15],
+    [(code?.label || 'Booking code (PNR)').toUpperCase(), codeValue, codeValue.length > 10 ? 10 : 15],
     ['JETSETTERS BOOKING', booking.bookingReference || booking.orderId || '', 10],
     ['STATUS', title === 'E-Ticket' ? 'Ticketed' : 'Confirmed, ticket pending', 10],
   ];
@@ -188,6 +191,10 @@ function header(t, booking, { title, issued }) {
     t.font(size, 'bold', [255, 255, 255]);
     t.text(value, x, t.y + 14);
   });
+  if (code?.amadeusReference) {
+    t.font(7, 'normal', COLOR.sky);
+    t.text(`Amadeus reference ${code.amadeusReference}`, PAGE.margin + 5 + columnWidth, t.y + 18.5);
+  }
   t.y += boxHeight + 3;
 }
 
@@ -332,9 +339,18 @@ function fareRules(t, booking) {
   t.wrapped('Changes and cancellations follow the airline\'s fare rules. To change or cancel, open Manage Booking or call us. The Jetsetters service fee is not refundable.', PAGE.margin, CONTENT_WIDTH, 8.5, 'normal', COLOR.ink);
 }
 
+const checkInNotice = (checkIn) => {
+  const opens = checkInOpensText(checkIn);
+  return `Check in online with ${checkIn.airline} at ${checkIn.url.replace(/^https:\/\/(www\.)?/, '')}, `
+    + `using ${checkIn.codeIsAirlines ? 'airline booking code' : 'booking code'} ${checkIn.code} and your last name.`
+    + (opens ? ` ${opens}.` : '');
+};
+
 async function importantInformation(t, booking) {
   t.section('Important information');
-  NOTICES.forEach((line) => {
+  const checkIns = checkInsOf(booking);
+  const notices = checkIns.length > 0 ? [...checkIns.map(checkInNotice), ...NOTICES.slice(1)] : NOTICES;
+  notices.forEach((line) => {
     t.font(8.2, 'normal', COLOR.ink);
     const lines = t.doc.splitTextToSize(line, CONTENT_WIDTH - 5);
     t.ensure(lines.length * 3.7 + 1);

@@ -12,9 +12,10 @@ import { downloadTicketPdf } from '../../../utils/ticketDownload';
 import BookingItinerary from './BookingItinerary';
 import BookingCancelRules from './BookingCancelRules';
 import CancelQuote from './CancelQuote';
+import CheckInLinks from './CheckInLinks';
 import { bookingItineraries, multiCityRoute } from '../../../../../shared/bookingItineraries';
 import { formatUsd } from '../../../utils/bookingCharge';
-import { canDownloadDocument, isCommitUnknown, isPaid, ticketState } from '../../../utils/eTicket';
+import { bookingCodeOf, canDownloadDocument, isCommitUnknown, isPaid, ticketState } from '../../../utils/eTicket';
 import { attentionMessage, bookingStatusBadge, cancellationMessage, refundStatus } from '../../../utils/bookingStatus';
 import { refundOutcome, serviceFeeKeptBy } from '../../../../../shared/cancellationOutcome';
 import ArcPayService from '../../../Services/ArcPayService';
@@ -62,6 +63,7 @@ function ManageBooking() {
       ? { ...base, status: 'CANCELLED', cancellation: cancelResult?.cancellation ?? base.cancellation }
       : base;
   }, [passedData, fetchedBooking, cancelledLocally, cancelResult]);
+  const bookingCode = bookingCodeOf(bookingData);
   const loading = !passedData && queryLoading;
   // The error screen only when there is no booking to show. A read that fails
   // after one succeeded keeps the booking it read (the query keeps its data):
@@ -617,6 +619,7 @@ function ManageBooking() {
               </button>
             )}
             {downloadError && <p role="alert" className="w-full text-sm text-red-700">{downloadError}</p>}
+            <CheckInLinks booking={bookingData} />
 
             {bookingData?.status?.toUpperCase() !== 'CANCELLED' && 
              // Nor a cancel that went through and could not be recorded
@@ -692,8 +695,11 @@ function ManageBooking() {
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
                     <div className="border-r-0 sm:border-r border-gray-200 pr-0 sm:pr-4">
-                      <label className="text-sm font-medium text-gray-500 block mb-1">PNR Number</label>
-                      <p className="text-lg font-semibold font-mono text-[#055B75]">{bookingData?.pnr || 'Not Available'}</p>
+                      <label className="text-sm font-medium text-gray-500 block mb-1">{bookingCode?.label || 'Booking code (PNR)'}</label>
+                      <p className="text-lg font-semibold font-mono text-[#055B75]">{bookingCode?.value || 'Not Available'}</p>
+                      {bookingCode?.amadeusReference && (
+                        <p className="mt-1 text-xs text-gray-500">{`Amadeus reference ${bookingCode.amadeusReference}`}</p>
+                      )}
                     </div>
                     <div className="border-r-0 md:border-r border-gray-200 pr-0 md:pr-4">
                       <label className="text-sm font-medium text-gray-500 block mb-1">Booking Reference</label>
