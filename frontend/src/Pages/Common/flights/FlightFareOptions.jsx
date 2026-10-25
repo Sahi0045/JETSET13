@@ -4,6 +4,7 @@ import Price from '../../../Components/Price';
 import apiConfig from '@/config/api';
 import { fareCheckFor } from '../../../utils/fareCheckHandoff';
 import { formatCheckedBag } from '../../../utils/baggage';
+import { legsOf, tripAirlineNames, tripAirlines } from './flightSort';
 
 const prettyFare = (opt) => {
   // "This fare" rather than an invented "Standard" brand.
@@ -201,14 +202,21 @@ function FlightFareOptions({ flight, onClose, onSelect }) {
               className="w-9 h-9 object-contain rounded-md border border-gray-100 flex-shrink-0"
               onError={(e) => { e.target.style.display = 'none'; }}
             />
-            <div className="min-w-0">
-              <div className="font-bold text-gray-900 text-sm truncate">{flight.airline?.name}</div>
-              <div className="text-xs text-gray-500 flex items-center gap-1.5 flex-wrap">
-                <span className="font-medium text-gray-700">{flight.departure?.airport} {flight.departure?.time}</span>
-                <ArrowRight className="h-3 w-3" />
-                <span className="font-medium text-gray-700">{flight.arrival?.airport} {flight.arrival?.time}</span>
-                <span className="text-gray-400">· {flight.stops === 0 ? 'Non stop' : `${flight.stops} stop`}</span>
+            <div className="min-w-0" data-testid="fare-options-trip">
+              <div className="font-bold text-gray-900 text-sm truncate">
+                {tripAirlines(flight).length > 1 ? tripAirlineNames(flight) : flight.airline?.name}
               </div>
+              {legsOf(flight).map((leg, index, legs) => (
+                <div key={index} className="text-xs text-gray-500 flex items-center gap-1.5 flex-wrap">
+                  {legs.length > 1 && (
+                    <span className="font-semibold text-gray-400">{flight.returnLeg ? (index === 0 ? 'Onward' : 'Return') : `Flight ${index + 1}`}</span>
+                  )}
+                  <span className="font-medium text-gray-700">{leg.departure?.airport} {leg.departure?.time}</span>
+                  <ArrowRight className="h-3 w-3" />
+                  <span className="font-medium text-gray-700">{leg.arrival?.airport} {leg.arrival?.time}</span>
+                  <span className="text-gray-400">· {leg.stops === 0 ? 'Non stop' : `${leg.stops} stop${leg.stops > 1 ? 's' : ''}`}</span>
+                </div>
+              ))}
             </div>
           </div>
           <button onClick={onClose} className="p-1.5 rounded-full hover:bg-gray-100 text-gray-500 flex-shrink-0">

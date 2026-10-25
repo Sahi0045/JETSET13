@@ -30,6 +30,7 @@ import FlightFareOptions from './FlightFareOptions';
 import FlightAppliedFilters from './FlightAppliedFilters';
 import FlightFareCalendar from './FlightFareCalendar';
 import { sortFlights } from './flightSort';
+import { citySearchInstead } from './multiCityHelp';
 import { buildSearchPayload, fieldCode, isMultiCity, searchFromQuery, searchKeyOf, searchToQuery } from './searchQuery';
 import { tripTypeOf } from '../../../../../shared/bookingItineraries';
 import { airportClockLabel, buildDateStrip, filtersWithin, journeyBounds, layoverBounds, legDateLabel, matchesFilters, minutesBetweenAirportTimes, priceStep, searchFailureMessage, shiftDateStrip, stopsSummary, withDepartureDate } from './searchResults';
@@ -1029,6 +1030,11 @@ function FlightSearchPage() {
   const fromCityName = cityMap[fromCode] || String(searchParams.from || '').replace(/\s*\([A-Z]{3}\)$/, '') || fromCode;
   const toCityName = cityMap[toCode] || String(searchParams.to || '').replace(/\s*\([A-Z]{3}\)$/, '') || toCode;
   const multiCitySearch = isMultiCity(searchParams);
+  const cityInstead = multiCitySearch ? citySearchInstead(searchData?.legs || []) : null;
+  const searchCityInstead = () => {
+    const next = { ...searchData, legs: cityInstead.legs };
+    navigate(`/flights/search?${searchToQuery(next)}`, { state: { searchData: next } });
+  };
   const placeName = (label) => {
     const code = extractRouteCode(label);
     return cityMap[code] || String(label || '').replace(/\s*\([A-Z]{3}\)$/, '') || code;
@@ -1256,15 +1262,34 @@ function FlightSearchPage() {
                     <div className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-[#F0FAFC] mb-8 animate-bounce-gentle">
                       <Plane className="h-12 w-12 text-[#055B75]" />
                     </div>
-                    <h3 className="text-xl font-bold text-gray-800 mb-4">No flights found</h3>
-                    <p className="text-gray-600 mb-8 max-w-md mx-auto">We couldn't find any flights matching your criteria. Try adjusting your search filters or dates.</p>
-                    <button
-                      onClick={handleResetAllFilters}
-                      className="px-6 py-3 bg-[#055B75] text-white rounded-lg font-medium hover:bg-[#034457] transition-colors"
-                    >
-                      <X className="h-4 w-4 mr-2 inline" />
-                      Reset All Filters
-                    </button>
+                    {multiCitySearch && flights.length === 0 ? (
+                      <>
+                        <h3 className="text-xl font-bold text-gray-800 mb-4">No flights found for this trip</h3>
+                        <p className="text-gray-600 mb-8 max-w-md mx-auto">
+                          {`No airline sells these flights together on one ticket for these dates. Try other dates${cityInstead ? `, or every ${cityInstead.cityNames.join(' and ')} airport` : ''}.`}
+                        </p>
+                        {cityInstead && (
+                          <button
+                            onClick={searchCityInstead}
+                            className="px-6 py-3 bg-[#055B75] text-white rounded-lg font-medium hover:bg-[#034457] transition-colors"
+                          >
+                            {`Search ${cityInstead.cityNames.join(' and ')} (all airports) instead`}
+                          </button>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <h3 className="text-xl font-bold text-gray-800 mb-4">No flights found</h3>
+                        <p className="text-gray-600 mb-8 max-w-md mx-auto">We couldn't find any flights matching your criteria. Try adjusting your search filters or dates.</p>
+                        <button
+                          onClick={handleResetAllFilters}
+                          className="px-6 py-3 bg-[#055B75] text-white rounded-lg font-medium hover:bg-[#034457] transition-colors"
+                        >
+                          <X className="h-4 w-4 mr-2 inline" />
+                          Reset All Filters
+                        </button>
+                      </>
+                    )}
                   </div>
                 ) : (
                   <div className="bg-white rounded-2xl border border-[#EFE9DD] shadow-[0_10px_26px_-20px_rgba(12,42,51,0.45)]">
