@@ -169,6 +169,19 @@ export function bookingItineraries(booking) {
   }];
 }
 
+/**
+ * "DEL → DXB → LHR → DEL" for a multi-city trip, with " · " where one flight
+ * leaves from somewhere other than where the last one landed; '' for any other trip.
+ */
+export function multiCityRoute(legs) {
+  if (tripTypeOf(legs) !== 'multiCity') return '';
+  return legs.reduce((route, leg, index) => {
+    const origin = text(leg?.origin);
+    const start = index === 0 ? origin : (origin !== text(legs[index - 1]?.destination) ? `${route} · ${origin}` : route);
+    return `${start} → ${text(leg?.destination)}`;
+  }, '');
+}
+
 /** "Outbound", "Return", or "Flight 2" on a multi-city trip; "Flight" for a one-way trip. */
 export function legLabel(leg, index, count) {
   if (count <= 1) return 'Flight';

@@ -12,7 +12,7 @@ import { downloadTicketPdf } from '../../../utils/ticketDownload';
 import BookingItinerary from './BookingItinerary';
 import BookingCancelRules from './BookingCancelRules';
 import CancelQuote from './CancelQuote';
-import { bookingItineraries } from '../../../../../shared/bookingItineraries';
+import { bookingItineraries, multiCityRoute } from '../../../../../shared/bookingItineraries';
 import { formatUsd } from '../../../utils/bookingCharge';
 import { canDownloadDocument, isCommitUnknown, isPaid, ticketState } from '../../../utils/eTicket';
 import { attentionMessage, bookingStatusBadge, cancellationMessage, refundStatus } from '../../../utils/bookingStatus';
@@ -713,6 +713,9 @@ function ManageBooking() {
                   {/* Flight Route Information */}
                   <div className="mt-6 p-6 bg-gradient-to-r from-gray-50 to-[#F0FAFC] rounded-xl border border-gray-200">
                     <h4 className="font-semibold mb-4 text-gray-700">Flight Route</h4>
+                    {multiCityRoute(itineraryLegs) && (
+                      <p className="-mt-2 mb-4 text-sm font-semibold text-[#055B75]">{`Multi-city: ${multiCityRoute(itineraryLegs)}`}</p>
+                    )}
                     <div className="flex items-center justify-between">
                       {/* Departure */}
                       <div className="text-center flex-1">

@@ -40,7 +40,7 @@ import { formatCoins, maxWalletCoinsFor } from '../../../../../shared/jetCoins';
 import { describeGroup, groupFromOffer, travellerGroupProblem } from '../../../../../shared/travellerGroup';
 import { lastFlightDepartureDate, needsDateOfBirth, tripDates } from '../../../../../shared/travellerDetails';
 import { CALLING_CODES, COUNTRIES, callingCodeDigits } from '../../../../../shared/countries';
-import { arcItineraries, returnLegOf } from '../../../utils/reviewTrip';
+import { arcItineraries, laterLegsOf, returnLegOf } from '../../../utils/reviewTrip';
 import { fareIdentity, findSameFare, rebuildTravellers, searchForGroup } from '../../../utils/travellerGroupChange';
 import { reviewFlightFromSearch } from '../../../utils/reviewFlightFromSearch';
 import { travellerProblems, travellerProgress } from '../../../utils/travellerChecks';
@@ -772,6 +772,16 @@ function FlightBookingConfirmation() {
         departureTerminal: flightData.departure.terminal || '',
         arrivalTerminal: flightData.arrival.terminal || '',
         segments: flightData.segments.map(toReviewSegment),
+        laterLegs: laterLegsOf(flightData).map((leg) => {
+          const segments = leg.segments.map(toReviewSegment);
+          return {
+            segments,
+            duration: leg.duration,
+            stops: leg.stops,
+            departureCity: segments[0].departure.cityName,
+            arrivalCity: segments[segments.length - 1].arrival.cityName,
+          };
+        }),
         returnLeg: returnSegments.length > 0 ? {
           segments: returnSegments,
           duration: returnLeg.duration,
@@ -1823,8 +1833,10 @@ function FlightBookingConfirmation() {
                 {/* Route Summary Header */}
                 <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between mb-4 px-3 py-2.5 bg-gray-50 rounded-lg border border-gray-200">
                   <span className="font-semibold text-[#055B75]">
-                    {bookingDetails?.flight?.returnLeg && (
-                      <span className="mr-2 text-[10px] font-bold uppercase tracking-wide text-gray-500">Onward</span>
+                    {(bookingDetails?.flight?.returnLeg || bookingDetails?.flight?.laterLegs?.length > 0) && (
+                      <span className="mr-2 text-[10px] font-bold uppercase tracking-wide text-gray-500">
+                        {bookingDetails.flight.returnLeg ? 'Onward' : 'Flight 1'}
+                      </span>
                     )}
                     {bookingDetails?.flight?.departureCity} &rarr; {bookingDetails?.flight?.arrivalCity}
                   </span>
@@ -1908,6 +1920,27 @@ function FlightBookingConfirmation() {
                     {renderSegmentList(bookingDetails.flight.returnLeg.segments)}
                   </div>
                 )}
+
+                {(bookingDetails?.flight?.laterLegs || []).map((leg, index) => (
+                  <div className="mt-5" data-later-leg="" key={`later-${index}`}>
+                    <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between mb-2 px-3 py-2.5 bg-gray-50 rounded-lg border border-gray-200">
+                      <span className="font-semibold text-[#055B75]">
+                        <span className="mr-2 text-[10px] font-bold uppercase tracking-wide text-gray-500">{`Flight ${index + 2}`}</span>
+                        {leg.departureCity} &rarr; {leg.arrivalCity}
+                      </span>
+                      <div className="flex items-center gap-3 text-sm text-gray-600 whitespace-nowrap flex-shrink-0">
+                        <span>{leg.stops === 0 ? 'Direct' : `${leg.stops} Stop${leg.stops > 1 ? 's' : ''}`}</span>
+                        {leg.duration && (
+                          <>
+                            <span className="text-gray-300">|</span>
+                            <span className="whitespace-nowrap">Total: {formatDuration(leg.duration)}</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    {renderSegmentList(leg.segments)}
+                  </div>
+                ))}
 
                 {/* One-line summary strip — the grey DATE/FLIGHT NO/BAGGAGE grid is
                     folded in here (density pass); values are unchanged bindings. */}

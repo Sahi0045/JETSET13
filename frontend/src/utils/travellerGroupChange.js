@@ -12,6 +12,9 @@
  * someone else, and charge them all the one fare.
  */
 
+import { tripTypeOf } from '../../../shared/bookingItineraries';
+import { normalizeTripType } from '../Pages/Common/flights/searchQuery';
+
 /** The flights, times and booking classes that make a fare this fare. */
 export const fareIdentity = (offer) => {
   const itineraries = offer?.itineraries ?? [];
@@ -61,8 +64,40 @@ const isoDate = (at) => String(at ?? '').slice(0, 10);
  * found with. The search the customer ran is preferred - a city code finds the
  * same flights it did the first time - and the offer fills any gap.
  */
+const offerLegs = (itineraries) => itineraries.map((itinerary) => {
+  const segments = itinerary?.segments ?? [];
+  return {
+    from: segments[0]?.departure?.iataCode,
+    to: segments[segments.length - 1]?.arrival?.iataCode,
+    departDate: isoDate(segments[0]?.departure?.at),
+  };
+});
+
 export const searchForGroup = (searchData, offer, group) => {
   const itineraries = offer?.itineraries ?? [];
+  const travellers = {
+    ...(searchData?.travelClass ? { travelClass: searchData.travelClass } : {}),
+    adults: group.adults,
+    children: group.children,
+    infants: group.infants,
+    travelers: group.adults + group.children + group.infants,
+  };
+  const searchedLegs = Array.isArray(searchData?.legs) && searchData.legs.length >= 2 ? searchData.legs : null;
+  const legs = searchedLegs || offerLegs(itineraries);
+  const multiCity = searchedLegs
+    ? normalizeTripType(searchData?.tripType, searchData?.returnDate) === 'multiCity'
+    : tripTypeOf(legs.map((leg) => ({ origin: leg.from, destination: leg.to }))) === 'multiCity';
+  if (multiCity) {
+    return {
+      tripType: 'multiCity',
+      legs,
+      from: legs[0].from,
+      to: legs[legs.length - 1].to,
+      departDate: legs[0].departDate,
+      returnDate: '',
+      ...travellers,
+    };
+  }
   const outbound = itineraries[0]?.segments ?? [];
   const returning = itineraries[1]?.segments ?? [];
   const returnDate = itineraries.length > 1
@@ -77,11 +112,7 @@ export const searchForGroup = (searchData, offer, group) => {
     // The search form's spelling (searchQuery.js normalizeTripType): Modify
     // read 'round-trip' as one way.
     tripType: returnDate ? 'roundTrip' : 'oneWay',
-    ...(searchData?.travelClass ? { travelClass: searchData.travelClass } : {}),
-    adults: group.adults,
-    children: group.children,
-    infants: group.infants,
-    travelers: group.adults + group.children + group.infants,
+    ...travellers,
   };
 };
 

@@ -74,3 +74,31 @@ describe('the trip type of booked flights', () => {
     expect(labels(saved)).toEqual(['Outbound', 'Return']);
   });
 });
+
+describe('the route line of a multi-city trip', () => {
+  it('names every stop in order', async () => {
+    const { multiCityRoute } = await import('../../shared/bookingItineraries.js');
+    const legs = itinerariesFromOffer(offerOf(
+      [segment('1', 'DEL', 'DXB', '2026-11-24')],
+      [segment('2', 'DXB', 'LHR', '2026-11-28')],
+      [segment('3', 'LHR', 'DEL', '2026-12-05')],
+    ));
+
+    expect(multiCityRoute(legs)).toBe('DEL → DXB → LHR → DEL');
+  });
+
+  it('marks the gap of an open-jaw trip', async () => {
+    const { multiCityRoute } = await import('../../shared/bookingItineraries.js');
+    const legs = itinerariesFromOffer(offerOf([segment('1', 'DEL', 'DXB', '2026-11-24')], [segment('2', 'LHR', 'DEL', '2026-12-05')]));
+
+    expect(multiCityRoute(legs)).toBe('DEL → DXB · LHR → DEL');
+  });
+
+  it('is empty for a one-way or a round trip', async () => {
+    const { multiCityRoute } = await import('../../shared/bookingItineraries.js');
+    const roundTrip = itinerariesFromOffer(offerOf([segment('1', 'DEL', 'DXB', '2026-11-24')], [segment('2', 'DXB', 'DEL', '2026-11-28')]));
+
+    expect(multiCityRoute(roundTrip)).toBe('');
+    expect(multiCityRoute([])).toBe('');
+  });
+});
