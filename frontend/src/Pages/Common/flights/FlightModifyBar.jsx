@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ArrowRight, Pencil, ChevronUp } from 'lucide-react';
 import { parseISO, isValid, format } from 'date-fns';
 import FlightSearchForm from './flight-search-form';
+import { isMultiCity } from './searchQuery';
 
 const extractCode = (str) => {
   if (!str) return '';
@@ -48,6 +49,13 @@ function FlightModifyBar({ searchParams = {}, cityMap = {}, onSearch, openTravel
     (parseInt(searchParams.infants, 10) || 0);
   const classLabel = CLASS_LABELS[searchParams.travelClass || 'ECONOMY'] || 'Economy';
   const isRoundTrip = (searchParams.tripType === 'roundTrip' || searchParams.tripType === 'round-trip') && searchParams.returnDate;
+  const legs = isMultiCity(searchParams) ? searchParams.legs : null;
+  const stops = legs
+    ? [legs[0].from, ...legs.map((leg) => leg.to)].map((place) => {
+      const code = extractCode(place) || place;
+      return { code, city: cityMap[code] || String(place || '').replace(/\s*\([A-Z]{3}\)$/, '') };
+    })
+    : [{ code: fromCode, city: fromCity }, { code: toCode, city: toCity }];
 
   const handleSearch = (formData) => {
     setExpanded(false);
@@ -62,23 +70,25 @@ function FlightModifyBar({ searchParams = {}, cityMap = {}, onSearch, openTravel
           <div className="flex-1 flex items-center gap-2 sm:gap-4 min-w-0 overflow-x-auto hide-scrollbar">
             {/* Route */}
             <div className="flex items-center gap-2 flex-shrink-0">
-              <div className="text-left">
-                <div className="text-base sm:text-lg font-bold leading-none">{fromCode || '—'}</div>
-                <div className="text-[11px] text-white/70 truncate max-w-[110px]">{fromCity}</div>
-              </div>
-              <ArrowRight className="h-4 w-4 text-white/60 flex-shrink-0" />
-              <div className="text-left">
-                <div className="text-base sm:text-lg font-bold leading-none">{toCode || '—'}</div>
-                <div className="text-[11px] text-white/70 truncate max-w-[110px]">{toCity}</div>
-              </div>
+              {stops.map((stop, index) => (
+                <React.Fragment key={`${stop.code}-${index}`}>
+                  {index > 0 && <ArrowRight className="h-4 w-4 text-white/60 flex-shrink-0" />}
+                  <div className="text-left">
+                    <div className="text-base sm:text-lg font-bold leading-none">{stop.code || '—'}</div>
+                    <div className="text-[11px] text-white/70 truncate max-w-[110px]">{stop.city}</div>
+                  </div>
+                </React.Fragment>
+              ))}
             </div>
 
             <span className="h-8 w-px bg-white/20 flex-shrink-0" />
 
             {/* Dates */}
             <div className="flex items-center gap-2 text-sm flex-shrink-0">
-              <span className="font-medium whitespace-nowrap">{fmtDate(searchParams.departDate) || 'Date'}</span>
-              {isRoundTrip && (
+              <span className="font-medium whitespace-nowrap">
+                {legs ? legs.map((leg) => fmtDate(leg.departDate)).join(' · ') : (fmtDate(searchParams.departDate) || 'Date')}
+              </span>
+              {!legs && isRoundTrip && (
                 <>
                   <span className="text-white/50">–</span>
                   <span className="font-medium whitespace-nowrap">{fmtDate(searchParams.returnDate)}</span>

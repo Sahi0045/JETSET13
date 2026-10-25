@@ -30,7 +30,8 @@ import FlightFareOptions from './FlightFareOptions';
 import FlightAppliedFilters from './FlightAppliedFilters';
 import FlightFareCalendar from './FlightFareCalendar';
 import { sortFlights } from './flightSort';
-import { buildSearchPayload, fieldCode, searchFromQuery, searchKeyOf, searchToQuery } from './searchQuery';
+import { buildSearchPayload, fieldCode, isMultiCity, searchFromQuery, searchKeyOf, searchToQuery } from './searchQuery';
+import { tripTypeOf } from '../../../../../shared/bookingItineraries';
 import { airportClockLabel, buildDateStrip, filtersWithin, journeyBounds, layoverBounds, legDateLabel, matchesFilters, minutesBetweenAirportTimes, priceStep, searchFailureMessage, shiftDateStrip, stopsSummary, withDepartureDate } from './searchResults';
 
 // The IATA code in "New Delhi (DEL)", or a bare code as typed.
@@ -189,7 +190,8 @@ function FlightSearchPage() {
       setError(null);
 
       const payload = buildSearchPayload(searchData);
-      if (!payload.from || !payload.to || !payload.departDate) {
+      const hasRoute = payload.legs ? payload.legs.length >= 2 : Boolean(payload.from && payload.to && payload.departDate);
+      if (!hasRoute) {
         setFlights([]);
         setError('Please choose where you are flying from, where to, and the date.');
         setLoading(false);
@@ -286,6 +288,7 @@ function FlightSearchPage() {
   const cityMap = useCityNames([
     searchParams.fromCode || extractRouteCode(searchParams.from),
     searchParams.toCode || extractRouteCode(searchParams.to),
+    ...(searchParams.legs || []).flatMap((leg) => [extractRouteCode(leg.from), extractRouteCode(leg.to)]),
     ...flights.flatMap(airportCodesOf),
   ]);
 
@@ -295,6 +298,91 @@ function FlightSearchPage() {
   // Dynamic aircraft names - populated from Amadeus API responses (no hardcoding)
   // The backend transform already resolves aircraft codes to names using Amadeus dictionaries.aircraft
   const [dynamicAircraftMap, setDynamicAircraftMap] = useState({});
+
+  const legFromItinerary = (itin) => {
+    const segs = itin?.segments;
+    if (!segs || segs.length === 0) return null;
+    const first = segs[0];
+    const last = segs[segs.length - 1];
+    const layover = (from, to) => {
+      const minutes = minutesBetweenAirportTimes(from, to);
+      return Number.isFinite(minutes) ? `${Math.floor(minutes / 60)}h ${minutes % 60}m` : '';
+    };
+    // Technical stops inside a flight count too: the plane lands on the way.
+    const stopDetails = segs.flatMap((seg, idx) => {
+      const technical = (seg.stops || []).map((stop) => ({
+        airport: stop.iataCode, duration: layover(stop.arrivalAt, stop.departureAt), technical: true,
+      }));
+      const next = segs[idx + 1];
+      return next ? [...technical, { airport: seg.arrival.iataCode, duration: layover(seg.arrival.at, next.departure.at) }] : technical;
+    });
+    return {
+      departure: {
+        time: airportClockLabel(first.departure.at),
+        rawDate: first.departure.at?.split('T')[0],
+        airport: first.departure.iataCode,
+        terminal: first.departure.terminal || '',
+        cityName: cityMap[first.departure.iataCode] || first.departure.iataCode,
+      },
+      arrival: {
+        time: airportClockLabel(last.arrival.at),
+        rawDate: last.arrival.at?.split('T')[0],
+        airport: last.arrival.iataCode,
+        terminal: last.arrival.terminal || '',
+        cityName: cityMap[last.arrival.iataCode] || last.arrival.iataCode,
+      },
+      duration: itin.duration,
+      stops: stopDetails.length,
+      stopDetails,
+      airline: {
+        code: first.carrierCode,
+        name: dynamicAirlineMap[first.carrierCode] || first.carrierCode,
+        logo: `https://pics.avs.io/200/200/${first.carrierCode.toUpperCase()}.png`,
+      },
+      segments: segs.map(segment => ({
+        departure: {
+          time: airportClockLabel(segment.departure.at),
+          airport: segment.departure.iataCode,
+          terminal: segment.departure.terminal || '',
+          cityName: cityMap[segment.departure.iataCode] || segment.departure.iataCode,
+          at: segment.departure.at,
+        },
+        arrival: {
+          time: airportClockLabel(segment.arrival.at),
+          airport: segment.arrival.iataCode,
+          terminal: segment.arrival.terminal || '',
+          cityName: cityMap[segment.arrival.iataCode] || segment.arrival.iataCode,
+          at: segment.arrival.at,
+        },
+        airline: {
+          code: segment.carrierCode,
+          name: dynamicAirlineMap[segment.carrierCode] || segment.carrierCode,
+          logo: `https://pics.avs.io/200/200/${segment.carrierCode.toUpperCase()}.png`,
+        },
+        // Who flies it. A return sold as Delta and flown by Air France was
+        // shown as Delta: a different check-in desk, and a codeshare a US
+        // ticket agent has to disclose (14 CFR 257).
+        operatingCarrier: segment.operating?.carrierCode || null,
+        operatingAirlineName: segment.operating?.carrierCode ? (dynamicAirlineMap[segment.operating.carrierCode] || segment.operating.carrierCode) : null,
+        duration: segment.duration,
+        flightNumber: `${segment.carrierCode} ${segment.number}`,
+        aircraft: dynamicAircraftMap[segment.aircraft?.code] || segment.aircraft?.code || 'Unknown Aircraft',
+        stops: 0,
+      })),
+    };
+  };
+
+  const tripLegsOf = (itineraries = []) => {
+    const type = tripTypeOf(itineraries.map((itin) => ({
+      origin: itin?.segments?.[0]?.departure?.iataCode,
+      destination: itin?.segments?.at(-1)?.arrival?.iataCode,
+    })));
+    return {
+      isRoundTrip: type === 'roundTrip',
+      returnLeg: type === 'roundTrip' ? legFromItinerary(itineraries[1]) : null,
+      laterLegs: type === 'multiCity' ? itineraries.slice(1).map(legFromItinerary).filter(Boolean) : [],
+    };
+  };
 
   // Transform Amadeus API flight data to our format
   const transformFlightData = (data) => {
@@ -523,81 +611,8 @@ function FlightSearchPage() {
               stops: 0
             }];
           })(),
-          // Return leg (round trips) — built from the second Amadeus itinerary
-          isRoundTrip: (flight.originalOffer?.itineraries?.length || 1) > 1,
-          returnLeg: (() => {
-            const itin = flight.originalOffer?.itineraries?.[1];
-            const segs = itin?.segments;
-            if (!segs || segs.length === 0) return null;
-            const first = segs[0];
-            const last = segs[segs.length - 1];
-            const layover = (from, to) => {
-              const minutes = minutesBetweenAirportTimes(from, to);
-              return Number.isFinite(minutes) ? `${Math.floor(minutes / 60)}h ${minutes % 60}m` : '';
-            };
-            // Technical stops inside a flight count too: the plane lands on the way.
-            const stopDetails = segs.flatMap((seg, idx) => {
-              const technical = (seg.stops || []).map((stop) => ({
-                airport: stop.iataCode, duration: layover(stop.arrivalAt, stop.departureAt), technical: true,
-              }));
-              const next = segs[idx + 1];
-              return next ? [...technical, { airport: seg.arrival.iataCode, duration: layover(seg.arrival.at, next.departure.at) }] : technical;
-            });
-            return {
-              departure: {
-                time: airportClockLabel(first.departure.at),
-                rawDate: first.departure.at?.split('T')[0],
-                airport: first.departure.iataCode,
-                terminal: first.departure.terminal || '',
-                cityName: cityMap[first.departure.iataCode] || first.departure.iataCode,
-              },
-              arrival: {
-                time: airportClockLabel(last.arrival.at),
-                rawDate: last.arrival.at?.split('T')[0],
-                airport: last.arrival.iataCode,
-                terminal: last.arrival.terminal || '',
-                cityName: cityMap[last.arrival.iataCode] || last.arrival.iataCode,
-              },
-              duration: itin.duration,
-              stops: stopDetails.length,
-              stopDetails,
-              airline: {
-                code: first.carrierCode,
-                name: dynamicAirlineMap[first.carrierCode] || first.carrierCode,
-                logo: `https://pics.avs.io/200/200/${first.carrierCode.toUpperCase()}.png`,
-              },
-              segments: segs.map(segment => ({
-                departure: {
-                  time: airportClockLabel(segment.departure.at),
-                  airport: segment.departure.iataCode,
-                  terminal: segment.departure.terminal || '',
-                  cityName: cityMap[segment.departure.iataCode] || segment.departure.iataCode,
-                  at: segment.departure.at,
-                },
-                arrival: {
-                  time: airportClockLabel(segment.arrival.at),
-                  airport: segment.arrival.iataCode,
-                  terminal: segment.arrival.terminal || '',
-                  cityName: cityMap[segment.arrival.iataCode] || segment.arrival.iataCode,
-                  at: segment.arrival.at,
-                },
-                airline: {
-                  code: segment.carrierCode,
-                  name: dynamicAirlineMap[segment.carrierCode] || segment.carrierCode,
-                  logo: `https://pics.avs.io/200/200/${segment.carrierCode.toUpperCase()}.png`,
-                },
-                // Who flies it. A return sold as Delta and flown by Air France was
-                // shown as Delta: a different check-in desk, and a codeshare a US
-                // ticket agent has to disclose (14 CFR 257).
-                operatingCarrier: segment.operating?.carrierCode || null,
-                operatingAirlineName: segment.operating?.carrierCode ? (dynamicAirlineMap[segment.operating.carrierCode] || segment.operating.carrierCode) : null,
-                duration: segment.duration,
-                flightNumber: `${segment.carrierCode} ${segment.number}`,
-                aircraft: dynamicAircraftMap[segment.aircraft?.code] || segment.aircraft?.code || 'Unknown Aircraft',
-                stops: 0,
-              })),
-            };
-          })(),
+          // Return leg (round trips) and later flights (multi-city), from the offer's itineraries
+          ...tripLegsOf(flight.originalOffer?.itineraries),
           // IMPORTANT: Preserve original Amadeus offer for booking API
           originalOffer: flight.originalOffer
         };
@@ -950,7 +965,7 @@ function FlightSearchPage() {
     // from the origin, so every figure on a round trip's strip was the price of
     // a different journey. Counted as a request, so a one-way answer still on
     // its way cannot land on the round trip's strip.
-    if (sp.returnDate) {
+    if (sp.returnDate || isMultiCity(sp)) {
       datePricesRequest.current += 1;
       return;
     }
@@ -1013,6 +1028,14 @@ function FlightSearchPage() {
   const toCode = searchParams.toCode || extractRouteCode(searchParams.to);
   const fromCityName = cityMap[fromCode] || String(searchParams.from || '').replace(/\s*\([A-Z]{3}\)$/, '') || fromCode;
   const toCityName = cityMap[toCode] || String(searchParams.to || '').replace(/\s*\([A-Z]{3}\)$/, '') || toCode;
+  const multiCitySearch = isMultiCity(searchParams);
+  const placeName = (label) => {
+    const code = extractRouteCode(label);
+    return cityMap[code] || String(label || '').replace(/\s*\([A-Z]{3}\)$/, '') || code;
+  };
+  const routeChain = multiCitySearch
+    ? [searchParams.legs[0].from, ...searchParams.legs.map((leg) => leg.to)].map(placeName).join(' → ')
+    : '';
 
   return (
     <div className="bg-gray-100 min-h-screen">
@@ -1030,7 +1053,8 @@ function FlightSearchPage() {
         open={!searchData}
       />
 
-      {/* Date Navigation Bar */}
+      {/* Date Navigation Bar - one-way fares by day, so none for a multi-city trip */}
+      {!multiCitySearch && (<>
       <div className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-20">
         <div className="container mx-auto max-w-[1400px] px-5 py-3">
           {/* Date selector */}
@@ -1112,6 +1136,7 @@ function FlightSearchPage() {
           </div>
         </div>
       </div>
+      </>)}
 
       <div className="bg-[#F0FAFC] min-h-screen pb-12 pt-6">
         <div className="container mx-auto max-w-[1400px] px-5">
@@ -1120,9 +1145,9 @@ function FlightSearchPage() {
             <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
               {/* With no search there is no route, and "Flights from  to" with
                   two blanks reads like a page that failed to load. */}
-              {searchData
-                ? <>Flights from {fromCityName} <span className="text-gray-400 font-normal">to</span> {toCityName}</>
-                : 'Find a flight'}
+              {!searchData ? 'Find a flight'
+                : multiCitySearch ? <>Multi-city: {routeChain}</>
+                  : <>Flights from {fromCityName} <span className="text-gray-400 font-normal">to</span> {toCityName}</>}
             </h1>
             {!loading && !error && (
               <p className="text-sm text-gray-500 mt-0.5">
@@ -1328,7 +1353,7 @@ function FlightSearchPage() {
       </div>
 
       {/* Fare calendar (month grid) */}
-      {showFareCalendar && (
+      {showFareCalendar && !multiCitySearch && (
         <FlightFareCalendar
           searchParams={searchParams}
           initialDate={dateRange.find(d => d.selected)?.isoDate || searchParams.departDate}

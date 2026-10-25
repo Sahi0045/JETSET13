@@ -251,6 +251,10 @@ const pricedForLabel = (offer) => {
 };
 
 function FlightCard({ flight, onBook, onViewPrices, priceStats, cityMap = {} }) {
+  const otherLegs = flight.returnLeg
+    ? [{ leg: flight.returnLeg, label: 'Return' }]
+    : (flight.laterLegs || []).map((leg, index) => ({ leg, label: `Flight ${index + 2}` }));
+  const firstLegLabel = flight.returnLeg ? 'Onward' : 'Flight 1';
   const [expanded, setExpanded] = useState(false);
   const [showBreakup, setShowBreakup] = useState(false);
   const handleCta = () => (onViewPrices ? onViewPrices(flight) : onBook?.(flight));
@@ -325,16 +329,20 @@ function FlightCard({ flight, onBook, onViewPrices, priceStats, cityMap = {} }) 
             </div>
           </div>
 
-          {/* Timeline(s): one leg for one-way, two for round trip */}
-          {flight.returnLeg ? (
+          {/* Timeline(s): one leg for one-way, two for round trip, one per flight multi-city */}
+          {otherLegs.length > 0 ? (
             <div className="flex-1 space-y-3">
               <Leg
                 leg={{ departure: flight.departure, arrival: flight.arrival, duration: flight.duration, stops: flight.stops, stopDetails: flight.stopDetails, segments: flight.segments }}
-                label="Onward"
+                label={firstLegLabel}
                 cityMap={cityMap}
               />
-              <div className="border-t border-dashed border-gray-200" />
-              <Leg leg={flight.returnLeg} label="Return" operators={operatorsOf(flight.returnLeg.segments)} cityMap={cityMap} />
+              {otherLegs.map(({ leg, label }) => (
+                <React.Fragment key={label}>
+                  <div className="border-t border-dashed border-gray-200" />
+                  <Leg leg={leg} label={label} operators={operatorsOf(leg.segments)} cityMap={cityMap} />
+                </React.Fragment>
+              ))}
             </div>
           ) : (
             <div className="flex-1">
@@ -460,17 +468,17 @@ function FlightCard({ flight, onBook, onViewPrices, priceStats, cityMap = {} }) 
       {/* ===== Expanded details ===== */}
       {expanded && (
         <div className="px-4 sm:px-5 py-4 border-t border-gray-100 bg-white rounded-b-[15px]">
-          {flight.returnLeg && (
-            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-2">Onward</div>
+          {otherLegs.length > 0 && (
+            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-2">{firstLegLabel}</div>
           )}
           <SegmentList segments={segments} stopDetails={flight.stopDetails} cityMap={cityMap} />
 
-          {flight.returnLeg && (
-            <>
-              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mt-4 mb-2 pt-3 border-t border-dashed border-gray-200">Return</div>
-              <SegmentList segments={flight.returnLeg.segments} stopDetails={flight.returnLeg.stopDetails} cityMap={cityMap} />
-            </>
-          )}
+          {otherLegs.map(({ leg, label }) => (
+            <React.Fragment key={label}>
+              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mt-4 mb-2 pt-3 border-t border-dashed border-gray-200">{label}</div>
+              <SegmentList segments={leg.segments} stopDetails={leg.stopDetails} cityMap={cityMap} />
+            </React.Fragment>
+          ))}
 
           {/* Amenities (full list, free + paid) */}
           {amenities.length > 0 && (
