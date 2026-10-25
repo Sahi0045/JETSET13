@@ -42,6 +42,8 @@ import { isUsableEmail } from '../services/guestBooking.service.js';
 import { readBookedFeeTable } from '../services/bookedFeeTable.service.js';
 import { freeUntilOf } from '../../shared/flightCancelPolicy.js';
 import { isInternalRequest } from '../utils/internalRequest.js';
+import { buildTicketPdf } from '../services/ticketPdf.js';
+import { documentTitleOf } from '../../shared/ticketDocument.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -4760,26 +4762,7 @@ router.get('/bookings/:bookingRef', optionalProtect, guestBookingLimiter, async 
     //
     // Passport numbers arrive masked except for staff. The stored number is
     // for the airline; nobody opening their booking needs it back.
-    const showPassports = isStaff(req.user);
-    const formattedBooking = {
-      // The camelCase shape the bookings list sends. Manage Booking read
-      // camelCase fields that this endpoint never had, so a refreshed page
-      // showed "Date N/A" and "--:--".
-      ...toClientBooking(data, { showPassports }),
-      // The passenger list lives in its own column, not inside booking_details,
-      // and was never included here. Manage Booking therefore showed "No
-      // passenger information available" whenever it loaded the booking itself
-      // — a refresh, or a shared link — and showed it correctly only when My
-      // Trips handed the record over through router state.
-      travelers: clientTravellers(data.booking_details?.travelers ?? data.passenger_details, { showPassports }),
-      passengerData: clientTravellers(data.passenger_details ?? data.booking_details?.travelers, { showPassports }),
-      status: data.status,
-      payment_status: data.payment_status,
-      bookingReference: data.booking_reference,
-      type: data.travel_type,
-      bookingDate: data.created_at,
-      source: 'database'
-    };
+    const formattedBooking = singleBookingView(data, { showPassports: isStaff(req.user) });
 
     res.json({
       success: true,
@@ -4796,6 +4779,41 @@ router.get('/bookings/:bookingRef', optionalProtect, guestBookingLimiter, async 
 
 // The airline's cancel and change-date fees for a booked trip, read from its
 // PNR. Opened exactly as the booking itself is (loadOwnedBooking).
+router.get('/bookings/:bookingRef/ticket.pdf', optionalProtect, guestBookingLimiter, async (req, res) => {
+  try {
+    if (!supabase) {
+      return res.status(503).json({ success: false, error: 'Database not configured' });
+    }
+    const { booking: data, notFound } = await loadOwnedBooking(req.params.bookingRef, req.user, {
+      email: req.get('x-booking-email')
+    });
+    if (notFound || !data) {
+      return res.status(404).json({ success: false, error: 'Booking not found' });
+    }
+
+    const booking = singleBookingView(data, { showPassports: false });
+    let pdf;
+    try {
+      pdf = await buildTicketPdf(booking);
+    } catch (error) {
+      if (error?.code === 'NO_DOCUMENT') {
+        return res.status(409).json({ success: false, code: 'NO_DOCUMENT', error: error.message });
+      }
+      throw error;
+    }
+
+    const label = documentTitleOf(booking) === 'E-Ticket' ? 'ETicket' : 'BookingConfirmation';
+    const reference = String(booking.bookingReference || 'Booking').replace(/[^A-Za-z0-9-]/g, '');
+    res.set('Content-Type', 'application/pdf');
+    res.set('Content-Disposition', `attachment; filename="Jetsetters-${label}-${reference}.pdf"`);
+    res.set('Cache-Control', 'private, no-store');
+    return res.send(Buffer.from(pdf));
+  } catch (error) {
+    console.error('❌ Ticket PDF error:', error);
+    return res.status(500).json({ success: false, error: 'Could not prepare the ticket. Please try again.' });
+  }
+});
+
 router.get('/bookings/:bookingRef/fee-rules', optionalProtect, guestBookingLimiter, async (req, res) => {
   try {
     if (!supabase) {
@@ -4868,6 +4886,29 @@ const CLIENT_TRAVELLER_FIELDS = [
 ];
 
 /** Travellers as a response carries them, with passports masked unless `showPassports`. */
+/** One booking as Manage Booking, the e-ticket and the app read it. */
+function singleBookingView(data, { showPassports }) {
+  return {
+    // The camelCase shape the bookings list sends. Manage Booking read
+    // camelCase fields that this endpoint never had, so a refreshed page
+    // showed "Date N/A" and "--:--".
+    ...toClientBooking(data, { showPassports }),
+    // The passenger list lives in its own column, not inside booking_details,
+    // and was never included here. Manage Booking therefore showed "No
+    // passenger information available" whenever it loaded the booking itself
+    // — a refresh, or a shared link — and showed it correctly only when My
+    // Trips handed the record over through router state.
+    travelers: clientTravellers(data.booking_details?.travelers ?? data.passenger_details, { showPassports }),
+    passengerData: clientTravellers(data.passenger_details ?? data.booking_details?.travelers, { showPassports }),
+    status: data.status,
+    payment_status: data.payment_status,
+    bookingReference: data.booking_reference,
+    type: data.travel_type,
+    bookingDate: data.created_at,
+    source: 'database'
+  };
+}
+
 function clientTravellers(list, { showPassports = false } = {}) {
   if (!Array.isArray(list)) return [];
   return list.map((traveller) => {
