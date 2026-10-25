@@ -9,6 +9,9 @@ import {
   cancellationMessage,
   refundOutcome,
 } from '../../../shared/cancellationOutcome';
+import { paymentReturned } from '../../../shared/ticketDocument.js';
+
+export { paymentReturned };
 
 /**
  * What a booking's state means to the customer, in one place.
@@ -51,12 +54,6 @@ export { NO_CONFIRMED_SEAT_REVIEW_REASON };
  * "Payment received", "do not book this trip again" - was said without
  * reading it, and was false of that booking.
  */
-export function paymentReturned(booking) {
-  const payment = String(booking?.payment_status ?? booking?.paymentStatus ?? '').toLowerCase();
-  if (['refunded', 'reversed'].includes(payment)) return 'all';
-  if (payment === 'partially_refunded') return 'part';
-  return null;
-}
 
 const money = (amount, currency) => {
   try {
