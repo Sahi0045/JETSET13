@@ -8,6 +8,7 @@ import Price from '../../../Components/Price';
 import { formatCheckedBag } from '../../../utils/baggage';
 import { formatCalendarDate } from '../../../utils/dateUtils';
 import { arrivalDayOffset, layoverLabel, layoversOf, legDateLabel, seatsLeftLabel } from './searchResults';
+import { tripAirlineNames, tripAirlines } from './flightSort';
 
 const AIRLINE_LOGO_FALLBACK = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiByeD0iOCIgZmlsbD0iIzM3NzNmNCIvPgo8dGV4dCB4PSIyMCIgeT0iMjgiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxOCIgZmlsbD0id2hpdGUiIHRleHQtYW5jaG9yPSJtaWRkbGUiPuKciO+4jzwvdGV4dD4KPHN2Zz4K';
 
@@ -102,11 +103,18 @@ const operatorsOf = (segments = []) => [...new Set(segments
   .filter((seg) => seg?.operatingCarrier && seg.operatingCarrier !== seg.airline?.code)
   .map((seg) => seg.operatingAirlineName || seg.operatingCarrier))];
 
+const flightNumbersOf = (segments = []) => segments.map((segment) => segment?.flightNumber).filter(Boolean).join(', ');
+
 function Leg({ leg, label, operators = [], cityMap = {} }) {
   const dayOffset = arrivalDayOffset(leg.departure?.rawDate, leg.arrival?.rawDate);
   return (
     <div>
-      {label && <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1">{label}</div>}
+      {label && (
+        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1">
+          <span>{label}</span>
+          {flightNumbersOf(leg.segments) && <span className="ml-1.5 normal-case font-semibold text-gray-500">{flightNumbersOf(leg.segments)}</span>}
+        </div>
+      )}
       {operators.length > 0 && (
         <div className="text-[10px] text-amber-600 mb-1">Operated by {operators.join(', ')}</div>
       )}
@@ -311,7 +319,7 @@ function FlightCard({ flight, onBook, onViewPrices, priceStats, cityMap = {} }) 
             </div>
             <div className="min-w-0">
               <h3 className="font-semibold text-gray-900 text-sm leading-tight truncate">
-                {flight.airline?.name || 'Unknown Airline'}
+                {tripAirlines(flight).length > 1 ? tripAirlineNames(flight) : (flight.airline?.name || 'Unknown Airline')}
               </h3>
               <div className="text-xs text-gray-400 truncate">
                 {flight.segments?.[0]?.flightNumber || flight.flightNumber || ''}

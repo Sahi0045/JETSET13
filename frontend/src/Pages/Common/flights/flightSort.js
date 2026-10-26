@@ -25,6 +25,19 @@ const minutesOf = (leg) => (Number.isFinite(leg?.durationMinutes) ? leg.duration
 /** The outbound leg, the later flights of a multi-city trip, or a round trip's return. */
 export const legsOf = (f) => [f, ...(f?.laterLegs || []), f?.returnLeg].filter(Boolean);
 
+export const tripAirlines = (f) => {
+  const airlines = new Map();
+  for (const leg of legsOf(f)) {
+    const flown = Array.isArray(leg.segments) && leg.segments.length > 0 ? leg.segments.map((segment) => segment.airline) : [leg.airline];
+    for (const airline of flown) {
+      if (airline?.code && !airlines.has(airline.code)) airlines.set(airline.code, airline);
+    }
+  }
+  return [...airlines.values()];
+};
+
+export const tripAirlineNames = (f) => tripAirlines(f).map((airline) => airline.name || airline.code).join(' + ');
+
 /** The outbound duration in minutes - the one the card shows. */
 export const legMinutes = (f) => minutesOf(f);
 
