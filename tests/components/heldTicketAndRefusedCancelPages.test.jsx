@@ -5,6 +5,7 @@ import { render, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { readMyTrips } from '../helpers/source.js';
 
 const mockUseFlightBooking = vi.fn();
 vi.mock('../../frontend/src/Pages/Common/Navbar', () => ({ default: () => null }));
@@ -217,8 +218,8 @@ describe('held, and the cancel refused by the airline: every page says the cance
   });
 
   it('the My Trips ticket cell does not say "Not yet issued" of it', () => {
-    const trips = readFileSync(path.resolve(process.cwd(), 'frontend/src/Pages/Common/login/mytrips.jsx'), 'utf8');
-    expect(trips).toMatch(/if \(documentState\(booking\) === 'cancel_pending'\) return 'None, cancellation pending';/);
+    const trips = readMyTrips();
+    expect(trips).toMatch(/if \(documentState\(booking\) === 'cancel_pending'\) return 'None, cancellation pending'/);
   });
 });
 

@@ -8,6 +8,7 @@ import BookingItinerary from '../../frontend/src/Pages/Common/flights/BookingIti
 import BookingConfirmation from '../../frontend/src/Pages/Common/BookingConfirmation.jsx';
 import FlightETicket from '../../frontend/src/Pages/Common/flights/FlightETicket.jsx';
 import { itinerariesFromOffer } from '../../shared/bookingItineraries.js';
+import { readMyTrips } from '../helpers/source.js';
 
 vi.mock('../../frontend/src/Pages/Common/Navbar', () => ({ default: () => null }));
 
@@ -91,7 +92,7 @@ describe('the pages that show it', () => {
 
   it('My Trips and Manage Booking render every leg too', () => {
     const read = (file) => readFileSync(path.resolve(process.cwd(), file), 'utf8');
-    expect(read('frontend/src/Pages/Common/login/mytrips.jsx')).toMatch(/<BookingItinerary legs=\{legs\} variant="compact"/);
+    expect(readMyTrips()).toMatch(/<BookingItinerary legs=\{legs\} \/>/);
     expect(read('frontend/src/Pages/Common/flights/ManageBooking.jsx')).toMatch(/<BookingItinerary legs=\{itineraryLegs\} \/>/);
   });
 });

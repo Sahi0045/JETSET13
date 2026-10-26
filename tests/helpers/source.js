@@ -31,3 +31,14 @@ export const readCode = (file) => codeOf(readFileSync(path.resolve(process.cwd()
 
 /** A repo file exactly as written, comments and all. */
 export const readRaw = (file) => readFileSync(path.resolve(process.cwd(), file), 'utf8');
+
+/** My Trips: the page and the parts it is built from, exactly as written. */
+export const MY_TRIPS_FILES = [
+  'frontend/src/Pages/Common/login/mytrips.jsx',
+  'frontend/src/Pages/Common/login/myTrips/tripView.js',
+  'frontend/src/Pages/Common/login/myTrips/TripCards.jsx',
+  'frontend/src/Pages/Common/login/myTrips/TripDetails.jsx',
+  'frontend/src/Pages/Common/login/myTrips/RequestRow.jsx',
+];
+
+export const readMyTrips = () => MY_TRIPS_FILES.map(readRaw).join('\n');

@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { isCompletedTrip } from '../../frontend/src/utils/bookingStatus';
+import { readMyTrips } from '../helpers/source.js';
 
 /**
  * "Trip Completed" in My Trips.
@@ -31,8 +32,8 @@ describe('isCompletedTrip', () => {
   });
 
   it('is what My Trips asks before saying "Trip Completed"', () => {
-    const src = readFileSync(path.resolve(process.cwd(), 'frontend/src/Pages/Common/login/mytrips.jsx'), 'utf8');
-    expect(src).toMatch(/daysUntilTrip < 0 && \(isCompletedTrip\(booking\) \? \(/);
+    const src = readMyTrips();
+    expect(src).toMatch(/days < 0 \? \(isCompletedTrip\(booking\) \? 'Trip completed' : 'Travel date passed'\)/);
     expect(src).toMatch(/Travel date passed/);
   });
 });

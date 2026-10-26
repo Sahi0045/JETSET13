@@ -112,10 +112,9 @@ const renderMyTrips = (bookings) => {
   );
 };
 
-const listed = (container) => [...container.querySelectorAll('.group p')]
-  .map((p) => p.textContent)
-  .filter((text) => /^#FLT/.test(text))
-  .map((text) => text.slice(1));
+const listed = (container) => [...container.querySelectorAll('[data-testid^="trip-"]')]
+  .map((el) => el.dataset.testid.slice('trip-'.length))
+  .filter((reference) => /^FLT/.test(reference));
 
 const ALL = [commitUnknown, noSeat, reallyFailed, cancelledRefundStuck, heldForStaff];
 
@@ -124,9 +123,9 @@ describe('the Failed tab', () => {
 
   it('leaves out a commit being checked with the airline and a seat not confirmed yet', async () => {
     const { container } = renderMyTrips(ALL);
-    await screen.findByText('#FLTUNK1');
+    await screen.findByTestId('trip-FLTUNK1');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Failed' }));
+    fireEvent.click(screen.getByRole('button', { name: /Needs attention/ }));
 
     const failed = listed(container);
     expect(failed).not.toContain('FLTUNK1');
@@ -135,7 +134,7 @@ describe('the Failed tab', () => {
 
   it('they stay under Upcoming, with their own sentences', async () => {
     const { container } = renderMyTrips(ALL);
-    await screen.findByText('#FLTUNK1');
+    await screen.findByTestId('trip-FLTUNK1');
 
     const upcoming = listed(container);
     expect(upcoming).toEqual(expect.arrayContaining(['FLTUNK1', 'FLTNOSEAT']));
@@ -151,9 +150,9 @@ describe('the Failed tab', () => {
   // "Failed". It is under Upcoming now.
   it('still lists a booking that failed and a stuck refund on a cancelled one', async () => {
     const { container } = renderMyTrips(ALL);
-    await screen.findByText('#FLTUNK1');
+    await screen.findByTestId('trip-FLTUNK1');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Failed' }));
+    fireEvent.click(screen.getByRole('button', { name: /Needs attention/ }));
 
     expect(listed(container)).toEqual(expect.arrayContaining(['FLTFAIL1', 'FLTUNKCX']));
     expect(listed(container)).not.toContain('FLTHELD1');

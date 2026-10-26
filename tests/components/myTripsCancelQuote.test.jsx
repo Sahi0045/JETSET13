@@ -44,8 +44,8 @@ describe('the My Trips cancel confirm', () => {
     vi.stubGlobal('fetch', fetch);
     render(<MemoryRouter initialEntries={['/my-trips']}><MyTrips /></MemoryRouter>);
 
-    const card = (await screen.findByText('#FLTQ1')).closest('.group');
-    fireEvent.click(await within(card).findByRole('button', { name: /Cancel Booking/ }));
+    const card = await screen.findByTestId('trip-FLTQ1');
+    fireEvent.click(await within(card).findByRole('button', { name: /cancel booking/i }));
 
     expect(await within(card).findByText('No ticket has been issued yet. You get back $287.50; the $12.50 service fee is not refundable.')).toBeTruthy();
     expect(fetch.mock.calls.some(([url]) => String(url).includes('flights/bookings/FLTQ1/cancel-quote'))).toBe(true);

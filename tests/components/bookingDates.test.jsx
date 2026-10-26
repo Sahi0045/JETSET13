@@ -6,6 +6,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import BookingConfirmation from '../../frontend/src/Pages/Common/BookingConfirmation.jsx';
 import FlightETicket from '../../frontend/src/Pages/Common/flights/FlightETicket.jsx';
+import { readMyTrips } from '../helpers/source.js';
 
 vi.mock('../../frontend/src/Pages/Common/Navbar', () => ({ default: () => null }));
 
@@ -60,7 +61,7 @@ describe('no booking page parses a travel date as UTC', () => {
   const read = (file) => readFileSync(path.resolve(process.cwd(), file), 'utf8');
 
   it('My Trips counts days and sorts Past from the calendar day', () => {
-    const src = read('frontend/src/Pages/Common/login/mytrips.jsx');
+    const src = readMyTrips();
     expect(src).not.toMatch(/new Date\(travelDate\)/);
     expect(src).not.toMatch(/new Date\(request\.(flight_departure_date|hotel_checkin_date|cruise_departure_date|package_start_date)\)/);
     expect(src).toMatch(/daysUntilDate\(travelDate\)/);

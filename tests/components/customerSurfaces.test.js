@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { readMyTrips } from '../helpers/source.js';
 
 /**
  * Three customer-facing pages, three fabrications, zero component tests.
@@ -260,15 +261,16 @@ describe('the review page charges what checkout verifies', () => {
  * My Trips, Manage Booking and the surrounding pages say what the record says.
  */
 describe('My Trips reads the booking record', () => {
-  const trips = readFileSync(path.resolve(process.cwd(), 'frontend/src/Pages/Common/login/mytrips.jsx'), 'utf8');
+  const trips = readMyTrips();
 
   it('derives its badge from the record and never defaults to Confirmed', () => {
     expect(trips).toMatch(/bookingStatusBadge\(booking\)/);
     expect(trips).not.toMatch(/booking\.status \|\| 'Confirmed'/);
   });
 
-  it('lists bookings that need attention under Failed', () => {
-    expect(trips).toMatch(/activeTab === "Failed"\) return list\.filter\(\(b\) => needsAttention\(b\)\)/);
+  it('lists bookings that need attention under Needs attention', () => {
+    expect(trips).toMatch(/if \(!needsAttention\(booking\)\) return false/);
+    expect(trips).toMatch(/attention: bookings\.filter\(failed\)/);
   });
 
   it('reports what happened to the refund on cancel', () => {
@@ -319,7 +321,7 @@ describe('Manage Booking claims nothing it cannot back', () => {
  */
 describe('a cancelled booking has no usable ticket and one account of its refund', () => {
   const manage = page('ManageBooking.jsx');
-  const trips = readFileSync(path.resolve(process.cwd(), 'frontend/src/Pages/Common/login/mytrips.jsx'), 'utf8');
+  const trips = readMyTrips();
   const confirmation = commonPage('BookingConfirmation.jsx');
 
   it('Manage Booking offers no download for a cancelled booking', () => {
@@ -338,7 +340,7 @@ describe('a cancelled booking has no usable ticket and one account of its refund
   it('My Trips adds nothing to the outcome, shows no ticket for a cancelled booking, and words attention by case', () => {
     expect(trips).not.toMatch(/airline cancellation is still being processed/);
     expect(trips).toMatch(/setCancelOutcome\(\{ tone: 'success', text: cancellationMessage\(result\) \}\)/);
-    expect(trips).toMatch(/if \(statusUp === 'CANCELLED'\) return 'Cancelled'/);
+    expect(trips).toMatch(/if \(status === 'CANCELLED' \|\| ticketState\(booking\) === 'cancelled'\) return 'Cancelled'/);
     expect(trips).toMatch(/attentionMessage\(booking\)/);
     expect(trips).toMatch(/refundStatus\(booking\)/);
   });

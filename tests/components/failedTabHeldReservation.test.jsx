@@ -114,10 +114,9 @@ const renderMyTrips = (bookings) => {
   );
 };
 
-const listed = (container) => [...container.querySelectorAll('.group p')]
-  .map((p) => p.textContent)
-  .filter((text) => /^#FLT/.test(text))
-  .map((text) => text.slice(1));
+const listed = (container) => [...container.querySelectorAll('[data-testid^="trip-"]')]
+  .map((el) => el.dataset.testid.slice('trip-'.length))
+  .filter((reference) => /^FLT/.test(reference));
 
 const ALL = [heldByDesk, heldForStaff, reallyFailed, cancelledRefundStuck, cancelRefused];
 
@@ -126,9 +125,9 @@ describe('the Failed tab', () => {
 
   it('leaves out a reservation held at the airline that is only waiting on its ticket', async () => {
     const { container } = renderMyTrips(ALL);
-    await screen.findByText('#FLTDESKHELD');
+    await screen.findByTestId('trip-FLTDESKHELD');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Failed' }));
+    fireEvent.click(screen.getByRole('button', { name: /Needs attention/ }));
 
     const failed = listed(container);
     expect(failed).not.toContain('FLTDESKHELD');
@@ -137,7 +136,7 @@ describe('the Failed tab', () => {
 
   it('they stay under Upcoming, saying the seats are reserved', async () => {
     const { container } = renderMyTrips([heldByDesk, heldForStaff]);
-    await screen.findByText('#FLTDESKHELD');
+    await screen.findByTestId('trip-FLTDESKHELD');
 
     expect(listed(container)).toEqual(expect.arrayContaining(['FLTDESKHELD', 'FLTHELD1']));
     expect(container.textContent).toMatch(/Your seats are reserved, but your ticket has not been issued yet/);
@@ -146,9 +145,9 @@ describe('the Failed tab', () => {
   // Fences: the rest of what the tab listed, it still lists.
   it('still lists a booking that failed, a cancelled one whose refund failed, and a cancel the airline refused', async () => {
     const { container } = renderMyTrips(ALL);
-    await screen.findByText('#FLTDESKHELD');
+    await screen.findByTestId('trip-FLTDESKHELD');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Failed' }));
+    fireEvent.click(screen.getByRole('button', { name: /Needs attention/ }));
 
     expect(listed(container)).toEqual(expect.arrayContaining(['FLTFAIL1', 'FLTHELDCX', 'FLTCXREFUSED']));
   });
