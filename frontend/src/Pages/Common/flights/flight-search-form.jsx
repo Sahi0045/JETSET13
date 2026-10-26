@@ -9,6 +9,7 @@ import AirportService from "../../../Services/AirportService";
 import { getTodayDate, getNextDay, getSafeDate } from "../../../utils/dateUtils";
 import { useLocationContext } from '../../../Context/LocationContext';
 import CustomFlightCalendar from "./CustomFlightCalendar";
+import { PlaceSuggestions, comboboxProps, makeRoomBelow, usePlaceSearch } from "./PlaceSuggestions";
 import MultiCityLegs, { MIN_LEGS, nextLegAfter } from "./MultiCityLegs";
 import { fieldCode, normalizeTripType } from './searchQuery';
 import { format, parseISO, isValid } from 'date-fns';
@@ -33,11 +34,6 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
   const navigate = useNavigate();
   const [formData, setFormData] = useState(withTripType(initialData) || defaultSearchData)
   const [formErrors, setFormErrors] = useState({})
-  const [showFromSuggestions, setShowFromSuggestions] = useState(false);
-  const [showToSuggestions, setShowToSuggestions] = useState(false);
-  const [fromSuggestions, setFromSuggestions] = useState([]);
-  const [toSuggestions, setToSuggestions] = useState([]);
-  const [isSearching, setIsSearching] = useState(false);
   const [showDepartCalendar, setShowDepartCalendar] = useState(false);
   const [showReturnCalendar, setShowReturnCalendar] = useState(false);
   // Open on arrival when the customer came to change who is travelling.
@@ -50,8 +46,15 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
   const returnCalendarRef = useRef(null);
   const travellersRef = useRef(null);
 
-  // Debounce timer ref
-  const searchTimeoutRef = useRef(null);
+  const pickPlace = (field, city) => setFormData((prev) => ({
+    ...prev,
+    [field]: `${city.name} (${city.code})`,
+    [`${field}Code`]: city.code,
+    [`${field}Country`]: city.country,
+    [`${field}Type`]: city.type,
+  }));
+  const fromPlace = usePlaceSearch((city) => pickPlace('from', city));
+  const toPlace = usePlaceSearch((city) => pickPlace('to', city));
 
   // Create a map of city names to their codes
   const cityCodeMap = allAirports.reduce((acc, city) => {
@@ -216,46 +219,9 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
       return next;
     });
 
-    // Hide suggestions for the other field
-    if (name === "from") {
-      setShowToSuggestions(false);
-    } else if (name === "to") {
-      setShowFromSuggestions(false);
-    }
-
-    // Show suggestions for the current field with dynamic API search
     if (name === "from" || name === "to") {
-      const showSuggestions = name === "from" ? setShowFromSuggestions : setShowToSuggestions;
-      const setSuggestions = name === "from" ? setFromSuggestions : setToSuggestions;
-
-      showSuggestions(true);
-
-      // Clear previous timeout
-      if (searchTimeoutRef.current) {
-        clearTimeout(searchTimeoutRef.current);
-      }
-
-      // Show local results immediately for responsiveness
-      const localFiltered = AirportService.searchLocalAirports(value);
-      setSuggestions(localFiltered);
-
-      // Debounce API call (300ms)
-      if (value.trim().length >= 2) {
-        searchTimeoutRef.current = setTimeout(async () => {
-          setIsSearching(true);
-          try {
-            const apiResults = await AirportService.searchAirports(value);
-            if (apiResults && apiResults.length > 0) {
-              setSuggestions(apiResults);
-            }
-          } catch (error) {
-            console.warn('Airport search API error:', error);
-            // Keep local results on API failure
-          } finally {
-            setIsSearching(false);
-          }
-        }, 300);
-      }
+      (name === "from" ? toPlace : fromPlace).close();
+      (name === "from" ? fromPlace : toPlace).search(value);
     }
 
     // Clear validation error when field is changed
@@ -266,38 +232,6 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
       });
     }
   }
-
-  const handleSuggestionClick = (name, field) => {
-    const selectedCity = field === "from"
-      ? fromSuggestions.find(city => city.name === name)
-      : toSuggestions.find(city => city.name === name);
-
-    if (selectedCity) {
-      setFormData((prev) => ({
-        ...prev,
-        [field]: `${selectedCity.name} (${selectedCity.code})`,
-        [`${field}Code`]: selectedCity.code,
-        [`${field}Country`]: selectedCity.country,
-        [`${field}Type`]: selectedCity.type
-      }));
-    }
-
-    // Hide suggestions for both fields after selection
-    setShowFromSuggestions(false);
-    setShowToSuggestions(false);
-  };
-
-  // Add blur handler to hide suggestions when input loses focus
-  const handleInputBlur = (field) => {
-    // Use setTimeout to allow click events to fire before hiding suggestions
-    setTimeout(() => {
-      if (field === "from") {
-        setShowFromSuggestions(false);
-      } else if (field === "to") {
-        setShowToSuggestions(false);
-      }
-    }, 200);
-  };
 
   const multiCityErrors = (legs) => legs.map((leg, index) => {
     const n = index + 1;
@@ -544,23 +478,14 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
               <span className="block text-[10.5px] font-bold uppercase tracking-[0.14em] text-gray-400 mb-1.5">From</span>
               <input
                 type="text" name="from" value={formData.from || ""}
-                onChange={handleInputChange} onBlur={() => handleInputBlur("from")}
+                onChange={handleInputChange} onBlur={fromPlace.close} onKeyDown={fromPlace.onKeyDown}
+                onFocus={(e) => makeRoomBelow(e.currentTarget)} {...comboboxProps('from-places', fromPlace)}
                 placeholder="City or airport"
                 autoComplete="off" autoCorrect="off" spellCheck={false}
                 className="w-full border-0 p-0 bg-transparent outline-none focus:ring-0 font-grotesk text-[20px] leading-tight font-semibold text-ink placeholder:text-gray-300 placeholder:font-normal placeholder:text-[15px]"
               />
               <span className="block text-xs text-gray-500 mt-1 truncate">{fromSubtitle || ' '}</span>
-              {showFromSuggestions && fromSuggestions.length > 0 && (
-                <div className="absolute z-[60] left-3 top-full mt-1 w-[280px] max-w-[88vw] bg-white rounded-lg shadow-xl border border-gray-200 max-h-60 overflow-auto">
-                  {fromSuggestions.map((c, i) => (
-                    <div key={i} className="px-4 py-2.5 hover:bg-gray-50 cursor-pointer border-b last:border-0 border-gray-100"
-                      onClick={() => handleSuggestionClick(c.name, "from")}>
-                      <div className="font-semibold text-gray-800 text-sm">{c.name}</div>
-                      <div className="text-xs text-gray-500 flex justify-between"><span>{c.code}</span><span>{c.country}</span></div>
-                    </div>
-                  ))}
-                </div>
-              )}
+              <PlaceSuggestions id="from-places" place={fromPlace} />
               {formErrors.from && <span className="block text-red-500 text-xs mt-1">{formErrors.from}</span>}
             </label>
 
@@ -569,23 +494,14 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
               <span className="block text-[10.5px] font-bold uppercase tracking-[0.14em] text-gray-400 mb-1.5">To</span>
               <input
                 type="text" name="to" value={formData.to || ""}
-                onChange={handleInputChange} onBlur={() => handleInputBlur("to")}
+                onChange={handleInputChange} onBlur={toPlace.close} onKeyDown={toPlace.onKeyDown}
+                onFocus={(e) => makeRoomBelow(e.currentTarget)} {...comboboxProps('to-places', toPlace)}
                 placeholder="City or airport"
                 autoComplete="off" autoCorrect="off" spellCheck={false}
                 className="w-full border-0 p-0 bg-transparent outline-none focus:ring-0 font-grotesk text-[20px] leading-tight font-semibold text-ink placeholder:text-gray-300 placeholder:font-normal placeholder:text-[15px]"
               />
               <span className="block text-xs text-gray-500 mt-1 truncate">{toSubtitle || ' '}</span>
-              {showToSuggestions && toSuggestions.length > 0 && (
-                <div className="absolute z-[60] left-3 top-full mt-1 w-[280px] max-w-[88vw] bg-white rounded-lg shadow-xl border border-gray-200 max-h-60 overflow-auto">
-                  {toSuggestions.map((c, i) => (
-                    <div key={i} className="px-4 py-2.5 hover:bg-gray-50 cursor-pointer border-b last:border-0 border-gray-100"
-                      onClick={() => handleSuggestionClick(c.name, "to")}>
-                      <div className="font-semibold text-gray-800 text-sm">{c.name}</div>
-                      <div className="text-xs text-gray-500 flex justify-between"><span>{c.code}</span><span>{c.country}</span></div>
-                    </div>
-                  ))}
-                </div>
-              )}
+              <PlaceSuggestions id="to-places" place={toPlace} />
               {formErrors.to && <span className="block text-red-500 text-xs mt-1">{formErrors.to}</span>}
 
               {/* Swap origin / destination — rendered LAST so the To input stays the

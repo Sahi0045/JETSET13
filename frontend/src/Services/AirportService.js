@@ -91,27 +91,65 @@ export const searchAirports = async (keyword, options = {}) => {
     }
 };
 
+const plain = (value) => String(value || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
 /**
- * Search in local hardcoded airports (fallback)
+ * How well a place matches what was typed: the airport code, then the start of
+ * its name or city, then the start of a word in them. 0 is no match. A letter
+ * of the country is not a match - "d" listed every airport in India.
+ */
+export const placeScore = (place, keyword) => {
+    const term = plain(keyword).trim();
+    if (!term) return 0;
+    const code = plain(place?.code);
+    const name = plain(place?.name);
+    const city = plain(place?.cityName);
+    if (code === term) return 100;
+    if (name.startsWith(term) || city.startsWith(term)) return 80;
+    if (term.length <= 3 && code.startsWith(term)) return 70;
+    if (`${name} ${city}`.split(/[\s\-(),/.]+/).some((word) => word.startsWith(term))) return 60;
+    if (term.length >= 3 && (name.includes(term) || city.includes(term))) return 40;
+    if (term.length >= 3 && plain(place?.country).startsWith(term)) return 20;
+    return 0;
+};
+
+const ranked = (places, keyword) => places
+    .map((place, order) => ({ place, order, score: placeScore(place, keyword) }))
+    .filter((entry) => entry.score > 0)
+    .sort((a, b) => b.score - a.score || a.order - b.order)
+    .map((entry) => entry.place);
+
+/**
+ * Search in local hardcoded airports (fallback). The list is in order of how
+ * often our customers fly there, which breaks ties.
  * @param {string} keyword - Search term
  * @returns {Array} - Matching airports
  */
 export const searchLocalAirports = (keyword) => {
     if (!keyword || keyword.length < 1) return [];
 
-    const term = keyword.toLowerCase();
-
-    return allAirports
-        .filter(airport =>
-            airport.name.toLowerCase().includes(term) ||
-            airport.code.toLowerCase().includes(term) ||
-            airport.country.toLowerCase().includes(term)
-        )
-        .slice(0, 15)
+    return ranked(allAirports, keyword)
+        .slice(0, 12)
         .map(airport => ({
             ...airport,
             fullName: `${airport.name} (${airport.code}), ${airport.country}`
         }));
+};
+
+/**
+ * The API's answer added to the places already listed. Those stay where they
+ * are: the answer comes 300 ms after the local list, and reordering it then
+ * changed the row under the cursor as it was clicked. New places go after
+ * them, best match first; places that do not match what was typed are left out.
+ */
+export const mergeAirportResults = (listed = [], found = [], keyword = '', limit = 12) => {
+    const seen = new Set(listed.map((place) => place.code));
+    const added = ranked((found || []).filter((place) => {
+        if (!place?.code || seen.has(place.code)) return false;
+        seen.add(place.code);
+        return true;
+    }), keyword);
+    return [...listed, ...added].slice(0, limit);
 };
 
 /**
@@ -289,6 +327,7 @@ export const clearCache = () => {
 const AirportService = {
     searchAirports,
     searchLocalAirports,
+    mergeAirportResults,
     getNearbyAirports,
     getDefaultDepartureAirport,
     getAirportByCode,

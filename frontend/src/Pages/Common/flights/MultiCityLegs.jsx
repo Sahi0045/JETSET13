@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Plus, X } from 'lucide-react';
 import { format, isValid, parseISO } from 'date-fns';
-import AirportService from '../../../Services/AirportService';
+import { PlaceSuggestions, comboboxProps, makeRoomBelow, usePlaceSearch } from './PlaceSuggestions';
 import CustomFlightCalendar from './CustomFlightCalendar';
 
 export const MAX_LEGS = 6;
@@ -21,28 +21,8 @@ const dateParts = (value) => {
   return { day: format(date, 'dd'), month: format(date, 'MMM'), yy: format(date, 'yy'), weekday: format(date, 'EEEE') };
 };
 
-function PlaceField({ label, name, value, subtitle, error, onType, onPick }) {
-  const [suggestions, setSuggestions] = useState([]);
-  const [open, setOpen] = useState(false);
-  const timer = useRef(null);
-
-  useEffect(() => () => clearTimeout(timer.current), []);
-
-  const type = (text) => {
-    onType(text);
-    setOpen(true);
-    setSuggestions(AirportService.searchLocalAirports(text));
-    clearTimeout(timer.current);
-    if (text.trim().length < 2) return;
-    timer.current = setTimeout(async () => {
-      try {
-        const found = await AirportService.searchAirports(text);
-        if (found?.length) setSuggestions(found);
-      } catch (error) {
-        console.warn('Airport search API error:', error);
-      }
-    }, 300);
-  };
+function PlaceField({ id, label, name, value, subtitle, error, onType, onPick }) {
+  const place = usePlaceSearch(onPick);
 
   return (
     <label className="relative flex-[1.4] px-5 py-3 cursor-text hover:bg-[#055B75]/[0.03] focus-within:bg-[#055B75]/[0.04] transition-colors block">
@@ -51,28 +31,17 @@ function PlaceField({ label, name, value, subtitle, error, onType, onPick }) {
         type="text"
         aria-label={label}
         value={value || ''}
-        onChange={(e) => type(e.target.value)}
-        onBlur={() => setTimeout(() => setOpen(false), 200)}
+        onChange={(e) => { onType(e.target.value); place.search(e.target.value); }}
+        onBlur={place.close}
+        onKeyDown={place.onKeyDown}
+        onFocus={(e) => makeRoomBelow(e.currentTarget)}
+        {...comboboxProps(id, place)}
         placeholder="City or airport"
         autoComplete="off" autoCorrect="off" spellCheck={false}
         className="w-full border-0 p-0 bg-transparent outline-none focus:ring-0 font-grotesk text-[18px] leading-tight font-semibold text-ink placeholder:text-gray-300 placeholder:font-normal placeholder:text-[15px]"
       />
       <span className="block text-xs text-gray-500 mt-1 truncate">{subtitle || ' '}</span>
-      {open && suggestions.length > 0 && (
-        <div className="absolute z-[60] left-3 top-full mt-1 w-[280px] max-w-[88vw] bg-white rounded-lg shadow-xl border border-gray-200 max-h-60 overflow-auto">
-          {suggestions.map((city) => (
-            <div
-              key={`${city.code}-${city.name}`}
-              className="px-4 py-2.5 hover:bg-gray-50 cursor-pointer border-b last:border-0 border-gray-100"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => { onPick(city); setOpen(false); }}
-            >
-              <div className="font-semibold text-gray-800 text-sm">{city.name}</div>
-              <div className="text-xs text-gray-500 flex justify-between"><span>{city.code}</span><span>{city.country}</span></div>
-            </div>
-          ))}
-        </div>
-      )}
+      <PlaceSuggestions id={id} place={place} />
       {error && <span className="block text-red-500 text-xs mt-1">{error}</span>}
     </label>
   );
@@ -152,6 +121,7 @@ export default function MultiCityLegs({ legs, errors = [], onChange }) {
           <div key={index} className="flex flex-col lg:flex-row lg:items-stretch border-b border-gray-100 last:border-b-0">
             <span className="px-5 pt-3 lg:pt-4 lg:w-20 text-xs font-bold text-[#055B75] whitespace-nowrap">{`Flight ${number}`}</span>
             <PlaceField
+              id={`leg-${index}-from-places`}
               label={`Flight ${number} from`}
               name="From"
               value={leg.from}
@@ -161,6 +131,7 @@ export default function MultiCityLegs({ legs, errors = [], onChange }) {
               onPick={(city) => picked(index, 'from', city)}
             />
             <PlaceField
+              id={`leg-${index}-to-places`}
               label={`Flight ${number} to`}
               name="To"
               value={leg.to}
