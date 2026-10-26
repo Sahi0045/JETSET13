@@ -1,16 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { X, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import Price from '../../../Components/Price';
-import apiConfig from '@/config/api';
 import { getSafeDate } from '../../../utils/dateUtils';
 import { moveDayFocus } from './calendarKeys';
+import { fareWeeks, monthDatesFrom, priceFareWeeks } from './fareWeeks';
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-
-// The server prices up to 10 dates per request and samples a longer list, so a
-// month asked for at once came back with every third day priced.
-const DAYS_PER_REQUEST = 7;
 
 const iso = (y, m, d) => `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 const todayISO = () => {
@@ -47,12 +43,11 @@ function FlightFareCalendar({ searchParams = {}, initialDate, selectedDate, know
     const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
     const cells = [];
     for (let i = 0; i < firstDay; i++) cells.push(null);
-    const monthDates = [];
     for (let d = 1; d <= daysInMonth; d++) {
       const dateStr = iso(viewYear, viewMonth, d);
       cells.push({ day: d, isoDate: dateStr, isPast: dateStr < today });
-      if (dateStr >= today) monthDates.push(dateStr);
     }
+    const monthDates = monthDatesFrom(viewYear, viewMonth, today);
     while (cells.length % 7 !== 0) cells.push(null);
     const weeks = [];
     for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
@@ -60,7 +55,6 @@ function FlightFareCalendar({ searchParams = {}, initialDate, selectedDate, know
   }, [viewYear, viewMonth, today]);
 
   useEffect(() => {
-    let cancelled = false;
     const controller = new AbortController();
     const fromCode = searchParams.fromCode || extractCode(searchParams.from);
     const toCode = searchParams.toCode || extractCode(searchParams.to);
@@ -69,46 +63,29 @@ function FlightFareCalendar({ searchParams = {}, initialDate, selectedDate, know
     setPrices(known);
     if (!fromCode || !toCode || monthDates.length === 0) { setPending(new Set()); return undefined; }
 
-    const weeks = [];
-    for (let i = 0; i < monthDates.length; i += DAYS_PER_REQUEST) weeks.push(monthDates.slice(i, i + DAYS_PER_REQUEST));
     setPending(new Set(monthDates.filter((date) => !(date in known))));
-
-    (async () => {
-      for (const dates of weeks) {
-        if (cancelled) return;
-        try {
-          const res = await fetch(apiConfig.endpoints.flights.datePrices, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              from: fromCode,
-              to: toCode,
-              dates,
-              adults: parseInt(searchParams.adults) || parseInt(searchParams.travelers) || 1,
-              children: parseInt(searchParams.children) || 0,
-              infants: parseInt(searchParams.infants) || 0,
-              travelClass: searchParams.travelClass || 'ECONOMY',
-            }),
-            signal: controller.signal,
-          });
-          const data = await res.json();
-          if (cancelled) return;
-          const priced = Object.fromEntries(Object.entries(data?.dateWisePrices || {})
-            .filter(([date, amount]) => dates.includes(date) && Number(amount) > 0)
-            .map(([date, amount]) => [date, Number(amount)]));
-          setPrices((current) => ({ ...current, ...priced }));
-        } catch (e) {
-          if (cancelled || e.name === 'AbortError') return;
-        }
+    priceFareWeeks({
+      weeks: fareWeeks(monthDates),
+      search: {
+        from: fromCode,
+        to: toCode,
+        adults: parseInt(searchParams.adults) || parseInt(searchParams.travelers) || 1,
+        children: parseInt(searchParams.children) || 0,
+        infants: parseInt(searchParams.infants) || 0,
+        travelClass: searchParams.travelClass || 'ECONOMY',
+      },
+      signal: controller.signal,
+      onWeek: (dates, found) => {
+        setPrices((current) => ({ ...current, ...found }));
         setPending((current) => {
           const next = new Set(current);
           dates.forEach((date) => next.delete(date));
           return next;
         });
-      }
-    })();
+      },
+    });
 
-    return () => { cancelled = true; controller.abort(); };
+    return () => controller.abort();
   }, [viewYear, viewMonth, monthDates, searchParams, knownPrices]);
 
   const goMonth = (delta) => {
