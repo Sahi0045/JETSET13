@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -32,7 +32,9 @@ const cardFor = async (rows) => {
     ? reply(200, { success: true, data: rows })
     : reply(200, { success: true, data: [] }))));
   render(<MemoryRouter initialEntries={['/my-trips']}><MyTrips /></MemoryRouter>);
-  return within((await screen.findByText('#FLTQ1')).closest('.group'));
+  const trip = await screen.findByTestId('trip-FLTQ1');
+  fireEvent.click(within(trip).getByRole('button', { name: /booking details/i }));
+  return within(within(trip).getByTestId('trip-details'));
 };
 
 afterEach(() => vi.unstubAllGlobals());

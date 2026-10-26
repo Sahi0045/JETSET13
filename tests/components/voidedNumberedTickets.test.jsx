@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
+import { readMyTrips } from '../helpers/source.js';
 
 const mockUseFlightBooking = vi.fn();
 
@@ -137,9 +138,9 @@ describe('every recorded ticket voided, then the cancel refused', () => {
   it('My Trips shows no void number and says voided; the trip is never "completed"', () => {
     expect(eTicket.liveTickets(allVoided)).toEqual([]);
     expect(eTicket.ticketsVoided(allVoided)).toBe(true);
-    const trips = readFileSync(path.resolve(process.cwd(), 'frontend/src/Pages/Common/login/mytrips.jsx'), 'utf8');
+    const trips = readMyTrips();
     expect(trips).toMatch(/liveTickets\(booking\)\.map\(\(t\) => t\?\.number\)/);
-    expect(trips).toMatch(/if \(ticketsVoided\(booking\)\) return 'Voided';/);
+    expect(trips).toMatch(/if \(ticketsVoided\(booking\)\) return 'Voided'/);
     expect(isCompletedTrip({ ...allVoided, departureDate: '2020-01-15' })).toBe(false);
   });
 });

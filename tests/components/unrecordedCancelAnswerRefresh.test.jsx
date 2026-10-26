@@ -174,12 +174,18 @@ describe('My Trips', () => {
     );
   };
 
-  const cardFor = async (reference) => (await screen.findByText(`#${reference}`)).closest('.group');
+/** The trip on My Trips that names this reference, with its details and buttons open. */
+  const cardFor = async (reference) => {
+    const card = await screen.findByTestId(`trip-${reference}`);
+    const toggle = within(card).queryByRole('button', { name: /^(Booking details|Details)$/ });
+    if (toggle) fireEvent.click(toggle);
+    return card;
+  };
 
   const cancelFromTheCard = async () => {
     const card = await cardFor('FLTHELD1');
-    fireEvent.click(await within(card).findByRole('button', { name: /Cancel Booking/ }));
-    fireEvent.click(within(card).getByRole('button', { name: /Yes, Cancel/ }));
+    fireEvent.click(await within(card).findByRole('button', { name: /cancel booking/i }));
+    fireEvent.click(within(card).getByRole('button', { name: /yes, cancel/i }));
   };
 
   beforeEach(() => mockCancelFlightBooking.mockReset());
@@ -195,7 +201,7 @@ describe('My Trips', () => {
     await waitFor(() => expect(bookingReads).toBe(2));
     const card = await cardFor('FLTHELD1');
     await waitFor(() => expect(card.textContent).toMatch(UNRECORDED));
-    expect(within(card).queryByRole('button', { name: /Cancel Booking/ })).toBeNull();
+    expect(within(card).queryByRole('button', { name: /cancel booking/i })).toBeNull();
     expect(card.textContent).not.toMatch(/Ticketed/);
   });
 
@@ -211,6 +217,6 @@ describe('My Trips', () => {
     await waitFor(() => expect(bookingReads).toBe(2));
     const card = await cardFor('FLTHELD1');
     expect(card.textContent).toMatch(/Ticketed/);
-    expect(within(card).getByRole('button', { name: /Cancel Booking/ })).toBeTruthy();
+    expect(within(card).getByRole('button', { name: /cancel booking/i })).toBeTruthy();
   });
 });

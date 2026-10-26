@@ -1,25 +1,12 @@
 "use client"
 
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useMemo } from "react"
 import { useNavigate } from "react-router-dom"
-import { daysUntilDate, formatCalendarDate, formatIsoDuration } from "../../../utils/dateUtils"
-import { bookingStatusBadge, needsAttention, cancellationMessage, refundStatus, attentionMessage, isCompletedTrip } from "../../../utils/bookingStatus"
-import { bookingCodeOf, canDownloadDocument, documentState, hasNoConfirmedSeat, isCommitUnknown, liveTickets, ticketState, ticketsVoided } from "../../../utils/eTicket"
+import { AlertTriangle, ArrowLeft, Hotel, LayoutGrid, Lock, Luggage, MessageSquare, Plane, RefreshCw, Ship, ShieldCheck, XCircle } from 'lucide-react'
+import { daysUntilDate } from "../../../utils/dateUtils"
+import { cancellationMessage } from "../../../utils/bookingStatus"
 import { downloadTicketPdf } from "../../../utils/ticketDownload"
-import { bookingItineraries, multiCityRoute, tripTypeOf } from "../../../../../shared/bookingItineraries"
-import { isAwaitingTicketOnly } from "../../../../../shared/reviewQueue"
-import BookingItinerary from "../flights/BookingItinerary"
-import CheckInLinks from "../flights/CheckInLinks"
-import { formatUsd } from "../../../utils/bookingCharge"
 import { authHeaders } from "../../../utils/authHeaders"
-import {
-  FaPlane, FaShip, FaHotel, FaSuitcaseRolling, FaClipboardList,
-  FaCommentDots, FaStar, FaEye, FaCog, FaTimesCircle, FaCheckCircle,
-  FaCalendarAlt, FaMapMarkerAlt, FaLock,
-  FaSyncAlt, FaInfoCircle, FaFileInvoiceDollar, FaExclamationTriangle,
-  FaClock, FaShieldAlt,
-  FaDownload,
-} from 'react-icons/fa'
 import { getApiUrl } from '../../../utils/apiHelper'
 import Navbar from '../Navbar'
 import Footer from '../Footer'
@@ -28,8 +15,12 @@ import ArcPayService from '../../../Services/ArcPayService'
 import CancelOutcomeDialog from './CancelOutcomeDialog'
 import CancelQuote from '../flights/CancelQuote'
 import { fetchCancelQuote } from '../../../hooks/queries/useFlights'
+import useCityNames from '../../../hooks/useCityNames'
+import { groupRequests, groupTrips, pickNextTrip, routeOf, travelDateOf, tripReferenceOf, untilLabel } from './myTrips/tripView'
+import { DetailsToggle, NextTripCard, NoTripCard, PastTripCard, TripRow, TripsBar, cardShell, focusRing, tripTitle } from './myTrips/TripCards'
+import { TripActions, TripDetails } from './myTrips/TripDetails'
+import RequestRow from './myTrips/RequestRow'
 
-// ----- Icon helpers (react-icons replace emoji) -----
 /**
  * One inquiries request, however many callers want it.
  *
@@ -67,70 +58,6 @@ const fetchMyInquiries = (headers, owner) => {
   return promise
 }
 
-const TYPE_ICON = {
-  flight: FaPlane,
-  cruise: FaShip,
-  hotel: FaHotel,
-  package: FaSuitcaseRolling,
-  general: FaCommentDots,
-  default: FaClipboardList,
-}
-
-const TypeIcon = ({ type, className = '' }) => {
-  const Icon = TYPE_ICON[(type || '').toLowerCase()] || TYPE_ICON.default
-  return <Icon className={className} />
-}
-
-const TYPE_NAME = {
-  flight: 'Flight',
-  cruise: 'Cruise',
-  hotel: 'Hotel',
-  package: 'Package',
-  general: 'General',
-  default: 'Travel',
-}
-
-const getTypeName = (type) => TYPE_NAME[(type || '').toLowerCase()] || TYPE_NAME.default
-
-// Travel dates are calendar days. `new Date('2026-11-15')` is UTC midnight -
-// the evening of the 14th in the US - so every trip here showed a day early.
-const fmtDate = (d, opts) => formatCalendarDate(d, opts || { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
-
-// Reusable eyebrow label
-const Eyebrow = ({ children, className = '' }) => (
-  <span className={`text-[11px] font-semibold uppercase tracking-widest text-gray-400 ${className}`}>{children}</span>
-)
-
-// Empty State Component
-const EmptyState = ({ icon, title, description, actionLabel, onAction }) => (
-  <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_15px_30px_-5px_rgba(5,91,117,0.12)] p-12">
-    <div className="flex flex-col items-center justify-center text-center">
-      <div className="w-20 h-20 bg-gradient-to-br from-[#F0FAFC] to-[#E3F1F6] rounded-2xl flex items-center justify-center text-3xl mb-6 text-[#055B75]">
-        {icon}
-      </div>
-      <h3 className="text-xl font-bold text-gray-900 mb-2">{title}</h3>
-      <p className="text-gray-500 mb-6 max-w-sm">{description}</p>
-      {actionLabel && onAction && (
-        <button
-          onClick={onAction}
-          className="px-6 py-3 bg-gradient-to-br from-[#055B75] to-[#034457] text-white font-semibold rounded-lg hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 shadow-md shadow-[#055B75]/30"
-        >
-          {actionLabel}
-        </button>
-      )}
-    </div>
-  </div>
-)
-
-const Spinner = ({ label }) => (
-  <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_15px_30px_-5px_rgba(5,91,117,0.12)] p-12">
-    <div className="flex flex-col items-center justify-center">
-      <div className="w-10 h-10 border-[3px] border-[#055B75] border-t-transparent rounded-full animate-spin"></div>
-      <p className="mt-4 text-gray-600">{label}</p>
-    </div>
-  </div>
-)
-
 function TripCancelQuote({ reference }) {
   const [query, setQuery] = useState({ isLoading: true, data: undefined })
   useEffect(() => {
@@ -147,21 +74,65 @@ function TripCancelQuote({ reference }) {
   )
 }
 
+const PAST_ON_OVERVIEW = 4
+
+const VIEW_TITLE = {
+  past: 'Past trips',
+  cancelled: 'Cancelled trips',
+  attention: 'Needs attention',
+  requests: 'Your requests',
+}
+
+const TYPE_TABS = [
+  { key: 'all', label: 'All trips', Icon: LayoutGrid },
+  { key: 'flight', label: 'Flights', Icon: Plane },
+  { key: 'cruise', label: 'Cruise', Icon: Ship },
+  { key: 'hotel', label: 'Hotels', Icon: Hotel },
+  { key: 'package', label: 'Packages', Icon: Luggage },
+]
+
+const Panel = ({ children, className = '' }) => <div className={`${cardShell} ${className}`}>{children}</div>
+
+const Spinner = ({ label }) => (
+  <Panel className="p-12 flex flex-col items-center justify-center">
+    <div className="w-10 h-10 border-[3px] border-[#055B75] border-t-transparent rounded-full animate-spin" />
+    <p className="mt-4 text-gray-600">{label}</p>
+  </Panel>
+)
+
+const EmptyState = ({ icon: Icon, title, description, actionLabel, onAction }) => (
+  <Panel className="p-10 sm:p-12 flex flex-col items-center text-center">
+    <div className="w-16 h-16 rounded-2xl bg-[#F0FAFC] text-[#055B75] flex items-center justify-center mb-5"><Icon className="h-7 w-7" aria-hidden="true" /></div>
+    <h3 className="font-grotesk text-xl font-semibold text-ink mb-1.5">{title}</h3>
+    <p className="text-sm text-gray-500 mb-6 max-w-sm">{description}</p>
+    {actionLabel && onAction && (
+      <button type="button" onClick={onAction} className="px-7 py-3 bg-[#055B75] hover:bg-[#034457] text-white rounded-full text-sm font-bold shadow-sm">{actionLabel}</button>
+    )}
+  </Panel>
+)
+
+const SectionTitle = ({ children, action }) => (
+  <div className="flex items-baseline justify-between gap-3 mb-3">
+    <h2 className="text-lg font-bold text-gray-900">{children}</h2>
+    {action && <button type="button" onClick={action.onClick} className="text-sm font-semibold text-[#055B75] hover:text-[#034457]">{action.label} ›</button>}
+  </div>
+)
+
 export default function TravelDashboard() {
   const navigate = useNavigate()
   // Auth comes from the Supabase context (same source the navbar uses). Tokens
   // now live in httpOnly cookies, not localStorage, so don't read localStorage.
   const { user, isAuthenticated: authed, session, loading: authLoading } = useSupabaseAuth()
-  const [activeTab, setActiveTab] = useState("Upcoming")
-  const [activeSidebarItem, setActiveSidebarItem] = useState("All Bookings")
+  const [view, setView] = useState('overview')
+  const [tripType, setTripType] = useState('all')
+  const [openTrip, setOpenTrip] = useState(null)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isGuest, setIsGuest] = useState(false)
   const [showLoginPopup, setShowLoginPopup] = useState(false)
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [bookings, setBookings] = useState([])
   const [requests, setRequests] = useState([])
   const [isLoadingRequests, setIsLoadingRequests] = useState(false)
-  const [isLoadingBookings, setIsLoadingBookings] = useState(false)
+  const [isLoadingBookings, setIsLoadingBookings] = useState(true)
   const [cancellingBookingId, setCancellingBookingId] = useState(null)
   const [showCancelConfirm, setShowCancelConfirm] = useState(null)
   // What a cancel from this page did, shown in a dialog rather than a browser alert box
@@ -189,7 +160,6 @@ export default function TravelDashboard() {
       return () => clearTimeout(t)
     }
 
-    // Authenticated (nav shows the same). Load the server-backed data.
     setIsAuthenticated(true)
     setIsGuest(false)
     setShowLoginPopup(false)
@@ -216,24 +186,12 @@ export default function TravelDashboard() {
     }
   }, [authed, authLoading])
 
-  // Polling effect for real-time request updates
+  // While the requests list is open, a quote the team sends shows up without a reload.
   useEffect(() => {
-    let pollingInterval
-
-    if (isAuthenticated && activeSidebarItem === "Requests") {
-      // Start polling every 30 seconds
-      pollingInterval = setInterval(() => {
-        console.log('🔄 Polling for request updates...')
-        loadRequests()
-      }, 30000) // 30 seconds
-    }
-
-    return () => {
-      if (pollingInterval) {
-        clearInterval(pollingInterval)
-      }
-    }
-  }, [isAuthenticated, activeSidebarItem])
+    if (!isAuthenticated || view !== 'requests') return undefined
+    const pollingInterval = setInterval(() => loadRequests(), 30000)
+    return () => clearInterval(pollingInterval)
+  }, [isAuthenticated, view])
 
   const loadBookings = async () => {
     setIsLoadingBookings(true)
@@ -567,1120 +525,316 @@ export default function TravelDashboard() {
     }
   }
 
-  const handleTabChange = (tab) => {
-    setActiveTab(tab)
-  }
+  const allTrips = useMemo(() => groupTrips(bookings), [bookings])
+  const trips = useMemo(() => groupTrips(tripType === 'all' ? bookings : bookings.filter((booking) => booking.type === tripType)), [bookings, tripType])
+  const requestGroups = useMemo(() => groupRequests(requests), [requests])
+  const nextTrip = pickNextTrip(trips.upcoming)
+  const soonest = pickNextTrip(allTrips.upcoming)
+  const keyOf = (booking) => booking.id || tripReferenceOf(booking)
+  const alsoComing = trips.upcoming.filter((booking) => booking !== nextTrip)
+  const placesBeen = trips.past.filter((booking, index, all) => {
+    const place = routeOf(booking).to || keyOf(booking)
+    return all.findIndex((other) => (routeOf(other).to || keyOf(other)) === place) === index
+  }).slice(0, PAST_ON_OVERVIEW)
+  const cityCodes = useMemo(() => bookings.flatMap((booking) => {
+    const { legs, from, to } = routeOf(booking)
+    return [from, to, ...legs.flatMap((leg) => leg.segments.flatMap((segment) => [segment.origin, segment.destination]))]
+  }), [bookings])
+  const cityNames = useCityNames(cityCodes)
 
-  const handleSidebarItemChange = (item) => {
-    setActiveSidebarItem(item)
-    setIsMobileMenuOpen(false)
-  }
+  const handleLoginClick = () => navigate('/login')
 
-  const handleLoginClick = () => {
-    navigate('/login')
-  }
-
-  const closeLoginPopup = () => {
-    setShowLoginPopup(false)
-  }
-
-  const toggleMobileMenu = () => {
-    setIsMobileMenuOpen(!isMobileMenuOpen)
-  }
-
-  // Helper function to get travel date from booking
-  const getTravelDateFromBooking = (booking) => {
-    // Check various date fields depending on booking type
-    if (booking.type === 'flight') {
-      return booking.departureDate || booking.flight_departure_date || booking.flightData?.departureDate;
-    } else if (booking.type === 'cruise') {
-      return booking.cruiseDepartureDate || booking.cruise_departure_date || booking.cruiseData?.departureDate;
-    } else if (booking.type === 'hotel') {
-      return booking.checkinDate || booking.hotel_checkin_date || booking.hotelData?.checkinDate;
-    } else if (booking.type === 'package') {
-      return booking.packageStartDate || booking.package_start_date;
-    }
-    // Fallback to generic departure/start date fields
-    return booking.departureDate || booking.startDate || booking.travelDate;
-  };
-
-  // Check if a booking's travel date is in the past
-  const isTravelDatePast = (booking) => {
-    const travelDate = getTravelDateFromBooking(booking);
-    if (!travelDate) return false; // If no date, consider it upcoming
-
-    // Past only once the departure day is over, where the customer is. Read as
-    // UTC, a US trip moved to Past on the morning it departed.
-    const days = daysUntilDate(travelDate);
-    return days !== null && days < 0;
-  };
-
-  // Filter bookings based on active tab and sidebar selection
-  // Filter a booking list by the active tab (Upcoming / Past / Cancelled / Failed)
-  const filterByTab = (list) => {
-    const normalizeStatus = (s) => (s || '').toUpperCase();
-    if (activeTab === "Upcoming") {
-      return list.filter((b) => {
-        const status = normalizeStatus(b.status);
-        const isCancelled = status === 'CANCELLED' || status === 'FAILED';
-        return !isCancelled && !isTravelDatePast(b);
-      });
-    }
-    if (activeTab === "Past") {
-      return list.filter((b) => {
-        const status = normalizeStatus(b.status);
-        const isCancelled = status === 'CANCELLED' || status === 'FAILED';
-        return !isCancelled && isTravelDatePast(b);
-      });
-    }
-    if (activeTab === "Cancelled") return list.filter((b) => normalizeStatus(b.status) === 'CANCELLED');
-    // Bookings someone has to act on: a reservation flagged for review, a
-    // refund that did not go through. This matched a 'failed' status that
-    // nothing ever writes, so the tab could never show anything.
-    //
-    // Not a booking whose outcome is still open, which has not failed: a
-    // commit our team is checking with the airline (isCommitUnknown), or a
-    // PNR the airline has not confirmed a seat on yet (hasNoConfirmedSeat).
-    // Each tells the customer not to book the trip again, and under "Failed"
-    // invited exactly that. They stay under Upcoming with their sentences.
-    // A cancelled one whose refund did not go through (refundStatus) is still
-    // listed: that has failed.
-    //
-    // Nor a reservation the airline holds that is only waiting on its ticket:
-    // a live PNR with a confirmed seat, no ticket, not cancelled (documentState
-    // 'held'), flagged for the ticket alone (isAwaitingTicketOnly) - held for
-    // staff after ticketing failed, or a commit the desk found held. Its
-    // sentence is "Your seats are reserved, but your ticket has not been issued
-    // yet", and "Failed" beside it said otherwise. A PNR whose cancellation the
-    // airline refused carries its own flag, and stays.
-    const waitingOnTicket = (b) => documentState(b) === 'held' && isAwaitingTicketOnly(b);
-    const stillOpen = (b) => !refundStatus(b) && (isCommitUnknown(b) || hasNoConfirmedSeat(b) || waitingOnTicket(b));
-    if (activeTab === "Failed") return list.filter((b) => needsAttention(b)).filter((b) => !stillOpen(b));
-    return list;
-  };
-
-  const getFilteredBookings = () => {
-    // First narrow to the active tab, then by sidebar type
-    let filtered = filterByTab(bookings);
-    if (activeSidebarItem !== "All Bookings" && activeSidebarItem !== "Requests") {
-      const typeMap = { "Flights": "flight", "Cruise": "cruise", "Hotels": "hotel", "Packages": "package" };
-      const targetType = typeMap[activeSidebarItem];
-      if (targetType) filtered = filtered.filter((booking) => booking.type === targetType);
-    }
-    return filtered;
-  };
-
-  const filteredBookings = getFilteredBookings()
-  // Bookings within the current tab — used for sidebar counts so the badges match the list
-  const tabBookings = filterByTab(bookings)
-
-  const getFilteredRequests = () => {
-    let filtered = requests
-    console.log('🔍 Filtering requests...', {
-      totalRequests: requests.length,
-      activeTab
-    })
-
-    // Filter by status (tab) - similar to bookings but for inquiry status
-    if (activeTab === "Upcoming") {
-      // Show pending, processing, and quoted inquiries (so sent quotes appear here)
-      filtered = filtered.filter(request =>
-        request.status === 'pending' || request.status === 'processing' || request.status === 'quoted'
-      )
-    } else if (activeTab === "Past") {
-      // Show completed inquiries (quoted, booked)
-      filtered = filtered.filter(request =>
-        request.status === 'quoted' || request.status === 'booked'
-      )
-    } else if (activeTab === "Cancelled") {
-      filtered = filtered.filter(request => request.status === 'cancelled')
-    } else if (activeTab === "Failed") {
-      filtered = filtered.filter(request => request.status === 'expired')
-    }
-
-    console.log(`Final filtered requests for ${activeTab}:`, filtered.length)
-    return filtered
-  }
-
-  const filteredRequests = getFilteredRequests()
-
-  // ---- Booking card ----
-  const renderBookingCard = (booking) => {
-    const isFlightBooking = booking.type === 'flight'
-    const tripReference = booking.bookingReference || booking.booking_reference || booking.orderId
-    const isCruiseBooking = booking.type === 'cruise'
-    const isHotelBooking = booking.type === 'hotel'
-    const isPackageBooking = booking.type === 'package'
-    // Every leg and flight: a round trip's return flight was not on the card.
-    const legs = isFlightBooking ? bookingItineraries(booking) : []
-
-    const getBookingTitle = () => {
-      if (booking.title) return booking.title
-      // Prefer the real name (hotel/cruise/airline) over a generic "X Booking"
-      if (booking.type === 'hotel' && booking.hotelName) return booking.hotelName
-      if (booking.type === 'cruise' && booking.cruiseName) return booking.cruiseName
-      if (booking.type === 'flight' && booking.airlineName) return `${booking.airlineName} Flight`
-      return `${getTypeName(booking.type)} Booking`
-    }
-
-    // Check if this is a database booking (has quoteId or inquiryId)
-    const isDatabaseBooking = !!(booking.quoteId || booking.inquiryId)
-
-    // Calculate days until trip
-    const travelDate = getTravelDateFromBooking(booking);
-    const getDaysUntil = () => daysUntilDate(travelDate);
-    const daysUntilTrip = getDaysUntil();
-    const normalizeStatus = (s) => (s || '').toUpperCase();
-    const statusUp = normalizeStatus(booking.status);
-    // From the booking record, not `status` alone - see utils/bookingStatus.js.
-    const badge = bookingStatusBadge(booking);
-    // For a cancelled booking, what happened to the money - see refundStatus.
-    const refund = refundStatus(booking);
-    const attention = attentionMessage(booking);
-    const BADGE_TONES = {
-      success: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-      danger: 'bg-red-50 text-red-700 border-red-200',
-      warning: 'bg-amber-50 text-amber-800 border-amber-200',
-      neutral: 'bg-[#F0FAFC] text-[#055B75] border-[#B9D0DC]',
-    };
-
-    const bookingCode = bookingCodeOf(booking) || {};
-
-    const DetailCell = ({ label, children }) => (
-      <div className="bg-white rounded-lg p-2.5 border border-[#D1E9F0] min-w-0">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-[#0890BC] mb-0.5">{label}</p>
-        <p className="text-[13px] sm:text-sm font-bold text-gray-900 break-words">{children}</p>
-      </div>
-    )
-
-    return (
-      <div key={booking.orderId || booking.bookingReference || booking.quoteId}
-        className="group bg-white rounded-2xl p-4 sm:p-6 border border-gray-100 shadow-[0_15px_30px_-5px_rgba(5,91,117,0.12)] hover:shadow-[0_20px_40px_-8px_rgba(5,91,117,0.2)] hover:-translate-y-0.5 transition-all duration-200 relative overflow-hidden">
-        {/* Teal accent rail */}
-        <span className="absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b from-[#055B75] to-[#0890BC]" />
-
-        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-6">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-[#055B75]/10 text-[#055B75] text-lg flex-shrink-0">
-                <TypeIcon type={booking.type} />
-              </div>
-              <div className="min-w-0">
-                <h3 className="text-lg font-bold text-gray-900 group-hover:text-[#055B75] transition-colors truncate">
-                  {getBookingTitle()}
-                </h3>
-                <p className="text-sm text-gray-500 font-medium">
-                  #{booking.orderId || booking.bookingReference || booking.quoteId || 'N/A'}
-                </p>
-                {booking.quoteId && (
-                  <p className="text-xs text-gray-400 mt-0.5">Quote: {booking.orderId || booking.bookingReference}</p>
-                )}
-              </div>
-            </div>
-            {/* Travel Date Countdown Badge */}
-            {daysUntilTrip !== null && daysUntilTrip >= 0 && (
-              <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold mt-3 ${daysUntilTrip === 0 ? 'bg-green-50 text-green-700 border border-green-200' :
-                daysUntilTrip <= 3 ? 'bg-orange-50 text-orange-700 border border-orange-200' :
-                  daysUntilTrip <= 7 ? 'bg-amber-50 text-amber-700 border border-amber-200' :
-                    'bg-[#F0FAFC] text-[#055B75] border border-[#D1E9F0]'
-                }`}>
-                <FaCalendarAlt className="w-3 h-3" />
-                {daysUntilTrip === 0 ? '🎉 Today!' :
-                  daysUntilTrip === 1 ? 'Tomorrow' :
-                    `${daysUntilTrip} days to go`}
-              </div>
-            )}
-            {/* "Trip Completed" only for a trip that could have been taken
-                (isCompletedTrip). It was shown under every past date - for a
-                reservation never ticketed, too. */}
-            {daysUntilTrip !== null && daysUntilTrip < 0 && (isCompletedTrip(booking) ? (
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold mt-3 bg-gray-50 text-gray-500 border border-gray-200">
-                <FaCheckCircle className="w-3 h-3" /> Trip Completed
-              </div>
-            ) : (
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold mt-3 bg-gray-50 text-gray-500 border border-gray-200">
-                <FaCalendarAlt className="w-3 h-3" /> Travel date passed
-              </div>
-            ))}
-          </div>
-
-          <div className="flex flex-col items-start sm:items-end gap-2">
-            <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full border ${BADGE_TONES[badge.tone]}`}>
-              {badge.tone === 'success' ? <FaCheckCircle className="w-3 h-3" /> :
-                badge.tone === 'danger' ? <FaTimesCircle className="w-3 h-3" /> : null}
-              {badge.label}
-            </span>
-            {refund && (
-              <span className={`inline-flex items-center px-3 py-1 text-xs font-semibold rounded-full border ${BADGE_TONES[refund.tone]}`}>
-                {refund.label}
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* One sentence per case, from the record. This said "the refund did
-            not go through" for every cancelled booking needing attention -
-            a refund under review included - and "your seats are reserved"
-            for a booking the airline never received. */}
-        {attention && (
-          <div className="mb-4 p-3 rounded-xl border border-amber-200 bg-amber-50 text-sm text-amber-800">
-            {attention}
-          </div>
-        )}
-
-        {/* Travel details panel */}
-        {(booking.origin || booking.destination || booking.departureDate || booking.hotelDestination || booking.cruiseDestination || booking.returnDate || booking.checkinDate || booking.checkoutDate || booking.cruiseDepartureDate) && (
-          <div className="mb-4 p-3 sm:p-4 bg-[#F1FBFD] rounded-xl border border-[#D1E9F0]">
-            <div className="flex items-center gap-2 mb-3">
-              <FaMapMarkerAlt className="w-3.5 h-3.5 text-[#055B75]" />
-              <span className="text-[11px] font-bold uppercase tracking-widest text-[#055B75]">Travel Details</span>
-            </div>
-
-            {isFlightBooking && (
-              <>
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                  {(booking.origin || booking.destination) && (
-                    <DetailCell label="Route">{multiCityRoute(legs) || `${booking.origin || 'N/A'} ${tripTypeOf(legs) === 'roundTrip' ? '⇄' : '→'} ${booking.destination || 'N/A'}`}</DetailCell>
-                  )}
-                  {booking.departureDate && <DetailCell label="Departure">{fmtDate(booking.departureDate)}</DetailCell>}
-                  {booking.returnDate && <DetailCell label="Return">{fmtDate(booking.returnDate)}</DetailCell>}
-                  {(booking.passengers || booking.travelClass) && (
-                    <DetailCell label={booking.travelClass ? 'Class & Passengers' : 'Passengers'}>
-                      <span className="capitalize">{booking.travelClass && booking.travelClass.replace('_', ' ')}</span>
-                      {booking.travelClass && booking.passengers && ' • '}
-                      {booking.passengers && `${booking.passengers} ${booking.passengers === 1 ? 'Traveler' : 'Travelers'}`}
-                    </DetailCell>
-                  )}
-                </div>
-
-                {/* Every flight, leg by leg, with its number, times and terminals.
-                    The grid below is for a booking that recorded none: it shows
-                    the first flight number beside the last arrival, which read
-                    as one non-stop flight. */}
-                {legs.length > 0 ? (
-                  <BookingItinerary legs={legs} variant="compact" className="mt-3" />
-                ) : (booking.airlineName || booking.flightNumber || booking.departureTime || booking.duration || booking.pnr) && (
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-3">
-                    {(booking.airlineName || booking.flightNumber) && (
-                      <DetailCell label="Airline / Flight">
-                        {booking.airlineName || booking.airline || ''}{booking.flightNumber ? ` • ${booking.flightNumber}` : ''}
-                        {booking.aircraft && <span className="block text-xs text-gray-500 font-medium mt-0.5">{booking.aircraft}</span>}
-                        {booking.operatingAirlineName && booking.operatingAirlineName !== booking.airlineName && (
-                          <span className="block text-xs text-gray-400 mt-0.5">Operated by {booking.operatingAirlineName}</span>
-                        )}
-                      </DetailCell>
-                    )}
-                    {(booking.departureTime || booking.departureTerminal) && (
-                      <DetailCell label="Departure">
-                        {booking.departureTime || ''}{booking.departureTerminal ? ` • Terminal ${booking.departureTerminal}` : ''}
-                      </DetailCell>
-                    )}
-                    {(booking.arrivalTime || booking.arrivalTerminal) && (
-                      <DetailCell label="Arrival">
-                        {booking.arrivalTime || ''}{booking.arrivalTerminal ? ` • Terminal ${booking.arrivalTerminal}` : ''}
-                      </DetailCell>
-                    )}
-                    {(booking.duration || booking.stops !== undefined) && (
-                      <DetailCell label="Duration">
-                        {formatIsoDuration(booking.duration)}
-                        {booking.stops !== undefined && booking.stops !== null && (
-                          <span className="text-xs text-gray-500 ml-1 font-medium">• {booking.stops === 0 ? 'Direct' : `${booking.stops} Stop${booking.stops > 1 ? 's' : ''}`}</span>
-                        )}
-                      </DetailCell>
-                    )}
-                  </div>
-                )}
-
-                {/* PNR, Cabin Class, Baggage, Fare Type */}
-                {(booking.pnr || booking.cabinClass || booking.baggage || booking.brandedFareLabel) && (
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-3">
-                    {booking.pnr && (
-                      <DetailCell label={bookingCode.label}>
-                        <span className="tracking-wider">{bookingCode.value}</span>
-                        {bookingCode.amadeusReference && (
-                          <span className="block text-[11px] font-medium text-gray-500">{`Amadeus reference ${bookingCode.amadeusReference}`}</span>
-                        )}
-                      </DetailCell>
-                    )}
-                    {/* A PNR alone is a reservation. It used to be the only
-                        thing shown, identical for ticketed and unticketed. */}
-                    {booking.pnr && (
-                      <DetailCell label="Ticket">
-                        {(() => {
-                          // A cancelled booking's tickets were voided or refunded:
-                          // no number is shown as though it could still be used.
-                          if (statusUp === 'CANCELLED') return 'Cancelled';
-                          // Nor one whose cancel went through and could not be
-                          // recorded: its row still reads confirmed (ticketState).
-                          if (ticketState(booking) === 'cancelled') return 'Cancelled';
-                          // Not a number a cancel voided: printed here, it read as a ticket.
-                          const numbers = liveTickets(booking).map((t) => t?.number).filter(Boolean);
-                          if (numbers.length) return <span className="tracking-wider">{numbers.join(', ')}</span>;
-                          if (ticketsVoided(booking)) return 'Voided';
-                          // Being cancelled: "Not yet issued" promised a ticket nobody will issue.
-                          if (documentState(booking) === 'cancel_pending') return 'None, cancellation pending';
-                          return ticketState(booking) === 'pending' ? 'Issued, number pending' : 'Not yet issued';
-                        })()}
-                      </DetailCell>
-                    )}
-                    {booking.cabinClass && <DetailCell label="Cabin Class"><span className="capitalize">{booking.cabinClass.replace('_', ' ')}</span></DetailCell>}
-                    {booking.baggage && <DetailCell label="Baggage">{typeof booking.baggage === 'object' ? JSON.stringify(booking.baggage) : booking.baggage}</DetailCell>}
-                    {booking.brandedFareLabel && <DetailCell label="Fare Type">{booking.brandedFareLabel}</DetailCell>}
-                  </div>
-                )}
-              </>
-            )}
-
-            {isHotelBooking && (
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                {booking.hotelDestination && <DetailCell label="Destination">{booking.hotelDestination}</DetailCell>}
-                {booking.checkinDate && <DetailCell label="Check-in">{fmtDate(booking.checkinDate)}</DetailCell>}
-                {booking.checkoutDate && <DetailCell label="Check-out">{fmtDate(booking.checkoutDate)}</DetailCell>}
-                {(booking.hotelRooms || booking.hotelGuests) && (
-                  <DetailCell label="Rooms & Guests">
-                    {booking.hotelRooms && `${booking.hotelRooms} ${booking.hotelRooms === 1 ? 'Room' : 'Rooms'}`}
-                    {booking.hotelRooms && booking.hotelGuests && ' • '}
-                    {booking.hotelGuests && `${booking.hotelGuests} ${booking.hotelGuests === 1 ? 'Guest' : 'Guests'}`}
-                  </DetailCell>
-                )}
-              </div>
-            )}
-
-            {isCruiseBooking && (
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                {booking.cruiseDestination && <DetailCell label="Destination">{booking.cruiseDestination}</DetailCell>}
-                {booking.cruiseDepartureDate && <DetailCell label="Departure">{fmtDate(booking.cruiseDepartureDate)}</DetailCell>}
-                {booking.cruiseDuration && <DetailCell label="Duration">{booking.cruiseDuration} {booking.cruiseDuration === 1 ? 'Day' : 'Days'}</DetailCell>}
-                {(booking.cruisePassengers || booking.cruiseCabinType) && (
-                  <DetailCell label={booking.cruiseCabinType ? 'Cabin & Passengers' : 'Passengers'}>
-                    {booking.cruiseCabinType && `${booking.cruiseCabinType}`}
-                    {booking.cruiseCabinType && booking.cruisePassengers && ' • '}
-                    {booking.cruisePassengers && `${booking.cruisePassengers} ${booking.cruisePassengers === 1 ? 'Person' : 'People'}`}
-                  </DetailCell>
-                )}
-              </div>
-            )}
-
-            {isPackageBooking && (booking.packageDestination || booking.packageStartDate || booking.packageEndDate || booking.packageTravelers) && (
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                {booking.packageDestination && <DetailCell label="Destination">{booking.packageDestination}</DetailCell>}
-                {booking.packageStartDate && <DetailCell label="Start Date">{fmtDate(booking.packageStartDate)}</DetailCell>}
-                {booking.packageEndDate && <DetailCell label="End Date">{fmtDate(booking.packageEndDate)}</DetailCell>}
-                {booking.packageTravelers && <DetailCell label="Travelers">{booking.packageTravelers} {booking.packageTravelers === 1 ? 'Person' : 'People'}</DetailCell>}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Meta grid */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-          <div className="bg-[#F0FAFC] rounded-lg p-3.5 border border-[#E3F1F6]">
-            <Eyebrow className="block mb-1">Reference</Eyebrow>
-            <p className="text-sm font-bold text-gray-900 truncate">{booking.orderId || booking.bookingReference || booking.quoteId || 'N/A'}</p>
-          </div>
-          <div className="bg-[#F0FAFC] rounded-lg p-3.5 border border-[#E3F1F6]">
-            <Eyebrow className="block mb-1">{isDatabaseBooking ? 'Quote Number' : 'Transaction ID'}</Eyebrow>
-            <p className="text-sm font-bold text-gray-900 truncate">{isDatabaseBooking ? (booking.orderId || booking.bookingReference) : (booking.transactionId || 'N/A')}</p>
-          </div>
-          <div className="bg-[#F0FAFC] rounded-lg p-3.5 border border-[#E3F1F6]">
-            <Eyebrow className="block mb-1">Amount</Eyebrow>
-            <p className="text-base font-bold text-[#055B75]">
-              {(() => {
-                const amt = parseFloat(booking.totalAmount || booking.total_amount || booking.amount || 0);
-                // What was charged, in USD. <Price> converted it into the
-                // visitor's chosen currency, which is not what the card paid.
-                return amt > 0 ? formatUsd(amt) : <span className="text-gray-400 font-semibold text-sm">On request</span>;
-              })()}
-            </p>
-          </div>
-          <div className="bg-[#F0FAFC] rounded-lg p-3.5 border border-[#E3F1F6]">
-            <Eyebrow className="block mb-1">Booking Date</Eyebrow>
-            <p className="text-sm font-semibold text-gray-900">
-              {fmtDate(booking.bookingDate || booking.orderCreatedAt || booking.paid_at || new Date(), { month: 'short', day: 'numeric', year: 'numeric' })}
-            </p>
-          </div>
-        </div>
-
-        {booking.description && (
-          <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-100">
-            <Eyebrow className="block mb-1">Description</Eyebrow>
-            <p className="text-sm text-gray-700">{booking.description}</p>
-          </div>
-        )}
-
-        <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-gray-100">
-          {isDatabaseBooking ? (
-            <button
-              onClick={async () => {
-                try {
-                  // If we have both quoteId and inquiryId, fetch full details
-                  if (booking.quoteId && booking.inquiryId) {
-                    const token = session?.access_token || '' // cookie session also authenticates
-
-                    // Fetch quote and inquiry data
-                    const [quoteResponse, inquiryResponse] = await Promise.all([
-                      fetch(getApiUrl(`quotes?id=${booking.quoteId}`), {
-                        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                        credentials: 'include'
-                      }),
-                      fetch(getApiUrl(`inquiries?id=${booking.inquiryId}`), {
-                        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                        credentials: 'include'
-                      })
-                    ])
-
-                    const quoteData = await quoteResponse.json()
-                    const inquiryData = await inquiryResponse.json()
-
-                    if (quoteData.success && inquiryData.success) {
-                      navigate('/quote-detail', {
-                        state: {
-                          quoteData: quoteData.data,
-                          inquiryData: inquiryData.data
-                        }
-                      })
-                      return
-                    }
-                  }
-
-                  // Fallback: navigate to inquiry detail page
-                  if (booking.inquiryId) {
-                    navigate(`/inquiry/${booking.inquiryId}`)
-                  } else {
-                    console.error('No inquiry ID found for booking')
-                  }
-                } catch (error) {
-                  console.error('Error loading booking details:', error)
-                  // Fallback: navigate to inquiry detail
-                  if (booking.inquiryId) {
-                    navigate(`/inquiry/${booking.inquiryId}`)
-                  }
-                }
-              }}
-              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-br from-[#055B75] to-[#034457] text-white text-sm font-semibold rounded-lg hover:shadow-lg hover:shadow-[#055B75]/30 hover:-translate-y-0.5 transition-all"
-            >
-              <FaEye className="w-4 h-4" /> View Booking Details
-            </button>
-          ) : (
-            <button
-              onClick={() => navigate('/booking-confirmation', { state: { bookingData: booking } })}
-              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-br from-[#055B75] to-[#034457] text-white text-sm font-semibold rounded-lg hover:shadow-lg hover:shadow-[#055B75]/30 hover:-translate-y-0.5 transition-all"
-            >
-              <FaEye className="w-4 h-4" /> View Details
-            </button>
-          )}
-          {isFlightBooking && !isDatabaseBooking && (
-            <button
-              // The reference goes in the URL, so a refresh or a shared link
-              // still finds the booking. Router state alone was lost on refresh.
-              onClick={() => {
-                const ref = booking.bookingReference || booking.orderId
-                navigate(ref ? `/manage-booking/${encodeURIComponent(ref)}` : '/manage-booking', { state: { bookingData: booking } })
-              }}
-              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-white text-[#055B75] text-sm font-semibold rounded-lg border-2 border-[#B9D0DC] hover:bg-[#F0FAFC] hover:border-[#055B75] transition-all"
-            >
-              <FaCog className="w-4 h-4" /> Manage Booking
-            </button>
-          )}
-          {isFlightBooking && canDownloadDocument(booking) && tripReference && (
-            <button
-              onClick={() => downloadTrip(tripReference)}
-              disabled={ticketDownload.busy === tripReference}
-              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-white text-[#055B75] text-sm font-semibold rounded-lg border-2 border-[#B9D0DC] hover:bg-[#F0FAFC] hover:border-[#055B75] transition-all disabled:opacity-60"
-            >
-              <FaDownload className="w-4 h-4" />
-              {ticketDownload.busy === tripReference
-                ? 'Preparing your PDF…'
-                : (ticketState(booking) === 'issued' ? 'Download E-Ticket' : 'Download Booking Confirmation')}
-            </button>
-          )}
-          {ticketDownload.failed && ticketDownload.failed === tripReference && (
-            <p role="alert" className="w-full text-sm text-red-700">{ticketDownload.error}</p>
-          )}
-          {isFlightBooking && <CheckInLinks booking={booking} />}
-          {/* Cancel Booking Button — only for non-cancelled upcoming bookings.
-              Not one whose cancel went through and could not be recorded
-              (ticketState 'cancelled'): the customer was told not to try again.
-              Nor while our team is checking with the airline whether the
-              booking went through (isCommitUnknown): the server refuses it. */}
-          {statusUp !== 'CANCELLED' && statusUp !== 'FAILED' && ticketState(booking) !== 'cancelled' && (daysUntilTrip === null || daysUntilTrip >= 0) && !isCommitUnknown(booking) && (
-            <>
-              {showCancelConfirm === booking.id ? (
-                <div className="flex items-center gap-2 flex-wrap">
-                  {(booking.type || '').toLowerCase() === 'flight' && (booking.bookingReference || booking.booking_reference || booking.orderId) && (
-                    <TripCancelQuote reference={booking.bookingReference || booking.booking_reference || booking.orderId} />
-                  )}
-                  <span className="text-sm text-red-600 font-medium">Cancel this booking?</span>
-                  <button
-                    disabled={cancellingBookingId === booking.id}
-                    onClick={async () => {
-                      const ref = booking.bookingReference || booking.booking_reference || booking.orderId
-                      if (!ref) {
-                        setCancelOutcome({ tone: 'error', text: 'This booking has no reference, so it cannot be cancelled here. Please contact support at (877) 538-7380.' })
-                        setShowCancelConfirm(null)
-                        return
-                      }
-                      setCancellingBookingId(booking.id)
-                      try {
-                        const userEmail = user?.email || null
-                        const isFlight = (booking.type || '').toLowerCase() === 'flight'
-                        let result
-                        if (isFlight) {
-                          // The same cancel Manage Booking makes, on the flights host
-                          // that reaches the airline: a minute to answer, and
-                          // plain-language errors instead of a raw response.
-                          result = await ArcPayService.cancelFlightBooking(ref, userEmail, 'Customer request')
-                        } else {
-                          // Non-flight: existing ARC Pay refund + DB status flow
-                          result = await ArcPayService.cancelBooking(ref, userEmail, 'Customer request')
-                        }
-                        if (result.success) {
-                          // What happened to the money, from the cancellation
-                          // record. A refused refund used to read as a plain
-                          // "cancelled successfully": its amount is 0, which is
-                          // falsy, so not even a refund line appeared. Nothing
-                          // is added to it: "the airline cancellation is still
-                          // being processed" went on bookings that never had a
-                          // reservation, and a cancel the airline refused is not
-                          // a success at all.
-                          setCancelOutcome({ tone: 'success', text: cancellationMessage(result) })
-                          // Reload bookings to reflect the cancellation
-                          loadBookings()
-                        } else {
-                          setCancelOutcome({ tone: 'error', text: result.error || result.message || 'Failed to cancel booking. Please try again.' })
-                          // Whatever the refusal, the list is read again: a
-                          // refusal can come after the cancel changed the
-                          // booking. No answer in time: it may have gone
-                          // through. It went through and could not be recorded,
-                          // or the airline refused it after the ticket was
-                          // voided (502, needsReview): the card still said
-                          // Ticketed, printed the void number and offered a
-                          // second cancel. The list shows what the booking
-                          // says now.
-                          loadBookings()
-                        }
-                      } catch (err) {
-                        console.error('Cancel error:', err)
-                        setCancelOutcome({ tone: 'error', text: 'Something went wrong while cancelling. Nothing may have changed - please check the booking again, or contact support at (877) 538-7380.' })
-                      } finally {
-                        setCancellingBookingId(null)
-                        setShowCancelConfirm(null)
-                      }
-                    }}
-                    className="px-3 py-1.5 bg-red-600 text-white text-xs font-semibold rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
-                  >
-                    {cancellingBookingId === booking.id ? 'Cancelling...' : 'Yes, Cancel'}
-                  </button>
-                  <button
-                    onClick={() => setShowCancelConfirm(null)}
-                    className="px-3 py-1.5 bg-gray-100 text-gray-700 text-xs font-semibold rounded-lg hover:bg-gray-200 transition-colors"
-                  >
-                    No
-                  </button>
-                </div>
-              ) : (
-                <button
-                  onClick={() => setShowCancelConfirm(booking.id)}
-                  className="inline-flex items-center justify-center gap-2 px-5 py-2.5 text-red-600 text-sm font-semibold rounded-lg border-2 border-red-200 hover:bg-red-50 hover:border-red-400 transition-all"
-                >
-                  <FaTimesCircle className="w-4 h-4" /> Cancel Booking
-                </button>
-              )}
-            </>
-          )}
-        </div>
-      </div>
-    )
-  }
-
-  // ---- Request card ----
-  const renderRequestCard = (request) => {
-    const getStatusColor = (status) => {
-      switch (status) {
-        case 'pending': return 'bg-amber-50 text-amber-700 border-amber-200'
-        case 'processing': return 'bg-[#F0FAFC] text-[#055B75] border-[#B9D0DC]'
-        case 'quoted': return 'bg-emerald-50 text-emerald-700 border-emerald-200'
-        case 'booked': return 'bg-violet-50 text-violet-700 border-violet-200'
-        case 'cancelled': return 'bg-red-50 text-red-700 border-red-200'
-        case 'expired': return 'bg-gray-50 text-gray-600 border-gray-200'
-        default: return 'bg-gray-50 text-gray-700 border-gray-200'
+  const openDatabaseBooking = async (booking) => {
+    try {
+      if (booking.quoteId && booking.inquiryId) {
+        const token = session?.access_token || '' // cookie session also authenticates
+        const [quoteResponse, inquiryResponse] = await Promise.all([
+          fetch(getApiUrl(`quotes?id=${booking.quoteId}`), {
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            credentials: 'include'
+          }),
+          fetch(getApiUrl(`inquiries?id=${booking.inquiryId}`), {
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            credentials: 'include'
+          })
+        ])
+        const quoteData = await quoteResponse.json()
+        const inquiryData = await inquiryResponse.json()
+        if (quoteData.success && inquiryData.success) {
+          navigate('/quote-detail', { state: { quoteData: quoteData.data, inquiryData: inquiryData.data } })
+          return
+        }
       }
+      if (booking.inquiryId) navigate(`/inquiry/${booking.inquiryId}`)
+    } catch (error) {
+      console.error('Error loading booking details:', error)
+      if (booking.inquiryId) navigate(`/inquiry/${booking.inquiryId}`)
     }
+  }
 
-    const getStatusText = (status) => {
-      switch (status) {
-        case 'pending': return 'Pending Review'
-        case 'processing': return 'Processing'
-        case 'quoted': return 'Quote Sent'
-        case 'booked': return 'Booked'
-        case 'cancelled': return 'Cancelled'
-        case 'expired': return 'Expired'
-        default: return status
+  const openDetails = (booking) => (booking.quoteId || booking.inquiryId
+    ? openDatabaseBooking(booking)
+    : navigate('/booking-confirmation', { state: { bookingData: booking } }))
+
+  // The reference goes in the URL, so a refresh or a shared link still finds
+  // the booking. Router state alone was lost on refresh.
+  const manageTrip = (booking) => {
+    const ref = booking.bookingReference || booking.orderId
+    navigate(ref ? `/manage-booking/${encodeURIComponent(ref)}` : '/manage-booking', { state: { bookingData: booking } })
+  }
+
+  const cancelTrip = async (booking) => {
+    const ref = booking.bookingReference || booking.booking_reference || booking.orderId
+    if (!ref) {
+      setCancelOutcome({ tone: 'error', text: 'This booking has no reference, so it cannot be cancelled here. Please contact support at (877) 538-7380.' })
+      setShowCancelConfirm(null)
+      return
+    }
+    setCancellingBookingId(booking.id)
+    try {
+      const userEmail = user?.email || null
+      const isFlight = (booking.type || '').toLowerCase() === 'flight'
+      // A flight goes through the same cancel Manage Booking makes, on the
+      // flights host that reaches the airline; anything else through the ARC
+      // Pay refund and status flow.
+      const result = isFlight
+        ? await ArcPayService.cancelFlightBooking(ref, userEmail, 'Customer request')
+        : await ArcPayService.cancelBooking(ref, userEmail, 'Customer request')
+      if (result.success) {
+        // What happened to the money, from the cancellation record. A refused
+        // refund used to read as a plain "cancelled successfully": its amount
+        // is 0, which is falsy, so not even a refund line appeared.
+        setCancelOutcome({ tone: 'success', text: cancellationMessage(result) })
+      } else {
+        setCancelOutcome({ tone: 'error', text: result.error || result.message || 'Failed to cancel booking. Please try again.' })
       }
+      // Whatever the answer, the list is read again: a refusal can come after
+      // the cancel changed the booking (no answer in time, or the airline
+      // refused it after the ticket was voided), and the card has to show what
+      // the booking says now rather than offer a second cancel.
+      loadBookings()
+    } catch (err) {
+      console.error('Cancel error:', err)
+      setCancelOutcome({ tone: 'error', text: 'Something went wrong while cancelling. Nothing may have changed - please check the booking again, or contact support at (877) 538-7380.' })
+    } finally {
+      setCancellingBookingId(null)
+      setShowCancelConfirm(null)
     }
+  }
 
-    const activeQuotes = (request.quotes || []).filter(q => q.status === 'sent' || q.status === 'accepted')
+  const ctx = {
+    manage: manageTrip,
+    openDetails,
+    download: downloadTrip,
+    downloadState: ticketDownload,
+    cancel: {
+      confirmFor: showCancelConfirm,
+      busyFor: cancellingBookingId,
+      ask: setShowCancelConfirm,
+      dismiss: () => setShowCancelConfirm(null),
+      run: cancelTrip,
+    },
+    CancelQuote: TripCancelQuote,
+  }
 
-    return (
-      <div key={request.id}
-        className="group bg-white rounded-2xl p-4 sm:p-6 border border-gray-100 shadow-[0_15px_30px_-5px_rgba(5,91,117,0.12)] hover:shadow-[0_20px_40px_-8px_rgba(5,91,117,0.2)] hover:-translate-y-0.5 transition-all duration-200 relative overflow-hidden">
-        <span className="absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b from-[#055B75] to-[#0890BC]" />
+  const isOpen = (booking) => openTrip === keyOf(booking)
+  const toggle = (booking) => setOpenTrip((current) => (current === keyOf(booking) ? null : keyOf(booking)))
 
-        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-6">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-xl bg-[#055B75]/10 text-[#055B75] flex items-center justify-center text-lg flex-shrink-0">
-                <TypeIcon type={request.inquiry_type} />
-              </div>
-              <div className="min-w-0">
-                <h3 className="text-lg font-bold text-gray-900 group-hover:text-[#055B75] transition-colors flex items-center gap-2 flex-wrap">
-                  {getTypeName(request.inquiry_type)} Inquiry
-                  <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full font-medium">
-                    #{request.id.slice(-8)}
-                  </span>
-                </h3>
-                <p className="text-sm text-gray-500 font-medium mt-0.5">
-                  Submitted {new Date(request.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                </p>
-              </div>
-            </div>
-          </div>
+  const showView = (next, open = null) => {
+    setView(next)
+    setOpenTrip(open)
+    window.scrollTo?.({ top: 0, behavior: 'smooth' })
+  }
 
-          <div className="flex flex-col items-start sm:items-end gap-2">
-            <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-full border ${getStatusColor(request.status)}`}>
-              <span className="w-1.5 h-1.5 rounded-full bg-current opacity-70" />
-              {getStatusText(request.status)}
-            </span>
-          </div>
-        </div>
+  const chooseType = (key) => {
+    setTripType(key)
+    setView('overview')
+    setOpenTrip(null)
+  }
 
-        {/* Progress bar */}
-        <div className="mb-6 p-4 bg-[#F1FBFD] rounded-xl border border-[#D1E9F0]">
-          <div className="flex justify-between text-sm font-medium text-gray-700 mb-2">
-            <span className="flex items-center gap-1.5"><FaClock className="w-3.5 h-3.5 text-[#0890BC]" /> Progress</span>
-            <span className="capitalize text-[#055B75] font-semibold">{request.status === 'booked' ? 'Completed' : 'In Progress'}</span>
-          </div>
-          <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
-            <div
-              className={`h-full rounded-full transition-all duration-1000 ease-out ${request.status === 'pending' ? 'bg-gradient-to-r from-amber-400 to-amber-500 w-1/4' :
-                request.status === 'processing' ? 'bg-gradient-to-r from-[#65B3CF] to-[#0890BC] w-1/2' :
-                  request.status === 'quoted' ? 'bg-gradient-to-r from-emerald-400 to-emerald-500 w-3/4' :
-                    request.status === 'booked' ? 'bg-gradient-to-r from-violet-400 to-violet-500 w-full' :
-                      'bg-gradient-to-r from-gray-400 to-gray-500 w-full'
-                }`}
-            ></div>
-          </div>
-          <div className="flex justify-between text-xs text-gray-400 mt-2">
-            <span>Submitted</span>
-            <span>Quoted</span>
-            <span>Booked</span>
-          </div>
-        </div>
-
-        {/* Meta */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
-          <div className="bg-[#F0FAFC] rounded-lg p-3.5 border border-[#E3F1F6]">
-            <Eyebrow className="block mb-1">Last Updated</Eyebrow>
-            <p className="text-sm font-semibold text-gray-900">
-              {new Date(request.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-            </p>
-          </div>
-          <div className="bg-[#F0FAFC] rounded-lg p-3.5 border border-[#E3F1F6]">
-            <Eyebrow className="block mb-1">Priority</Eyebrow>
-            <p className="text-sm font-semibold text-gray-900 capitalize">{request.priority || 'Normal'}</p>
-          </div>
-          {request.expires_at && (
-            <div className="bg-amber-50 rounded-lg p-3.5 border border-amber-200 sm:col-span-2">
-              <Eyebrow className="block mb-1 text-amber-700">Expires</Eyebrow>
-              <p className="text-sm font-semibold text-amber-800">
-                {new Date(request.expires_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-              </p>
-            </div>
-          )}
-        </div>
-
-        {/* Inquiry details */}
-        <div className="mb-6 p-4 bg-[#F1FBFD] rounded-xl border border-[#D1E9F0]">
-          <p className="text-[11px] font-bold uppercase tracking-widest text-[#055B75] mb-3 flex items-center gap-2">
-            <FaInfoCircle className="w-3.5 h-3.5" /> Inquiry Details
-          </p>
-          {request.inquiry_type === 'flight' && (
-            <div className="text-sm text-gray-700 space-y-1">
-              <p><strong className="text-[#055B75]">Route:</strong> {request.flight_origin} → {request.flight_destination}</p>
-              {request.flight_departure_date && <p><strong className="text-[#055B75]">Departure:</strong> {fmtDate(request.flight_departure_date, { month: 'short', day: 'numeric', year: 'numeric' })}</p>}
-              {request.flight_passengers && <p><strong className="text-[#055B75]">Passengers:</strong> {request.flight_passengers}</p>}
-            </div>
-          )}
-          {request.inquiry_type === 'hotel' && (
-            <div className="text-sm text-gray-700 space-y-1">
-              <p><strong className="text-[#055B75]">Destination:</strong> {request.hotel_destination}</p>
-              {request.hotel_checkin_date && <p><strong className="text-[#055B75]">Check-in:</strong> {fmtDate(request.hotel_checkin_date, { month: 'short', day: 'numeric', year: 'numeric' })}</p>}
-              {request.hotel_rooms && <p><strong className="text-[#055B75]">Rooms:</strong> {request.hotel_rooms}</p>}
-            </div>
-          )}
-          {request.inquiry_type === 'cruise' && (
-            <div className="text-sm text-gray-700 space-y-1">
-              <p><strong className="text-[#055B75]">Destination:</strong> {request.cruise_destination}</p>
-              {request.cruise_departure_date && <p><strong className="text-[#055B75]">Departure:</strong> {fmtDate(request.cruise_departure_date, { month: 'short', day: 'numeric', year: 'numeric' })}</p>}
-              {request.cruise_passengers && <p><strong className="text-[#055B75]">Passengers:</strong> {request.cruise_passengers}</p>}
-            </div>
-          )}
-          {request.inquiry_type === 'package' && (
-            <div className="text-sm text-gray-700 space-y-1">
-              <p><strong className="text-[#055B75]">Destination:</strong> {request.package_destination}</p>
-              {request.package_start_date && <p><strong className="text-[#055B75]">Start:</strong> {fmtDate(request.package_start_date, { month: 'short', day: 'numeric', year: 'numeric' })}</p>}
-              {request.package_travelers && <p><strong className="text-[#055B75]">Travelers:</strong> {request.package_travelers}</p>}
-            </div>
-          )}
-          {request.inquiry_type === 'general' && (
-            <div className="text-sm text-gray-700 space-y-1">
-              {request.inquiry_subject && <p><strong className="text-[#055B75]">Subject:</strong> {request.inquiry_subject}</p>}
-              {request.inquiry_message && <p className="truncate"><strong className="text-[#055B75]">Message:</strong> {request.inquiry_message}</p>}
-            </div>
-          )}
-        </div>
-
-        {/* Quotes */}
-        {activeQuotes.length > 0 && (
-          <div className="mb-6 p-4 bg-emerald-50/60 border border-emerald-200 rounded-xl">
-            <p className="text-[11px] font-bold uppercase tracking-widest text-emerald-700 mb-3 flex items-center gap-2">
-              <FaFileInvoiceDollar className="w-3.5 h-3.5" /> {activeQuotes.length} Quote{activeQuotes.length !== 1 ? 's' : ''} Available
-            </p>
-            {activeQuotes.map((quote) => (
-              <div key={quote.id} className="bg-white rounded-lg p-3 mb-2 border border-emerald-200 last:mb-0">
-                <div className="flex justify-between items-start mb-1">
-                  <p className="text-sm font-semibold text-gray-900">Quote #{quote.quote_number}</p>
-                  <p className="text-lg font-bold text-emerald-600">${quote.total_amount} {quote.currency}</p>
-                </div>
-                {quote.expires_at && (
-                  <p className="text-xs text-gray-500 flex items-center gap-1">
-                    <FaClock className="w-3 h-3" /> Expires: {new Date(quote.expires_at).toLocaleDateString()}
-                  </p>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-
-        <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-gray-100">
+  const typeTabs = (
+    <div role="tablist" aria-label="Booking type" className="flex gap-2 overflow-x-auto [scrollbar-width:none] mb-5 -mx-4 px-4 sm:mx-0 sm:px-0">
+      {TYPE_TABS.map(({ key, label, Icon }) => {
+        const active = view !== 'requests' && tripType === key
+        const count = key === 'all' ? bookings.length : bookings.filter((booking) => booking.type === key).length
+        return (
           <button
-            onClick={() => navigate(`/inquiry/${request.id}`)}
-            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-br from-[#055B75] to-[#034457] text-white text-sm font-semibold rounded-lg hover:shadow-lg hover:shadow-[#055B75]/30 hover:-translate-y-0.5 transition-all"
+            key={key}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => chooseType(key)}
+            className={`inline-flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-semibold whitespace-nowrap transition-colors ${focusRing} ${active ? 'bg-[#055B75] border-[#055B75] text-white' : 'bg-white border-[#EFE9DD] text-gray-600 hover:border-[#B9D0DC] hover:text-[#055B75]'}`}
           >
-            <FaEye className="w-4 h-4" /> View Details
+            <Icon className="h-4 w-4" aria-hidden="true" />
+            {label}
+            {count > 0 && <span className={`text-xs rounded-full px-1.5 ${active ? 'bg-white/20' : 'bg-[#F0FAFC] text-[#055B75]'}`}>{count}</span>}
           </button>
-          {activeQuotes.length > 0 && (
-            <button
-              onClick={() => {
-                const sentQuote = activeQuotes[0]
-                navigate('/quote-detail', { state: { quoteData: sentQuote, inquiryData: request } })
-              }}
-              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-br from-emerald-500 to-emerald-600 text-white text-sm font-semibold rounded-lg hover:shadow-lg hover:shadow-emerald-500/30 hover:-translate-y-0.5 transition-all"
-            >
-              <FaFileInvoiceDollar className="w-4 h-4" /> View Quote
-            </button>
-          )}
-        </div>
-      </div>
-    )
-  }
+        )
+      })}
+      <button
+        type="button"
+        role="tab"
+        aria-selected={view === 'requests'}
+        onClick={() => showView('requests')}
+        className={`inline-flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-semibold whitespace-nowrap transition-colors ${focusRing} ${view === 'requests' ? 'bg-[#055B75] border-[#055B75] text-white' : 'bg-white border-[#EFE9DD] text-gray-600 hover:border-[#B9D0DC] hover:text-[#055B75]'}`}
+      >
+        <MessageSquare className="h-4 w-4" aria-hidden="true" />
+        Requests
+        {requests.length > 0 && <span className={`text-xs rounded-full px-1.5 ${view === 'requests' ? 'bg-white/20' : 'bg-[#F0FAFC] text-[#055B75]'}`}>{requests.length}</span>}
+      </button>
+    </div>
+  )
 
-  // ----- Sidebar items config -----
-  const sidebarItems = [
-    { key: "All Bookings", icon: FaClipboardList, count: tabBookings.length },
-    { key: "Flights", icon: FaPlane, count: tabBookings.filter(b => b.type === 'flight').length },
-    { key: "Hotels", icon: FaHotel, count: tabBookings.filter(b => b.type === 'hotel').length },
-    { key: "Cruise", icon: FaShip, count: tabBookings.filter(b => b.type === 'cruise').length },
-    { key: "Packages", icon: FaSuitcaseRolling, count: tabBookings.filter(b => b.type === 'package').length },
-  ]
+  const tripRows = (list) => (
+    <Panel>
+      {list.map((booking) => (
+        <TripRow key={keyOf(booking)} booking={booking} cityNames={cityNames} expanded={isOpen(booking)} onToggle={() => toggle(booking)}>
+          <TripDetails booking={booking} />
+          <div className="px-4 sm:px-5 pb-5"><TripActions booking={booking} ctx={ctx} /></div>
+        </TripRow>
+      ))}
+    </Panel>
+  )
+
+  const openRequest = (request) => navigate(`/inquiry/${request.id}`)
+  const openQuote = (request, quote) => navigate('/quote-detail', { state: { quoteData: quote, inquiryData: request } })
+  const requestRows = (list) => (
+    <Panel>{list.map((request) => <RequestRow key={request.id} request={request} onOpen={openRequest} onQuote={openQuote} />)}</Panel>
+  )
+
+  const nextDays = soonest ? daysUntilDate(travelDateOf(soonest)) : null
+  const nextLine = soonest ? <>Next: <b>{tripTitle(soonest, cityNames)}</b> {untilLabel(nextDays) || ''}</> : null
+
+  const overview = (
+    <>
+      {nextTrip ? (
+        <NextTripCard
+          booking={nextTrip}
+          cityNames={cityNames}
+          expanded={isOpen(nextTrip)}
+          actions={(
+            <TripActions booking={nextTrip} ctx={ctx}>
+              <DetailsToggle expanded={isOpen(nextTrip)} onClick={() => toggle(nextTrip)} />
+            </TripActions>
+          )}
+          details={<TripDetails booking={nextTrip} />}
+        />
+      ) : (
+        <NoTripCard type={tripType} onSearch={(path) => navigate(path)} />
+      )}
+
+      {alsoComing.length > 0 && (
+        <section className="mt-8">
+          <SectionTitle>Also coming up</SectionTitle>
+          {tripRows(alsoComing)}
+        </section>
+      )}
+
+      {tripType === 'all' && requestGroups.open.length > 0 && (
+        <section className="mt-8">
+          <SectionTitle action={{ label: 'All requests', onClick: () => showView('requests') }}>Your requests</SectionTitle>
+          {requestRows(requestGroups.open)}
+        </section>
+      )}
+
+      {trips.past.length > 0 && (
+        <section className="mt-8">
+          <SectionTitle action={{ label: trips.past.length > PAST_ON_OVERVIEW ? `All ${trips.past.length} past trips` : 'Past trips', onClick: () => showView('past') }}>
+            Where you've been
+          </SectionTitle>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+            {placesBeen.map((booking) => (
+              <PastTripCard key={keyOf(booking)} booking={booking} cityNames={cityNames} onOpen={() => showView('past', keyOf(booking))} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      <nav aria-label="More trips" className="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-sm font-semibold">
+        <button type="button" onClick={() => showView('cancelled')} className="inline-flex items-center gap-1.5 text-[#055B75] hover:text-[#034457]">
+          <XCircle className="h-4 w-4" aria-hidden="true" /> Cancelled ({trips.cancelled.length})
+        </button>
+        <button type="button" onClick={() => showView('attention')} className={`inline-flex items-center gap-1.5 ${trips.attention.length ? 'text-amber-700 hover:text-amber-800' : 'text-[#055B75] hover:text-[#034457]'}`}>
+          <AlertTriangle className="h-4 w-4" aria-hidden="true" /> Needs attention ({trips.attention.length})
+        </button>
+        <button type="button" onClick={() => showView('requests')} className="inline-flex items-center gap-1.5 text-[#055B75] hover:text-[#034457]">
+          <MessageSquare className="h-4 w-4" aria-hidden="true" /> Requests ({requests.length})
+        </button>
+      </nav>
+    </>
+  )
+
+  const viewList = view === 'requests' ? [...requestGroups.open, ...requestGroups.closed] : (trips[view] || [])
+  const renderListView = () => (
+    <>
+      <button type="button" onClick={() => showView('overview')} className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#055B75] hover:text-[#034457] mb-3">
+        <ArrowLeft className="h-4 w-4" aria-hidden="true" /> All trips
+      </button>
+      <div className="flex items-center justify-between gap-3 mb-4">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">{VIEW_TITLE[view]}</h2>
+          <p className="text-sm text-gray-500">{viewList.length} {view === 'requests' ? 'request' : 'booking'}{viewList.length === 1 ? '' : 's'}</p>
+        </div>
+        <button type="button" onClick={view === 'requests' ? loadRequests : loadBookings} title="Refresh" aria-label="Refresh" className="p-2 text-gray-400 hover:text-[#055B75] hover:bg-white rounded-lg transition-colors">
+          <RefreshCw className="h-4 w-4" aria-hidden="true" />
+        </button>
+      </div>
+      {view === 'requests' ? (
+        isLoadingRequests && requests.length === 0 ? <Spinner label="Loading requests..." />
+          : viewList.length > 0 ? requestRows(viewList)
+            : <EmptyState icon={MessageSquare} title="No requests yet" description="When you ask our team for a cruise or a custom trip, it shows up here with its quote." />
+      ) : viewList.length > 0 ? tripRows(viewList) : (
+        <EmptyState icon={Plane} title={`No ${VIEW_TITLE[view].toLowerCase()}`} description="Nothing here right now." actionLabel="Back to all trips" onAction={() => showView('overview')} />
+      )}
+    </>
+  )
+
+  let content
+  if (isGuest) {
+    content = <EmptyState icon={Lock} title="Sign in to see your trips" description="Your bookings, e-tickets and check-in are here once you sign in." actionLabel="Sign in" onAction={handleLoginClick} />
+  } else if (authLoading || (isLoadingBookings && bookings.length === 0)) {
+    content = <Spinner label="Loading your trips..." />
+  } else {
+    content = <>{typeTabs}{view === 'overview' ? overview : renderListView()}</>
+  }
 
   return (
-    <div className="min-h-screen flex flex-col font-sans" style={{ background: 'linear-gradient(180deg, #F0FAFC 0%, #E3F1F6 100%)' }}>
+    <div className="min-h-screen flex flex-col font-sans bg-[#F0FAFC]">
       <Navbar />
 
       {isGuest && (
         <div className="bg-amber-50 border-b border-amber-200">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2">
+          <div className="max-w-6xl mx-auto px-4 py-2">
             <p className="text-sm text-amber-800 flex items-center gap-2">
-              <FaExclamationTriangle className="w-4 h-4 flex-shrink-0" />
+              <AlertTriangle className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
               Viewing as guest. Sign in to see your bookings.
             </p>
           </div>
         </div>
       )}
 
-      {/* Hero banner */}
-      <section className="relative overflow-hidden bg-gradient-to-br from-[#034457] via-[#055B75] to-[#0890BC] px-4 py-14 md:py-20 text-center">
-        <div className="absolute inset-0 opacity-10 pointer-events-none"
-          style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, #fff 1px, transparent 0)', backgroundSize: '26px 26px' }} />
-        <div className="relative z-10 max-w-3xl mx-auto">
-          <h1 className="text-3xl md:text-5xl font-bold text-white mb-3 leading-tight tracking-tight">My Trips</h1>
-          <p className="text-base md:text-lg text-white/85 max-w-xl mx-auto leading-relaxed">
-            All your flights, stays, cruises and requests — organized in one place.
-          </p>
-        </div>
-      </section>
+      <TripsBar
+        counts={{ upcoming: allTrips.upcoming.length, past: allTrips.past.length, cancelled: allTrips.cancelled.length }}
+        nextLine={nextLine}
+        onBook={() => navigate('/flights')}
+      />
 
-      {/* Stat strip floating over hero */}
-      <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 -mt-9 relative z-20">
-        <div className="grid grid-cols-3 gap-3 md:gap-4">
-          {[
-            { label: 'Upcoming', value: filterByTab(bookings).length, icon: FaCalendarAlt },
-            { label: 'All Bookings', value: bookings.length, icon: FaClipboardList },
-            { label: 'Requests', value: requests.length, icon: FaCommentDots },
-          ].map((s) => (
-            <div key={s.label} className="bg-white rounded-2xl p-3 md:p-4 border border-gray-100 shadow-[0_15px_30px_-5px_rgba(5,91,117,0.15)] flex items-center gap-3">
-              <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-[#055B75]/10 text-[#055B75] flex items-center justify-center flex-shrink-0">
-                <s.icon className="text-base md:text-lg" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-xl md:text-2xl font-bold text-gray-900 leading-none">{s.value}</p>
-                <p className="text-[11px] md:text-xs font-semibold uppercase tracking-wider text-gray-400 mt-1 truncate">{s.label}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Tab Navigation - Underline Style */}
-      <div className="bg-white/70 backdrop-blur-sm border-b border-gray-200 sticky top-0 z-30 mt-6">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex gap-4 sm:gap-8 overflow-x-auto hide-scrollbar">
-            {["Upcoming", "Past", "Cancelled", "Failed"].map((tab) => (
-              <button
-                key={tab}
-                onClick={() => handleTabChange(tab)}
-                className={`py-4 text-sm font-semibold whitespace-nowrap transition-all border-b-2 -mb-px ${activeTab === tab
-                  ? "text-[#055B75] border-[#055B75]"
-                  : "text-gray-500 border-transparent hover:text-gray-700 hover:border-gray-300"
-                  }`}
-              >
-                {tab}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="flex-grow">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex gap-6">
-            {/* Mobile sidebar backdrop */}
-            {isMobileMenuOpen && (
-              <div
-                className="fixed inset-0 bg-black/40 z-30 lg:hidden"
-                onClick={toggleMobileMenu}
-              />
-            )}
-            {/* Sidebar */}
-            <aside className={`
-            fixed lg:relative inset-y-0 left-0 z-40 w-[85vw] max-w-72 bg-white lg:bg-transparent
-            transform transition-transform duration-300 lg:transform-none
-            ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
-            lg:block flex-shrink-0 shadow-xl lg:shadow-none
-          `}>
-              <div className="h-full lg:h-auto overflow-y-auto lg:overflow-visible p-4 lg:p-0">
-                <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_15px_30px_-5px_rgba(5,91,117,0.12)] p-2 lg:sticky lg:top-36">
-                  <div className="flex items-center justify-between mb-2 lg:hidden px-3 pt-2">
-                    <h2 className="font-semibold text-gray-900">Categories</h2>
-                    <button onClick={toggleMobileMenu} className="p-1 hover:bg-gray-100 rounded">
-                      <FaTimesCircle className="w-5 h-5 text-gray-400" />
-                    </button>
-                  </div>
-
-                  <p className="hidden lg:block text-[11px] font-bold uppercase tracking-widest text-gray-400 px-3 pt-3 pb-1">Bookings</p>
-                  <nav className="space-y-0.5">
-                    {sidebarItems.map((item) => {
-                      const active = activeSidebarItem === item.key
-                      return (
-                        <button
-                          key={item.key}
-                          onClick={() => handleSidebarItemChange(item.key)}
-                          className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-left transition-colors ${active
-                            ? "bg-gradient-to-r from-[#055B75]/10 to-[#034457]/10 text-[#055B75] font-semibold shadow-[inset_3px_0_0_#055B75]"
-                            : "text-gray-600 hover:bg-gray-50 hover:text-gray-900 font-medium"
-                            }`}
-                        >
-                          <span className="flex items-center gap-3">
-                            <span className={`text-base ${active ? 'text-[#055B75]' : 'text-gray-400'}`}><item.icon /></span>
-                            <span className="text-sm">{item.key}</span>
-                          </span>
-                          {item.count > 0 && (
-                            <span className={`text-xs px-2 py-0.5 rounded-full ${active
-                              ? "bg-[#055B75] text-white"
-                              : "bg-gray-100 text-gray-600"
-                              }`}>
-                              {item.count}
-                            </span>
-                          )}
-                        </button>
-                      )
-                    })}
-
-                    <div className="border-t border-gray-100 my-2"></div>
-
-                    <button
-                      onClick={() => handleSidebarItemChange("Requests")}
-                      className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-left transition-colors ${activeSidebarItem === "Requests"
-                        ? "bg-gradient-to-r from-[#055B75]/10 to-[#034457]/10 text-[#055B75] font-semibold shadow-[inset_3px_0_0_#055B75]"
-                        : "text-gray-600 hover:bg-gray-50 hover:text-gray-900 font-medium"
-                        }`}
-                    >
-                      <span className="flex items-center gap-3">
-                        <span className={`text-base ${activeSidebarItem === "Requests" ? 'text-[#055B75]' : 'text-gray-400'}`}><FaCommentDots /></span>
-                        <span className="text-sm">My Requests</span>
-                      </span>
-                      {requests.length > 0 && (
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${activeSidebarItem === "Requests"
-                          ? "bg-[#055B75] text-white"
-                          : "bg-gray-100 text-gray-600"
-                          }`}>
-                          {requests.length}
-                        </span>
-                      )}
-                    </button>
-                  </nav>
-
-                  {/* Membership card */}
-                  <div className="border-t border-gray-100 my-2"></div>
-                  <button
-                    onClick={() => navigate('/membership')}
-                    className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-left transition-colors bg-gradient-to-br from-amber-50 to-orange-50 hover:from-amber-100 hover:to-orange-100 border border-amber-200"
-                  >
-                    <span className="w-9 h-9 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 text-white flex items-center justify-center flex-shrink-0">
-                      <FaStar className="text-sm" />
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block text-sm font-semibold text-amber-800">Premium Membership</span>
-                      <span className="block text-xs text-amber-600">Unlock exclusive perks</span>
-                    </span>
-                  </button>
-                </div>
-              </div>
-            </aside>
-
-            {/* Overlay for mobile */}
-            {isMobileMenuOpen && (
-              <div
-                className="fixed inset-0 bg-black/50 z-30 lg:hidden"
-                onClick={toggleMobileMenu}
-              />
-            )}
-
-            {/* Main Content */}
-            <main className="flex-1 min-w-0">
-              {/* Mobile sidebar toggle button */}
-              <button
-                onClick={toggleMobileMenu}
-                className="lg:hidden mb-4 flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 rounded-xl shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-              >
-                <FaClipboardList className="w-4 h-4 text-[#055B75]" />
-                Categories
-              </button>
-
-              {activeSidebarItem === "Requests" ? (
-                /* Requests Section */
-                isAuthenticated ? (
-                  isLoadingRequests ? (
-                    <Spinner label="Loading requests..." />
-                  ) : filteredRequests.length > 0 ? (
-                    <div className="space-y-4">
-                      {/* Header */}
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h2 className="text-lg font-semibold text-gray-900">{activeTab} Requests</h2>
-                          <p className="text-sm text-gray-500">{filteredRequests.length} request{filteredRequests.length !== 1 ? 's' : ''}</p>
-                        </div>
-                        <button
-                          onClick={loadRequests}
-                          className="p-2 text-gray-400 hover:text-[#055B75] hover:bg-[#F0FAFC] rounded-lg transition-colors"
-                          title="Refresh"
-                        >
-                          <FaSyncAlt className="w-4 h-4" />
-                        </button>
-                      </div>
-
-                      {/* Request Cards */}
-                      <div className="grid gap-4">
-                        {filteredRequests.map(renderRequestCard)}
-                      </div>
-                    </div>
-                  ) : (
-                    <EmptyState
-                      icon={<FaCommentDots />}
-                      title={`No ${activeTab} Requests`}
-                      description="When you submit a travel inquiry, it will appear here."
-                      actionLabel="Submit New Request"
-                      onAction={() => navigate('/request')}
-                    />
-                  )
-                ) : (
-                  <EmptyState
-                    icon={<FaLock />}
-                    title="Login Required"
-                    description="Please sign in to view your travel requests."
-                    actionLabel="Sign In"
-                    onAction={handleLoginClick}
-                  />
-                )
-              ) : (
-                /* Bookings Section */
-                isLoadingBookings ? (
-                  <Spinner label="Loading bookings..." />
-                ) : filteredBookings.length > 0 ? (
-                  <div className="space-y-4">
-                    {/* Header */}
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h2 className="text-lg font-semibold text-gray-900">
-                          {activeTab} {activeSidebarItem === "All Bookings" ? "Bookings" : activeSidebarItem}
-                        </h2>
-                        <p className="text-sm text-gray-500">{filteredBookings.length} booking{filteredBookings.length !== 1 ? 's' : ''}</p>
-                      </div>
-                      <button
-                        onClick={loadBookings}
-                        className="p-2 text-gray-400 hover:text-[#055B75] hover:bg-[#F0FAFC] rounded-lg transition-colors"
-                        title="Refresh"
-                      >
-                        <FaSyncAlt className="w-4 h-4" />
-                      </button>
-                    </div>
-
-                    {/* Booking Cards */}
-                    <div className="grid gap-4">
-                      {filteredBookings.map(renderBookingCard)}
-                    </div>
-                  </div>
-                ) : (
-                  <EmptyState
-                    icon={isGuest ? <FaLock /> : <FaPlane />}
-                    title={isGuest ? "Sign In to View Bookings" : `No ${activeTab} Bookings`}
-                    description={isGuest
-                      ? "Sign in to view your trips and bookings."
-                      : "When you book a trip, it will appear here."
-                    }
-                    actionLabel={isGuest ? "Sign In" : "Book a Trip"}
-                    onAction={isGuest ? handleLoginClick : () => navigate('/')}
-                  />
-                )
-              )}
-            </main>
-          </div>
-        </div>
-      </div>
+      <main className="flex-grow">
+        <div className="max-w-6xl mx-auto w-full px-4 pt-6 pb-14">{content}</div>
+      </main>
 
       {cancelOutcome && (
         <CancelOutcomeDialog outcome={cancelOutcome} onClose={() => setCancelOutcome(null)} />
       )}
       <Footer />
 
-      {/* Login Popup */}
       {showLoginPopup && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-[0_24px_48px_-12px_rgba(5,91,117,0.4)]">
             <div className="text-center">
               <div className="w-16 h-16 bg-[#055B75]/10 rounded-full flex items-center justify-center mx-auto mb-4 text-[#055B75]">
-                <FaShieldAlt className="w-8 h-8" />
+                <ShieldCheck className="w-8 h-8" aria-hidden="true" />
               </div>
               <h2 className="text-xl font-bold text-gray-900 mb-2">Sign In Required</h2>
               <p className="text-gray-600 text-sm mb-6">
@@ -1689,13 +843,13 @@ export default function TravelDashboard() {
               <div className="space-y-3">
                 <button
                   onClick={handleLoginClick}
-                  className="w-full py-3 bg-gradient-to-br from-[#055B75] to-[#034457] text-white font-semibold rounded-lg hover:shadow-lg transition-all"
+                  className="w-full py-3 bg-[#055B75] hover:bg-[#034457] text-white font-semibold rounded-full transition-colors"
                 >
                   Sign In
                 </button>
                 <button
-                  onClick={closeLoginPopup}
-                  className="w-full py-3 text-gray-600 font-semibold hover:bg-gray-100 rounded-lg transition-colors"
+                  onClick={() => setShowLoginPopup(false)}
+                  className="w-full py-3 text-gray-600 font-semibold hover:bg-gray-100 rounded-full transition-colors"
                 >
                   Continue as Guest
                 </button>
@@ -1704,16 +858,6 @@ export default function TravelDashboard() {
           </div>
         </div>
       )}
-
-      <style>{`
-        .hide-scrollbar {
-          -ms-overflow-style: none;
-          scrollbar-width: none;
-        }
-        .hide-scrollbar::-webkit-scrollbar {
-          display: none;
-        }
-      `}</style>
     </div>
   )
 }

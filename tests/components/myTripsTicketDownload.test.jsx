@@ -42,8 +42,8 @@ describe('the e-ticket in My Trips', () => {
     downloadTicketPdf.mockResolvedValue(undefined);
     showTrips([trip()]);
 
-    const card = (await screen.findByText('#FLTQ1')).closest('.group');
-    fireEvent.click(within(card).getByRole('button', { name: /Download E-Ticket/ }));
+    const card = await screen.findByTestId('trip-FLTQ1');
+    fireEvent.click(within(card).getByRole('button', { name: /download e-ticket/i }));
 
     await waitFor(() => expect(downloadTicketPdf).toHaveBeenCalledWith('FLTQ1', expect.anything()));
   });
@@ -51,7 +51,7 @@ describe('the e-ticket in My Trips', () => {
   it('is not offered for a held seat whose payment went back', async () => {
     showTrips([trip({ status: 'pending_ticketing', tickets: [], gds: { ticketed: false }, payment_status: 'refunded', paymentStatus: 'refunded' })]);
 
-    const card = (await screen.findByText('#FLTQ1')).closest('.group');
-    expect(within(card).queryByRole('button', { name: /Download/ })).toBeNull();
+    const card = await screen.findByTestId('trip-FLTQ1');
+    expect(within(card).queryByRole('button', { name: /download/i })).toBeNull();
   });
 });

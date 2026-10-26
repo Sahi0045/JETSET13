@@ -105,7 +105,7 @@ describe('the check-in button on My Trips', () => {
       : reply(200, { success: true, data: [] }))));
     render(<MemoryRouter initialEntries={['/my-trips']}><MyTrips /></MemoryRouter>);
 
-    const card = within((await screen.findByText('#FLTQ1')).closest('.group'));
+    const card = within(await screen.findByTestId('trip-FLTQ1'));
     expect(card.getByRole('link', { name: /Check in with United/ }).getAttribute('href')).toBe('https://www.united.com/en/us/checkin');
   });
 });
