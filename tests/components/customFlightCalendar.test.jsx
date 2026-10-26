@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import CustomFlightCalendar from '../../frontend/src/Pages/Common/flights/CustomFlightCalendar.jsx';
-import { stripDates } from '../../frontend/src/Pages/Common/flights/searchResults.js';
+import FlightFareCalendar from '../../frontend/src/Pages/Common/flights/FlightFareCalendar.jsx';
 import { formatDateToISO } from '../../frontend/src/utils/dateUtils.js';
 
 /**
@@ -52,15 +52,17 @@ describe('CustomFlightCalendar', () => {
     renderCalendar({ selectedDate: selected, adults: 2, children: 1, travelClass: 'BUSINESS' });
 
     await waitFor(() => expect(screen.getByTestId('calendar-fare').textContent).toBe('$82.30'));
-    expect(JSON.parse(datePriceCalls()[0][1].body)).toEqual({
-      from: 'DEL', to: 'BOM', dates: stripDates(selected), adults: 2, children: 1, infants: 0, travelClass: 'BUSINESS',
+    const first = JSON.parse(datePriceCalls()[0][1].body);
+    expect(first).toEqual({
+      from: 'DEL', to: 'BOM', dates: expect.arrayContaining([selected]), adults: 2, children: 1, infants: 0, travelClass: 'BUSINESS',
     });
+    expect(first.dates.length).toBeLessThanOrEqual(7);
   });
 
   it('shows no price at all when no fare is known', async () => {
     const { container } = renderCalendar();
 
-    await waitFor(() => expect(datePriceCalls()).toHaveLength(1));
+    await waitFor(() => expect(datePriceCalls().length).toBeGreaterThan(0));
     await waitFor(() => expect(container.querySelector('.animate-spin')).toBeNull());
 
     expect(screen.queryAllByTestId('calendar-fare')).toHaveLength(0);
@@ -72,7 +74,7 @@ describe('CustomFlightCalendar', () => {
     datePrices = () => Promise.reject(new TypeError('Failed to fetch'));
     const { container } = renderCalendar();
 
-    await waitFor(() => expect(datePriceCalls()).toHaveLength(1));
+    await waitFor(() => expect(datePriceCalls().length).toBeGreaterThan(0));
     await waitFor(() => expect(container.querySelector('.animate-spin')).toBeNull());
     expect(screen.queryAllByTestId('calendar-fare')).toHaveLength(0);
   });
@@ -150,6 +152,98 @@ describe('CustomFlightCalendar', () => {
     expect(source).not.toMatch(/₹\{/);
     expect(source).not.toMatch(/getCheapestFlightDates/);
     expect(source).not.toMatch(/interpDate/);
+  });
+});
+
+/**
+ * It priced only the seven days around the chosen date. Opened before a date
+ * was chosen - the usual way - that was today to three days on, and every
+ * other day of both months stayed blank.
+ */
+describe('pricing every day it shows', () => {
+  const monthOf = (offset) => {
+    const date = new Date();
+    date.setDate(1);
+    date.setMonth(date.getMonth() + offset);
+    return date;
+  };
+  const daysOf = (month, from = '') => {
+    const last = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
+    return Array.from({ length: last }, (_, i) => formatDateToISO(new Date(month.getFullYear(), month.getMonth(), i + 1)))
+      .filter((date) => date >= from);
+  };
+  const priceFor = (date) => 100 + Number(date.slice(-2));
+  const requested = () => datePriceCalls().map(([, init]) => JSON.parse(init.body).dates);
+  const answerEveryDate = () => {
+    datePrices = (url, init) => {
+      const { dates } = JSON.parse(init.body);
+      return respond({ success: true, dateWisePrices: Object.fromEntries(dates.map((date) => [date, priceFor(date)])), currency: 'USD' });
+    };
+  };
+  const cellText = (container, date) => container.querySelector(`[data-date="${date}"]`).textContent;
+
+  beforeEach(() => {
+    globalThis.fetch = vi.fn((url, init) => (String(url).includes('/flights/date-prices') ? datePrices(url, init) : respond({})));
+  });
+
+  it('prices every day of both months, before a date is chosen', async () => {
+    answerEveryDate();
+    const { container } = renderCalendar({ selectedDate: '' });
+    const shown = [...daysOf(monthOf(0), inDays(0)), ...daysOf(monthOf(1))];
+
+    await waitFor(() => {
+      for (const date of shown) expect(cellText(container, date)).toContain(String(priceFor(date)));
+    });
+  });
+
+  it('asks a week at a time, so the server prices each day it is asked for', async () => {
+    answerEveryDate();
+    const { container } = renderCalendar({ selectedDate: '' });
+
+    await waitFor(() => expect(container.querySelector('.animate-spin')).toBeNull());
+    expect(requested().flat().sort()).toEqual([...daysOf(monthOf(0), inDays(0)), ...daysOf(monthOf(1))]);
+    for (const dates of requested()) expect(dates.length).toBeLessThanOrEqual(7);
+  });
+
+  it("asks for the same weeks as the results page's fare calendar, so one fills the other's cache", async () => {
+    answerEveryDate();
+    const picker = renderCalendar({ selectedDate: '' });
+    await waitFor(() => expect(picker.container.querySelector('.animate-spin')).toBeNull());
+    const nextMonth = daysOf(monthOf(1));
+    const pickerWeeks = requested().filter((dates) => nextMonth.includes(dates[0]));
+    picker.unmount();
+    fetch.mockClear();
+
+    const results = render(
+      <FlightFareCalendar searchParams={{ from: 'DEL', to: 'BOM', adults: 1 }} initialDate={nextMonth[9]} selectedDate={nextMonth[9]} onSelectDate={() => {}} onClose={() => {}} />,
+    );
+    await waitFor(() => expect(results.container.querySelector('.animate-spin')).toBeNull());
+
+    expect(requested()).toEqual(pickerWeeks);
+  });
+
+  it('keeps the fares it has when the month changes, and asks only for the new month', async () => {
+    answerEveryDate();
+    const { container } = renderCalendar({ selectedDate: '' });
+    await waitFor(() => expect(container.querySelector('.animate-spin')).toBeNull());
+    fetch.mockClear();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next month' }));
+
+    const comingMonth = daysOf(monthOf(2));
+    await waitFor(() => expect(cellText(container, comingMonth.at(-1))).toContain(String(priceFor(comingMonth.at(-1)))));
+    expect(requested().flat().sort()).toEqual(comingMonth);
+    const nextMonth = daysOf(monthOf(1));
+    expect(cellText(container, nextMonth[0])).toContain(String(priceFor(nextMonth[0])));
+  });
+
+  it('asks for the chosen week first', async () => {
+    answerEveryDate();
+    const chosen = daysOf(monthOf(1))[20];
+    renderCalendar({ selectedDate: chosen });
+
+    await waitFor(() => expect(requested().length).toBeGreaterThan(0));
+    expect(requested()[0]).toContain(chosen);
   });
 });
 

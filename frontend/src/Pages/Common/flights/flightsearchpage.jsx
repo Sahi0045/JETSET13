@@ -825,6 +825,16 @@ function FlightSearchPage() {
     setCurrentPage(1);
   }, [flights, filters, sortOrder]);
 
+  const fareCalendarKnownPrices = useMemo(() => {
+    const known = Object.fromEntries(dateRange
+      .filter((day) => Number(day.price) > 0)
+      .map((day) => [day.isoDate, Number(day.price)]));
+    const searched = searchParams?.departDate;
+    const cheapest = flights.reduce((min, flight) => Math.min(min, Number(flight.price?.amount) || Infinity), Infinity);
+    if (searched && Number.isFinite(cheapest)) known[searched] = Math.min(known[searched] ?? Infinity, cheapest);
+    return known;
+  }, [dateRange, flights, searchParams?.departDate]);
+
   // Price distribution across current results — powers the per-card deal badge
   const priceStats = useMemo(() => {
     const ps = filteredFlights
@@ -1383,6 +1393,7 @@ function FlightSearchPage() {
           searchParams={searchParams}
           initialDate={dateRange.find(d => d.selected)?.isoDate || searchParams.departDate}
           selectedDate={dateRange.find(d => d.selected)?.isoDate || searchParams.departDate}
+          knownPrices={fareCalendarKnownPrices}
           onSelectDate={(isoDate) => handleDateSelect({ isoDate, isPast: false })}
           onClose={() => setShowFareCalendar(false)}
         />

@@ -9,6 +9,7 @@ import { computeBounds, formatMinutes, legMinutes, maxStops, recommendScore, pri
 
 const OTHER_SORTS = [
   { value: 'duration', label: 'Fastest' },
+  { value: 'price', label: 'Price – Low to High' },
   { value: '-price', label: 'Price – High to Low' },
   { value: 'departure', label: 'Departure – Earliest' },
   { value: 'arrival', label: 'Arrival – Earliest' },

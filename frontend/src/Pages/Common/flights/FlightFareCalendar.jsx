@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { X, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import Price from '../../../Components/Price';
-import apiConfig from '@/config/api';
 import { getSafeDate } from '../../../utils/dateUtils';
 import { moveDayFocus } from './calendarKeys';
+import { fareWeeks, monthDatesFrom, priceFareWeeks } from './fareWeeks';
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -22,15 +22,18 @@ const extractCode = (str) => {
   return str;
 };
 
-function FlightFareCalendar({ searchParams = {}, initialDate, selectedDate, onSelectDate, onClose }) {
+function FlightFareCalendar({ searchParams = {}, initialDate, selectedDate, knownPrices, onSelectDate, onClose }) {
   // A local date: new Date('YYYY-MM-DD') is UTC midnight, the day before west
   // of UTC, so a search on the 1st opened on the month before.
   const start = initialDate ? getSafeDate(initialDate) : new Date();
   const [viewYear, setViewYear] = useState(start.getFullYear());
   const [viewMonth, setViewMonth] = useState(start.getMonth());
   const [prices, setPrices] = useState({});
-  const [lowestPrice, setLowestPrice] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [pending, setPending] = useState(() => new Set());
+  const lowestPrice = useMemo(() => {
+    const amounts = Object.values(prices);
+    return amounts.length > 0 ? Math.min(...amounts) : null;
+  }, [prices]);
 
   const today = todayISO();
 
@@ -40,12 +43,11 @@ function FlightFareCalendar({ searchParams = {}, initialDate, selectedDate, onSe
     const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
     const cells = [];
     for (let i = 0; i < firstDay; i++) cells.push(null);
-    const monthDates = [];
     for (let d = 1; d <= daysInMonth; d++) {
       const dateStr = iso(viewYear, viewMonth, d);
       cells.push({ day: d, isoDate: dateStr, isPast: dateStr < today });
-      if (dateStr >= today) monthDates.push(dateStr);
     }
+    const monthDates = monthDatesFrom(viewYear, viewMonth, today);
     while (cells.length % 7 !== 0) cells.push(null);
     const weeks = [];
     for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
@@ -53,42 +55,38 @@ function FlightFareCalendar({ searchParams = {}, initialDate, selectedDate, onSe
   }, [viewYear, viewMonth, today]);
 
   useEffect(() => {
-    let cancelled = false;
     const controller = new AbortController();
     const fromCode = searchParams.fromCode || extractCode(searchParams.from);
     const toCode = searchParams.toCode || extractCode(searchParams.to);
-    if (!fromCode || !toCode || monthDates.length === 0) { setLoading(false); return; }
+    const known = Object.fromEntries(Object.entries(knownPrices || {})
+      .filter(([date, amount]) => monthDates.includes(date) && Number(amount) > 0));
+    setPrices(known);
+    if (!fromCode || !toCode || monthDates.length === 0) { setPending(new Set()); return undefined; }
 
-    (async () => {
-      setLoading(true);
-      try {
-        const res = await fetch(apiConfig.endpoints.flights.datePrices, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            from: fromCode,
-            to: toCode,
-            dates: monthDates,
-            adults: parseInt(searchParams.adults) || parseInt(searchParams.travelers) || 1,
-            children: parseInt(searchParams.children) || 0,
-            infants: parseInt(searchParams.infants) || 0,
-            travelClass: searchParams.travelClass || 'ECONOMY',
-          }),
-          signal: controller.signal,
+    setPending(new Set(monthDates.filter((date) => !(date in known))));
+    priceFareWeeks({
+      weeks: fareWeeks(monthDates),
+      search: {
+        from: fromCode,
+        to: toCode,
+        adults: parseInt(searchParams.adults) || parseInt(searchParams.travelers) || 1,
+        children: parseInt(searchParams.children) || 0,
+        infants: parseInt(searchParams.infants) || 0,
+        travelClass: searchParams.travelClass || 'ECONOMY',
+      },
+      signal: controller.signal,
+      onWeek: (dates, found) => {
+        setPrices((current) => ({ ...current, ...found }));
+        setPending((current) => {
+          const next = new Set(current);
+          dates.forEach((date) => next.delete(date));
+          return next;
         });
-        const data = await res.json();
-        if (cancelled) return;
-        setPrices(data.dateWisePrices || {});
-        setLowestPrice(data.lowestPrice ?? null);
-      } catch (e) {
-        if (!cancelled && e.name !== 'AbortError') { setPrices({}); setLowestPrice(null); }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
+      },
+    });
 
-    return () => { cancelled = true; controller.abort(); };
-  }, [viewYear, viewMonth, monthDates, searchParams]);
+    return () => controller.abort();
+  }, [viewYear, viewMonth, monthDates, searchParams, knownPrices]);
 
   const goMonth = (delta) => {
     let m = viewMonth + delta;
@@ -143,11 +141,6 @@ function FlightFareCalendar({ searchParams = {}, initialDate, selectedDate, onSe
 
         {/* Grid */}
         <div className="px-3 sm:px-5 pb-5 overflow-y-auto relative">
-          {loading && (
-            <div className="absolute inset-0 bg-white/70 flex items-center justify-center z-10">
-              <Loader2 className="h-6 w-6 animate-spin text-[#055B75]" />
-            </div>
-          )}
           <div className="grid grid-cols-7 gap-1 mb-1">
             {WEEKDAYS.map((w) => (
               <div key={w} className="text-center text-[11px] font-semibold text-gray-400 py-1">{w}</div>
@@ -157,6 +150,7 @@ function FlightFareCalendar({ searchParams = {}, initialDate, selectedDate, onSe
             {weeks.flat().map((cell, i) => {
               if (!cell) return <div key={i} />;
               const price = prices[cell.isoDate];
+              const isPending = price == null && pending.has(cell.isoDate);
               const isSelected = cell.isoDate === selectedDate;
               const isLowest = price != null && lowestPrice != null && price === lowestPrice;
               return (
@@ -182,9 +176,11 @@ function FlightFareCalendar({ searchParams = {}, initialDate, selectedDate, onSe
                   <span className="sr-only">{getSafeDate(cell.isoDate).toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
                   <span aria-hidden="true" className={`text-sm font-semibold ${isSelected ? 'text-white' : 'text-gray-700'}`}>{cell.day}</span>
                   {price != null ? (
-                    <span className={`text-[10px] font-medium ${isSelected ? 'text-blue-100' : isLowest ? 'text-emerald-600' : 'text-gray-500'}`}>
+                    <span className={`text-[10px] font-medium ${isSelected ? 'text-white/80' : isLowest ? 'text-emerald-600' : 'text-gray-500'}`}>
                       <Price amount={price} />
                     </span>
+                  ) : isPending ? (
+                    <Loader2 aria-hidden="true" className={`h-3 w-3 animate-spin ${isSelected ? 'text-white' : 'text-[#65B3CF]'}`} />
                   ) : (
                     <span className="text-[10px] text-gray-300">—</span>
                   )}

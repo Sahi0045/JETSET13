@@ -6,8 +6,8 @@ import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react"
 import apiConfig from '@/config/api'
 import Price from '../../../Components/Price'
 import { getTodayDate } from '../../../utils/dateUtils'
-import { stripDates } from './searchResults'
 import { moveDayFocus } from './calendarKeys'
+import { fareWeeks, monthDatesFrom, priceFareWeeks } from './fareWeeks'
 
 /**
  * The search form's date picker.
@@ -19,11 +19,11 @@ import { moveDayFocus } from './calendarKeys'
  * hard-coded "₹". Real prices almost never arrived anyway, because it called
  * /cheapest-dates without the departure date the provider needs.
  *
- * It now asks /date-prices - what the results page's date strip uses - for the
- * seven days around the chosen date, for the passengers and cabin being
- * searched, and shows each fare through <Price> in the currency it came in.
- * Asking for the strip's exact dates also means the results page finds those
- * fares already cached. A day with no fare shows no price.
+ * It asks /date-prices for every day of the months on screen, a week at a
+ * time and the chosen week first, for the passengers and cabin being searched,
+ * and shows each fare through <Price> in the currency it came in. The weeks
+ * are the results page's fare calendar's (fareWeeks.js), so each fills the
+ * other's cache. A day with no fare shows no price.
  *
  * `showPrices` is off for the return date: these are one-way fares from the
  * origin, and printing them on return days would price the wrong journey.
@@ -44,7 +44,8 @@ export default function CustomFlightCalendar({
     const [currentMonth, setCurrentMonth] = useState(() => (minDate instanceof Date && minDate > new Date() ? minDate : new Date()))
     const [prices, setPrices] = useState({})
     const [currency, setCurrency] = useState('USD')
-    const [loading, setLoading] = useState(false)
+    const [pending, setPending] = useState(() => new Set())
+    const priced = useRef({ search: null, dates: new Set() })
 
     // Draggable state
     const [position, setPosition] = useState({ x: 0, y: 0 })
@@ -92,59 +93,57 @@ export default function CustomFlightCalendar({
         return values.length >= 2 ? Math.min(...values) : null
     }, [prices])
 
+    const search = showPrices && originCode && destinationCode
+        ? JSON.stringify({
+            from: originCode,
+            to: destinationCode,
+            adults: Number(adults) || 1,
+            children: Number(children) || 0,
+            infants: Number(infants) || 0,
+            travelClass: travelClass || 'ECONOMY',
+        })
+        : null
+    const shownMonth = format(currentMonth, 'yyyy-MM')
+    const firstPriced = [today, format(minDate, 'yyyy-MM-dd')].sort().at(-1)
+
     useEffect(() => {
-        if (!showPrices || !originCode || !destinationCode) {
+        if (!search) {
             setPrices({})
+            setPending(new Set())
             return undefined
         }
+        if (priced.current.search !== search) {
+            priced.current = { search, dates: new Set() }
+            setPrices({})
+        }
+
+        const [year, month] = shownMonth.split('-').map(Number)
+        const weeks = [new Date(year, month - 1, 1), new Date(year, month, 1)]
+            .flatMap((first) => fareWeeks(monthDatesFrom(first.getFullYear(), first.getMonth(), firstPriced)))
+            .filter((dates) => dates.some((date) => !priced.current.dates.has(date)))
+        const chosenWeek = weeks.findIndex((dates) => dates.includes(centerDate))
+        if (chosenWeek > 0) weeks.unshift(...weeks.splice(chosenWeek, 1))
+        setPending(new Set(weeks.flat()))
 
         const controller = new AbortController()
-        let cancelled = false
-
-        const fetchPrices = async () => {
-            setLoading(true)
-            try {
-                const response = await fetch(apiConfig.endpoints.flights.datePrices, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        from: originCode,
-                        to: destinationCode,
-                        dates: stripDates(centerDate),
-                        adults: Number(adults) || 1,
-                        children: Number(children) || 0,
-                        infants: Number(infants) || 0,
-                        travelClass: travelClass || 'ECONOMY',
-                    }),
-                    signal: controller.signal,
+        priceFareWeeks({
+            weeks,
+            search: JSON.parse(search),
+            signal: controller.signal,
+            onWeek: (dates, found, answeredIn) => {
+                dates.forEach((date) => priced.current.dates.add(date))
+                setPrices((current) => ({ ...current, ...found }))
+                if (answeredIn) setCurrency(answeredIn)
+                setPending((current) => {
+                    const next = new Set(current)
+                    dates.forEach((date) => next.delete(date))
+                    return next
                 })
-                const data = await response.json()
-                if (cancelled) return
+            },
+        })
 
-                const real = {}
-                if (data?.success && data.dateWisePrices) {
-                    for (const [date, value] of Object.entries(data.dateWisePrices)) {
-                        const amount = Number(value)
-                        if (Number.isFinite(amount) && amount > 0) real[date] = amount
-                    }
-                }
-                setPrices(real)
-                setCurrency(data?.currency || 'USD')
-            } catch (err) {
-                if (cancelled || err.name === 'AbortError') return
-                setPrices({})
-            } finally {
-                if (!cancelled) setLoading(false)
-            }
-        }
-
-        fetchPrices()
-
-        return () => {
-            cancelled = true
-            controller.abort()
-        }
-    }, [showPrices, originCode, destinationCode, centerDate, adults, children, infants, travelClass])
+        return () => controller.abort()
+    }, [search, shownMonth, firstPriced, centerDate])
 
     // Drag handlers
     const handleMouseDown = (e) => {
@@ -204,6 +203,7 @@ export default function CustomFlightCalendar({
             // calendar highlighted the day before the one chosen.
             const isSelected = dateKey === selectedDate;
             const isLowest = lowestPrice !== null && price === lowestPrice;
+            const isPending = !isPast && price === undefined && pending.has(dateKey);
 
             // A button: Enter and Space choose it, the arrow keys move between
             // days. It was a div only a mouse could press.
@@ -231,6 +231,9 @@ export default function CustomFlightCalendar({
                         <span data-testid="calendar-fare" className={`text-[8px] leading-none mt-0.5 ${isSelected ? 'text-white/80' : (isLowest ? 'text-green-600 font-bold' : 'text-gray-400')}`}>
                             <Price amount={{ amount: price, currency }} />
                         </span>
+                    )}
+                    {isPending && (
+                        <Loader2 aria-hidden="true" className={`h-2.5 w-2.5 mt-0.5 animate-spin ${isSelected ? 'text-white' : 'text-[#65B3CF]'}`} />
                     )}
                 </button>
             );
@@ -294,7 +297,7 @@ export default function CustomFlightCalendar({
                     <ChevronLeft className="h-4 w-4 text-[#055B75]" />
                 </button>
                 <div className="flex items-center gap-3">
-                    {loading && <Loader2 className="h-4 w-4 animate-spin text-[#055B75]" />}
+                    {pending.size > 0 && <Loader2 className="h-4 w-4 animate-spin text-[#055B75]" />}
                     <span className="text-[10px] font-bold text-[#055B75] uppercase tracking-widest bg-white px-3 py-1 rounded-full border border-gray-200 shadow-sm whitespace-nowrap">
                         <span className="hidden sm:inline">Drag to Move • </span>Select Date
                     </span>
