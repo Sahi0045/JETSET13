@@ -365,7 +365,7 @@ describe('opening near the bottom of the screen', () => {
 
 // On a phone the calendar spans the screen, and the WhatsApp, Contact Us and
 // chat buttons covered its Sunday column and its Done button. They hide while
-// a calendar is open (ContactPopup.css, AIChatbot.css).
+// a calendar is open (FloatingHelp.css, AIChatbot.css).
 describe('the floating buttons while the calendar is open', () => {
   it('marks the page while it is open, and clears the mark when it closes', () => {
     const { unmount } = renderCalendar({ showPrices: false });
@@ -377,7 +377,7 @@ describe('the floating buttons while the calendar is open', () => {
   it('is what the floating buttons hide on', async () => {
     const { readFileSync } = await import('node:fs');
     const css = (file) => readFileSync(`${process.cwd()}/frontend/src/Pages/Common/${file}`, 'utf8');
-    expect(css('ContactPopup.css')).toMatch(/body\.date-picker-open \.contact-us-container\s*\{[^}]*visibility:\s*hidden/);
+    expect(css('FloatingHelp.css')).toMatch(/body\.date-picker-open \.floating-help\s*\{[^}]*visibility:\s*hidden/);
     expect(css('AIChatbot.css')).toMatch(/body\.date-picker-open \.ai-chatbot-container\s*\{[^}]*visibility:\s*hidden/);
   });
 });

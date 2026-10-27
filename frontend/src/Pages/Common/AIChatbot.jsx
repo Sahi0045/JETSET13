@@ -7,8 +7,7 @@ const MAX_MESSAGE_LENGTH = 2000;
 // Strip HTML tags client-side before sending to backend
 const sanitizeInput = (text) => text.replace(/<[^>]*>/g, '').trim();
 
-const AIChatbot = () => {
-  const [isOpen, setIsOpen] = useState(false);
+const AIChatbot = ({ isOpen, onClose }) => {
   const [messages, setMessages] = useState([]);
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -58,10 +57,6 @@ const AIChatbot = () => {
     if (container) {
       container.scrollTop = container.scrollHeight;
     }
-  };
-
-  const toggleChat = () => {
-    setIsOpen(!isOpen);
   };
 
   const handleInputChange = (e) => {
@@ -193,23 +188,6 @@ const AIChatbot = () => {
 
   return (
     <div className="ai-chatbot-container">
-      {/* Chat toggle button */}
-      <button
-        className={`chat-toggle-button ${isOpen ? 'open' : ''}`}
-        onClick={toggleChat}
-      >
-        {isOpen ? (
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="18" y1="6" x2="6" y2="18"></line>
-            <line x1="6" y1="6" x2="18" y2="18"></line>
-          </svg>
-        ) : (
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-          </svg>
-        )}
-      </button>
-
       {/* Chat window */}
       {isOpen && (
         <div className="chatbot-window">
@@ -222,6 +200,12 @@ const AIChatbot = () => {
               </svg>
               <span>Jetsetters Assistant</span>
             </div>
+            <button type="button" className="chatbot-close" onClick={onClose} aria-label="Close chat">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
           </div>
 
           <div className="chatbot-messages" ref={messagesContainerRef}>
