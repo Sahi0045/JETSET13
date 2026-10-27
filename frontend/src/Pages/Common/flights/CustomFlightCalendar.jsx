@@ -58,6 +58,8 @@ export default function CustomFlightCalendar({
     // Opened 640 px wide from the clicked field's left edge, it ran off the
     // right of the screen from the Return field on laptop widths. The centre
     // is measured because the opening zoom scales the box about its centre.
+    // On a laptop 730 px tall it opened wholly below the screen, so the page
+    // scrolls up until it fits, never past its top.
     useLayoutEffect(() => {
         const el = calendarRef.current
         const width = el?.offsetWidth
@@ -68,6 +70,11 @@ export default function CustomFlightCalendar({
         const maxLeft = document.documentElement.clientWidth - gutter - width
         const shift = Math.round(Math.max(gutter - left, Math.min(0, maxLeft - left)))
         if (shift) setNudge(shift)
+
+        const height = el.offsetHeight
+        const top = rect.top + rect.height / 2 - height / 2
+        const rise = Math.round(Math.min(top + height + gutter - window.innerHeight, top - gutter))
+        if (rise > 0) window.scrollBy?.({ top: rise, behavior: 'smooth' })
     }, [])
 
     useEffect(() => {
@@ -228,7 +235,7 @@ export default function CustomFlightCalendar({
                         {i}
                     </span>
                     {!isPast && price !== undefined && (
-                        <span data-testid="calendar-fare" className={`text-[8px] leading-none mt-0.5 ${isSelected ? 'text-white/80' : (isLowest ? 'text-green-600 font-bold' : 'text-gray-400')}`}>
+                        <span data-testid="calendar-fare" className={`text-[10px] sm:text-[9px] whitespace-nowrap leading-none mt-0.5 ${isSelected ? 'text-white/80' : (isLowest ? 'text-green-600 font-bold' : 'text-gray-500')}`}>
                             <Price amount={{ amount: price, currency }} />
                         </span>
                     )}

@@ -94,6 +94,16 @@ describe('CustomFlightCalendar', () => {
     expect(screen.getByText('Lowest fare shown')).toBeTruthy();
   });
 
+  // At 8 px "₹6,852" could not be read on a phone.
+  it('prints fares large enough to read on a phone', async () => {
+    datePrices = () => respond({ success: true, dateWisePrices: { [inDays(11)]: 120 }, lowestPrice: 120, currency: 'USD' });
+    renderCalendar();
+
+    const fare = await screen.findByTestId('calendar-fare');
+    expect(fare.className).toMatch(/(^|\s)text-\[10px\]/);
+    expect(fare.className).toMatch(/whitespace-nowrap/);
+  });
+
   // One-way fares from the origin are not what a return date costs.
   it('prices nothing on the return-date calendar', async () => {
     renderCalendar({ showPrices: false });
@@ -295,6 +305,61 @@ describe('keeping the calendar on screen', () => {
     place({ left: 24, page: 600 });
     renderCalendar({ showPrices: false });
     expect(calendar().style.left).toBe('-8px');
+  });
+});
+
+/**
+ * On a 1920 x 1080 ThinkPad at 125% the page is 1536 x 730 and the Departure
+ * field ends at 734, so the calendar opened at 745: wholly below the screen,
+ * and clicking the date seemed to do nothing. At 1366 x 768, 23 px of it
+ * showed (both measured on jetsetterss.com).
+ */
+describe('opening near the bottom of the screen', () => {
+  const realInnerHeight = window.innerHeight;
+  const realScrollBy = window.scrollBy;
+
+  const place = ({ top, screen: screenHeight, height = 456, scale = 1 }) => {
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function rect() {
+      if (!this.hasAttribute('data-calendar-grid')) return new DOMRect(0, 0, 0, 0);
+      return new DOMRect(720 + (640 - 640 * scale) / 2, top + (height - height * scale) / 2, 640 * scale, height * scale);
+    });
+    vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(640);
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(height);
+    Object.defineProperty(document.documentElement, 'clientWidth', { configurable: true, value: 1536 });
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: screenHeight });
+    window.scrollBy = vi.fn();
+  };
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    delete document.documentElement.clientWidth;
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: realInnerHeight });
+    window.scrollBy = realScrollBy;
+  });
+
+  it('scrolls the page up until its foot is 16 px above the bottom', () => {
+    place({ top: 745, screen: 730 });
+    renderCalendar({ showPrices: false });
+    expect(window.scrollBy).toHaveBeenCalledTimes(1);
+    expect(window.scrollBy).toHaveBeenCalledWith({ top: 487, behavior: 'smooth' });
+  });
+
+  it('measures through the opening zoom', () => {
+    place({ top: 745, screen: 730, scale: 0.95 });
+    renderCalendar({ showPrices: false });
+    expect(window.scrollBy).toHaveBeenCalledWith({ top: 487, behavior: 'smooth' });
+  });
+
+  it('keeps its top on screen when the screen is shorter than it', () => {
+    place({ top: 745, screen: 400 });
+    renderCalendar({ showPrices: false });
+    expect(window.scrollBy).toHaveBeenCalledWith({ top: 729, behavior: 'smooth' });
+  });
+
+  it('leaves the page alone when it fits', () => {
+    place({ top: 300, screen: 994 });
+    renderCalendar({ showPrices: false });
+    expect(window.scrollBy).not.toHaveBeenCalled();
   });
 });
 
