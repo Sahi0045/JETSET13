@@ -137,6 +137,21 @@ describe('the help buttons', () => {
     expect(own.closest('[data-covered="true"]')).toBeNull();
   });
 
+  // The box around the three buttons, and the gaps between them, took the
+  // clicks meant for what lay under them: the footer's Facebook and Instagram,
+  // Terms & Conditions on a narrow laptop, Select flight and Fare breakup.
+  it('take clicks only on the buttons themselves', () => {
+    const css = readFileSync(path.join(process.cwd(), 'frontend/src/Pages/Common/FloatingHelp.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+    const pointer = (selector) => [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+      .filter(([, selectors]) => selectors.split(',').map((s) => s.trim()).includes(selector))
+      .map(([, , body]) => body.match(/pointer-events\s*:\s*([a-z]+)/)?.[1])
+      .find(Boolean);
+
+    expect(pointer('.floating-help')).toBe('none');
+    expect(pointer('.floating-help__action')).toBe('auto');
+    expect(pointer('.floating-help__launcher')).toBe('auto');
+  });
+
   it('use the brand teal, not a generic blue', () => {
     const dir = path.join(process.cwd(), 'frontend/src/Pages/Common');
     const offPalette = readdirSync(dir)
