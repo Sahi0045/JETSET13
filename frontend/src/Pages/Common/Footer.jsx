@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { Facebook, Instagram, Mail, Check } from 'lucide-react';
 import supabase from '../../lib/supabase';
 import { isShownToCustomers } from '../../../../shared/siteSections';
+import { clearOfHelpButtons } from './helpButtonsLane';
 
 const COLUMNS = [
   {
@@ -48,12 +49,9 @@ const COLUMNS = [
 const Footer = () => {
   const currentYear = new Date().getFullYear();
   const { pathname } = useLocation();
-  // The help buttons float in the bottom-right corner, 121 px in from a phone's
-  // width up, and at the end of the page sat on the Company links and the
-  // social icons. Each row stops 142 px short of the screen edge, padding only
-  // what the side margin does not already give; on a phone the one Help button
-  // covers just the bottom bar.
-  const clearOfHelpButtons = 'sm:pr-[max(0px,calc(142px_-_(100vw_-_100%)_/_2))]';
+  // At the end of the page the help buttons sat on the Company links and the
+  // social icons, so each row keeps clear of them; on a phone the one Help
+  // button covers just the bottom bar.
   // The page scrolls to the top only when the path changes (ScrollToTop), so
   // "Flight" clicked on /flights left the reader in the footer.
   const toTopIfHere = (to) => () => {

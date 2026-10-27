@@ -5,6 +5,7 @@ import { Plane, Calendar, Users, ArrowRight, X, Search, ChevronDown, ChevronUp, 
 import Navbar from '../Navbar';
 import Footer from '../Footer';
 import withPageElements from '../PageWrapper';
+import { clearOfHelpButtons } from '../helpButtonsLane';
 import Price from '../../../Components/Price';
 import currencyService from '../../../Services/CurrencyService';
 import {
@@ -1207,7 +1208,10 @@ function FlightSearchPage() {
               )}
             </div>
           ) : (
-            <div className="flex gap-6 items-start">
+            // Select flight, Fare breakup and Flight Details are at the right
+            // of each card, where the help buttons float: on a laptop they sat
+            // on them as the list scrolled by.
+            <div className={`flex gap-6 items-start ${clearOfHelpButtons}`}>
               <FlightFilterSidebar
                 filters={filters}
                 priceRangeBounds={priceRangeBounds}
@@ -1401,7 +1405,7 @@ function FlightSearchPage() {
 
       {/* Mobile filter drawer */}
       {showMobileFilters && (
-        <div className="fixed inset-0 z-[10000] lg:hidden flex">
+        <div className="fixed inset-0 z-[10000] xl:hidden flex">
           <div className="absolute inset-0 bg-black/50" onClick={() => setShowMobileFilters(false)} />
           <div className="relative ml-auto w-[88%] max-w-sm h-full bg-white shadow-2xl flex flex-col animate-in slide-in-from-right duration-200">
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 flex-shrink-0">
