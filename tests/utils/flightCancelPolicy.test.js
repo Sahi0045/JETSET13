@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   FREE_CANCEL_HOURS,
   cancelPolicyLines,
+  cancellationFeeWords,
   cancelTermsLines,
   customerCancelTerms,
   fareRuleOf,
@@ -234,13 +235,27 @@ describe('cancelPolicyLines', () => {
     );
   });
 
-  it('names the saved percentage instead of the fixed fee', () => {
-    expect(cancelPolicyLines({ cancellationFee: 50, cancellationFeePercent: 10, money })[1]).toBe(
+  it('names the flat fee and the percentage together', () => {
+    const line = (cancellationFee, cancellationFeePercent) => cancelPolicyLines({ cancellationFee, cancellationFeePercent, money })[1];
+    expect(line(50, 10)).toBe(
+      "After that the airline's fare rules apply: a refundable fare returns the airline price less the airline's penalty and our cancellation fee of USD 50.00 plus 10% of what you paid; a non-refundable fare returns only unused taxes.",
+    );
+    expect(line(0, 10)).toBe(
       "After that the airline's fare rules apply: a refundable fare returns the airline price less the airline's penalty and our cancellation fee of 10% of what you paid; a non-refundable fare returns only unused taxes.",
     );
-    expect(cancelPolicyLines({ cancellationFee: 50, cancellationFeePercent: 0, money })[1]).toBe(
+    expect(line(50, 0)).toBe(
+      "After that the airline's fare rules apply: a refundable fare returns the airline price less the airline's penalty and our USD 50.00 cancellation fee; a non-refundable fare returns only unused taxes.",
+    );
+    expect(line(0, 0)).toBe(
       "After that the airline's fare rules apply: a refundable fare returns the airline price less the airline's penalty; a non-refundable fare returns only unused taxes.",
     );
+  });
+
+  it('words the fee for the staff cancel screen', () => {
+    expect(cancellationFeeWords({ flat: 50, percent: 10, money, whoPaid: 'what was paid' })).toBe('USD 50.00 plus 10% of what was paid');
+    expect(cancellationFeeWords({ flat: 0, percent: 10, money, whoPaid: 'what was paid' })).toBe('10% of what was paid');
+    expect(cancellationFeeWords({ flat: 50, percent: null, money })).toBe('USD 50.00');
+    expect(cancellationFeeWords({ flat: 0, percent: 0, money })).toBeNull();
   });
 
   it('leaves out a fee of 0', () => {

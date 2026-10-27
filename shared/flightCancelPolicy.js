@@ -165,12 +165,22 @@ function policyLines(terms, { money, time }) {
   }
 }
 
+/**
+ * Our cancellation fee in words: "$50.00 plus 10% of what you paid", "10% of
+ * what you paid" or "$50.00"; null when both parts are 0.
+ */
+export function cancellationFeeWords({ flat = null, percent = null, money = usd, whoPaid = 'what you paid' } = {}) {
+  const flatPart = Number(flat) > 0 ? money(flat) : '';
+  const percentPart = known(percent) && Number(percent) > 0 ? `${Number(percent)}% of ${whoPaid}` : '';
+  if (flatPart && percentPart) return `${flatPart} plus ${percentPart}`;
+  return flatPart || percentPart || null;
+}
+
 /** `freeUntil`: when a booking made now stops being free to cancel, when known. */
 export function cancelPolicyLines({ cancellationFee = null, cancellationFeePercent = null, freeUntil = null, money = usd, time = clock } = {}) {
-  const percent = known(cancellationFeePercent) ? Number(cancellationFeePercent) : NaN;
-  const fixedFee = Number(cancellationFee) > 0 ? ` and our ${money(cancellationFee)} cancellation fee` : '';
-  const percentFee = percent > 0 ? ` and our cancellation fee of ${percent}% of what you paid` : '';
-  const fee = Number.isFinite(percent) ? percentFee : fixedFee;
+  const words = cancellationFeeWords({ flat: cancellationFee, percent: cancellationFeePercent, money });
+  const hasPercent = known(cancellationFeePercent) && Number(cancellationFeePercent) > 0;
+  const fee = !words ? '' : (hasPercent ? ` and our cancellation fee of ${words}` : ` and our ${words} cancellation fee`);
   return [
     freeUntil
       ? `Book now and you can cancel free until ${time(freeUntil)}: you get back the airline price. The service fee is not refundable.`

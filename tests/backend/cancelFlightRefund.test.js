@@ -270,13 +270,22 @@ describe('cancelling a flight', () => {
     expect(res.body.cancellation).toMatchObject({ paymentAction: 'PARTIAL_REFUND', cancellationFee: 20, refundAmount: 271 });
   });
 
-  it('keeps the saved percentage of what was paid', async () => {
+  it('keeps the saved percentage of what was paid when the flat fee is 0', async () => {
     cancelFlightOrder.mockResolvedValue(ticketsVoided);
 
-    const res = await cancel(flight(), { settings: { cancellation_fee: 75, flight_cancellation_fee_percent: 10 }, user: STAFF });
+    const res = await cancel(flight(), { settings: { cancellation_fee: 75, flight_cancellation_fee: 0, flight_cancellation_fee_percent: 10 }, user: STAFF });
 
     expect(sent('REFUND')[0].transaction.amount).toBe('261.90');
     expect(res.body.cancellation).toMatchObject({ paymentAction: 'PARTIAL_REFUND', cancellationFee: 29.1, refundAmount: 261.9 });
+  });
+
+  it('keeps the flat fee plus the percentage of what was paid', async () => {
+    cancelFlightOrder.mockResolvedValue(ticketsVoided);
+
+    const res = await cancel(flight(), { settings: { flight_cancellation_fee: 20, flight_cancellation_fee_percent: 10 }, user: STAFF });
+
+    expect(sent('REFUND')[0].transaction.amount).toBe('241.90');
+    expect(res.body.cancellation).toMatchObject({ paymentAction: 'PARTIAL_REFUND', cancellationFee: 49.1, refundAmount: 241.9 });
   });
 
   it('keeps the fee the admin set', async () => {
