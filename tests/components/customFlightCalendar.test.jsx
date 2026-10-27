@@ -298,6 +298,32 @@ describe('the month it opens on', () => {
 });
 
 /**
+ * Samsung Internet in dark mode recolours the page itself: dark text turns
+ * light, and light text stays light. Past days were light grey, so on a
+ * Samsung phone they showed brighter than the days that could be chosen
+ * (S25 Ultra size, jetsetterss.com, 27 Oct). Opacity survives that recolouring.
+ */
+describe('days that cannot be chosen', () => {
+  const nextMonthDay = (day) => {
+    const date = new Date();
+    date.setDate(1);
+    date.setMonth(date.getMonth() + 1);
+    return formatDateToISO(new Date(date.getFullYear(), date.getMonth(), day));
+  };
+
+  it('are dimmed as a whole, not drawn in light text', () => {
+    const { container } = renderCalendar({ selectedDate: '', minDate: new Date(`${nextMonthDay(10)}T00:00:00`), showPrices: false });
+    const past = container.querySelector(`[data-date="${nextMonthDay(5)}"]`);
+    const open = container.querySelector(`[data-date="${nextMonthDay(15)}"]`);
+
+    expect(past.disabled).toBe(true);
+    expect(past.className).toMatch(/(^|\s)opacity-30(\s|$)/);
+    expect(past.querySelector('[aria-hidden="true"]').className).not.toMatch(/text-gray-[1-4]00/);
+    expect(open.className).not.toMatch(/(^|\s)opacity-/);
+  });
+});
+
+/**
  * The calendar opens under the field that was clicked, 640 px wide from that
  * field's left edge. From the Return field it ran off the right of the screen
  * on every laptop width: 233 px at 1024, 104 px at 1366, 67 px at 1440

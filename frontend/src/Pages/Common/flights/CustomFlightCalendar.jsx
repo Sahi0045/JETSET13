@@ -229,14 +229,17 @@ export default function CustomFlightCalendar({
                     tabIndex={dateKey === tabbableDate ? 0 : -1}
                     onClick={() => onSelect(dateKey)}
                     onKeyDown={moveDayFocus}
+                    // Past days are dimmed with opacity, not light-grey text: Samsung
+                    // Internet's dark mode turns light text white, and the days that
+                    // could not be chosen showed brighter than the ones that could.
                     className={`relative h-11 w-full flex flex-col items-center justify-center transition-all rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[#055B75]/50
-                        ${isPast ? 'text-gray-300 cursor-not-allowed bg-gray-50/30' : ''}
+                        ${isPast ? 'opacity-30 cursor-not-allowed' : ''}
                         ${!isPast && !isSelected ? 'cursor-pointer hover:bg-[#055B75]/5' : ''}
                         ${isSelected ? 'bg-[#055B75] text-white rounded-lg shadow-md cursor-pointer' : ''}
                     `}
                 >
                     <span className="sr-only">{format(day, 'EEEE d MMMM yyyy')}</span>
-                    <span aria-hidden="true" className={`text-[13px] font-semibold leading-tight ${isSelected ? 'text-white' : (isPast ? 'text-gray-300' : 'text-gray-700')}`}>
+                    <span aria-hidden="true" className={`text-[13px] font-semibold leading-tight ${isSelected ? 'text-white' : 'text-gray-700'}`}>
                         {i}
                     </span>
                     {!isPast && price !== undefined && (
