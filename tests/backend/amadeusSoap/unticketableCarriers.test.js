@@ -55,9 +55,12 @@ describe('the carriers the office cannot ticket', () => {
     const { unticketableCarriers } = getWsConfig({ ...REQUIRED_ENV });
 
     expect(unticketableCarriers).toEqual([
-      'AI', 'GF', 'AW', 'BF', 'CY', 'EN', 'HF', 'JX', 'KC', 'KU', 'LG', 'NT', 'SQ', 'SS',
+      'GF', 'AW', 'BF', 'CY', 'EN', 'HF', 'JX', 'KC', 'KU', 'LG', 'NT', 'SQ', 'SS',
       'CX', 'EK', 'QF', 'UL', 'VN',
     ]);
+    // Air India tickets on production since 23 Oct 2026; left on the default it
+    // would vanish from search the day the production setting went missing.
+    expect(unticketableCarriers).not.toContain('AI');
     // A link or timing failure is not a refusal of authority.
     expect(unticketableCarriers).not.toContain('CZ');
     expect(unticketableCarriers).not.toContain('BI');
