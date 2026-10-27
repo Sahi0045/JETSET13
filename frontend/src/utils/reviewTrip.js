@@ -18,7 +18,7 @@ const itinerariesOf = (flightData) => (Array.isArray(flightData?.originalOffer?.
 
 const isMultiCityOffer = (flightData) => tripTypeOf(itinerariesOf(flightData).map((itinerary) => ({
   origin: segmentsOf(itinerary)[0]?.departure?.iataCode,
-  destination: segmentsOf(itinerary).at(-1)?.arrival?.iataCode,
+  destination: segmentsOf(itinerary).slice(-1)[0]?.arrival?.iataCode,
 }))) === 'multiCity';
 
 /** Changes of plane, and technical stops inside a flight. */

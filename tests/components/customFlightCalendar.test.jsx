@@ -258,6 +258,46 @@ describe('pricing every day it shows', () => {
 });
 
 /**
+ * A phone shows one month: the first. It was always this month, so with a
+ * date already chosen in a later one - reopening the field, or Modify on the
+ * results page - the phone showed this month's days, greyed out late in the
+ * month, and not the date chosen (27 Oct: October, 26 of its 31 days past).
+ */
+describe('the month it opens on', () => {
+  const firstOfMonth = (offset) => {
+    const date = new Date();
+    date.setDate(1);
+    date.setMonth(date.getMonth() + offset);
+    return date;
+  };
+  const dayOf = (offset, day) => {
+    const month = firstOfMonth(offset);
+    return formatDateToISO(new Date(month.getFullYear(), month.getMonth(), day));
+  };
+  const monthName = (offset) => firstOfMonth(offset).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  const firstMonthShown = (container) => container.querySelector('[data-calendar-grid] .text-center.py-2\\.5').textContent;
+
+  it('is the month of the date already chosen', () => {
+    const { container } = renderCalendar({ selectedDate: dayOf(2, 13) });
+
+    expect(firstMonthShown(container)).toBe(monthName(2));
+    expect(container.querySelector(`[data-date="${dayOf(2, 13)}"]`).getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('is the first month that can be chosen from when the chosen date is before it', () => {
+    const { container } = renderCalendar({ selectedDate: dayOf(1, 3), minDate: new Date(`${dayOf(2, 10)}T00:00:00`), showPrices: false });
+
+    expect(firstMonthShown(container)).toBe(monthName(2));
+  });
+
+  it('is this month when no date is chosen', () => {
+    const { container } = renderCalendar({ selectedDate: '' });
+
+    expect(firstMonthShown(container)).toBe(monthName(0));
+  });
+});
+
+/**
  * The calendar opens under the field that was clicked, 640 px wide from that
  * field's left edge. From the Return field it ran off the right of the screen
  * on every laptop width: 233 px at 1024, 104 px at 1366, 67 px at 1440
