@@ -29,12 +29,16 @@
  * record locator never arrived). Those are link and timing failures rather than
  * a refusal of authority, and may be PDT only.
  *
+ * AI is not on the default any more: Air India tickets on production since
+ * 23 Oct 2026 (PDT still answers 2161). Left on it, Air India would vanish from
+ * search the day the production setting below went missing.
+ *
  * AMADEUS_WS_UNTICKETABLE_CARRIERS replaces the list (codes separated by commas
  * or spaces). Set it empty to offer every carrier again - for example once
- * Amadeus adds AI and GF to the office.
+ * Amadeus adds GF to the office.
  */
 export const DEFAULT_UNTICKETABLE_CARRIERS = Object.freeze([
-  'AI', 'GF', 'AW', 'BF', 'CY', 'EN', 'HF', 'JX', 'KC', 'KU', 'LG', 'NT', 'SQ', 'SS',
+  'GF', 'AW', 'BF', 'CY', 'EN', 'HF', 'JX', 'KC', 'KU', 'LG', 'NT', 'SQ', 'SS',
   'CX', 'EK', 'QF', 'UL', 'VN',
 ]);
 
