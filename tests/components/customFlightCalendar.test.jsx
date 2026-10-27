@@ -94,6 +94,16 @@ describe('CustomFlightCalendar', () => {
     expect(screen.getByText('Lowest fare shown')).toBeTruthy();
   });
 
+  // At 8 px "₹6,852" could not be read on a phone.
+  it('prints fares large enough to read on a phone', async () => {
+    datePrices = () => respond({ success: true, dateWisePrices: { [inDays(11)]: 120 }, lowestPrice: 120, currency: 'USD' });
+    renderCalendar();
+
+    const fare = await screen.findByTestId('calendar-fare');
+    expect(fare.className).toMatch(/(^|\s)text-\[10px\]/);
+    expect(fare.className).toMatch(/whitespace-nowrap/);
+  });
+
   // One-way fares from the origin are not what a return date costs.
   it('prices nothing on the return-date calendar', async () => {
     renderCalendar({ showPrices: false });

@@ -235,7 +235,7 @@ export default function CustomFlightCalendar({
                         {i}
                     </span>
                     {!isPast && price !== undefined && (
-                        <span data-testid="calendar-fare" className={`text-[8px] leading-none mt-0.5 ${isSelected ? 'text-white/80' : (isLowest ? 'text-green-600 font-bold' : 'text-gray-400')}`}>
+                        <span data-testid="calendar-fare" className={`text-[10px] sm:text-[9px] whitespace-nowrap leading-none mt-0.5 ${isSelected ? 'text-white/80' : (isLowest ? 'text-green-600 font-bold' : 'text-gray-500')}`}>
                             <Price amount={{ amount: price, currency }} />
                         </span>
                     )}
