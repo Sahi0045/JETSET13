@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { FileText, Video, Download, Play, Search, Eye } from 'lucide-react';
 import Navbar from './Navbar';
 import Footer from './Footer';
+import { isShownToCustomers } from '../../../../shared/siteSections';
 import Breadcrumb from '../../components/Breadcrumb';
 
 const API_BASE = '/api';
@@ -101,7 +102,7 @@ export default function HelpCenter() {
         <nav aria-label="Help Center topics" style={{ marginBottom: '32px' }}>
           <h2 style={{ fontSize: '18px', margin: '0 0 12px' }}>Explore travel help</h2>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
-            {helpLinks.map(({ label, to }) => (
+            {helpLinks.filter(({ to }) => isShownToCustomers(to)).map(({ label, to }) => (
               <Link
                 key={to}
                 to={to}

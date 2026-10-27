@@ -3,6 +3,7 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isShownToCustomers } from '../shared/siteSections.js';
 import {
   DEFAULT_OG_IMAGE,
   DEFAULT_ROUTE_SEO,
@@ -33,7 +34,7 @@ const CRAWL_NAVIGATION = Object.freeze([
   { pathname: '/support', label: 'Support' },
   { pathname: '/contact', label: 'Contact' },
   { pathname: '/faqs', label: 'FAQs' },
-]);
+].filter(({ pathname }) => isShownToCustomers(pathname)));
 
 /**
  * Sitemap files, generated from INDEXABLE_ROUTE_SEO at build time.

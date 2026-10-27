@@ -1,4 +1,5 @@
 import { DESTINATION_IMAGES } from '../data/destinationImages.js';
+import { isShownToCustomers } from '../../../shared/siteSections.js';
 
 const SITE_NAME = 'Jetsetters';
 export const SITE_URL = 'https://www.jetsetterss.com';
@@ -904,7 +905,7 @@ export const ROUTE_SEO_PATTERNS = [
 
 export const INDEXABLE_ROUTE_SEO = Object.freeze(
   Object.entries(ROUTE_SEO)
-    .filter(([, seo]) => seo.shouldIndex !== false)
+    .filter(([pathname, seo]) => seo.shouldIndex !== false && isShownToCustomers(pathname))
     .map(([pathname, seo]) => Object.freeze({ pathname, seo })),
 );
 

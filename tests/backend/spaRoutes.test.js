@@ -74,7 +74,11 @@ describe('SPA route contract', () => {
     for (const [from, to] of legacy) {
       expect(configured.get(from), `vercel.json is missing a redirect for ${from}`).toBe(to);
     }
-    expect(config.redirects.every(({ permanent }) => permanent === true)).toBe(true);
+    // Permanent, except the visa pages hidden for now (shared/siteSections.js):
+    // a browser caches a permanent redirect for good, so bringing the visa
+    // pages back would still send returning visitors home.
+    const { isCustomerVisaPath } = await import('../../shared/siteSections.js');
+    expect(config.redirects.filter(({ source }) => !isCustomerVisaPath(source)).every(({ permanent }) => permanent === true)).toBe(true);
   });
 
   it('normalizes trailing slashes without accepting malformed paths', () => {
