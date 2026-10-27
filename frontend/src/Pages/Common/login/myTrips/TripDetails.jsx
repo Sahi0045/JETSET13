@@ -5,34 +5,11 @@ import { attentionMessage } from '../../../../utils/bookingStatus'
 import { bookingCodeOf, canDownloadDocument, documentState, isCommitUnknown, liveTickets, ticketState, ticketsVoided } from '../../../../utils/eTicket'
 import { formatUsd } from '../../../../utils/bookingCharge'
 import BookingItinerary from '../../flights/BookingItinerary'
+import CopyButton from '../../../../Components/CopyButton'
 import { checkInOpensText, checkInsOf } from '../../../../../../shared/airlineCheckIn'
 import { cabinOf, routeOf, travelDateOf, travellerCount, tripReferenceOf } from './tripView'
 
 const fmt = (date, options = { month: 'short', day: 'numeric', year: 'numeric' }) => formatCalendarDate(date, options)
-
-function CopyButton({ value, label }) {
-  const [copied, setCopied] = useState(false)
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(value)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1500)
-    } catch {
-      setCopied(false)
-    }
-  }
-  return (
-    <button
-      type="button"
-      onClick={copy}
-      aria-label={`Copy ${label}`}
-      title={copied ? 'Copied' : 'Copy'}
-      className={`inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-gray-400 hover:text-[#055B75] hover:bg-[#F1FBFD] transition-colors ${focusRing}`}
-    >
-      {copied ? <Check className="h-3.5 w-3.5 text-emerald-600" aria-hidden="true" /> : <Copy className="h-3.5 w-3.5" aria-hidden="true" />}
-    </button>
-  )
-}
 
 const Fact = ({ label, children, copy }) => (
   <div className="flex items-center justify-between gap-4 py-3 min-w-0">

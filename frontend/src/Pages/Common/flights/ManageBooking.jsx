@@ -4,7 +4,7 @@ import { daysUntilDate, formatCalendarDate, formatIsoDuration } from '../../../u
 import {
   ArrowLeft, Plane, User, CreditCard, FileText,
   AlertCircle, AlertTriangle, CheckCircle, Info, Phone, Mail, Edit3,
-  Download, X
+  Download, Headset, X
 } from 'lucide-react';
 import Navbar from '../Navbar';
 import Footer from '../Footer';
@@ -13,6 +13,9 @@ import BookingItinerary from './BookingItinerary';
 import BookingCancelRules from './BookingCancelRules';
 import CancelQuote from './CancelQuote';
 import CheckInLinks from './CheckInLinks';
+import CopyButton from '../../../Components/CopyButton';
+import { checkInsOf } from '../../../../../shared/airlineCheckIn';
+import { airlineOf } from '../login/myTrips/tripView';
 import { bookingItineraries, multiCityRoute } from '../../../../../shared/bookingItineraries';
 import { formatUsd } from '../../../utils/bookingCharge';
 import { bookingCodeOf, canDownloadDocument, isCommitUnknown, isPaid, ticketState } from '../../../utils/eTicket';
@@ -342,7 +345,7 @@ function ManageBooking() {
         ref={cancelResultRef}
         tabIndex={-1}
         role={tone === 'danger' ? 'alert' : 'status'}
-        className={`mb-6 p-4 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[#055B75]/40 ${RESULT_TONES[tone]}`}
+        className={`mb-4 p-4 rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-[#055B75]/40 ${RESULT_TONES[tone]}`}
       >
         <div className="flex items-start gap-3">
           <Icon className="w-5 h-5 mt-0.5 flex-shrink-0" />
@@ -377,14 +380,14 @@ function ManageBooking() {
       const tone = BANNER_TONES[badge.tone] || BANNER_TONES.neutral;
       const attention = attentionMessage(bookingData);
       return (
-        <div className={`p-4 rounded-lg mb-6 ${tone.box}`}>
+        <div className={`px-4 py-3 rounded-2xl mb-4 ${tone.box}`}>
           <div className="flex items-center">
             {badge.tone === 'success' ? (
               <CheckCircle className={`w-5 h-5 mr-2 ${tone.icon}`} />
             ) : (
               <Info className={`w-5 h-5 mr-2 ${tone.icon}`} />
             )}
-            <span className={`font-medium ${tone.text}`}>
+            <span className={`font-semibold ${tone.text}`}>
               Booking Status: {badge.label}
             </span>
           </div>
@@ -564,25 +567,49 @@ function ManageBooking() {
     );
   };
 
+  const bookingReference = bookingData?.orderId || bookingData?.bookingReference;
+  const tripLine = [
+    multiCityRoute(itineraryLegs) || [bookingData?.originCity || bookingData?.origin, bookingData?.destinationCity || bookingData?.destination].filter(Boolean).join(' → '),
+    formatCalendarDate(bookingData?.departureDate, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }, ''),
+  ].filter(Boolean).join(' · ');
+  // Nor a cancel that went through and could not be recorded (ticketState
+  // 'cancelled'): the customer was told not to try again, and its dialog said
+  // no ticket had been issued. From the calendar day the booking names:
+  // `new Date(departureDate)` was UTC midnight, so in the US Cancel vanished a
+  // day early.
+  const canChangeOrCancel = bookingData?.status?.toUpperCase() !== 'CANCELLED'
+    && ticketState(bookingData) !== 'cancelled'
+    && (daysUntilDate(bookingData?.departureDate) ?? 0) >= 0;
+  const airline = airlineOf(bookingData);
+  const hasActions = checkInsOf(bookingData).length > 0 || canDownloadDocument(bookingData) || canChangeOrCancel || Boolean(downloadError);
+  const focusRing = 'outline-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[#65B3CF] focus-visible:ring-offset-2';
+
   return (
     <div className="min-h-screen bg-[#F1FBFD]">
       <Navbar />
 
-      <div className="pt-[80px]">
-        <div className="container mx-auto px-4 py-8">
+      <div>
+        <div className="container mx-auto max-w-5xl px-4 pt-6 pb-12">
           {/* Header */}
-          <div className="flex items-center mb-6">
-            <button
-              onClick={() => navigate('/my-trips')}
-              className="flex items-center text-[#055B75] hover:text-[#034457] mr-4"
-            >
-              <ArrowLeft className="w-5 h-5 mr-1" />
-              Back to My Trips
-            </button>
-            <div>
-              <h1 className="text-2xl font-bold text-gray-800">Manage Booking</h1>
-              <p className="text-gray-600">Booking Reference: {bookingData?.orderId || bookingData?.bookingReference}</p>
+          <button
+            onClick={() => navigate('/my-trips')}
+            className={`inline-flex items-center gap-1.5 rounded-full text-sm font-semibold text-[#055B75] hover:text-[#034457] ${focusRing}`}
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back to My Trips
+          </button>
+          <div className="mt-3 mb-5 flex flex-wrap items-end justify-between gap-3">
+            <div className="min-w-0">
+              <h1 className="font-grotesk text-[28px] font-bold leading-tight text-gray-900">Manage Booking</h1>
+              {tripLine && <p className="mt-1 text-[15px] text-gray-600">{tripLine}</p>}
             </div>
+            {bookingReference && (
+              <div className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-[#DCEBF0] bg-white py-1 pl-4 pr-1 text-sm shadow-sm">
+                <span className="text-gray-500 whitespace-nowrap">Booking Reference:</span>
+                <span className="truncate font-semibold tracking-wide text-[#034457]">{bookingReference}</span>
+                <CopyButton value={bookingReference} label="booking reference" />
+              </div>
+            )}
           </div>
 
           {refreshFailed && (
@@ -598,69 +625,66 @@ function ManageBooking() {
           {renderStatusBanner()}
 
           {/* Action Buttons */}
-          <div className="flex flex-wrap gap-3 mb-6">
-            {/* A cancelled booking offers no document. Its tickets were voided
-                or refunded with the airline, and a PDF of them is a travel
-                document for a flight the customer no longer holds. Nor does a
-                booking with no PNR - queued, never booked, held as a second
-                payment, or unpaid - whose "PNR: N/A" document said a seat was
-                held. */}
-            {canDownloadDocument(bookingData) && (
-              <button
-                onClick={downloadETicket}
-                disabled={downloading}
-                className="flex items-center bg-[#055B75] text-white px-4 py-2 rounded-lg hover:bg-[#034457] transition disabled:opacity-60"
-              >
-                <Download className="w-4 h-4 mr-2" />
-                {/* The document names itself honestly, so the button that offers
-                    it must too - clicking "E-Ticket" and receiving a reservation
-                    is the same misrepresentation in a different place. */}
-                {downloading ? 'Preparing your PDF…' : (ticketState(bookingData) === 'issued' ? 'Download E-Ticket' : 'Download Booking Confirmation')}
-              </button>
-            )}
-            {downloadError && <p role="alert" className="w-full text-sm text-red-700">{downloadError}</p>}
-            <CheckInLinks booking={bookingData} />
-
-            {bookingData?.status?.toUpperCase() !== 'CANCELLED' && 
-             // Nor a cancel that went through and could not be recorded
-             // (ticketState 'cancelled'): the customer was told not to try
-             // again, and its dialog said no ticket had been issued.
-             ticketState(bookingData) !== 'cancelled' &&
-             // From the calendar day the booking names. `new Date(departureDate)`
-             // was UTC midnight, so in the US Cancel vanished a day early.
-             (daysUntilDate(bookingData?.departureDate) ?? 0) >= 0 && (
-              <>
-                {/* Changes are made by the support team; there is no
-                    self-serve change flow. This button used to open an alert
-                    promising a modification feature that did not exist. */}
-                <a
-                  href="tel:+18775387380"
-                  className="flex items-center bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition"
-                >
-                  <Phone className="w-4 h-4 mr-2" />
-                  Call to change this booking
-                </a>
-                {/* Not while our team is checking with the airline whether
-                    the booking went through (isCommitUnknown): the server
-                    refuses it, and a cancel would return the money while the
-                    airline may still hold the reservation. The call link above
-                    stays. */}
-                {!isCommitUnknown(bookingData) && (
+          {hasActions && (
+            <div className="mb-6 space-y-4 rounded-2xl border border-gray-200 bg-white p-4 sm:p-5 shadow-[0_1px_2px_rgba(3,68,87,0.05)]">
+              <CheckInLinks booking={bookingData} />
+              <div className="flex flex-wrap items-center gap-2.5">
+                {/* A cancelled booking offers no document. Its tickets were voided
+                    or refunded with the airline, and a PDF of them is a travel
+                    document for a flight the customer no longer holds. Nor does a
+                    booking with no PNR - queued, never booked, held as a second
+                    payment, or unpaid - whose "PNR: N/A" document said a seat was
+                    held. */}
+                {canDownloadDocument(bookingData) && (
                   <button
-                    onClick={handleCancelBooking}
-                    className="flex items-center bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition"
+                    onClick={downloadETicket}
+                    disabled={downloading}
+                    className={`inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-full border border-[#B9D0DC] bg-white px-5 py-2.5 text-sm font-bold text-[#055B75] hover:border-[#055B75] transition-colors disabled:opacity-60 ${focusRing}`}
                   >
-                    <X className="w-4 h-4 mr-2" />
-                    Cancel Booking
+                    <Download className="w-4 h-4" />
+                    {/* The document names itself honestly, so the button that offers
+                        it must too - clicking "E-Ticket" and receiving a reservation
+                        is the same misrepresentation in a different place. */}
+                    {downloading ? 'Preparing your PDF…' : (ticketState(bookingData) === 'issued' ? 'Download E-Ticket' : 'Download Booking Confirmation')}
                   </button>
                 )}
-              </>
-            )}
-          </div>
+
+                {canChangeOrCancel && (
+                  <>
+                    {/* Changes are made by the support team; there is no
+                        self-serve change flow. This button used to open an alert
+                        promising a modification feature that did not exist. */}
+                    <a
+                      href="tel:+18775387380"
+                      className={`inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-full border border-[#B9D0DC] bg-white px-5 py-2.5 text-sm font-bold text-[#055B75] hover:border-[#055B75] transition-colors ${focusRing}`}
+                    >
+                      <Phone className="w-4 h-4" />
+                      Call to change this booking
+                    </a>
+                    {/* Not while our team is checking with the airline whether
+                        the booking went through (isCommitUnknown): the server
+                        refuses it, and a cancel would return the money while the
+                        airline may still hold the reservation. The call link above
+                        stays. */}
+                    {!isCommitUnknown(bookingData) && (
+                      <button
+                        onClick={handleCancelBooking}
+                        className={`inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-50 transition-colors sm:ml-auto ${focusRing}`}
+                      >
+                        <X className="w-4 h-4" />
+                        Cancel Booking
+                      </button>
+                    )}
+                  </>
+                )}
+                {downloadError && <p role="alert" className="w-full text-sm text-red-700">{downloadError}</p>}
+              </div>
+            </div>
+          )}
 
           {/* Tabs */}
-          <div className="border-b border-gray-200 mb-6">
-            <nav className="flex gap-6 sm:gap-8 overflow-x-auto whitespace-nowrap">
+          <div className="mb-4">
+            <nav className="hide-scrollbar flex gap-2 overflow-x-auto whitespace-nowrap pb-1">
               {[
                 { id: 'details', label: 'Flight Details', icon: Plane },
                 { id: 'passenger', label: 'Passenger Info', icon: User },
@@ -675,12 +699,13 @@ function ManageBooking() {
                   // else took focus. Keyboard users still get a visible ring —
                   // same treatment as the other tab strips (ServiceTabs,
                   // flight-search-form).
-                  className={`flex items-center py-2 px-1 border-b-2 font-medium text-sm transition-colors rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[#055B75]/40 ${activeTab === tab.id
-                    ? 'border-[#0890BC] text-[#055B75]'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  aria-pressed={activeTab === tab.id}
+                  className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition-colors ${focusRing} ${activeTab === tab.id
+                    ? 'bg-[#055B75] text-white shadow-sm'
+                    : 'border border-gray-200 bg-white text-gray-600 hover:border-[#055B75] hover:text-[#055B75]'
                     }`}
                 >
-                  <tab.icon className="w-4 h-4 mr-2" />
+                  <tab.icon className="w-4 h-4" />
                   {tab.label}
                 </button>
               ))}
@@ -688,50 +713,59 @@ function ManageBooking() {
           </div>
 
           {/* Tab Content */}
-          <div className="bg-white rounded-lg shadow-sm border p-6">
+          <div className="rounded-2xl border border-gray-200 bg-white p-5 sm:p-6 shadow-[0_1px_2px_rgba(3,68,87,0.05)]">
             {activeTab === 'details' && (
               <div>
-                <h3 className="text-lg font-semibold mb-4">Flight Information</h3>
+                <h3 className="font-grotesk text-lg font-bold text-gray-900 mb-4">Flight Information</h3>
                 <div className="space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
-                    <div className="border-r-0 sm:border-r border-gray-200 pr-0 sm:pr-4">
-                      <label className="text-sm font-medium text-gray-500 block mb-1">{bookingCode?.label || 'Booking code (PNR)'}</label>
-                      <p className="text-lg font-semibold font-mono text-[#055B75]">{bookingCode?.value || 'Not Available'}</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-5 rounded-xl border border-[#DCEBF0] bg-[#F5FAFB] p-4 sm:p-5">
+                    <div className="min-w-0">
+                      <div className="text-[12px] text-gray-500 mb-1">{bookingCode?.label || 'Booking code (PNR)'}</div>
+                      <div className="flex items-center gap-1">
+                        <span className="font-grotesk text-xl font-bold tracking-[0.14em] text-[#034457]">{bookingCode?.value || 'Not Available'}</span>
+                        {bookingCode?.value && <CopyButton value={bookingCode.value} label={bookingCode.label || 'booking code'} />}
+                      </div>
                       {bookingCode?.amadeusReference && (
                         <p className="mt-1 text-xs text-gray-500">{`Amadeus reference ${bookingCode.amadeusReference}`}</p>
                       )}
                     </div>
-                    <div className="border-r-0 md:border-r border-gray-200 pr-0 md:pr-4">
-                      <label className="text-sm font-medium text-gray-500 block mb-1">Booking Reference</label>
-                      <p className="text-lg font-semibold font-mono">{bookingData?.orderId || bookingData?.bookingReference}</p>
+                    <div className="min-w-0">
+                      <div className="text-[12px] text-gray-500 mb-1">Booking Reference</div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-[15px] font-semibold tracking-wide text-gray-900 break-all">{bookingReference}</span>
+                        {bookingReference && <CopyButton value={bookingReference} label="booking reference" />}
+                      </div>
                     </div>
-                    <div className="border-r-0 md:border-r border-gray-200 pr-0 md:pr-4">
-                      <label className="text-sm font-medium text-gray-500 block mb-1">Amount Paid</label>
+                    <div className="min-w-0">
+                      <div className="text-[12px] text-gray-500 mb-1">Amount Paid</div>
                       {/* "USD 512.4" was the raw number beside a currency code. */}
-                      <p className="text-lg font-semibold">{Number(bookingData?.amount) > 0 ? formatUsd(bookingData.amount) : 'Not recorded'}</p>
+                      <p className="font-grotesk text-xl font-bold text-gray-900">{Number(bookingData?.amount) > 0 ? formatUsd(bookingData.amount) : 'Not recorded'}</p>
                     </div>
-                    <div>
-                      <label className="text-sm font-medium text-gray-500 block mb-1">Transaction ID</label>
-                      <p className="text-lg font-semibold font-mono break-all">{bookingData?.transactionId || 'N/A'}</p>
+                    <div className="min-w-0">
+                      <div className="text-[12px] text-gray-500 mb-1">Transaction ID</div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-[15px] font-semibold tracking-wide text-gray-900 break-all">{bookingData?.transactionId || 'N/A'}</span>
+                        {bookingData?.transactionId && <CopyButton value={bookingData.transactionId} label="transaction ID" />}
+                      </div>
                     </div>
                   </div>
 
                   {/* Flight Route Information */}
-                  <div className="mt-6 p-6 bg-gradient-to-r from-gray-50 to-[#F0FAFC] rounded-xl border border-gray-200">
-                    <h4 className="font-semibold mb-4 text-gray-700">Flight Route</h4>
+                  <div className="mt-5 p-5 sm:p-6 rounded-xl border border-gray-200 bg-white">
+                    <h4 className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#055B75] mb-4">Flight Route</h4>
                     {multiCityRoute(itineraryLegs) && (
                       <p className="-mt-2 mb-4 text-sm font-semibold text-[#055B75]">{`Multi-city: ${multiCityRoute(itineraryLegs)}`}</p>
                     )}
                     <div className="flex items-center justify-between">
                       {/* Departure */}
                       <div className="text-center flex-1">
-                        <div className="text-3xl font-bold text-[#055B75] mb-1">
+                        <div className="font-grotesk text-3xl font-bold text-[#034457] mb-1">
                           {bookingData?.origin || bookingData?.flight?.departureCity?.substring(0, 3)?.toUpperCase() || 'DEP'}
                         </div>
                         <div className="text-sm text-gray-600 font-medium">
                           {bookingData?.originCity || bookingData?.flight?.departureCity || 'Departure City'}
                         </div>
-                        <div className="text-lg font-semibold text-gray-800 mt-2">
+                        <div className="font-grotesk text-lg font-bold text-gray-900 mt-2">
                           {bookingData?.departureTime || bookingData?.flight?.departureTime || '--:--'}
                         </div>
                         <div className="text-xs text-gray-500">
@@ -750,20 +784,23 @@ function ManageBooking() {
                         </div>
                         {(bookingData?.airline || bookingData?.flightNumber) && (
                           <div className="text-sm font-medium text-gray-700 mt-1">
-                            {bookingData?.airlineName || bookingData?.airline || ''} {bookingData?.flightNumber || ''}
+                            {/* The airline by name, as My Trips names it: a stored "EY" beside
+                                "EY128" read "EY EY128". */}
+                            {[airline.name !== airline.code || !String(bookingData?.flightNumber || '').startsWith(airline.code) ? airline.name : '', bookingData?.flightNumber]
+                              .filter(Boolean).join(' ')}
                           </div>
                         )}
                       </div>
 
                       {/* Arrival */}
                       <div className="text-center flex-1">
-                        <div className="text-3xl font-bold text-[#055B75] mb-1">
+                        <div className="font-grotesk text-3xl font-bold text-[#034457] mb-1">
                           {bookingData?.destination || bookingData?.flight?.arrivalCity?.substring(0, 3)?.toUpperCase() || 'ARR'}
                         </div>
                         <div className="text-sm text-gray-600 font-medium">
                           {bookingData?.destinationCity || bookingData?.flight?.arrivalCity || 'Arrival City'}
                         </div>
-                        <div className="text-lg font-semibold text-gray-800 mt-2">
+                        <div className="font-grotesk text-lg font-bold text-gray-900 mt-2">
                           {bookingData?.arrivalTime || bookingData?.flight?.arrivalTime || '--:--'}
                         </div>
                         <div className="text-xs text-gray-500">
@@ -776,7 +813,7 @@ function ManageBooking() {
 
                     {/* Additional Flight Info */}
                     {(bookingData?.cabinClass || bookingData?.passengers || bookingData?.departureTerminal || bookingData?.arrivalTerminal || bookingData?.aircraft) && (
-                      <div className="flex justify-center gap-6 mt-4 pt-4 border-t border-gray-200 flex-wrap">
+                      <div className="flex justify-center gap-6 mt-5 pt-4 border-t border-dashed border-gray-200 flex-wrap">
                         {bookingData?.cabinClass && (
                           <div className="text-center">
                             <span className="text-xs text-gray-500 block">Class</span>
@@ -824,62 +861,66 @@ function ManageBooking() {
 
             {activeTab === 'passenger' && (
               <div>
-                <h3 className="text-lg font-semibold mb-4">Passenger Information</h3>
+                <h3 className="font-grotesk text-lg font-bold text-gray-900 mb-4">Passenger Information</h3>
                 {/* Either shape: the record arrives as `travelers` from My Trips
                     and as `passengerData` when this page fetches it itself. */}
                 {(bookingData?.travelers?.length ? bookingData.travelers : bookingData?.passengerData)?.length > 0 ? (
                   <div className="space-y-4">
                     {(bookingData?.travelers?.length ? bookingData.travelers : bookingData.passengerData).map((traveler, index) => (
-                      <div key={index} className="p-4 bg-gray-50 rounded-lg">
-                        <h4 className="font-semibold mb-2">Passenger {index + 1}</h4>
+                      <div key={index} className="rounded-xl border border-gray-200 p-4 sm:p-5">
+                        <h4 className="mb-4 flex items-center gap-3">
+                          <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-[#F1FBFD] font-grotesk text-sm font-bold text-[#055B75] ring-1 ring-[#DCEBF0]" aria-hidden="true">
+                            {`${traveler.firstName?.[0] || ''}${traveler.lastName?.[0] || ''}`.toUpperCase() || index + 1}
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block text-[11px] font-bold uppercase tracking-[0.14em] text-gray-400">Passenger {index + 1}</span>
+                            <span className="block font-semibold text-gray-900 truncate">{[traveler.firstName, traveler.lastName].filter(Boolean).join(' ')}</span>
+                          </span>
+                        </h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div>
-                            <label className="text-sm font-medium text-gray-500">Name</label>
-                            <p>{traveler.firstName} {traveler.lastName}</p>
-                          </div>
-                          <div>
-                            <label className="text-sm font-medium text-gray-500">Email</label>
-                            <p>{traveler.email || 'Not provided'}</p>
+                            <label className="block text-[12px] text-gray-500 mb-0.5">Email</label>
+                            <p className="text-[14px] font-semibold text-gray-900">{traveler.email || 'Not provided'}</p>
                           </div>
                           {traveler.dateOfBirth && (
                             <div>
-                              <label className="text-sm font-medium text-gray-500">Date of Birth</label>
-                              <p>{traveler.dateOfBirth}</p>
+                              <label className="block text-[12px] text-gray-500 mb-0.5">Date of Birth</label>
+                              <p className="text-[14px] font-semibold text-gray-900">{formatCalendarDate(traveler.dateOfBirth, { month: 'short', day: 'numeric', year: 'numeric' }, traveler.dateOfBirth)}</p>
                             </div>
                           )}
                           {traveler.gender && (
                             <div>
-                              <label className="text-sm font-medium text-gray-500">Gender</label>
-                              <p>{traveler.gender}</p>
+                              <label className="block text-[12px] text-gray-500 mb-0.5">Gender</label>
+                              <p className="text-[14px] font-semibold text-gray-900 capitalize">{String(traveler.gender).toLowerCase()}</p>
                             </div>
                           )}
                           {traveler.nationality && (
                             <div>
-                              <label className="text-sm font-medium text-gray-500">Nationality</label>
-                              <p>{traveler.nationality}</p>
+                              <label className="block text-[12px] text-gray-500 mb-0.5">Nationality</label>
+                              <p className="text-[14px] font-semibold text-gray-900">{traveler.nationality}</p>
                             </div>
                           )}
                           {traveler.passportNumber && (
                             <div>
-                              <label className="text-sm font-medium text-gray-500">Passport Number</label>
+                              <label className="block text-[12px] text-gray-500 mb-0.5">Passport Number</label>
                               {/* Masked: this page is opened on shared screens
                                   and captured into the downloadable document.
                                   The server already sends only the last three
                                   characters; this masks a record from anywhere
                                   else the same way. */}
-                              <p className="font-mono">{`•••• ${String(traveler.passportNumber).slice(-3)}`}</p>
+                              <p className="text-[14px] font-semibold tracking-wide text-gray-900">{`•••• ${String(traveler.passportNumber).slice(-3)}`}</p>
                             </div>
                           )}
                           {traveler.passportExpiry && (
                             <div>
-                              <label className="text-sm font-medium text-gray-500">Passport Expiry</label>
-                              <p>{traveler.passportExpiry}</p>
+                              <label className="block text-[12px] text-gray-500 mb-0.5">Passport Expiry</label>
+                              <p className="text-[14px] font-semibold text-gray-900">{formatCalendarDate(traveler.passportExpiry, { month: 'short', day: 'numeric', year: 'numeric' }, traveler.passportExpiry)}</p>
                             </div>
                           )}
                           {traveler.mobile && (
                             <div>
-                              <label className="text-sm font-medium text-gray-500">Mobile</label>
-                              <p>{traveler.mobile}</p>
+                              <label className="block text-[12px] text-gray-500 mb-0.5">Mobile</label>
+                              <p className="text-[14px] font-semibold text-gray-900">{traveler.mobile}</p>
                             </div>
                           )}
                         </div>
@@ -894,19 +935,19 @@ function ManageBooking() {
 
             {activeTab === 'payment' && (
               <div>
-                <h3 className="text-lg font-semibold mb-4">Payment Information</h3>
+                <h3 className="font-grotesk text-lg font-bold text-gray-900 mb-4">Payment Information</h3>
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="text-sm font-medium text-gray-500">Total Amount</label>
-                      <p className="text-xl font-bold text-green-600">{Number(bookingData?.amount) > 0 ? formatUsd(bookingData.amount) : 'Not recorded'}</p>
+                      <label className="block text-[12px] text-gray-500 mb-0.5">Total Amount</label>
+                      <p className="font-grotesk text-2xl font-bold text-gray-900">{Number(bookingData?.amount) > 0 ? formatUsd(bookingData.amount) : 'Not recorded'}</p>
                     </div>
                     <div>
-                      <label className="text-sm font-medium text-gray-500">Payment Status</label>
+                      <label className="block text-[12px] text-gray-500 mb-0.5">Payment Status</label>
                       {/* From the payment record. This said "Paid" for every
                           booking, including unpaid and refunded ones. */}
                       {isPaid(bookingData) ? (
-                        <p className="text-lg font-semibold text-green-600">Paid</p>
+                        <p><span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-sm font-bold text-emerald-700"><span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />Paid</span></p>
                       ) : (
                         <p className="text-lg font-semibold text-gray-700 capitalize">
                           {String(bookingData?.payment_status || bookingData?.paymentStatus || 'Not recorded').replace(/_/g, ' ')}
@@ -914,24 +955,27 @@ function ManageBooking() {
                       )}
                     </div>
                     <div>
-                      <label className="text-sm font-medium text-gray-500">Transaction ID</label>
-                      <p className="font-mono">{bookingData?.transactionId || 'N/A'}</p>
+                      <label className="block text-[12px] text-gray-500 mb-0.5">Transaction ID</label>
+                      <p className="flex items-center gap-1 text-[15px] font-semibold tracking-wide text-gray-900">
+                        {bookingData?.transactionId || 'N/A'}
+                        {bookingData?.transactionId && <CopyButton value={bookingData.transactionId} label="transaction ID" />}
+                      </p>
                     </div>
                     <div>
-                      <label className="text-sm font-medium text-gray-500">Booking Date</label>
+                      <label className="block text-[12px] text-gray-500 mb-0.5">Booking Date</label>
                       <p>{(bookingData?.orderCreatedAt || bookingData?.bookingDate) && !Number.isNaN(new Date(bookingData?.orderCreatedAt || bookingData?.bookingDate).getTime())
-                        ? new Date(bookingData?.orderCreatedAt || bookingData?.bookingDate).toLocaleDateString()
+                        ? new Date(bookingData?.orderCreatedAt || bookingData?.bookingDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
                         : 'N/A'}</p>
                     </div>
                   </div>
 
                   {isPaid(bookingData) && (
-                    <div className="mt-6 p-4 bg-green-50 rounded-lg border border-green-200">
+                    <div className="mt-5 p-4 bg-emerald-50 rounded-xl border border-emerald-100">
                       <div className="flex items-center">
-                        <CheckCircle className="w-5 h-5 text-green-600 mr-2" />
-                        <span className="font-medium text-green-800">Payment received</span>
+                        <CheckCircle className="w-5 h-5 text-emerald-600 mr-2" />
+                        <span className="font-semibold text-emerald-800">Payment received</span>
                       </div>
-                      <p className="text-sm text-green-700 mt-1">
+                      <p className="text-sm text-emerald-700 mt-1">
                         Your payment has been received.
                       </p>
                     </div>
@@ -946,16 +990,23 @@ function ManageBooking() {
           </div>
 
           {/* Contact Support */}
-          <div className="mt-6 bg-[#F0FAFC] border border-[#B9D0DC] rounded-lg p-4">
-            <h4 className="font-semibold text-[#034457] mb-2">Need Help?</h4>
-            <p className="text-[#034457] text-sm mb-3">Our customer support team is here to assist you with any questions about your booking.</p>
-            <div className="flex flex-wrap gap-4">
-              <a href="tel:+18775387380" className="flex items-center text-[#055B75] hover:text-[#034457]">
-                <Phone className="w-4 h-4 mr-1" />
+          <div className="mt-6 flex flex-col gap-4 rounded-2xl border border-[#DCEBF0] bg-white p-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-[#F1FBFD] text-[#055B75] ring-1 ring-[#DCEBF0]">
+                <Headset className="h-5 w-5" aria-hidden="true" />
+              </span>
+              <div>
+                <h4 className="font-semibold text-gray-900">Need Help?</h4>
+                <p className="text-sm text-gray-600">Our customer support team is here to assist you with any questions about your booking.</p>
+              </div>
+            </div>
+            <div className="flex flex-shrink-0 flex-wrap gap-2">
+              <a href="tel:+18775387380" className={`inline-flex items-center gap-2 rounded-full bg-[#055B75] px-4 py-2 text-sm font-bold text-white hover:bg-[#034457] transition-colors ${focusRing}`}>
+                <Phone className="w-4 h-4" />
                 (877) 538-7380
               </a>
-              <a href="mailto:support@jetsetterss.com" className="flex items-center text-[#055B75] hover:text-[#034457]">
-                <Mail className="w-4 h-4 mr-1" />
+              <a href="mailto:support@jetsetterss.com" className={`inline-flex items-center gap-2 rounded-full border border-[#B9D0DC] bg-white px-4 py-2 text-sm font-bold text-[#055B75] hover:border-[#055B75] transition-colors ${focusRing}`}>
+                <Mail className="w-4 h-4" />
                 support@jetsetterss.com
               </a>
             </div>
