@@ -14,6 +14,7 @@ import {
   renderRouteSeoHead,
   renderSitemap,
 } from '../../scripts/generate-route-seo-pages.js';
+import { VISA_SERVICES_VISIBLE, isShownToCustomers } from '../../shared/siteSections.js';
 
 const temporaryDirectories = [];
 const template = `<!doctype html><html><head>${ROUTE_SEO_MARKER}</head><body><div id="app">${ROUTE_SEO_BODY_MARKER}</div></body></html>`;
@@ -32,7 +33,7 @@ const crawlNavigationPaths = [
   '/support',
   '/contact',
   '/faqs',
-];
+].filter(isShownToCustomers);
 
 afterEach(async () => {
   await Promise.all(temporaryDirectories.splice(0).map((directory) => import('node:fs/promises').then(({ rm }) => rm(directory, { recursive: true, force: true }))));
@@ -51,7 +52,8 @@ describe('route SEO page generator', () => {
     const { generatedPaths, spaShellPath } = await generateRouteSeoPages({ distDirectory });
 
     expect(generatedPaths).toHaveLength(INDEXABLE_ROUTE_SEO.length);
-    expect(INDEXABLE_ROUTE_SEO).toHaveLength(27);
+    // Seven of the 27 are customer visa pages, hidden for now (shared/siteSections.js).
+    expect(INDEXABLE_ROUTE_SEO).toHaveLength(VISA_SERVICES_VISIBLE ? 27 : 20);
 
     const cruisePage = await readFile(join(distDirectory, 'cruise', 'index.html'), 'utf8');
     expect(cruisePage).toContain('<title data-rh="true">Luxury Cruise Vacations | Jetsetters</title>');
@@ -242,14 +244,14 @@ describe('route SEO page generator', () => {
     const spaFallbacks = config.rewrites.filter((r) => r.destination === '/spa-shell.html');
 
     expect(topLevelDocuments, 'no top-level document rewrite in vercel.json').toBeDefined();
-    expect(visaDocuments, 'no visa document rewrite in vercel.json').toBeDefined();
+    expect(Boolean(visaDocuments), 'a visa document rewrite exactly while the visa pages are shown').toBe(VISA_SERVICES_VISIBLE);
 
     const topLevelPaths = topLevelDocuments.source.match(/\((.*)\)/)[1]
       .split('|')
       .map((pathname) => `/${pathname}`);
-    const visaPaths = visaDocuments.source.match(/\((.*)\)/)[1]
-      .split('|')
-      .map((pathname) => `/visa/${pathname}`);
+    const visaPaths = visaDocuments
+      ? visaDocuments.source.match(/\((.*)\)/)[1].split('|').map((pathname) => `/visa/${pathname}`)
+      : [];
     const expectedPaths = INDEXABLE_ROUTE_SEO
       .map(({ pathname }) => pathname)
       .filter((pathname) => pathname !== '/');

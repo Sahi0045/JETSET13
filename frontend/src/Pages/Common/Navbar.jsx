@@ -7,6 +7,7 @@ import Breadcrumbs from '../../Components/Breadcrumbs';
 import { useSupabaseAuth } from '../../contexts/SupabaseAuthContext';
 import { clearStoredBookings } from '../../utils/bookingStorage';
 import { clearTravellerDraft } from '../../utils/flightTravellerDraft';
+import { VISA_SERVICES_VISIBLE } from '../../../../shared/siteSections';
 
 const Navbar = ({ forceScrolled }) => {
   const location = useLocation();
@@ -149,9 +150,11 @@ const Navbar = ({ forceScrolled }) => {
       <div className="navbar-right">
         <div className="desktop-nav-links flex items-center gap-8 mr-8 hidden lg:flex">
           {/* Cruise / Flight / Packages / Hotels now live in the booking-widget tabs on the home hero */}
-          <Link to="/visa" className={`nav-link ${isActive('/visa') ? 'active' : ''}`}>
-            Visa / Document services
-          </Link>
+          {VISA_SERVICES_VISIBLE && (
+            <Link to="/visa" className={`nav-link ${isActive('/visa') ? 'active' : ''}`}>
+              Visa / Document services
+            </Link>
+          )}
           <Link to="/my-trips" className={`nav-link ${isActive('/my-trips') ? 'active' : ''}`}>
             My Trips
           </Link>
@@ -357,9 +360,11 @@ const Navbar = ({ forceScrolled }) => {
           <Link to="/hotels" className="mobile-nav-link" onClick={() => setIsMobileMenuOpen(false)}>
             Hotels
           </Link>
-          <Link to="/visa" className="mobile-nav-link" onClick={() => setIsMobileMenuOpen(false)}>
-            Visa
-          </Link>
+          {VISA_SERVICES_VISIBLE && (
+            <Link to="/visa" className="mobile-nav-link" onClick={() => setIsMobileMenuOpen(false)}>
+              Visa
+            </Link>
+          )}
           <Link to="/my-trips" className="mobile-nav-link" onClick={() => setIsMobileMenuOpen(false)}>
             My Trips
           </Link>

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Facebook, Instagram, Mail, Check } from 'lucide-react';
 import supabase from '../../lib/supabase';
+import { isShownToCustomers } from '../../../../shared/siteSections';
 
 const COLUMNS = [
   {
@@ -174,7 +175,7 @@ const Footer = () => {
                   {col.title}
                 </h3>
                 <ul className="space-y-1.5">
-                  {col.links.map((l) => (
+                  {col.links.filter((l) => isShownToCustomers(l.to)).map((l) => (
                     <li key={l.label}>
                       <Link
                         to={l.to}

@@ -9,6 +9,21 @@
   },
   "redirects": [
     {
+      "source": "/visa",
+      "destination": "/",
+      "permanent": false
+    },
+    {
+      "source": "/visa/(documents|apply|success|track|status|booking|refund-policy|terms|privacy)",
+      "destination": "/",
+      "permanent": false
+    },
+    {
+      "source": "/visa/consultation/:id",
+      "destination": "/",
+      "permanent": false
+    },
+    {
       "source": "/rental",
       "destination": "/hotels",
       "permanent": true
@@ -118,12 +133,8 @@
       "destination": "/api/index.js"
     },
     {
-      "source": "/(cruise|cruises|flights|packages|hotels|visa|resources|destinations|travel-blog|support|faqs|company|contact|careers|privacy-policy|cookies|terms-conditions|request|membership|help)",
+      "source": "/(cruise|cruises|flights|packages|hotels|resources|destinations|travel-blog|support|faqs|company|contact|careers|privacy-policy|cookies|terms-conditions|request|membership|help)",
       "destination": "/$1/index.html"
-    },
-    {
-      "source": "/visa/(documents|apply|booking|refund-policy|terms|privacy)",
-      "destination": "/visa/$1/index.html"
     },
     {
       "source": "/(dashboard|login|signup|profiledashboard|complete-profile|help|supabase-login|supabase-signup|supabase-profile|supabase-auth-debug|supabase-auth-status|auth/callback|my-trips|manage-booking|forgot-password|reset-password|booking-confirmation|cruise|cruises|itinerary|cruise-booking-summary|cruise-booking-success|flight|flights|flight-payment|flight-create-orders|packages|hotels|hotel-booking-success|membership|request|quote-detail|payment/callback|payment/success|payment/failed|admin|agent|desk|visa/agent|visa/admin|cookies|careers|resources|destinations|travel-blog|support|faqs|company|contact|privacy-policy|terms-conditions)",
