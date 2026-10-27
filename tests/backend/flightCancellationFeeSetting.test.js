@@ -55,10 +55,16 @@ describe('flightCancellationFeeFrom', () => {
 });
 
 describe('flightCancellationFeeFor', () => {
-  it('is that percentage of what was paid once a percentage is saved', () => {
-    expect(flightCancellationFeeFor({ flight_cancellation_fee_percent: 10 }, 500)).toBe(50);
-    expect(flightCancellationFeeFor({ flight_cancellation_fee_percent: '12.5', flight_cancellation_fee: 20 }, 291)).toBe(36.38);
-    expect(flightCancellationFeeFor({ flight_cancellation_fee_percent: 0, cancellation_fee: 75 }, 300)).toBe(0);
+  it('keeps the flat fee plus that percentage of what was paid', () => {
+    expect(flightCancellationFeeFor({ flight_cancellation_fee: 20, flight_cancellation_fee_percent: '12.5' }, 291)).toBe(56.38);
+    expect(flightCancellationFeeFor({ flight_cancellation_fee: 0, flight_cancellation_fee_percent: 10 }, 500)).toBe(50);
+    expect(flightCancellationFeeFor({ flight_cancellation_fee_percent: 10 }, 500)).toBe(100);
+  });
+
+  it('keeps only the flat fee when the percentage is 0, and nothing when both are', () => {
+    expect(flightCancellationFeeFor({ flight_cancellation_fee: 25, flight_cancellation_fee_percent: 0 }, 500)).toBe(25);
+    expect(flightCancellationFeeFor({ flight_cancellation_fee: 25, flight_cancellation_fee_percent: 0 }, null)).toBe(25);
+    expect(flightCancellationFeeFor({ flight_cancellation_fee: 0, flight_cancellation_fee_percent: 0 }, 500)).toBe(0);
   });
 
   it('is the fixed fee until a percentage is saved', () => {

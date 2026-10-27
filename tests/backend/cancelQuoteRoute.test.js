@@ -113,11 +113,18 @@ describe('the cancel quote', () => {
     expect(res.body.quote).toMatchObject({ policy: 'refundable', penalty: 150, penaltyCurrency: 'USD', cancellationFee: 40, airlinePrice: 287.5 });
   });
 
-  it('names the saved percentage of what was paid as the cancellation fee', async () => {
-    const settings = { cancellation_fee: 50, flight_cancellation_fee_percent: 10 };
+  it('names the saved percentage of what was paid as the cancellation fee when the flat fee is 0', async () => {
+    const settings = { cancellation_fee: 50, flight_cancellation_fee: 0, flight_cancellation_fee_percent: 10 };
     const res = await ask(await makeApp(row({ created_at: hoursAgo(30) }, ticketed), refundable, settings));
 
     expect(res.body.quote).toMatchObject({ policy: 'refundable', cancellationFee: 30, airlinePrice: 287.5 });
+  });
+
+  it('names the flat fee plus the percentage of what was paid', async () => {
+    const settings = { flight_cancellation_fee: 20, flight_cancellation_fee_percent: 10 };
+    const res = await ask(await makeApp(row({ created_at: hoursAgo(30) }, ticketed), refundable, settings));
+
+    expect(res.body.quote).toMatchObject({ policy: 'refundable', cancellationFee: 50, airlinePrice: 287.5 });
   });
 
   it('returns everything for a booking the airline never had', async () => {

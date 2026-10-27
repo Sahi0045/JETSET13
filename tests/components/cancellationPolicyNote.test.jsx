@@ -20,10 +20,9 @@ describe('CancellationPolicyNote', () => {
     expect(screen.getByText("You can cancel free until 11:59 PM on the day you book (our ticketing office's time): you get back the airline price. The service fee is not refundable.")).toBeTruthy();
   });
 
-  it('names the saved percentage instead of the fixed fee', () => {
+  it('names the flat fee and the percentage together', () => {
     render(<CancellationPolicyNote cancellationFee={50} cancellationFeePercent={10} />);
-    expect(screen.getByText(/less the airline's penalty and our cancellation fee of 10% of what you paid; a non-refundable fare/)).toBeTruthy();
-    expect(screen.queryByText(/\$50\.00/)).toBeNull();
+    expect(screen.getByText(/less the airline's penalty and our cancellation fee of \$50\.00 plus 10% of what you paid; a non-refundable fare/)).toBeTruthy();
   });
 
   it('names no fee when none is set', () => {

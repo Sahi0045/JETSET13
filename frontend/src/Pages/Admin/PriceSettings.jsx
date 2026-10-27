@@ -267,17 +267,19 @@ const PriceSettings = () => {
                   description="Percentage of base fare added for variable taxes and fees"
                 />
                 <InputField
-                  label="Cancellation Fee"
+                  label="Cancellation Fee - Flat"
+                  value={settings.flight_cancellation_fee}
+                  onChange={(value) => handleInputChange('flight_cancellation_fee', value)}
+                  suffix="USD"
+                  description="Kept when a customer cancels a flight after the free cancellation time, on top of the airline's own penalty. Set 0 to use only the percentage"
+                />
+                <InputField
+                  label="Cancellation Fee - Percentage"
                   value={settings.flight_cancellation_fee_percent ?? ''}
                   onChange={(value) => handleInputChange('flight_cancellation_fee_percent', value)}
                   suffix="%"
-                  description="Kept when a customer cancels a flight after the free cancellation time: this percentage of what they paid, on top of the airline's own penalty"
+                  description="Of what the customer paid, kept on top of the flat fee. Leave empty or 0 to use only the flat fee"
                 />
-                {settings.flight_cancellation_fee_percent == null && (
-                  <p style={{ fontSize: '12px', color: '#92400e', margin: '-16px 0 24px' }}>
-                    Until you save a percentage, the fixed {formatCurrency(settings.flight_cancellation_fee)} fee applies.
-                  </p>
-                )}
               </div>
               <div style={{
                 padding: '20px',
