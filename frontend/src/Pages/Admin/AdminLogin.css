@@ -615,9 +615,12 @@
   outline-offset: 2px;
 }
 
-/* Reduced Motion */
+/* Reduced Motion. Kept to this page: the stylesheet loads on every page of
+   the site, and a bare `*` here stopped the flight calendar's fade-in, which
+   left it invisible on laptops with Windows animations turned off. */
 @media (prefers-reduced-motion: reduce) {
-  * {
+  .admin-login-container,
+  .admin-login-container * {
     animation: none !important;
     transition: none !important;
   }
