@@ -133,6 +133,7 @@ export default defineConfig(({ mode }) => {
                         if (id.endsWith('/Pages/Common/Navbar.jsx') ||
                             id.endsWith('/Pages/Common/Footer.jsx') ||
                             id.endsWith('/Pages/Common/PageWrapper.jsx') ||
+                            id.endsWith('/Pages/Common/helpButtonsLane.jsx') ||
                             id.endsWith('/Pages/Common/ContactPopup.jsx') ||
                             id.includes('/frontend/src/lib/supabase') ||
                             id.includes('/frontend/src/Components/PrefetchLink') ||

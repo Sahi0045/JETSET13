@@ -6,6 +6,7 @@ import currencyService from '../../frontend/src/Services/CurrencyService.js';
 import { formatDateToISO, getSafeDate } from '../../frontend/src/utils/dateUtils.js';
 import FlightSearchPage from '../../frontend/src/Pages/Common/flights/flightsearchpage.jsx';
 import { withDepartureDate } from '../../frontend/src/Pages/Common/flights/searchResults.js';
+import { clearOfHelpButtons } from '../../frontend/src/Pages/Common/helpButtonsLane.jsx';
 
 /**
  * The flight results page, driven through its own fetches.
@@ -273,6 +274,17 @@ describe('pages of results', () => {
 
     const box = (await screen.findByTestId('flight-card')).parentElement;
     expect(box.className).not.toMatch(/\boverflow-(hidden|clip)\b/);
+  });
+
+  // Select flight, Fare breakup and Flight Details sit at the right of each
+  // card, where the help buttons float: from 1024 to 1536 px wide they lay on
+  // them as the list scrolled by (jetsetterss.com, 27 Oct).
+  it('keeps the cards clear of the help buttons in the corner', async () => {
+    searchAnswer = () => answer(200, { success: true, data: [card('f0')] });
+    renderPage();
+
+    const row = (await screen.findByTestId('flight-card')).closest('.flex.gap-6');
+    expect(row.className.split(/\s+/)).toContain(clearOfHelpButtons);
   });
 });
 
