@@ -3,6 +3,7 @@ import { queryKeys } from '../../lib/queryKeys';
 import { getApiUrl } from '../../utils/apiHelper';
 import { authHeaders } from '../../utils/authHeaders';
 import { bookedFeeRulesStaleTime } from '../../utils/bookedFeeRules';
+import { useSupabaseAuth } from '../../contexts/SupabaseAuthContext';
 
 /**
  * Open one booking. `email` lets a guest open their own. Exported for the
@@ -40,14 +41,29 @@ export async function fetchFlightBooking(bookingId, email) {
 export const shouldRetryBookingLookup = (count, err) =>
   err?.status !== 429 && !/^(No booking matches|We could not find)/.test(err?.message || '') && count < 2;
 
+/**
+ * Who is asking, once that is known. The sign-in comes back from the server
+ * after every page load (the Supabase client keeps no session). A booking asked
+ * for before then went out anonymous, the server answered 404 "not in your
+ * account", and a 404 is not retried: a signed-in customer opening their
+ * booking link saw "We couldn't open this booking" until they reloaded. So the
+ * booking queries wait for it, and are keyed by it, so they ask again as
+ * whoever turns out to be signed in.
+ */
+function useAsker() {
+  const { user, loading } = useSupabaseAuth();
+  return { ready: !loading, who: user?.id || null };
+}
+
 export function useFlightBooking(bookingId, options = {}) {
   const { email, ...queryOptions } = options;
+  const asker = useAsker();
   return useQuery({
-    queryKey: ['flights', 'booking', bookingId, email || null],
+    queryKey: ['flights', 'booking', bookingId, email || null, asker.who],
     queryFn: () => fetchFlightBooking(bookingId, email),
     retry: shouldRetryBookingLookup,
     ...queryOptions,
-    enabled: (queryOptions.enabled ?? true) && !!bookingId,
+    enabled: (queryOptions.enabled ?? true) && !!bookingId && asker.ready,
   });
 }
 
@@ -89,24 +105,26 @@ export async function fetchCancelQuote(bookingId, email) {
 
 export function useCancelQuote(bookingId, options = {}) {
   const { email, ...queryOptions } = options;
+  const asker = useAsker();
   return useQuery({
-    queryKey: ['flights', 'booking', bookingId, 'cancel-quote', email || null],
+    queryKey: ['flights', 'booking', bookingId, 'cancel-quote', email || null, asker.who],
     queryFn: () => fetchCancelQuote(bookingId, email),
     staleTime: 0,
     retry: false,
     ...queryOptions,
-    enabled: (queryOptions.enabled ?? true) && !!bookingId,
+    enabled: (queryOptions.enabled ?? true) && !!bookingId && asker.ready,
   });
 }
 
 export function useBookedFeeRules(bookingId, options = {}) {
   const { email, ...queryOptions } = options;
+  const asker = useAsker();
   return useQuery({
-    queryKey: ['flights', 'booking', bookingId, 'fee-rules', email || null],
+    queryKey: ['flights', 'booking', bookingId, 'fee-rules', email || null, asker.who],
     queryFn: () => fetchBookedFeeRules(bookingId, email),
     staleTime: bookedFeeRulesStaleTime,
     retry: false,
     ...queryOptions,
-    enabled: (queryOptions.enabled ?? true) && !!bookingId,
+    enabled: (queryOptions.enabled ?? true) && !!bookingId && asker.ready,
   });
 }
