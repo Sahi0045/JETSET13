@@ -50,7 +50,7 @@ function ManageBooking() {
   // this a guest's confirmation email linked to a page they could never open.
   const [lookupEmail, setLookupEmail] = useState('');
   const [submittedEmail, setSubmittedEmail] = useState(null);
-  const { data: fetchedBooking, isLoading: queryLoading, error: queryError, refetch } = useFlightBooking(bookingId, {
+  const { data: fetchedBooking, isPending: queryPending, error: queryError, refetch } = useFlightBooking(bookingId, {
     enabled: !!bookingId,
     email: submittedEmail,
     placeholderData: passedData || undefined,
@@ -67,7 +67,9 @@ function ManageBooking() {
       : base;
   }, [passedData, fetchedBooking, cancelledLocally, cancelResult]);
   const bookingCode = bookingCodeOf(bookingData);
-  const loading = !passedData && queryLoading;
+  // Pending, not only fetching: while the booking waits for the sign-in to
+  // come back it is not fetching yet, and the page has nothing to show.
+  const loading = !passedData && queryPending;
   // The error screen only when there is no booking to show. A read that fails
   // after one succeeded keeps the booking it read (the query keeps its data):
   // every cancel answer that is not a success reads the booking again, and
