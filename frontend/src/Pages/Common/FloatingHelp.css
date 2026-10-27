@@ -1,0 +1,155 @@
+.floating-help {
+  position: fixed;
+  right: 20px;
+  bottom: calc(20px + var(--floating-lift, 0px));
+  z-index: 999;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  transition: bottom 0.2s ease;
+}
+
+/* Hidden under a menu, drawer or sheet (useCornerClearance), and under an open
+   date picker, which on a phone spans this corner. */
+.floating-help[data-covered='true'],
+body.date-picker-open .floating-help {
+  visibility: hidden;
+}
+
+.floating-help__actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.floating-help__action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: none;
+  cursor: pointer;
+  color: #fff;
+  text-decoration: none;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+}
+
+.floating-help__action:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+}
+
+.floating-help__action svg {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+}
+
+.floating-help__label {
+  display: none;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.floating-help__whatsapp {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: #25D366;
+}
+
+.floating-help__whatsapp:hover {
+  background: #20BD5C;
+}
+
+.floating-help__contact {
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: #055B75;
+}
+
+.floating-help__contact svg {
+  display: none;
+}
+
+.floating-help__contact .floating-help__label {
+  display: inline;
+}
+
+.floating-help__chat {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: #055B75;
+}
+
+.floating-help__contact:hover,
+.floating-help__chat:hover,
+.floating-help__chat.is-open {
+  background: #034457;
+}
+
+.floating-help__launcher {
+  display: none;
+}
+
+/* Phones: one Help button; the three open above it as labelled pills. */
+@media (max-width: 640px) {
+  .floating-help {
+    right: 12px;
+    bottom: calc(16px + var(--floating-lift, 0px));
+  }
+
+  .floating-help__actions {
+    display: none;
+  }
+
+  .floating-help.is-expanded .floating-help__actions {
+    display: flex;
+  }
+
+  .floating-help .floating-help__action {
+    width: auto;
+    height: 44px;
+    padding: 0 16px 0 12px;
+    border-radius: 999px;
+  }
+
+  .floating-help .floating-help__action svg {
+    display: block;
+    width: 20px;
+    height: 20px;
+  }
+
+  .floating-help .floating-help__label {
+    display: inline;
+  }
+
+  .floating-help__launcher {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 52px;
+    height: 52px;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    color: #fff;
+    background: #055B75;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.25);
+    transition: background-color 0.2s ease;
+  }
+
+  .floating-help__launcher.is-open {
+    background: #034457;
+  }
+
+  .floating-help__launcher svg {
+    width: 24px;
+    height: 24px;
+  }
+}
