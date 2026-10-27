@@ -66,7 +66,9 @@ function DateField({ number, value, minDate, error, onPick }) {
         aria-label={`Select date of flight ${number}`}
         aria-haspopup="dialog"
         aria-expanded={open}
-        onClick={() => setOpen((current) => !current)}
+        // Enter and Space click with detail 0 and open or shut it; a mouse
+        // click only opens, as a double click shut it again.
+        onClick={(event) => setOpen((current) => (event.detail === 0 ? !current : true))}
         className="w-full text-left"
       >
         <span className="block text-[10.5px] font-bold uppercase tracking-[0.14em] text-gray-400 mb-1">Date</span>

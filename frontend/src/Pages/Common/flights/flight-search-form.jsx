@@ -517,11 +517,13 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
               </button>
             </label>
 
-            {/* Departure */}
+            {/* Departure. A click opens the calendar and never shuts it: the
+                second click of a double click on a laptop shut it again, so it
+                seemed not to open. Enter and Space still open and shut it. */}
             <div ref={departCalendarRef}
               role="button" tabIndex={0} aria-haspopup="dialog" aria-expanded={showDepartCalendar} aria-label="Select departure date"
               className={`relative flex-1 px-5 py-4 cursor-pointer hover:bg-[#055B75]/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#055B75]/40 transition-colors border-t lg:border-t-0 lg:border-l border-gray-200 ${showDepartCalendar ? 'z-50' : ''}`}
-              onClick={() => { setShowDepartCalendar((v) => !v); setShowReturnCalendar(false); }}
+              onClick={() => { setShowDepartCalendar(true); setShowReturnCalendar(false); }}
               onKeyDown={onKeyActivate(() => { setShowDepartCalendar((v) => !v); setShowReturnCalendar(false); })}>
               <span className="block text-[10.5px] font-bold uppercase tracking-[0.14em] text-gray-400 mb-1.5">Departure</span>
               {departParts ? (
@@ -555,7 +557,7 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
               className={`relative flex-1 px-5 py-4 cursor-pointer hover:bg-[#055B75]/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#055B75]/40 transition-colors border-t lg:border-t-0 lg:border-l border-gray-200 ${showReturnCalendar ? 'z-50' : ''}`}
               onClick={() => {
                 if (formData.tripType !== 'roundTrip') handleTripTypeChange('roundTrip');
-                setShowReturnCalendar((v) => !v); setShowDepartCalendar(false);
+                setShowReturnCalendar(true); setShowDepartCalendar(false);
               }}
               onKeyDown={onKeyActivate(() => {
                 if (formData.tripType !== 'roundTrip') handleTripTypeChange('roundTrip');
