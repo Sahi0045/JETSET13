@@ -1,28 +1,72 @@
 import React, { useState } from 'react'
-import { Check, Copy, Download, ExternalLink, Eye, Settings } from 'lucide-react'
+import { Armchair, Check, Copy, Download, ExternalLink, Eye, Luggage, ReceiptText, Settings, Tag, Ticket, Users } from 'lucide-react'
 import { daysUntilDate, formatCalendarDate } from '../../../../utils/dateUtils'
 import { attentionMessage } from '../../../../utils/bookingStatus'
 import { bookingCodeOf, canDownloadDocument, documentState, isCommitUnknown, liveTickets, ticketState, ticketsVoided } from '../../../../utils/eTicket'
 import { formatUsd } from '../../../../utils/bookingCharge'
 import BookingItinerary from '../../flights/BookingItinerary'
+import CopyButton from '../../../../Components/CopyButton'
 import { checkInOpensText, checkInsOf } from '../../../../../../shared/airlineCheckIn'
 import { cabinOf, routeOf, travelDateOf, travellerCount, tripReferenceOf } from './tripView'
 
 const fmt = (date, options = { month: 'short', day: 'numeric', year: 'numeric' }) => formatCalendarDate(date, options)
 
-const Fact = ({ label, children }) => (
-  <div className="flex items-baseline justify-between gap-4 py-2.5 min-w-0">
-    <dt className="text-sm text-gray-500 flex-shrink-0">{label}</dt>
-    <dd className="text-sm font-semibold text-gray-900 text-right break-words min-w-0">{children}</dd>
+const Fact = ({ label, children, copy }) => (
+  <div className="flex items-center justify-between gap-4 py-3 min-w-0">
+    <dt className="text-[13px] text-gray-500 flex-shrink-0">{label}</dt>
+    <dd className="flex items-center justify-end gap-1 text-[13.5px] font-semibold text-gray-900 text-right break-words min-w-0">
+      {children}
+      {copy && <CopyButton value={copy} label={label} />}
+    </dd>
   </div>
 )
 
-const FactGroup = ({ title, children }) => (
-  <section className="min-w-0">
-    <h4 className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#055B75] mb-1">{title}</h4>
-    <dl className="divide-y divide-gray-200/80">{children}</dl>
+const Facts = ({ children }) => <dl className="divide-y divide-dashed divide-gray-200">{children}</dl>
+
+const Section = ({ icon: Icon, title, className = '', children }) => (
+  <section className={`min-w-0 p-4 sm:p-5 ${className}`}>
+    <h4 className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.14em] text-[#055B75] mb-3">
+      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#F1FBFD] ring-1 ring-[#DCEBF0]">
+        <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+      </span>
+      {title}
+    </h4>
+    {children}
   </section>
 )
+
+/** The one figure a section is about - the airline's code, what was paid - set large. */
+const Highlight = ({ label, children, note, copy }) => (
+  <div className="pb-3">
+    <div className="text-[12px] text-gray-500">{label}</div>
+    <div className="flex items-center gap-1 min-w-0">
+      {children}
+      {copy && <CopyButton value={copy} label={label} />}
+    </div>
+    {note && <div className="text-[11px] font-medium text-gray-500">{note}</div>}
+  </div>
+)
+
+function baggageText(baggage) {
+  if (typeof baggage === 'object') return JSON.stringify(baggage)
+  const text = String(baggage).trim()
+  const kilos = text.match(/^(\d+)\s*KG$/i)
+  if (kilos) return `${kilos[1]} kg checked`
+  const pieces = text.match(/^(\d+)\s*(PC|P|PIECES?)$/i)
+  if (pieces) return `${pieces[1]} checked bag${pieces[1] === '1' ? '' : 's'}`
+  return text
+}
+
+const Chips = ({ items }) => (items.length === 0 ? null : (
+  <ul className="flex flex-wrap gap-2 pb-2" aria-label="Trip facts">
+    {items.map(({ icon: Icon, label, text }) => (
+      <li key={label} className="inline-flex items-center gap-1.5 rounded-full border border-[#DCEBF0] bg-[#F1FBFD] px-3 py-1 text-[12.5px] font-semibold text-[#034457]">
+        <Icon className="h-3.5 w-3.5 text-[#0890BC]" aria-hidden="true" />
+        <span className="sr-only">{label}: </span>{text}
+      </li>
+    ))}
+  </ul>
+))
 
 function ticketText(booking) {
   const status = String(booking.status || '').toUpperCase()
@@ -92,36 +136,60 @@ export function TripDetails({ booking }) {
   const travellers = travellerCount(booking)
   const cabin = isFlight ? cabinOf(booking, legs) : ''
 
+  const ticket = isFlight && booking.pnr ? ticketText(booking) : null
+  const ticketNumbers = liveTickets(booking).map((t) => t?.number).filter(Boolean)
+  const reference = booking.orderId || booking.bookingReference || booking.quoteId || 'N/A'
+  const secondId = isDatabaseBooking ? (booking.orderId || booking.bookingReference) : (booking.transactionId || 'N/A')
+  const chips = [
+    cabin && { icon: Armchair, label: 'Cabin', text: cabin },
+    travellers && { icon: Users, label: 'Travellers', text: `${travellers} traveller${Number(travellers) === 1 ? '' : 's'}` },
+    booking.baggage && { icon: Luggage, label: 'Baggage', text: baggageText(booking.baggage) },
+    booking.brandedFareLabel && { icon: Tag, label: 'Fare type', text: booking.brandedFareLabel },
+  ].filter(Boolean)
+
   return (
     <div data-testid="trip-details" className="p-4 sm:p-5 space-y-4">
       {legs.length > 0 && <BookingItinerary legs={legs} />}
       {isFlight && legs.length === 0 && (booking.origin || booking.destination) && (
         <p className="text-sm text-gray-700">{booking.origin} → {booking.destination}{booking.departureDate ? ` · ${fmt(booking.departureDate)}` : ''}</p>
       )}
-      <div className="grid md:grid-cols-2 gap-x-10 gap-y-5">
-        <FactGroup title="Your booking">
-          {isFlight && booking.pnr && (
-            <Fact label={code.label}>
-              <span className="font-mono tracking-widest text-[#034457]">{code.value}</span>
-              {code.amadeusReference && <span className="block text-[11px] font-medium text-gray-500">{`Amadeus reference ${code.amadeusReference}`}</span>}
-            </Fact>
-          )}
-          {/* A PNR alone is a reservation, not a ticket. */}
-          {isFlight && booking.pnr && <Fact label="Ticket">{ticketText(booking)}</Fact>}
-          {cabin && <Fact label="Cabin">{cabin}</Fact>}
-          {travellers && <Fact label="Travellers">{travellers}</Fact>}
-          {booking.baggage && <Fact label="Baggage">{typeof booking.baggage === 'object' ? JSON.stringify(booking.baggage) : booking.baggage}</Fact>}
-          {booking.brandedFareLabel && <Fact label="Fare type">{booking.brandedFareLabel}</Fact>}
-          <OtherTravelFacts booking={booking} />
-        </FactGroup>
-        <FactGroup title="Payment">
-          <Fact label="Paid">{paidText(booking)}</Fact>
-          <Fact label="Booked on">{fmt(booking.bookingDate || booking.orderCreatedAt || booking.paid_at || new Date())}</Fact>
-          <Fact label="Reference">{booking.orderId || booking.bookingReference || booking.quoteId || 'N/A'}</Fact>
-          <Fact label={isDatabaseBooking ? 'Quote number' : 'Transaction ID'}>
-            {isDatabaseBooking ? (booking.orderId || booking.bookingReference) : (booking.transactionId || 'N/A')}
-          </Fact>
-        </FactGroup>
+      <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_1px_2px_rgba(3,68,87,0.05)]">
+        {/* Notches where the dashed line meets the edges, like a ticket's tear-off. */}
+        <span aria-hidden="true" className="hidden md:block absolute left-1/2 top-0 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border border-gray-200 bg-[#FCFBF8]" />
+        <span aria-hidden="true" className="hidden md:block absolute left-1/2 bottom-0 h-4 w-4 -translate-x-1/2 translate-y-1/2 rounded-full border border-gray-200 bg-[#FCFBF8]" />
+        <div className="grid md:grid-cols-2">
+          <Section icon={Ticket} title="Your booking">
+            {isFlight && booking.pnr && (
+              <Highlight label={code.label} note={code.amadeusReference ? `Amadeus reference ${code.amadeusReference}` : null} copy={code.value}>
+                <span className="font-grotesk text-[24px] font-bold leading-tight tracking-[0.18em] text-[#034457]">{code.value}</span>
+              </Highlight>
+            )}
+            <Chips items={chips} />
+            <Facts>
+              {/* A PNR alone is a reservation, not a ticket. */}
+              {ticket && (
+                <Fact label="E-ticket" copy={typeof ticket !== 'string' && ticketNumbers.length === 1 ? ticketNumbers[0] : null}>
+                  <span className="tabular-nums tracking-wide">{ticket}</span>
+                </Fact>
+              )}
+              <OtherTravelFacts booking={booking} />
+              <Fact label="Booked on">{fmt(booking.bookingDate || booking.orderCreatedAt || booking.paid_at || new Date())}</Fact>
+            </Facts>
+          </Section>
+          <Section icon={ReceiptText} title="Payment" className="border-t md:border-t-0 md:border-l border-dashed border-gray-200">
+            <Highlight label="Paid" note={amountOf(booking) > 0 ? 'Charged in US dollars' : null}>
+              <span className="font-grotesk text-[24px] font-bold leading-tight tabular-nums text-gray-900">{paidText(booking)}</span>
+            </Highlight>
+            <Facts>
+              <Fact label="Reference" copy={reference !== 'N/A' ? reference : null}>
+                <span className="tabular-nums tracking-wide">{reference}</span>
+              </Fact>
+              <Fact label={isDatabaseBooking ? 'Quote number' : 'Transaction ID'} copy={secondId && secondId !== 'N/A' ? secondId : null}>
+                <span className="tabular-nums tracking-wide">{secondId}</span>
+              </Fact>
+            </Facts>
+          </Section>
+        </div>
       </div>
       {booking.description && <p className="text-sm text-gray-600">{booking.description}</p>}
     </div>
@@ -175,7 +243,7 @@ export function CheckInStrip({ booking }) {
           <div className="min-w-0">
             <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-gray-500">{checkIn.codeIsAirlines ? 'Airline booking code' : 'Booking code'}</div>
             <div className="flex items-center gap-1.5">
-              <span className="font-mono text-lg font-bold tracking-[0.2em] text-[#034457]">{checkIn.code}</span>
+              <span className="font-grotesk text-lg font-bold tracking-[0.18em] text-[#034457]">{checkIn.code}</span>
               <button type="button" onClick={() => copy(checkIn.code)} aria-label={`Copy ${checkIn.code}`} title="Copy" className={`p-1.5 rounded-md text-[#055B75] hover:bg-white ${focusRing}`}>
                 {copied === checkIn.code ? <Check className="h-4 w-4" aria-hidden="true" /> : <Copy className="h-4 w-4" aria-hidden="true" />}
               </button>
