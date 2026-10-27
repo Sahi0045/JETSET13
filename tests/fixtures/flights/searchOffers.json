@@ -1,0 +1,480 @@
+[
+  {
+    "id": "4-1",
+    "airline": "Air India Limited",
+    "airlineCode": "AI",
+    "flightNumber": "AI-2433",
+    "price": {
+      "total": "173.40",
+      "amount": 173.4,
+      "currency": "USD",
+      "base": "134.00",
+      "grandTotal": "173.40",
+      "fees": []
+    },
+    "duration": "2h 20m",
+    "durationMinutes": 140,
+    "departure": {
+      "time": "21:30",
+      "airport": "DEL",
+      "terminal": "3",
+      "date": "2026-11-23"
+    },
+    "arrival": {
+      "time": "23:50",
+      "airport": "BOM",
+      "terminal": "2",
+      "date": "2026-11-23"
+    },
+    "stops": 0,
+    "stopDetails": [],
+    "aircraft": "Airbus A320neo",
+    "cabin": "ECONOMY",
+    "brandedFare": null,
+    "brandedFareLabel": null,
+    "operatingCarrier": "AI",
+    "operatingAirlineName": "Air India Limited",
+    "lastTicketingDate": null,
+    "numberOfBookableSeats": null,
+    "baggage": "15 KG",
+    "baggageDetails": {
+      "checked": {
+        "weight": 15,
+        "weightUnit": "KG"
+      },
+      "cabin": null
+    },
+    "refundable": null,
+    "seats": null,
+    "isUpsellOffer": false,
+    "amenities": [],
+    "fareBasis": "UU1YXR2I",
+    "bookingClass": "U",
+    "validatingAirlineCodes": [],
+    "originalOffer": {
+      "type": "flight-offer",
+      "id": "4-1",
+      "source": "GDS",
+      "instantTicketingRequired": false,
+      "nonHomogeneous": false,
+      "oneWay": true,
+      "lastTicketingDate": null,
+      "itineraries": [
+        {
+          "duration": "PT2H20M",
+          "segments": [
+            {
+              "id": "1",
+              "departure": {
+                "iataCode": "DEL",
+                "terminal": "3",
+                "at": "2026-11-23T21:30:00"
+              },
+              "arrival": {
+                "iataCode": "BOM",
+                "terminal": "2",
+                "at": "2026-11-23T23:50:00"
+              },
+              "carrierCode": "AI",
+              "number": "2433",
+              "aircraft": {
+                "code": "32N"
+              },
+              "operating": {
+                "carrierCode": "AI"
+              },
+              "numberOfStops": 0,
+              "blacklistedInEU": false
+            }
+          ]
+        }
+      ],
+      "price": {
+        "currency": "USD",
+        "total": "173.40",
+        "base": "134.00",
+        "grandTotal": "173.40",
+        "fees": []
+      },
+      "pricingOptions": {
+        "fareType": [
+          "PUBLISHED"
+        ],
+        "includedCheckedBagsOnly": true
+      },
+      "validatingAirlineCodes": [],
+      "travelerPricings": [
+        {
+          "travelerId": "1",
+          "fareOption": "STANDARD",
+          "travelerType": "ADULT",
+          "price": {
+            "currency": "USD",
+            "total": "86.70",
+            "base": "67.00"
+          },
+          "fareDetailsBySegment": [
+            {
+              "segmentId": "1",
+              "cabin": "ECONOMY",
+              "fareBasis": "UU1YXR2I",
+              "brandedFare": null,
+              "class": "U",
+              "includedCheckedBags": {
+                "weight": 15,
+                "weightUnit": "KG"
+              },
+              "amenities": []
+            }
+          ]
+        },
+        {
+          "travelerId": "2",
+          "fareOption": "STANDARD",
+          "travelerType": "ADULT",
+          "price": {
+            "currency": "USD",
+            "total": "86.70",
+            "base": "67.00"
+          },
+          "fareDetailsBySegment": [
+            {
+              "segmentId": "1",
+              "cabin": "ECONOMY",
+              "fareBasis": "UU1YXR2I",
+              "brandedFare": null,
+              "class": "U",
+              "includedCheckedBags": {
+                "weight": 15,
+                "weightUnit": "KG"
+              },
+              "amenities": []
+            }
+          ]
+        }
+      ],
+      "_ama": {
+        "wsap": "1ASIWJETJEC",
+        "node": "noded2.production.webservices.amadeus.com",
+        "officeId": "SCK1S2400",
+        "currency": "USD",
+        "recommendationId": "4",
+        "combination": 1,
+        "searchedAt": "2026-10-24T07:08:21.950Z",
+        "refundable": null,
+        "paxRefs": [
+          {
+            "ref": "1",
+            "ptc": "ADT"
+          },
+          {
+            "ref": "2",
+            "ptc": "ADT"
+          }
+        ],
+        "segments": [
+          {
+            "legIndex": 0,
+            "segmentRef": "1",
+            "boardPoint": "DEL",
+            "boardTerminal": "3",
+            "offPoint": "BOM",
+            "offTerminal": "2",
+            "departureDate": "231126",
+            "departureTime": "2130",
+            "arrivalDate": "231126",
+            "arrivalTime": "2350",
+            "dateVariation": "",
+            "marketingCarrier": "AI",
+            "operatingCarrier": "AI",
+            "flightNumber": "2433",
+            "rbd": "U",
+            "cabinDesignator": "M",
+            "equipmentType": "32N",
+            "fareBasis": "UU1YXR2I",
+            "breakPoint": ""
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "41-1",
+    "airline": "Air India Limited",
+    "airlineCode": "AI",
+    "flightNumber": "AI-9567",
+    "price": {
+      "total": "300.80",
+      "amount": 300.8,
+      "currency": "USD",
+      "base": "236.00",
+      "grandTotal": "300.80",
+      "fees": []
+    },
+    "duration": "5h 35m",
+    "durationMinutes": 335,
+    "departure": {
+      "time": "18:35",
+      "airport": "DEL",
+      "terminal": "1",
+      "date": "2026-11-23"
+    },
+    "arrival": {
+      "time": "00:10",
+      "airport": "BOM",
+      "terminal": "2",
+      "date": "2026-11-24"
+    },
+    "stops": 1,
+    "stopDetails": [
+      {
+        "airport": "GOI",
+        "terminal": "",
+        "arrivalAt": "2026-11-23T21:15:00",
+        "departureAt": "2026-11-23T22:45:00",
+        "duration": "1h 30m",
+        "waitingTime": "1h 30m"
+      }
+    ],
+    "aircraft": "Airbus A320",
+    "cabin": "ECONOMY",
+    "brandedFare": null,
+    "brandedFareLabel": null,
+    "operatingCarrier": "IX",
+    "operatingAirlineName": "Air India Express",
+    "lastTicketingDate": "2026-10-24",
+    "numberOfBookableSeats": 4,
+    "baggage": "15 KG",
+    "baggageDetails": {
+      "checked": {
+        "weight": 15,
+        "weightUnit": "KG"
+      },
+      "cabin": null
+    },
+    "refundable": false,
+    "seats": 4,
+    "isUpsellOffer": false,
+    "amenities": [],
+    "fareBasis": "QK1YXYDD",
+    "bookingClass": "Q",
+    "validatingAirlineCodes": [
+      "AI"
+    ],
+    "originalOffer": {
+      "type": "flight-offer",
+      "id": "41-1",
+      "source": "GDS",
+      "instantTicketingRequired": false,
+      "nonHomogeneous": false,
+      "oneWay": true,
+      "lastTicketingDate": "2026-10-24",
+      "numberOfBookableSeats": 4,
+      "itineraries": [
+        {
+          "duration": "PT5H35M",
+          "segments": [
+            {
+              "id": "1",
+              "departure": {
+                "iataCode": "DEL",
+                "terminal": "1",
+                "at": "2026-11-23T18:35:00"
+              },
+              "arrival": {
+                "iataCode": "GOI",
+                "at": "2026-11-23T21:15:00"
+              },
+              "carrierCode": "AI",
+              "number": "9567",
+              "aircraft": {
+                "code": "320"
+              },
+              "operating": {
+                "carrierCode": "IX"
+              },
+              "numberOfStops": 0,
+              "blacklistedInEU": false
+            },
+            {
+              "id": "2",
+              "departure": {
+                "iataCode": "GOI",
+                "at": "2026-11-23T22:45:00"
+              },
+              "arrival": {
+                "iataCode": "BOM",
+                "terminal": "2",
+                "at": "2026-11-24T00:10:00"
+              },
+              "carrierCode": "AI",
+              "number": "9838",
+              "aircraft": {
+                "code": "737"
+              },
+              "operating": {
+                "carrierCode": "IX"
+              },
+              "numberOfStops": 0,
+              "blacklistedInEU": false
+            }
+          ]
+        }
+      ],
+      "price": {
+        "currency": "USD",
+        "total": "300.80",
+        "base": "236.00",
+        "grandTotal": "300.80",
+        "fees": []
+      },
+      "pricingOptions": {
+        "fareType": [
+          "PUBLISHED"
+        ],
+        "includedCheckedBagsOnly": true
+      },
+      "validatingAirlineCodes": [
+        "AI"
+      ],
+      "travelerPricings": [
+        {
+          "travelerId": "1",
+          "fareOption": "STANDARD",
+          "travelerType": "ADULT",
+          "price": {
+            "currency": "USD",
+            "total": "150.40",
+            "base": "118.00"
+          },
+          "fareDetailsBySegment": [
+            {
+              "segmentId": "1",
+              "cabin": "ECONOMY",
+              "fareBasis": "QK1YXYDD",
+              "brandedFare": null,
+              "class": "Q",
+              "includedCheckedBags": {
+                "weight": 15,
+                "weightUnit": "KG"
+              },
+              "amenities": []
+            },
+            {
+              "segmentId": "2",
+              "cabin": "ECONOMY",
+              "fareBasis": "QK1YXYDD",
+              "brandedFare": null,
+              "class": "Q",
+              "includedCheckedBags": {
+                "weight": 15,
+                "weightUnit": "KG"
+              },
+              "amenities": []
+            }
+          ]
+        },
+        {
+          "travelerId": "2",
+          "fareOption": "STANDARD",
+          "travelerType": "ADULT",
+          "price": {
+            "currency": "USD",
+            "total": "150.40",
+            "base": "118.00"
+          },
+          "fareDetailsBySegment": [
+            {
+              "segmentId": "1",
+              "cabin": "ECONOMY",
+              "fareBasis": "QK1YXYDD",
+              "brandedFare": null,
+              "class": "Q",
+              "includedCheckedBags": {
+                "weight": 15,
+                "weightUnit": "KG"
+              },
+              "amenities": []
+            },
+            {
+              "segmentId": "2",
+              "cabin": "ECONOMY",
+              "fareBasis": "QK1YXYDD",
+              "brandedFare": null,
+              "class": "Q",
+              "includedCheckedBags": {
+                "weight": 15,
+                "weightUnit": "KG"
+              },
+              "amenities": []
+            }
+          ]
+        }
+      ],
+      "_ama": {
+        "wsap": "1ASIWJETJEC",
+        "node": "noded2.production.webservices.amadeus.com",
+        "officeId": "SCK1S2400",
+        "currency": "USD",
+        "recommendationId": "41",
+        "combination": 1,
+        "searchedAt": "2026-10-24T07:08:21.956Z",
+        "refundable": false,
+        "paxRefs": [
+          {
+            "ref": "1",
+            "ptc": "ADT"
+          },
+          {
+            "ref": "2",
+            "ptc": "ADT"
+          }
+        ],
+        "segments": [
+          {
+            "legIndex": 0,
+            "segmentRef": "1",
+            "boardPoint": "DEL",
+            "boardTerminal": "1",
+            "offPoint": "GOI",
+            "offTerminal": "",
+            "departureDate": "231126",
+            "departureTime": "1835",
+            "arrivalDate": "231126",
+            "arrivalTime": "2115",
+            "dateVariation": "",
+            "marketingCarrier": "AI",
+            "operatingCarrier": "IX",
+            "flightNumber": "9567",
+            "rbd": "Q",
+            "cabinDesignator": "M",
+            "equipmentType": "320",
+            "fareBasis": "QK1YXYDD",
+            "breakPoint": "N"
+          },
+          {
+            "legIndex": 0,
+            "segmentRef": "2",
+            "boardPoint": "GOI",
+            "boardTerminal": "",
+            "offPoint": "BOM",
+            "offTerminal": "2",
+            "departureDate": "231126",
+            "departureTime": "2245",
+            "arrivalDate": "241126",
+            "arrivalTime": "0010",
+            "dateVariation": "1",
+            "marketingCarrier": "AI",
+            "operatingCarrier": "IX",
+            "flightNumber": "9838",
+            "rbd": "Q",
+            "cabinDesignator": "M",
+            "equipmentType": "737",
+            "fareBasis": "QK1YXYDD",
+            "breakPoint": "Y"
+          }
+        ]
+      }
+    }
+  }
+]
