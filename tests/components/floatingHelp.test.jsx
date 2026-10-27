@@ -112,6 +112,22 @@ describe('the help buttons', () => {
     expect(document.documentElement.style.getPropertyValue('--floating-lift')).toBe('0px');
   });
 
+  // The phone menu slides in with a CSS transition, which changes no attribute:
+  // read when its class flipped, it was still off screen, and the buttons
+  // stayed on top of it (seen on jetsetterss.com, 27 Oct).
+  it('look again when a menu or sheet finishes sliding in', async () => {
+    render(<Page />);
+    const menu = fixedBox({ top: 64, height: 780 });
+    await inTheCorner();
+    document.elementsFromPoint = vi.fn(() => [menu]);
+    await act(async () => {
+      menu.dispatchEvent(new Event('transitionend', { bubbles: true }));
+      await nextFrame();
+    });
+    const contact = screen.getByRole('button', { name: 'Contact us' });
+    expect(contact.closest('[data-covered="true"]')).not.toBeNull();
+  });
+
   it('do not count their own buttons, chat window or contact form', async () => {
     render(<Page />);
     const own = screen.getByRole('button', { name: 'Contact us' });
