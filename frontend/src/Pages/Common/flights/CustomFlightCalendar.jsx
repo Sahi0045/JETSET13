@@ -41,7 +41,12 @@ export default function CustomFlightCalendar({
     travelClass = 'ECONOMY',
     showPrices = true,
 }) {
-    const [currentMonth, setCurrentMonth] = useState(() => (minDate instanceof Date && minDate > new Date() ? minDate : new Date()))
+    const [currentMonth, setCurrentMonth] = useState(() => {
+        const firstDay = [getTodayDate(), format(minDate, 'yyyy-MM-dd')].sort().pop()
+        const opening = selectedDate && selectedDate >= firstDay ? selectedDate : firstDay
+        const [year, month] = opening.split('-').map(Number)
+        return new Date(year, month - 1, 1)
+    })
     const [prices, setPrices] = useState({})
     const [currency, setCurrency] = useState('USD')
     const [pending, setPending] = useState(() => new Set())
@@ -91,7 +96,7 @@ export default function CustomFlightCalendar({
     // screen, else the first day that can be chosen - and the arrow keys move
     // from there (calendarKeys.js).
     const inView = (key) => [format(currentMonth, 'yyyy-MM'), format(nextMonth, 'yyyy-MM')].includes(key.slice(0, 7))
-    const firstChoosable = [format(startOfMonth(currentMonth), 'yyyy-MM-dd'), format(minDate, 'yyyy-MM-dd'), today].sort().at(-1)
+    const firstChoosable = [format(startOfMonth(currentMonth), 'yyyy-MM-dd'), format(minDate, 'yyyy-MM-dd'), today].sort().pop()
     const tabbableDate = inView(centerDate) ? centerDate : firstChoosable
 
     // The lowest fare is marked only when there are at least two to compare.
@@ -111,7 +116,7 @@ export default function CustomFlightCalendar({
         })
         : null
     const shownMonth = format(currentMonth, 'yyyy-MM')
-    const firstPriced = [today, format(minDate, 'yyyy-MM-dd')].sort().at(-1)
+    const firstPriced = [today, format(minDate, 'yyyy-MM-dd')].sort().pop()
 
     useEffect(() => {
         if (!search) {

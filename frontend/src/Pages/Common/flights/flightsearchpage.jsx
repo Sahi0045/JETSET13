@@ -376,7 +376,7 @@ function FlightSearchPage() {
   const tripLegsOf = (itineraries = []) => {
     const type = tripTypeOf(itineraries.map((itin) => ({
       origin: itin?.segments?.[0]?.departure?.iataCode,
-      destination: itin?.segments?.at(-1)?.arrival?.iataCode,
+      destination: itin?.segments?.slice(-1)[0]?.arrival?.iataCode,
     })));
     return {
       isRoundTrip: type === 'roundTrip',
