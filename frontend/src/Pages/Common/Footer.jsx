@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { Facebook, Instagram, Mail, Check } from 'lucide-react';
 import supabase from '../../lib/supabase';
 import { isShownToCustomers } from '../../../../shared/siteSections';
@@ -47,6 +47,18 @@ const COLUMNS = [
 
 const Footer = () => {
   const currentYear = new Date().getFullYear();
+  const { pathname } = useLocation();
+  // The help buttons float in the bottom-right corner, 121 px in from a phone's
+  // width up, and at the end of the page sat on the Company links and the
+  // social icons. Each row stops 142 px short of the screen edge, padding only
+  // what the side margin does not already give; on a phone the one Help button
+  // covers just the bottom bar.
+  const clearOfHelpButtons = 'sm:pr-[max(0px,calc(142px_-_(100vw_-_100%)_/_2))]';
+  // The page scrolls to the top only when the path changes (ScrollToTop), so
+  // "Flight" clicked on /flights left the reader in the footer.
+  const toTopIfHere = (to) => () => {
+    if (to === pathname) window.scrollTo(0, 0);
+  };
 
   const [email, setEmail] = useState('');
   const [status, setStatus] = useState({ loading: false, success: false, error: '' });
@@ -93,7 +105,7 @@ const Footer = () => {
     <footer className="relative z-30 bg-ink text-white/70">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         {/* Newsletter */}
-        <div className="flex flex-col gap-4 border-b border-white/10 py-5 md:flex-row md:items-center md:justify-between md:gap-8">
+        <div className={`flex flex-col gap-4 border-b border-white/10 py-5 md:flex-row md:items-center md:justify-between md:gap-8 ${clearOfHelpButtons}`}>
           <div className="md:max-w-sm">
             <h3 className="font-serif text-xl font-semibold text-white sm:text-2xl">Subscribe &amp; Save</h3>
             <p className="mt-1 text-xs text-white/55 sm:text-sm">
@@ -134,8 +146,8 @@ const Footer = () => {
                 ) : (
                   <p className="mt-2 text-[11px] text-white/40">
                     By subscribing you agree to our{' '}
-                    <Link to="/terms-conditions" className="underline hover:text-white/70">Terms</Link> &amp;{' '}
-                    <Link to="/privacy-policy" className="underline hover:text-white/70">Privacy</Link>.
+                    <Link to="/terms-conditions" onClick={toTopIfHere('/terms-conditions')} className="underline hover:text-white/70">Terms</Link> &amp;{' '}
+                    <Link to="/privacy-policy" onClick={toTopIfHere('/privacy-policy')} className="underline hover:text-white/70">Privacy</Link>.
                   </p>
                 )}
               </>
@@ -144,10 +156,10 @@ const Footer = () => {
         </div>
 
         {/* Links */}
-        <div className="flex flex-col gap-5 py-6 md:flex-row md:gap-8">
+        <div className={`flex flex-col gap-5 py-6 md:flex-row md:gap-8 ${clearOfHelpButtons}`}>
           {/* Brand */}
           <div className="md:w-1/4">
-            <Link to="/" className="inline-flex flex-col" aria-label="Jetsetters home">
+            <Link to="/" onClick={toTopIfHere('/')} className="inline-flex flex-col" aria-label="Jetsetters home">
               <picture>
                 <source srcSet="/images/logos/WhatsApp_Image_2026-01-22_at_12.05.24_AM-removebg-preview.webp" type="image/webp" />
                 <img
@@ -179,6 +191,7 @@ const Footer = () => {
                     <li key={l.label}>
                       <Link
                         to={l.to}
+                        onClick={toTopIfHere(l.to)}
                         className="text-xs text-white/60 transition-colors hover:text-brand-sky sm:text-sm"
                       >
                         {l.label}
@@ -192,7 +205,7 @@ const Footer = () => {
         </div>
 
         {/* Bottom bar */}
-        <div className="flex flex-row items-center justify-between gap-3 border-t border-white/10 py-3">
+        <div className={`flex flex-row items-center justify-between gap-3 border-t border-white/10 py-3 pr-14 ${clearOfHelpButtons}`}>
           <p className="text-[11px] text-white/45 sm:text-xs">© {currentYear} Jetsetters. All rights reserved.</p>
           <div className="flex items-center gap-2">
             <a
