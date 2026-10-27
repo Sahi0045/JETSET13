@@ -16,14 +16,14 @@ const words = (over) => ifYouCancel({ penalties: lufthansa, airline: 'Lufthansa'
 describe('ifYouCancel', () => {
   it('says what a cancel returns before the ticket, and the airline rules once it is issued', () => {
     expect(words({ quote: quote('not_ticketed') })).toEqual([
-      'No ticket has been issued yet. You get back $287.50; the $12.50 service fee is not refundable.',
+      'No ticket has been issued yet. You get back $287.50; the $12.50 platform fee is not refundable.',
       "Once the ticket is issued, Lufthansa's rules apply: not refundable; a date change costs US$336 per adult plus any fare difference.",
     ]);
   });
 
   it('says what a cancel returns before the free cancellation deadline, and the airline rules for the fare', () => {
     expect(words({ quote: quote('free_window') })).toEqual([
-      'Free cancellation until Oct 12, 10:00 AM. You get back $287.50; the $12.50 service fee is not refundable.',
+      'Free cancellation until Oct 12, 10:00 AM. You get back $287.50; the $12.50 platform fee is not refundable.',
       "Lufthansa's rules for this fare: not refundable; a date change costs US$336 per adult plus any fare difference.",
     ]);
   });
@@ -57,7 +57,7 @@ describe('ifYouCancel, when no ticket is coming', () => {
   // cancellation is pending, will never be ticketed.
   it('does not promise the airline rules "once the ticket is issued"', () => {
     expect(words({ quote: quote('not_ticketed'), ticketComing: false })).toEqual([
-      'No ticket has been issued yet. You get back $287.50; the $12.50 service fee is not refundable.',
+      'No ticket has been issued yet. You get back $287.50; the $12.50 platform fee is not refundable.',
     ]);
   });
 });

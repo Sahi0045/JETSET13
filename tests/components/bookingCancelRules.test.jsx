@@ -24,7 +24,7 @@ const notTicketed = {
   isLoading: false,
   data: { policy: 'not_ticketed', paid: 300, serviceFeeKept: 12.5, airlinePrice: 287.5, refundAmount: 287.5, penalty: null, penaltyCurrency: null, cancellationFee: null, freeUntil: null },
 };
-const NOT_TICKETED_LINE = 'No ticket has been issued yet. You get back $287.50; the $12.50 service fee is not refundable.';
+const NOT_TICKETED_LINE = 'No ticket has been issued yet. You get back $287.50; the $12.50 platform fee is not refundable.';
 
 describe('Cancel & change on Manage Booking', () => {
   it('says it is working the refund out while the quote loads', () => {

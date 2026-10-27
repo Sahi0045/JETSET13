@@ -60,6 +60,6 @@ describe('an alternative fare', () => {
   it('says what the figure is', () => {
     render(<FlightFareGoneAlternatives state={state([alternative()])} priceConfig={priceConfig} onChoose={() => {}} onSearchAgain={() => {}} />);
 
-    expect(screen.getByText(/total for all travellers in US dollars, including our service fee/)).toBeTruthy();
+    expect(screen.getByText(/total for all travellers in US dollars, including our platform fee/)).toBeTruthy();
   });
 });

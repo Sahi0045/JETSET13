@@ -88,7 +88,7 @@ function FlightFareGoneAlternatives({ state, priceConfig, onChoose, onSearchAgai
         <h3 className="font-grotesk text-[17px] font-bold text-ink">Fares available now</h3>
         <p className="mt-0.5 text-[13px] text-gray-500">
           Same route, same dates, same travellers. Everything you have typed is kept - pick a flight and carry on.
-          {' '}Each price is the total for all travellers in US dollars, including our service fee.
+          {' '}Each price is the total for all travellers in US dollars, including our platform fee.
         </p>
       </header>
 

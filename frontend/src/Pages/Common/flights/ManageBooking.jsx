@@ -545,7 +545,7 @@ function ManageBooking() {
                     {/* Only a fee the cancellation actually kept. It used to be
                         labelled "Standard" beside every booking, including the
                         ones that pay no fee. */}
-                    <span className="text-slate-600 font-medium">{serviceFeeKeptBy(cancelData) > 0 ? 'Service fee (not refundable)' : 'Cancellation Fee'}</span>
+                    <span className="text-slate-600 font-medium">{serviceFeeKeptBy(cancelData) > 0 ? 'Platform fee (not refundable)' : 'Cancellation Fee'}</span>
                     <span className="text-rose-600 font-semibold">
                       -${Number(cancelData.cancellationFee || 0).toFixed(2)}
                     </span>

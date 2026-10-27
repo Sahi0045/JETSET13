@@ -28,7 +28,7 @@ describe('the payment summary', () => {
     });
 
     expect(text).toMatch(/Airline fare \(incl\. taxes\)\$500\.00/);
-    expect(text).toMatch(/Service fee\$50\.00/);
+    expect(text).toMatch(/Platform fee\$50\.00/);
     expect(text).toMatch(/Discount \(SAVE\)- \$9\.14/);
     expect(text).not.toMatch(/Base Fare/);
   });

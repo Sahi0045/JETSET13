@@ -8,7 +8,7 @@ import withPageElements from "../PageWrapper";
 // Every amount on this page is what the card is charged, in US dollars; the
 // visitor's own currency appears only as a labelled estimate, from live rates.
 import ChargeAmount from "../../../Components/ChargeAmount";
-import { CHARGE_CURRENCY, describeServiceFee, formatUsd } from "../../../utils/chargeDisplay";
+import { CHARGE_CURRENCY, formatUsd } from "../../../utils/chargeDisplay";
 import { useSupabaseAuth } from "../../../contexts/SupabaseAuthContext";
 import { clearFlightReview, readFlightReview, saveFlightReview } from "../../../utils/flightReviewResume";
 import { clearTravellerDraft, readTravellerDraft, saveTravellerDraft } from "../../../utils/flightTravellerDraft";
@@ -1061,10 +1061,6 @@ function FlightBookingConfirmation() {
       baseFare: base,
       totalTax: Math.max(0, Math.round((fareTotal - base) * 100) / 100),
       serviceFee: charge.serviceFee,
-      // What the service fee is made of, from the same computation as the charge.
-      fixedFeeByType: charge.fixedFeeByType,
-      percentage: charge.percentage,
-      percentageFee: charge.percentageFee,
       totalAmount: charge.total,
       passengers: charge.passengers,
       currency: pricedFare?.currency || searched.currency || 'USD'
@@ -2512,21 +2508,11 @@ function FlightBookingConfirmation() {
                   </div>
                 )}
 
-                {/* Service Fee (Jetsetters convenience fee), line by line as it is
-                    charged: the fixed fee per traveller type - none for a lap
-                    infant - and the percentage of the fare. One line "for 3
-                    travellers" never said which of them paid it. */}
                 {calculatedFare.serviceFee > 0 && (
-                  <div className="flex items-start gap-3 py-3 border-b border-gray-100">
+                  <div className="flex items-start gap-3 py-3 border-b border-gray-100" data-platform-fee="">
                     <span className="mt-2 h-1.5 w-1.5 rounded-full bg-[#65B3CF] flex-shrink-0" />
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm font-bold text-gray-800">Service Fee</div>
-                      <div className="text-xs text-gray-400 mt-0.5">Jetsetters convenience fee · not refundable</div>
-                      <ul className="mt-1 space-y-0.5 text-xs text-gray-500" data-service-fee-lines="">
-                        {describeServiceFee(calculatedFare).map((line) => (
-                          <li key={line}>{line}</li>
-                        ))}
-                      </ul>
+                      <div className="text-sm font-bold text-gray-800">Platform Fee</div>
                     </div>
                     <div className="text-sm font-semibold text-gray-800 whitespace-nowrap"><ChargeAmount amount={calculatedFare.serviceFee} /></div>
                   </div>

@@ -166,13 +166,13 @@ describe('cancelTermsLines', () => {
 
   it('gives the amount before the ticket is issued', () => {
     expect(lines({ policy: 'not_ticketed' })).toEqual([
-      'No ticket has been issued yet. You get back USD 287.50; the USD 12.50 service fee is not refundable.',
+      'No ticket has been issued yet. You get back USD 287.50; the USD 12.50 platform fee is not refundable.',
     ]);
   });
 
   it('gives the amount and the free cancellation deadline', () => {
     expect(lines({ policy: 'free_window' })).toEqual([
-      'Free cancellation until <2026-10-13T04:00:00.000Z>. You get back USD 287.50; the USD 12.50 service fee is not refundable.',
+      'Free cancellation until <2026-10-13T04:00:00.000Z>. You get back USD 287.50; the USD 12.50 platform fee is not refundable.',
     ]);
   });
 
@@ -185,7 +185,7 @@ describe('cancelTermsLines', () => {
   it('names the penalty and our fee on a refundable fare', () => {
     expect(lines({ policy: 'refundable', penalty: 150, penaltyCurrency: 'EUR', cancellationFee: 50 })).toEqual([
       "This fare is refundable. You get back USD 287.50 less the airline's cancellation penalty of EUR 150.00 per adult and our USD 50.00 cancellation fee.",
-      'The USD 12.50 service fee is not refundable.',
+      'The USD 12.50 platform fee is not refundable.',
       'Our team confirms the amount with the airline and emails you within 2 business days.',
     ]);
   });
@@ -215,7 +215,7 @@ describe('cancelTermsLines', () => {
 
   it('formats dollars by default', () => {
     expect(cancelTermsLines({ policy: 'not_ticketed', serviceFeeKept: 12.5, airlinePrice: 287.5 })).toEqual([
-      'No ticket has been issued yet. You get back $287.50; the $12.50 service fee is not refundable.',
+      'No ticket has been issued yet. You get back $287.50; the $12.50 platform fee is not refundable.',
     ]);
   });
 });
@@ -223,7 +223,7 @@ describe('cancelTermsLines', () => {
 describe('cancelPolicyLines', () => {
   it('states the policy with the deadline for a booking made now and the flight cancellation fee', () => {
     expect(cancelPolicyLines({ cancellationFee: 50, freeUntil: VOID_DEADLINE, money, time })).toEqual([
-      'Book now and you can cancel free until <2026-10-13T04:00:00.000Z>: you get back the airline price. The service fee is not refundable.',
+      'Book now and you can cancel free until <2026-10-13T04:00:00.000Z>: you get back the airline price. The platform fee is not refundable.',
       "After that the airline's fare rules apply: a refundable fare returns the airline price less the airline's penalty and our USD 50.00 cancellation fee; a non-refundable fare returns only unused taxes.",
       'If the airline cancels or changes your flight, you get back everything you paid.',
     ]);
@@ -231,7 +231,7 @@ describe('cancelPolicyLines', () => {
 
   it('names the end of the booking day when the deadline is not known yet', () => {
     expect(cancelPolicyLines({ cancellationFee: 50, money })[0]).toBe(
-      'You can cancel free until 11:59 PM on the day you book (our ticketing office\'s time): you get back the airline price. The service fee is not refundable.',
+      'You can cancel free until 11:59 PM on the day you book (our ticketing office\'s time): you get back the airline price. The platform fee is not refundable.',
     );
   });
 
