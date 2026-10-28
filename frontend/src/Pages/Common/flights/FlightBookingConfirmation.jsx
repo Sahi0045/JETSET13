@@ -806,7 +806,6 @@ function FlightBookingConfirmation() {
       },
       passengers: [],
       contact: {
-        email: "",
         phone: ""
       },
       // International if any leg crosses a border, not only the two ends: a
@@ -1218,7 +1217,7 @@ function FlightBookingConfirmation() {
           ...prev,
           contact: {
             ...prev?.contact,
-            [field === 'mobile' ? 'phone' : 'email']: value
+            [field === 'mobile' ? 'phone' : 'email']: field === 'email' ? (value || undefined) : value
           }
         }));
       }
@@ -2357,26 +2356,50 @@ function FlightBookingConfirmation() {
                       carries the reference and the e-ticket. */}
                   Your booking reference is emailed to you after payment, and your e-ticket once it is issued. The airline uses the mobile number if it needs to reach you about the flight.
                 </p>
-                {/* The first traveller's number and code, filled in above. A
-                    second country-code selector sat here, changed nothing
-                    that was sent, and could disagree with the one above. */}
+                {/* The number and code are the first traveller's, edited here or
+                    above: a second number of its own could disagree with the
+                    one the airline gets. */}
                 <div className="form-grid">
                   <div className="form-group">
                     <label>Mobile Number</label>
-                    <input
-                      type="text"
-                      className="form-input bg-gray-50"
-                      value={bookingDetails?.contact?.phone ? `${passengerData?.[0]?.countryCode || ''} ${bookingDetails.contact.phone}`.trim() : ""}
-                      readOnly
-                    />
+                    <div style={{ display: 'flex', gap: '0' }}>
+                      <select
+                        className="form-input"
+                        style={{ width: '90px', minWidth: '90px', borderRadius: '6px 0 0 6px', borderRight: 'none', padding: '10px 4px', fontSize: '14px', appearance: 'none', backgroundImage: 'url("data:image/svg+xml,%3csvg xmlns=%27http://www.w3.org/2000/svg%27 fill=%27none%27 viewBox=%270 0 20 20%27%3e%3cpath stroke=%27%236b7280%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27 stroke-width=%271.5%27 d=%27M6 8l4 4 4-4%27/%3e%3c/svg%3e")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 2px center', backgroundSize: '16px' }}
+                        value={passengerData?.[0]?.countryCode || ''}
+                        onChange={(e) => handlePassengerChange(passengerData[0].id, 'countryCode', e.target.value)}
+                        aria-label="Contact country code"
+                      >
+                        <option value="">Code</option>
+                        {CALLING_CODES.map((code) => (
+                          <option key={code} value={code}>{code}</option>
+                        ))}
+                      </select>
+                      <input
+                        type="tel"
+                        className="form-input"
+                        style={{ borderRadius: '0 6px 6px 0', flex: 1 }}
+                        placeholder="9876543210"
+                        value={passengerData?.[0]?.mobile || ''}
+                        onChange={(e) => handlePassengerChange(passengerData[0].id, 'mobile', e.target.value.replace(/[^0-9]/g, ''))}
+                        aria-label="Contact mobile number"
+                      />
+                    </div>
                   </div>
                   <div className="form-group">
                     <label>Email Address</label>
+                    {/* Blank means the account's address, which checkout uses
+                        for a blank one; leaving it blank shows that again. */}
                     <input
-                      type="text"
-                      className="form-input bg-gray-50"
-                      value={bookingDetails?.contact?.email || user?.email || ""}
-                      readOnly
+                      type="email"
+                      className="form-input"
+                      placeholder="email@example.com"
+                      value={bookingDetails?.contact?.email ?? user?.email ?? ''}
+                      onChange={(e) => setBookingDetails((prev) => ({ ...prev, contact: { ...prev?.contact, email: e.target.value } }))}
+                      onBlur={(e) => {
+                        if (!e.target.value.trim()) setBookingDetails((prev) => ({ ...prev, contact: { ...prev?.contact, email: undefined } }));
+                      }}
+                      aria-label="Contact email address"
                     />
                   </div>
                 </div>
