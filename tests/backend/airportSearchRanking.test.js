@@ -64,6 +64,16 @@ describe('a city with several airports', () => {
     expect(found.filter((row) => row.parent === metro).map((row) => row.code)).toEqual(expect.arrayContaining(airports));
   });
 
+  it("gives each of the city's airports its distance from the centre", () => {
+    const london = rows('london', 12);
+    const km = Object.fromEntries(london.filter((row) => row.parent === 'LON').map((row) => [row.code, row.distanceKm]));
+
+    expect(km.LHR).toBeGreaterThan(18);
+    expect(km.LHR).toBeLessThan(28);
+    expect(km.LCY).toBeLessThan(km.LHR);
+    expect(rows('new york').find((row) => row.code === 'JFK').distanceKm).toBeGreaterThan(15);
+  });
+
   it('lists each airport once', () => {
     const found = codes('new');
     expect(found.filter((code) => code === 'EWR')).toHaveLength(1);

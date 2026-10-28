@@ -126,3 +126,28 @@ export const CITY_NAMES = Object.freeze({
   CTS: 'Sapporo',
   TZL: 'Tuzla',
 });
+
+/** City centres of the metros, [latitude, longitude], for "23 km from downtown" under each of their airports. */
+export const METRO_CENTRES = Object.freeze({
+  NYC: [40.7128, -74.006],
+  LON: [51.5074, -0.1278],
+  PAR: [48.8566, 2.3522],
+  TYO: [35.6812, 139.7671],
+  CHI: [41.8781, -87.6298],
+  WAS: [38.9072, -77.0369],
+  MIL: [45.4642, 9.19],
+  ROM: [41.9028, 12.4964],
+  MOW: [55.7558, 37.6173],
+  YTO: [43.6532, -79.3832],
+  SAO: [-23.5505, -46.6333],
+  RIO: [-22.9068, -43.1729],
+  BUE: [-34.6037, -58.3816],
+  STO: [59.3293, 18.0686],
+  OSA: [34.6937, 135.5023],
+  SEL: [37.5665, 126.978],
+  BJS: [39.9042, 116.4074],
+  SHA: [31.2304, 121.4737],
+  JKT: [-6.2088, 106.8456],
+  IST: [41.0082, 28.9784],
+  TEH: [35.6892, 51.389],
+});

@@ -1,5 +1,5 @@
 import { createRequire } from 'node:module';
-import { CITY_NAMES, METRO_AIRPORTS, METRO_CITIES, PASSENGERS, SHORT_NAMES } from '../data/airports/placeRanking.js';
+import { CITY_NAMES, METRO_AIRPORTS, METRO_CENTRES, METRO_CITIES, PASSENGERS, SHORT_NAMES } from '../data/airports/placeRanking.js';
 
 /**
  * Airport and city lookup, served from a bundled dataset.
@@ -65,6 +65,7 @@ const load = () => {
   }));
 
   for (const city of dataset.filter((r) => r.type === 'CITY')) {
+    city.centre = METRO_CENTRES[city.code] ?? null;
     city.members = dataset
       .filter((r) => r.type === 'AIRPORT' && r.cityCode === city.code)
       .sort((a, b) => b.popularity - a.popularity);
@@ -87,7 +88,17 @@ const load = () => {
   }
 };
 
-const present = ({ _name, _city, _country, _aliases, _short, aliases, lat, lon, members, popularity, ...rest }) => rest;
+const present = ({ _name, _city, _country, _aliases, _short, aliases, lat, lon, members, popularity, centre, ...rest }) => rest;
+
+/** Straight-line kilometres from a city's centre to one of its airports, or null. */
+const kmFromCentre = (centre, airport) => {
+  if (!centre || airport.lat === null || airport.lon === null) return null;
+  const rad = (degrees) => (degrees * Math.PI) / 180;
+  const dLat = rad(airport.lat - centre[0]);
+  const dLon = rad(airport.lon - centre[1]);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(centre[0])) * Math.cos(rad(airport.lat)) * Math.sin(dLon / 2) ** 2;
+  return Math.round(2 * 6371 * Math.asin(Math.sqrt(h)));
+};
 
 const MATCH = Object.freeze({ code: 100, start: 60, word: 45, airportWord: 30, inside: 10 });
 
@@ -112,7 +123,7 @@ const matchOf = (record, q, words) => {
  * or an airport's name - with how busy the place is added, so Hong Kong comes
  * before Honiara. A city with several airports is listed once with its airports
  * under it (`parent` names the city), whether or not each airport's own name
- * matches.
+ * matches, and how far it is from the city centre (`distanceKm`).
  */
 export const searchLocations = (keyword, subType = 'CITY,AIRPORT', options = {}) => {
   load();
@@ -157,7 +168,10 @@ export const searchLocations = (keyword, subType = 'CITY,AIRPORT', options = {})
     .filter(({ record }) => record.type === 'CITY' || !nested.has(record.code))
     .sort((a, b) => b.score - a.score || b.record.popularity - a.record.popularity || a.record.code.localeCompare(b.record.code))
     .flatMap(({ record }) => (grouping && record.type === 'CITY'
-      ? [present(record), ...record.members.filter(allowed).map((airport) => ({ ...present(airport), parent: record.code }))]
+      ? [present(record), ...record.members.filter(allowed).map((airport) => {
+        const distanceKm = kmFromCentre(record.centre, airport);
+        return { ...present(airport), parent: record.code, ...(distanceKm === null ? {} : { distanceKm }) };
+      })]
       : [present(record)]))
     .slice(0, limit);
 

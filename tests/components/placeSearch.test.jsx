@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import FlightSearchForm from '../../frontend/src/Pages/Common/flights/flight-search-form.jsx';
@@ -59,20 +59,21 @@ describe('the local airport list', () => {
 });
 
 describe('a row of the list', () => {
-  it('names a city with several airports, and says it searches them all', () => {
+  it('names a city with several airports, and its country', () => {
     expect(toPlace({ code: 'NYC', type: 'CITY', name: 'New York', countryCode: 'US' }))
-      .toMatchObject({ name: 'New York', title: 'New York', subtitle: 'All airports · United States' });
+      .toMatchObject({ name: 'New York', title: 'New York', subtitle: 'United States' });
   });
 
-  it("names an airport under its city by the airport, and puts it in the box without 'International Airport'", () => {
-    expect(toPlace(airport('MXP', 'Milan Malpensa International Airport', 'Ferno (VA)', 'IT', 'MIL'), 'Milan'))
-      .toMatchObject({ name: 'Milan Malpensa', title: 'Milan Malpensa International Airport', subtitle: 'Milan, Italy', parent: 'MIL' });
+  it("says how far an airport under its city is from the centre, and puts it in the box without 'International Airport'", () => {
+    expect(toPlace({ ...airport('MXP', 'Milan Malpensa International Airport', 'Ferno (VA)', 'IT', 'MIL'), distanceKm: 40 }, 'Milan'))
+      .toMatchObject({ name: 'Milan Malpensa', title: 'Milan Malpensa International Airport', subtitle: '40 km from downtown', parent: 'MIL' });
+    expect(toPlace(airport('MXP', 'Milan Malpensa International Airport', 'Ferno (VA)', 'IT', 'MIL'), 'Milan').subtitle).toBe('Milan, Italy');
   });
 
-  it('names an airport on its own by its city, without what OurAirports adds to it', () => {
+  it('names an airport on its own, and puts its city in the box without what OurAirports adds to it', () => {
     expect(toPlace(airport('CDG', 'Charles de Gaulle International Airport', "Paris (Roissy-en-France, Val-d'Oise)", 'FR')))
-      .toMatchObject({ name: 'Paris', subtitle: 'Charles de Gaulle International Airport · France' });
-    expect(toPlace(airport('HKG', 'Hong Kong International Airport', 'Hong Kong', 'HK')).subtitle).toMatch(/· Hong Kong$/);
+      .toMatchObject({ name: 'Paris', title: 'Charles de Gaulle International Airport', subtitle: 'Paris, France' });
+    expect(toPlace(airport('HKG', 'Hong Kong International Airport', 'Hong Kong', 'HK')).subtitle).toBe('Hong Kong, Hong Kong');
   });
 });
 
@@ -107,11 +108,11 @@ describe('the To box', () => {
     await act(async () => { await vi.advanceTimersByTimeAsync(300); });
 
     expect(options()).toEqual([
-      'New YorkAll airports · United StatesNYC',
-      'John F. Kennedy International AirportNew York, United StatesJFK',
-      'Newark Liberty International AirportNew York, United StatesEWR',
-      'LaGuardia AirportNew York, United StatesLGA',
-      'New DelhiIndira Gandhi International Airport · IndiaDEL',
+      'NYC New York All airportsUnited States',
+      'JFK John F. Kennedy International AirportNew York, United States',
+      'EWR Newark Liberty International AirportNew York, United States',
+      'LGA LaGuardia AirportNew York, United States',
+      'DEL Indira Gandhi International AirportNew Delhi, India',
     ]);
     expect(screen.getAllByRole('option')[1].className).toMatch(/pl-10/);
   });
@@ -125,7 +126,7 @@ describe('the To box', () => {
     await act(async () => { await vi.advanceTimersByTimeAsync(300); });
 
     expect(screen.queryByText('Searching airports…')).toBeNull();
-    expect(options()[0]).toMatch(/^Mumbai/);
+    expect(options()[0]).toMatch(/^BOM .*Mumbai, India$/);
   });
 
   it('uses the built-in list when the API cannot be reached', async () => {
@@ -195,6 +196,41 @@ describe('the To box', () => {
     fireEvent.keyDown(input, { key: 'ArrowDown' });
     fireEvent.keyDown(input, { key: 'Enter' });
     expect(input.value).toBe('Dubai (DXB)');
+  });
+});
+
+describe('on a phone', () => {
+  beforeEach(() => {
+    window.matchMedia = vi.fn((query) => ({ matches: query.includes('max-width'), media: query, addEventListener: () => {}, removeEventListener: () => {} }));
+  });
+  afterEach(() => {
+    delete window.matchMedia;
+    vi.useRealTimers();
+  });
+
+  it('searches on a page of its own, and picking fills the box and closes it', async () => {
+    vi.useFakeTimers();
+    renderForm();
+    const box = document.querySelector('input[name="to"]');
+
+    fireEvent.focus(box);
+    const page = screen.getByRole('dialog', { name: 'Going to' });
+    const search = within(page).getByLabelText('Airport or city');
+    fireEvent.change(search, { target: { value: 'mumbai' } });
+    await act(async () => { await vi.advanceTimersByTimeAsync(300); });
+    fireEvent.mouseDown(within(page).getAllByRole('option')[0]);
+
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(box.value).toBe('Mumbai (BOM)');
+  });
+
+  it('closes without picking', () => {
+    renderForm();
+    fireEvent.focus(document.querySelector('input[name="from"]'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 });
 

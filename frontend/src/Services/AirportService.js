@@ -42,21 +42,24 @@ const plainCity = (name) => String(name || '').split('(')[0].split(',')[0].trim(
 const shortAirportName = (name) => String(name || '').replace(/\s+(International\s+)?Airport$/i, '').trim() || name;
 
 /**
- * One row of the search list, from one row of the API's answer. `name` is what
- * picking it puts in the box: the city, or the airport for one listed under
- * its city (`parentName`).
+ * One row of the search list, from one row of the API's answer, laid out as
+ * booking.com lays it: the code, the place, and under it the country - or,
+ * for an airport listed under its city (`parentName`), how far it is from the
+ * centre. `name` is what picking it puts in the box: the city, or the airport
+ * for one listed under its city.
  */
 export const toPlace = (row, parentName) => {
     const country = countryName(row.countryCode || row.country);
     const base = { code: row.code, type: row.type, country, countryCode: row.countryCode };
     if (row.type === 'CITY') {
-        return { ...base, name: row.name, title: row.name, subtitle: `All airports · ${country}` };
+        return { ...base, name: row.name, title: row.name, subtitle: country };
     }
     const city = plainCity(row.cityName) || row.name;
     if (row.parent) {
-        return { ...base, parent: row.parent, name: shortAirportName(row.name), title: row.name, subtitle: `${parentName || city}, ${country}` };
+        const subtitle = Number.isFinite(row.distanceKm) ? `${row.distanceKm} km from downtown` : `${parentName || city}, ${country}`;
+        return { ...base, parent: row.parent, name: shortAirportName(row.name), title: row.name, subtitle };
     }
-    return { ...base, name: city, title: city, subtitle: `${row.name} · ${country}` };
+    return { ...base, name: city, title: row.name, subtitle: `${city}, ${country}` };
 };
 
 const toPlaces = (rows) => rows.map((row) => toPlace(
