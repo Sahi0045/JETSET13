@@ -31,19 +31,28 @@ const booking = (over = {}) => ({
 const textOf = async (data) => Buffer.from(await buildTicketPdf(data, { compress: false })).toString('latin1');
 
 describe('the booking code on the e-ticket', () => {
-  it("is the airline's own code, with our Amadeus reference beside it", async () => {
+  it("calls the airline's own code, the one shown at the airport, the airline PNR", async () => {
     const pdf = await textOf(booking({ airlineLocators: [{ carrierCode: 'UA', locator: 'H8KQ2P' }] }));
 
-    expect(pdf).toContain('AIRLINE BOOKING CODE');
+    expect(pdf).toContain('AIRLINE PNR');
     expect(pdf).toContain('H8KQ2P');
-    expect(pdf).toContain('Amadeus reference Q7XK2M');
+    expect(pdf).toContain('Booking reference Q7XK2M');
+    expect(pdf).not.toContain('Amadeus');
+    expect(pdf).not.toContain('AIRLINE BOOKING CODE');
+  });
+
+  it('names one airline PNR per airline when each airline sent its own', async () => {
+    const pdf = await textOf(booking({ airlineLocators: [{ carrierCode: 'UA', locator: 'H8KQ2P' }, { carrierCode: 'LH', locator: 'LH4X9Z' }] }));
+
+    expect(pdf).toContain('AIRLINE PNRS');
+    expect(pdf).toContain('UA H8KQ2P');
   });
 
   it('is called a PNR, not the airline code, while the airline has not sent its own', async () => {
     const pdf = await textOf(booking());
 
     expect(pdf).toContain('BOOKING CODE \\(PNR\\)');
-    expect(pdf).not.toContain('AIRLINE BOOKING CODE');
+    expect(pdf).not.toContain('AIRLINE PNR');
     expect(pdf).toContain('Q7XK2M');
   });
 });
@@ -52,7 +61,7 @@ describe('checking in, on the e-ticket', () => {
   it("names the airline's check-in page and the code to use", async () => {
     const pdf = await textOf(booking({ airlineLocators: [{ carrierCode: 'UA', locator: 'H8KQ2P' }] }));
 
-    expect(pdf).toContain('Check in online with United at united.com/en/us/checkin, using airline booking code H8KQ2P');
+    expect(pdf).toContain('Check in online with United at united.com/en/us/checkin, using airline PNR H8KQ2P');
     expect(pdf).toContain('Opens 24 hours before');
   });
 

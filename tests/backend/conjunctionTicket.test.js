@@ -33,9 +33,10 @@ describe('a conjunction ticket', () => {
     expect(ticket.conjunctionTo).toBeUndefined();
   });
 
-  it('is printed the way the airline writes it', () => {
-    expect(printedTicketNumber({ number: '057-7513754072', conjunctionTo: '057-7513754073' })).toBe('057-7513754072-73');
-    expect(printedTicketNumber({ number: '057-7513754072' })).toBe('057-7513754072');
+  it('is printed as one run of digits, with the last of the set after a slash', () => {
+    expect(printedTicketNumber({ number: '057-7513754072', conjunctionTo: '057-7513754073' })).toBe('0577513754072/73');
+    expect(printedTicketNumber({ number: '057-7513754072' })).toBe('0577513754072');
+    expect(printedTicketNumber({ number: '0577513754072' })).toBe('0577513754072');
   });
 });
 
@@ -49,6 +50,6 @@ describe('the ticket email for a conjunction ticket', () => {
       tickets: [{ number: '057-7513754072', conjunctionTo: '057-7513754073', travelerName: 'TEST TRAVELLER' }],
     });
 
-    expect(String(html?.html ?? html)).toContain('057-7513754072-73');
+    expect(String(html?.html ?? html)).toContain('0577513754072/73');
   });
 });

@@ -57,7 +57,8 @@ describe('the e-ticket email', () => {
     const { sendTicketIssuedEmail } = await load();
     await sendTicketIssuedEmail({ ...base, tickets: [{ number: '220-7491174929' }] });
 
-    expect(sent().subject).toContain('220-7491174929');
+    expect(sent().subject).toContain('2207491174929');
+    expect(sent().subject).not.toContain('220-7491174929');
     expect(sent().subject).toContain('FLT-1');
   });
 
@@ -71,8 +72,8 @@ describe('the e-ticket email', () => {
       ],
     });
 
-    expect(sent().html).toContain('220-1111111111');
-    expect(sent().html).toContain('220-2222222222');
+    expect(sent().html).toContain('2201111111111');
+    expect(sent().html).toContain('2202222222222');
     expect(sent().html).toContain('RAO/DEV');
     expect(sent().subject).toMatch(/2 e-tickets/i);
   });
@@ -129,7 +130,8 @@ describe('the booking confirmation email, once a ticket exists', () => {
       bookingDetails: { pnr: 'BEEDS3', tickets: [{ number: '220-7491174929', travelerName: 'RAO/ASHA' }] },
     });
 
-    expect(sent().html).toContain('220-7491174929');
+    expect(sent().html).toContain('2207491174929');
+    expect(sent().html).not.toContain('220-7491174929');
   });
 
   it('names each traveller when there is more than one ticket', async () => {
@@ -145,7 +147,7 @@ describe('the booking confirmation email, once a ticket exists', () => {
     });
 
     expect(sent().html).toContain('RAO/DEV');
-    expect(sent().html).toContain('220-2');
+    expect(sent().html).toContain('2202');
   });
 
   it('still sends cleanly for a booking with no ticket yet', async () => {

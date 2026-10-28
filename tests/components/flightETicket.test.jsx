@@ -30,7 +30,7 @@ describe('the travel document', () => {
 
     expect(text).toMatch(/Cancelled Booking/);
     expect(text).toMatch(/not valid for travel/);
-    expect(text).not.toMatch(/057-1000000001|057-2000000002/);
+    expect(text).not.toMatch(/057-?1000000001|057-?2000000002/);
     expect(text).not.toMatch(/E-Ticket/);
     expect(text).not.toMatch(/Payment Confirmed/);
   });
@@ -39,8 +39,8 @@ describe('the travel document', () => {
     const text = textOf({ status: 'confirmed', pnr: 'ABC123', bookingReference: 'FLT1', tickets, travelers: travellers, payment_status: 'paid' });
 
     expect(text).toMatch(/E-Ticket/);
-    expect(text).toMatch(/Ticket #: 057-1000000001/);
-    expect(text).toMatch(/Ticket #: 057-2000000002/);
+    expect(text).toMatch(/Ticket #: 0571000000001/);
+    expect(text).toMatch(/Ticket #: 0572000000002/);
   });
 
   it('prints a conjunction ticket as the whole set', () => {
@@ -50,7 +50,7 @@ describe('the travel document', () => {
       tickets: [{ number: '057-7513754072', conjunctionTo: '057-7513754073', travelerId: '1' }],
     });
 
-    expect(text).toMatch(/Ticket #: 057-7513754072-73/);
+    expect(text).toMatch(/Ticket #: 0577513754072\/73/);
   });
 
   it('prints "number pending" rather than a number that could be another traveller\'s', () => {

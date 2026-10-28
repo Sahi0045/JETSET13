@@ -2,6 +2,7 @@ import { Resend } from 'resend';
 import dotenv from 'dotenv';
 import { renderBrandedEmail, detailCard, highlightBox, paragraph, BRAND } from './emailTemplate.js';
 import { generateReservationHeldTemplate, generateTicketIssuedTemplate, isUnticketedFlight } from './email/templates.js';
+import { printedTicketNumber } from '../../shared/ticketNumber.js';
 import {
   generateCruiseCallbackTemplate,
   generatePackageCallbackTemplate,
@@ -595,7 +596,7 @@ export const sendTicketIssuedEmail = async ({
       // The number is the thing they need; putting it in the subject means a
       // customer at an airline desk can read it off a notification.
       subject: issued.length === 1
-        ? `🎫 Your e-ticket ${issued[0].number} - ${bookingReference} | Jetsetters`
+        ? `🎫 Your e-ticket ${printedTicketNumber(issued[0])} - ${bookingReference} | Jetsetters`
         : `🎫 Your ${issued.length} e-tickets are issued - ${bookingReference} | Jetsetters`,
       html,
       text: stripHtml(html),
