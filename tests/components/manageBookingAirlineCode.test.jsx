@@ -40,12 +40,12 @@ const renderPage = (booking) => {
 describe('the booking code on Manage Booking', () => {
   beforeEach(() => mockUseFlightBooking.mockReset());
 
-  it("shows the airline's own code, and our Amadeus reference beside it", () => {
+  it("shows the airline's own code, as the airline PNR, and ours as the GDS PNR", () => {
     renderPage(ticketed({ airlineLocators: [{ carrierCode: 'UA', locator: 'H8KQ2P' }] }));
 
-    expect(screen.getByText('Airline booking code')).toBeTruthy();
+    expect(screen.getByText('Airline PNR')).toBeTruthy();
     expect(screen.getByText('H8KQ2P')).toBeTruthy();
-    expect(screen.getByText('Amadeus reference Q7XK2M')).toBeTruthy();
+    expect(screen.getByText('GDS PNR Q7XK2M')).toBeTruthy();
   });
 
   it('calls our code a PNR while the airline has not sent its own', () => {
@@ -53,6 +53,6 @@ describe('the booking code on Manage Booking', () => {
 
     expect(screen.getByText('Booking code (PNR)')).toBeTruthy();
     expect(screen.getByText('Q7XK2M')).toBeTruthy();
-    expect(screen.queryByText('Airline booking code')).toBeNull();
+    expect(screen.queryByText('Airline PNR')).toBeNull();
   });
 });

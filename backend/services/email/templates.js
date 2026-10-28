@@ -18,6 +18,7 @@ import {
 } from '../../../shared/cancellationOutcome.js';
 import { clockTime, itinerariesFromOffer, layoverBetween, legLabel } from '../../../shared/bookingItineraries.js';
 import { printedTicketNumber } from '../../../shared/ticketNumber.js';
+import { bookingCodeOf } from '../../../shared/eTicket.js';
 
 const money = (amount, currency = 'USD') =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(Number(amount) || 0);
@@ -533,13 +534,15 @@ export function generateBookingConfirmationTemplate(data) {
     },
   });
 
+  const code = bookingCodeOf({ pnr: d.PNR || d.pnr, airline_locators: d.airline_locators });
   const rows = [
     ['Booking Type', title],
     travelDate ? ['Travel Date', longDate(travelDate)] : null,
     ['Travelers', `${passengers} ${passengers === 1 ? 'Person' : 'People'}`],
     d.hotelName ? ['Hotel', d.hotelName] : null,
     d.cruiseLine ? ['Cruise Line', d.cruiseLine] : null,
-    d.PNR || d.pnr ? ['Airline reference', d.PNR || d.pnr] : null,
+    code ? [code.label, code.value] : null,
+    code?.amadeusReference ? ['GDS PNR', code.amadeusReference] : null,
     // The one number a customer actually needs at a check-in desk, and the one
     // this email never carried: a ticketed booking said "Confirmed" and listed
     // its booking reference, its PNR and its transaction id, and nowhere the
@@ -713,6 +716,7 @@ export function generateTicketIssuedTemplate(data = {}) {
   const { customerName, bookingReference, tickets = [], bookingDetails = {} } = data;
   const details = bookingDetails || {};
   const issued = (Array.isArray(tickets) ? tickets : []).filter((t) => t?.number);
+  const code = bookingCodeOf({ pnr: details.pnr || details.PNR, airline_locators: details.airline_locators ?? details.airlineLocators });
 
   const named = issued.map((ticket) => [
     ticket.travelerName || ticket.passengerName || 'Traveller',
@@ -736,10 +740,11 @@ export function generateTicketIssuedTemplate(data = {}) {
     ${named.length > 1 ? detailCard('Ticket numbers', named) : ''}
     ${paragraph(
     'Use the ticket number if the airline asks for one — at check-in, at the airport, '
-    + 'or on the phone. The airline reference below is the one on its own website.',
+    + `or on the phone.${code?.isAirlines ? ' The airline PNR below is the one on its own website.' : ''}`,
   )}
     ${detailCard('Your booking', [
-    details.pnr || details.PNR ? ['Airline reference', details.pnr || details.PNR] : null,
+    code ? [code.label, code.value] : null,
+    code?.amadeusReference ? ['GDS PNR', code.amadeusReference] : null,
     ['Booking reference', bookingReference],
   ].filter(Boolean))}
     ${actionRow([

@@ -33,8 +33,8 @@ describe("a trip's booking and payment details", () => {
     const panel = details();
 
     for (const [name, value] of [
-      [/^Copy (Airline booking code|Booking code \(PNR\))$/, 'CA5QGL'],
-      ['Copy E-ticket', '607-7513754074'],
+      [/^Copy (Airline PNR|Booking code \(PNR\))$/, 'CA5QGL'],
+      ['Copy E-ticket', '6077513754074'],
       ['Copy Reference', 'FLTE5D2CF23972C40'],
       ['Copy Transaction ID', '629909187265'],
     ]) {

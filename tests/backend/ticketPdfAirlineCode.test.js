@@ -36,7 +36,7 @@ describe('the booking code on the e-ticket', () => {
 
     expect(pdf).toContain('AIRLINE PNR');
     expect(pdf).toContain('H8KQ2P');
-    expect(pdf).toContain('Booking reference Q7XK2M');
+    expect(pdf).toContain('GDS PNR Q7XK2M');
     expect(pdf).not.toContain('Amadeus');
     expect(pdf).not.toContain('AIRLINE BOOKING CODE');
   });

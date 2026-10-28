@@ -5,7 +5,7 @@ import QRCode from 'qrcode';
 import { checkInOpensText, checkInsOf } from '../../shared/airlineCheckIn.js';
 import { bookingItineraries, clockTime, layoverBetween, legLabel } from '../../shared/bookingItineraries.js';
 import {
-  airlineLocatorsOf, bookingCodeOf, canDownloadDocument, isPaid, issueDate, isVoidedTicket, liveTickets, resolveTickets, ticketForTraveler, ticketState, voidedTicketDigits,
+  bookingCodeOf, canDownloadDocument, isPaid, issueDate, isVoidedTicket, liveTickets, resolveTickets, ticketForTraveler, ticketState, voidedTicketDigits,
 } from '../../shared/eTicket.js';
 import { documentNoticeOf, documentTitleOf } from '../../shared/ticketDocument.js';
 import { printedTicketNumber } from '../../shared/ticketNumber.js';
@@ -178,10 +178,8 @@ function header(t, booking, { title, issued }) {
   doc.setFillColor(...COLOR.teal);
   doc.roundedRect(PAGE.margin, t.y, CONTENT_WIDTH, boxHeight, 2, 2, 'F');
   const codeValue = code?.value || 'Not yet assigned';
-  const airlineCodes = airlineLocatorsOf(booking).length;
-  const codeLabel = airlineCodes > 1 ? 'AIRLINE PNRS' : airlineCodes === 1 ? 'AIRLINE PNR' : 'BOOKING CODE (PNR)';
   const columns = [
-    [codeLabel, codeValue, codeValue.length > 10 ? 10 : 15],
+    [(code?.label || 'Booking code (PNR)').toUpperCase(), codeValue, codeValue.length > 10 ? 10 : 15],
     ['JETSETTERS BOOKING', booking.bookingReference || booking.orderId || '', 10],
     ['STATUS', title === 'E-Ticket' ? 'Ticketed' : 'Confirmed, ticket pending', 10],
   ];
@@ -195,7 +193,7 @@ function header(t, booking, { title, issued }) {
   });
   if (code?.amadeusReference) {
     t.font(7, 'normal', COLOR.sky);
-    t.text(`Booking reference ${code.amadeusReference}`, PAGE.margin + 5 + columnWidth, t.y + 18.5);
+    t.text(`GDS PNR ${code.amadeusReference}`, PAGE.margin + 5 + columnWidth, t.y + 18.5);
   }
   t.y += boxHeight + 3;
 }

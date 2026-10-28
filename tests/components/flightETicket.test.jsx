@@ -43,6 +43,16 @@ describe('the travel document', () => {
     expect(text).toMatch(/Ticket #: 0572000000002/);
   });
 
+  it("names the airline's code the airline PNR, and ours the GDS PNR", () => {
+    const text = textOf({
+      status: 'confirmed', pnr: 'BMYESL', bookingReference: 'FLT1', tickets, travelers: travellers, payment_status: 'paid',
+      airlineLocators: [{ carrierCode: 'AS', locator: 'QHNFSU' }],
+    });
+
+    expect(text).toMatch(/Airline PNR: QHNFSU · GDS PNR: BMYESL/);
+    expect(text.replace('GDS PNR: BMYESL', '')).not.toMatch(/PNR: BMYESL/);
+  });
+
   it('prints a conjunction ticket as the whole set', () => {
     const text = textOf({
       status: 'confirmed', pnr: '2IZOI8', bookingReference: 'FLT1', payment_status: 'paid',

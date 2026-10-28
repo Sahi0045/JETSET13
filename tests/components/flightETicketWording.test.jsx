@@ -22,7 +22,7 @@ describe('the travel document wording', () => {
 
     expect(text).toMatch(/Booking Confirmation/);
     expect(text).toMatch(/Your seat is held under the PNR below/);
-    expect(text).toMatch(/PNR: ABC123/);
+    expect(text).toMatch(/Booking code \(PNR\): ABC123/);
   });
 
   it('a queued booking holds no seat yet', () => {

@@ -728,7 +728,7 @@ function ManageBooking() {
                         {bookingCode?.value && <CopyButton value={bookingCode.value} label={bookingCode.label || 'booking code'} />}
                       </div>
                       {bookingCode?.amadeusReference && (
-                        <p className="mt-1 text-xs text-gray-500">{`Amadeus reference ${bookingCode.amadeusReference}`}</p>
+                        <p className="mt-1 text-xs text-gray-500">{`GDS PNR ${bookingCode.amadeusReference}`}</p>
                       )}
                     </div>
                     <div className="min-w-0">

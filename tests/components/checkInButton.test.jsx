@@ -73,6 +73,7 @@ describe('the check-in button on Manage Booking', () => {
     expect(link.getAttribute('target')).toBe('_blank');
     expect(link.getAttribute('rel')).toMatch(/noopener/);
     expect(within(link.closest('[data-check-in]')).getByText('H8KQ2P')).toBeTruthy();
+    expect(within(link.closest('[data-check-in]')).getByText('Airline PNR')).toBeTruthy();
     expect(screen.getByText('Opens 24 hours before departure')).toBeTruthy();
   });
 
