@@ -26,67 +26,82 @@ const getApiUrl = () => {
     return apiConfig.baseUrl || '';
 };
 
+const COUNTRY_NAMES = (() => {
+    try { return new Intl.DisplayNames(['en'], { type: 'region' }); } catch { return null; }
+})();
+const SHORTER_COUNTRY_NAMES = { HK: 'Hong Kong', MO: 'Macau' };
+
+export const countryName = (code) => {
+    const iso = String(code || '').toUpperCase();
+    if (SHORTER_COUNTRY_NAMES[iso]) return SHORTER_COUNTRY_NAMES[iso];
+    try { return (/^[A-Z]{2}$/.test(iso) && COUNTRY_NAMES?.of(iso)) || code || ''; } catch { return code || ''; }
+};
+
+// OurAirports decorates a city: "Paris (Roissy-en-France, Val-d'Oise)", "Honolulu, Oahu".
+const plainCity = (name) => String(name || '').split('(')[0].split(',')[0].trim();
+const shortAirportName = (name) => String(name || '').replace(/\s+(International\s+)?Airport$/i, '').trim() || name;
+
 /**
- * Search airports by keyword using Amadeus API
- * @param {string} keyword - Search term (city name, airport code, etc.)
- * @param {Object} options - Search options
- * @returns {Promise<Array>} - Matching airports
+ * One row of the search list, from one row of the API's answer, laid out as
+ * booking.com lays it: the code, the place, and under it the country - or,
+ * for an airport listed under its city (`parentName`), how far it is from the
+ * centre. `name` is what picking it puts in the box: the city, or the airport
+ * for one listed under its city.
  */
-export const searchAirports = async (keyword, options = {}) => {
-    if (!keyword || keyword.trim().length < 2) {
-        return [];
+export const toPlace = (row, parentName) => {
+    const country = countryName(row.countryCode || row.country);
+    const base = { code: row.code, type: row.type, country, countryCode: row.countryCode };
+    if (row.type === 'CITY') {
+        return { ...base, name: row.name, title: row.name, subtitle: country };
     }
-
-    const cacheKey = `${keyword.toLowerCase()}_${options.countryCode || ''}`;
-
-    // Check cache first
-    if (cache.searches.has(cacheKey)) {
-        const cached = cache.searches.get(cacheKey);
-        if (Date.now() - cached.timestamp < cache.TTL) {
-            console.log(`✅ Airport search cache hit: "${keyword}"`);
-            return cached.data;
-        }
+    const city = plainCity(row.cityName) || row.name;
+    if (row.parent) {
+        const subtitle = Number.isFinite(row.distanceKm) ? `${row.distanceKm} km from downtown` : `${parentName || city}, ${country}`;
+        return { ...base, parent: row.parent, name: shortAirportName(row.name), title: row.name, subtitle };
     }
+    return { ...base, name: city, title: row.name, subtitle: `${city}, ${country}` };
+};
+
+const toPlaces = (rows) => rows.map((row) => toPlace(
+    row,
+    row.parent ? rows.find((other) => other.type === 'CITY' && other.code === row.parent)?.name : undefined,
+));
+
+const cacheKeyOf = (keyword) => keyword.trim().toLowerCase();
+
+/** The list already fetched for this text, or null. */
+export const cachedAirports = (keyword) => {
+    const cached = cache.searches.get(cacheKeyOf(keyword || ''));
+    return cached && Date.now() - cached.timestamp < cache.TTL ? cached.data : null;
+};
+
+/**
+ * Airports and cities for what was typed, ranked by the API: a city with
+ * several airports first, its airports under it. Only when the API cannot be
+ * reached does the short built-in list stand in.
+ * @param {string} keyword - Search term (city name, airport code, etc.)
+ * @returns {Promise<Array>} - Rows for the search list
+ */
+export const searchAirports = async (keyword) => {
+    if (!keyword || !keyword.trim()) return [];
+    const cached = cachedAirports(keyword);
+    if (cached) return cached;
 
     try {
-        const baseUrl = getApiUrl();
-        const url = `${baseUrl}/airports/search`;
-
-        const response = await fetch(url, {
+        const response = await fetch(`${getApiUrl()}/airports/search`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            },
-            body: JSON.stringify({
-                keyword: keyword.trim(),
-                countryCode: options.countryCode || cache.userLocation?.countryCode,
-                limit: options.limit || 15
-            })
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify({ keyword: keyword.trim(), limit: 12 }),
         });
-
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-        }
-
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const result = await response.json();
+        if (!result.success) throw new Error(result.error || 'Airport search failed');
 
-        if (result.success && result.data?.length > 0) {
-            // Cache the results
-            cache.searches.set(cacheKey, {
-                data: result.data,
-                timestamp: Date.now()
-            });
-
-            console.log(`✅ Airport API: Found ${result.data.length} results for "${keyword}"`);
-            return result.data;
-        }
-
-        // API returned empty, use local fallback
-        return searchLocalAirports(keyword);
-
+        const places = toPlaces(result.data || []);
+        cache.searches.set(cacheKeyOf(keyword), { data: places, timestamp: Date.now() });
+        return places;
     } catch (error) {
-        console.warn(`⚠️ Airport API failed, using local data:`, error.message);
+        console.warn('⚠️ Airport API failed, using local data:', error.message);
         return searchLocalAirports(keyword);
     }
 };
@@ -132,24 +147,10 @@ export const searchLocalAirports = (keyword) => {
         .slice(0, 12)
         .map(airport => ({
             ...airport,
+            title: airport.name,
+            subtitle: airport.country,
             fullName: `${airport.name} (${airport.code}), ${airport.country}`
         }));
-};
-
-/**
- * The API's answer added to the places already listed. Those stay where they
- * are: the answer comes 300 ms after the local list, and reordering it then
- * changed the row under the cursor as it was clicked. New places go after
- * them, best match first; places that do not match what was typed are left out.
- */
-export const mergeAirportResults = (listed = [], found = [], keyword = '', limit = 12) => {
-    const seen = new Set(listed.map((place) => place.code));
-    const added = ranked((found || []).filter((place) => {
-        if (!place?.code || seen.has(place.code)) return false;
-        seen.add(place.code);
-        return true;
-    }), keyword);
-    return [...listed, ...added].slice(0, limit);
 };
 
 /**
@@ -327,7 +328,8 @@ export const clearCache = () => {
 const AirportService = {
     searchAirports,
     searchLocalAirports,
-    mergeAirportResults,
+    cachedAirports,
+    toPlace,
     getNearbyAirports,
     getDefaultDepartureAirport,
     getAirportByCode,

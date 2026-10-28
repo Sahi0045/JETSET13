@@ -9,7 +9,7 @@ import AirportService from "../../../Services/AirportService";
 import { getTodayDate, getNextDay, getSafeDate } from "../../../utils/dateUtils";
 import { useLocationContext } from '../../../Context/LocationContext';
 import CustomFlightCalendar from "./CustomFlightCalendar";
-import { PlaceSuggestions, comboboxProps, makeRoomBelow, usePlaceSearch } from "./PlaceSuggestions";
+import { PlaceSuggestions, comboboxProps, usePlaceSearch } from "./PlaceSuggestions";
 import MultiCityLegs, { MIN_LEGS, nextLegAfter } from "./MultiCityLegs";
 import { fieldCode, normalizeTripType } from './searchQuery';
 import { format, parseISO, isValid } from 'date-fns';
@@ -479,13 +479,13 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
               <input
                 type="text" name="from" value={formData.from || ""}
                 onChange={handleInputChange} onBlur={fromPlace.close} onKeyDown={fromPlace.onKeyDown}
-                onFocus={(e) => makeRoomBelow(e.currentTarget)} {...comboboxProps('from-places', fromPlace)}
+                onFocus={fromPlace.onFocus} {...comboboxProps('from-places', fromPlace)}
                 placeholder="City or airport"
                 autoComplete="off" autoCorrect="off" spellCheck={false}
                 className="w-full border-0 p-0 bg-transparent outline-none focus:ring-0 font-grotesk text-[20px] leading-tight font-semibold text-ink placeholder:text-gray-300 placeholder:font-normal placeholder:text-[15px]"
               />
               <span className="block text-xs text-gray-500 mt-1 truncate">{fromSubtitle || ' '}</span>
-              <PlaceSuggestions id="from-places" place={fromPlace} />
+              <PlaceSuggestions id="from-places" place={fromPlace} title="Leaving from" value={formData.from} onType={(text) => handleInputChange({ target: { name: 'from', value: text } })} />
               {formErrors.from && <span className="block text-red-500 text-xs mt-1">{formErrors.from}</span>}
             </label>
 
@@ -495,13 +495,13 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
               <input
                 type="text" name="to" value={formData.to || ""}
                 onChange={handleInputChange} onBlur={toPlace.close} onKeyDown={toPlace.onKeyDown}
-                onFocus={(e) => makeRoomBelow(e.currentTarget)} {...comboboxProps('to-places', toPlace)}
+                onFocus={toPlace.onFocus} {...comboboxProps('to-places', toPlace)}
                 placeholder="City or airport"
                 autoComplete="off" autoCorrect="off" spellCheck={false}
                 className="w-full border-0 p-0 bg-transparent outline-none focus:ring-0 font-grotesk text-[20px] leading-tight font-semibold text-ink placeholder:text-gray-300 placeholder:font-normal placeholder:text-[15px]"
               />
               <span className="block text-xs text-gray-500 mt-1 truncate">{toSubtitle || ' '}</span>
-              <PlaceSuggestions id="to-places" place={toPlace} />
+              <PlaceSuggestions id="to-places" place={toPlace} title="Going to" value={formData.to} onType={(text) => handleInputChange({ target: { name: 'to', value: text } })} />
               {formErrors.to && <span className="block text-red-500 text-xs mt-1">{formErrors.to}</span>}
 
               {/* Swap origin / destination — rendered LAST so the To input stays the
