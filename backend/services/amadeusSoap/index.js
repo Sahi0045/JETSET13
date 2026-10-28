@@ -1,6 +1,6 @@
 import logger from '../logger.js';
 import { reportError } from '../monitoring.js';
-import { isCityCode, resolveToIata, searchLocations as searchAirports } from '../airportsIndex.js';
+import { isCityCode, resolvePlaces, resolveToIata, searchLocations as searchAirports } from '../airportsIndex.js';
 import { getWsConfig } from './config.js';
 import { AmadeusSoapError, inspectReply } from './errors.js';
 import { mapMasterPricerReply } from './mappers/offer.js';
@@ -94,9 +94,14 @@ export const searchRequestFor = (params, { currency } = {}) => {
       return { from, to, departDate: leg.departDate, fromIsCity: isCityCode(from), toIsCity: isCityCode(to) };
     })
     : null;
-  const from = legs ? legs[0].from : resolveToIata(params.from ?? params.originLocationCode);
-  const to = legs ? legs[legs.length - 1].to : resolveToIata(params.to ?? params.destinationLocationCode);
-  if (!from || !to) throw unknownPlace(!from ? params.from : params.to);
+  // One side of a trip may name several airports ("JFK,EWR"): Master Pricer
+  // searches them all at once (depMultiCity, up to 50).
+  const fromCodes = legs ? [legs[0].from] : resolvePlaces(params.from ?? params.originLocationCode);
+  const toCodes = legs ? [legs[legs.length - 1].to] : resolvePlaces(params.to ?? params.destinationLocationCode);
+  if (!fromCodes || !toCodes) throw unknownPlace(!fromCodes ? params.from : params.to);
+  const from = fromCodes.join(',');
+  const to = toCodes.join(',');
+  const placesOf = (codes) => codes.map((code) => ({ code, isCity: isCityCode(code) }));
 
   // A group Amadeus cannot book together is refused here, in words the customer
   // can act on, rather than sent and answered with a bare 955 or 926.
@@ -114,6 +119,8 @@ export const searchRequestFor = (params, { currency } = {}) => {
     to,
     fromIsCity: isCityCode(from),
     toIsCity: isCityCode(to),
+    fromPlaces: placesOf(fromCodes),
+    toPlaces: placesOf(toCodes),
     departDate: legs ? legs[0].departDate : (params.departDate ?? params.departureDate),
     returnDate: legs ? undefined : (params.returnDate || undefined),
     ...(legs ? { legs } : {}),

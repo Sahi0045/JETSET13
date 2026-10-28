@@ -235,6 +235,26 @@ const namedPlace = (text) => {
   return null;
 };
 
+/** The most airports a search may name on one side. Amadeus takes 50; a list longer than this is not a choice. */
+export const MAX_PLACES = 6;
+
+const CODE_LIST = /^[A-Za-z]{3}(\s*,\s*[A-Za-z]{3})+$/;
+
+/**
+ * The places one side of a search names: ["JFK", "EWR"] for "JFK,EWR", or the
+ * one place any other text names. Only a list of codes is split: "San
+ * Francisco, CA" is one place. Null when any of them is not a place.
+ */
+export const resolvePlaces = (value) => {
+  const text = String(value ?? '').trim();
+  if (!CODE_LIST.test(text)) {
+    const code = resolveToIata(text);
+    return code ? [code] : null;
+  }
+  const codes = [...new Set(text.split(',').map((part) => resolveToIata(part.trim())))];
+  return codes.length <= MAX_PLACES && codes.every(Boolean) ? codes : null;
+};
+
 /** The ISO country code of an airport or city code, or null when it is unknown. */
 export const countryOfAirport = (code) => {
   load();

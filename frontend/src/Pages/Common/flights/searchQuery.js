@@ -20,9 +20,13 @@ export const extractIata = (str) => {
   if (!str) return '';
   const m = String(str).match(/\(([A-Z]{3})\)$/);
   if (m) return m[1];
-  if (/^[A-Z]{3}$/.test(String(str).trim())) return String(str).trim();
+  // Several ticked airports, "JFK, EWR", are one side of a search: "JFK,EWR".
+  if (/^[A-Z]{3}(\s*,\s*[A-Z]{3})*$/.test(String(str).trim())) return String(str).trim().replace(/\s+/g, '');
   return str;
 };
+
+/** "JFK, EWR" for a side that names several airports ("JFK,EWR"), or null. */
+export const airportListLabel = (code) => (String(code || '').includes(',') ? String(code).split(',').join(', ') : null);
 
 /**
  * The code - or failing that the typed text - a search field names.
