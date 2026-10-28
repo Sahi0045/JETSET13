@@ -3,6 +3,7 @@ import { Armchair, Check, Copy, Download, ExternalLink, Eye, Luggage, ReceiptTex
 import { daysUntilDate, formatCalendarDate } from '../../../../utils/dateUtils'
 import { attentionMessage } from '../../../../utils/bookingStatus'
 import { bookingCodeOf, canDownloadDocument, documentState, isCommitUnknown, liveTickets, ticketState, ticketsVoided } from '../../../../utils/eTicket'
+import { printedTicketNumber } from '../../../../../../shared/ticketNumber'
 import { formatUsd } from '../../../../utils/bookingCharge'
 import BookingItinerary from '../../flights/BookingItinerary'
 import CopyButton from '../../../../Components/CopyButton'
@@ -74,7 +75,7 @@ function ticketText(booking) {
   // as though it could still be used. Nor one whose cancel went through and
   // could not be recorded: its row still reads confirmed (ticketState).
   if (status === 'CANCELLED' || ticketState(booking) === 'cancelled') return 'Cancelled'
-  const numbers = liveTickets(booking).map((t) => t?.number).filter(Boolean)
+  const numbers = liveTickets(booking).filter((t) => t?.number).map(printedTicketNumber)
   if (numbers.length) return <span className="tracking-wider">{numbers.join(', ')}</span>
   if (ticketsVoided(booking)) return 'Voided'
   if (documentState(booking) === 'cancel_pending') return 'None, cancellation pending'
@@ -137,7 +138,7 @@ export function TripDetails({ booking }) {
   const cabin = isFlight ? cabinOf(booking, legs) : ''
 
   const ticket = isFlight && booking.pnr ? ticketText(booking) : null
-  const ticketNumbers = liveTickets(booking).map((t) => t?.number).filter(Boolean)
+  const ticketNumbers = liveTickets(booking).filter((t) => t?.number).map(printedTicketNumber)
   const reference = booking.orderId || booking.bookingReference || booking.quoteId || 'N/A'
   const secondId = isDatabaseBooking ? (booking.orderId || booking.bookingReference) : (booking.transactionId || 'N/A')
   const chips = [
@@ -160,7 +161,7 @@ export function TripDetails({ booking }) {
         <div className="grid md:grid-cols-2">
           <Section icon={Ticket} title="Your booking">
             {isFlight && booking.pnr && (
-              <Highlight label={code.label} note={code.amadeusReference ? `Amadeus reference ${code.amadeusReference}` : null} copy={code.value}>
+              <Highlight label={code.label} note={code.amadeusReference ? `GDS PNR ${code.amadeusReference}` : null} copy={code.value}>
                 <span className="font-grotesk text-[24px] font-bold leading-tight tracking-[0.18em] text-[#034457]">{code.value}</span>
               </Highlight>
             )}
@@ -241,7 +242,7 @@ export function CheckInStrip({ booking }) {
       {checkIns.map((checkIn) => (
         <div key={checkIn.carrierCode} data-check-in className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-5 rounded-2xl bg-[#F5FAFB] border border-[#DCEBF0] px-4 py-3">
           <div className="min-w-0">
-            <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-gray-500">{checkIn.codeIsAirlines ? 'Airline booking code' : 'Booking code'}</div>
+            <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-gray-500">{checkIn.codeIsAirlines ? 'Airline PNR' : 'Booking code (PNR)'}</div>
             <div className="flex items-center gap-1.5">
               <span className="font-grotesk text-lg font-bold tracking-[0.18em] text-[#034457]">{checkIn.code}</span>
               <button type="button" onClick={() => copy(checkIn.code)} aria-label={`Copy ${checkIn.code}`} title="Copy" className={`p-1.5 rounded-md text-[#055B75] hover:bg-white ${focusRing}`}>

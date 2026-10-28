@@ -273,11 +273,12 @@ export function airlineLocatorsOf(bookingData) {
 export function bookingCodeOf(bookingData) {
   const pnr = pnrOf(bookingData);
   const airline = airlineLocatorsOf(bookingData);
-  if (airline.length === 0) return pnr ? { label: 'Booking code (PNR)', value: pnr, amadeusReference: null } : null;
+  if (airline.length === 0) return pnr ? { label: 'Booking code (PNR)', value: pnr, amadeusReference: null, isAirlines: false } : null;
   return {
-    label: airline.length === 1 ? 'Airline booking code' : 'Airline booking codes',
+    label: airline.length === 1 ? 'Airline PNR' : 'Airline PNRs',
     value: airline.length === 1 ? airline[0].locator : airline.map((entry) => `${entry.carrierCode} ${entry.locator}`).join(' · '),
     amadeusReference: pnr && airline.some((entry) => entry.locator !== pnr) ? pnr : null,
+    isAirlines: true,
   };
 }
 

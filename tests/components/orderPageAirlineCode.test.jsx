@@ -91,8 +91,8 @@ describe("the airline's booking code after paying", () => {
     const { confirmation } = await bothPages(booked);
 
     expect(handedOver.airlineLocators).toEqual([{ carrierCode: 'FI', locator: 'K2X9QL' }]);
-    expect(confirmation).toMatch(/Airline booking code/);
+    expect(confirmation).toMatch(/Airline PNR/);
     expect(confirmation).toMatch(/K2X9QL/);
-    expect(confirmation).toMatch(/Amadeus reference Q7XK2M/);
+    expect(confirmation).toMatch(/GDS PNR Q7XK2M/);
   });
 });

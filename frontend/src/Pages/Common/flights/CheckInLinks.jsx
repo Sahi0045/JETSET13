@@ -25,7 +25,7 @@ export default function CheckInLinks({ booking }) {
           className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-5 rounded-2xl border border-[#DCEBF0] bg-[#F5FAFB] px-4 py-3"
         >
           <div className="min-w-0">
-            <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-gray-500">{checkIn.codeIsAirlines ? 'Airline booking code' : 'Booking code'}</div>
+            <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-gray-500">{checkIn.codeIsAirlines ? 'Airline PNR' : 'Booking code (PNR)'}</div>
             <div className="flex items-center gap-2">
               <span className="font-grotesk text-lg font-bold tracking-[0.18em] text-[#034457]">{checkIn.code}</span>
               <button

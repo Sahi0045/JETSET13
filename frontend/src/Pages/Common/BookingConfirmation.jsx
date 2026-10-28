@@ -601,7 +601,7 @@ function BookingConfirmation() {
                     <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">{bookingCodeOf(bookingData).label}</p>
                     <p className="text-lg font-bold text-[#055B75] font-mono">{bookingCodeOf(bookingData).value}</p>
                     {bookingCodeOf(bookingData).amadeusReference && (
-                      <p className="mt-1 text-xs text-gray-500">{`Amadeus reference ${bookingCodeOf(bookingData).amadeusReference}`}</p>
+                      <p className="mt-1 text-xs text-gray-500">{`GDS PNR ${bookingCodeOf(bookingData).amadeusReference}`}</p>
                     )}
                   </div>
                 ) : isFlight && (

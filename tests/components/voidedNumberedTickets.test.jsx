@@ -140,7 +140,7 @@ describe('every recorded ticket voided, then the cancel refused', () => {
     expect(eTicket.liveTickets(allVoided)).toEqual([]);
     expect(eTicket.ticketsVoided(allVoided)).toBe(true);
     const trips = readMyTrips();
-    expect(trips).toMatch(/liveTickets\(booking\)\.map\(\(t\) => t\?\.number\)/);
+    expect(trips).toMatch(/liveTickets\(booking\)\.filter\(\(t\) => t\?\.number\)\.map\(printedTicketNumber\)/);
     expect(trips).toMatch(/if \(ticketsVoided\(booking\)\) return 'Voided'/);
     expect(isCompletedTrip({ ...allVoided, departureDate: '2020-01-15' })).toBe(false);
   });
