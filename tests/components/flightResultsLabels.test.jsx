@@ -30,7 +30,7 @@ describe('the result card', () => {
   // "No hidden fees" sat over a price that leaves out the service fee.
   it('says its price is before the service fee', () => {
     render(<FlightCard flight={flight()} onViewPrices={() => {}} />);
-    expect(screen.getByText('for 2 travellers + service fee')).toBeTruthy();
+    expect(screen.getByText('for 2 travellers + platform fee')).toBeTruthy();
   });
 
   // Amadeus caps the count at 9: "9 seats left", in red, on flights with room.

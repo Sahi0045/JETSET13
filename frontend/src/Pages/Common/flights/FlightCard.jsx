@@ -253,9 +253,9 @@ function SegmentList({ segments = [], stopDetails = [], cityMap = {} }) {
 // page, so the card says so rather than sit under "No hidden fees".
 const pricedForLabel = (offer) => {
   const travellers = offer?.travelerPricings?.length || 0;
-  if (travellers > 1) return `for ${travellers} travellers + service fee`;
-  if (travellers === 1) return 'for 1 traveller + service fee';
-  return 'fare + service fee';
+  if (travellers > 1) return `for ${travellers} travellers + platform fee`;
+  if (travellers === 1) return 'for 1 traveller + platform fee';
+  return 'fare + platform fee';
 };
 
 function FlightCard({ flight, onBook, onViewPrices, priceStats, cityMap = {} }) {

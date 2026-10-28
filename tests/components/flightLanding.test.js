@@ -25,7 +25,7 @@ describe('a search from the landing page', () => {
   // Result prices leave out the service fee added before payment.
   it('promises no "no hidden fees"', () => {
     expect(landing).not.toMatch(/No hidden fees/);
-    expect(landing).toMatch(/Service fee shown before you pay/);
+    expect(landing).toMatch(/Platform fee shown before you pay/);
   });
 
   // Nothing handles a price-match request: no rules, no form, no refund path.

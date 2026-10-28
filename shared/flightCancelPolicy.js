@@ -138,7 +138,7 @@ export function cancelTermsLines(terms, { money = usd, time = clock } = {}) {
 function policyLines(terms, { money, time }) {
   const back = known(terms.airlinePrice) ? money(terms.airlinePrice) : 'what you paid';
   const kept = Number(terms.serviceFeeKept) > 0 ? money(terms.serviceFeeKept) : null;
-  const youGetBack = `You get back ${back}${kept ? `; the ${kept} service fee is not refundable.` : '.'}`;
+  const youGetBack = `You get back ${back}${kept ? `; the ${kept} platform fee is not refundable.` : '.'}`;
   switch (terms.policy) {
     case 'never_booked':
       return ['This booking was never confirmed with the airline, so everything you paid is returned.'];
@@ -151,7 +151,7 @@ function policyLines(terms, { money, time }) {
       const fee = Number(terms.cancellationFee) > 0 ? ` and our ${money(terms.cancellationFee)} cancellation fee` : '';
       return [
         `This fare is refundable. You get back ${back} less the airline's cancellation penalty${penalty}${fee}.`,
-        ...(kept ? [`The ${kept} service fee is not refundable.`] : []),
+        ...(kept ? [`The ${kept} platform fee is not refundable.`] : []),
         'Our team confirms the amount with the airline and emails you within 2 business days.',
       ];
     }
@@ -183,8 +183,8 @@ export function cancelPolicyLines({ cancellationFee = null, cancellationFeePerce
   const fee = !words ? '' : (hasPercent ? ` and our cancellation fee of ${words}` : ` and our ${words} cancellation fee`);
   return [
     freeUntil
-      ? `Book now and you can cancel free until ${time(freeUntil)}: you get back the airline price. The service fee is not refundable.`
-      : "You can cancel free until 11:59 PM on the day you book (our ticketing office's time): you get back the airline price. The service fee is not refundable.",
+      ? `Book now and you can cancel free until ${time(freeUntil)}: you get back the airline price. The platform fee is not refundable.`
+      : "You can cancel free until 11:59 PM on the day you book (our ticketing office's time): you get back the airline price. The platform fee is not refundable.",
     `After that the airline's fare rules apply: a refundable fare returns the airline price less the airline's penalty${fee}; a non-refundable fare returns only unused taxes.`,
     'If the airline cancels or changes your flight, you get back everything you paid.',
   ];

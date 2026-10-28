@@ -13,7 +13,7 @@ describe('bookingChargeLines', () => {
       total: 540.86,
       lines: [
         { label: 'Airline fare (incl. taxes)', amount: 500 },
-        { label: 'Service fee', amount: 50 },
+        { label: 'Platform fee', amount: 50 },
         { label: 'Discount (SAVE)', amount: -9.14 },
       ],
     });
@@ -28,7 +28,7 @@ describe('bookingChargeLines', () => {
     const charge = bookingChargeLines({ amount: 540.86, fareBreakdown: { baseFare: 410, totalTax: 90, serviceFee: 50, totalAmount: 550 } });
     expect(charge.lines).toEqual([
       { label: 'Airline fare (incl. taxes)', amount: 500 },
-      { label: 'Service fee', amount: 50 },
+      { label: 'Platform fee', amount: 50 },
       { label: 'Discount', amount: -9.14 },
     ]);
   });

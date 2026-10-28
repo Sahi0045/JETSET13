@@ -882,7 +882,7 @@ export function generateCancellationTemplate(data) {
   const fmt = (a) => money(a, currency);
   const outcome = refundOutcome({ paymentAction, refundAmount });
   const serviceFee = serviceFeeKeptBy(data);
-  const keptRow = serviceFee > 0 ? ['Service fee (not refundable)', fmt(serviceFee)] : ['Cancellation fee', fmt(cancellationFee)];
+  const keptRow = serviceFee > 0 ? ['Platform fee (not refundable)', fmt(serviceFee)] : ['Cancellation fee', fmt(cancellationFee)];
   const policySentence = customerReviewSentence(data);
   const coins = coinsSentence(data);
 
