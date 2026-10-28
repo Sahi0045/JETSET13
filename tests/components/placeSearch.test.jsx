@@ -1,9 +1,9 @@
 import React from 'react';
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import FlightSearchForm from '../../frontend/src/Pages/Common/flights/flight-search-form.jsx';
-import { mergeAirportResults, searchLocalAirports } from '../../frontend/src/Services/AirportService.js';
+import { clearCache, searchLocalAirports, toPlace } from '../../frontend/src/Services/AirportService.js';
 
 /**
  * The From and To boxes. The list was built from the local airports, then
@@ -11,16 +11,25 @@ import { mergeAirportResults, searchLocalAirports } from '../../frontend/src/Ser
  * under the cursor changed as it was clicked. It closed 200 ms after the box
  * lost focus, so a slow click landed on nothing. And on a 1366 x 768 laptop it
  * opened below the bottom of the screen.
+ *
+ * Then the built-in list came first, India first, and the API's ranked answer
+ * only after it: "new" opened on New Delhi and "ny" found no New York (28 Oct).
+ * The list is now the API's answer, as on booking.com.
  */
 
 const codes = (list) => list.map((place) => place.code);
 
 const reply = (body) => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) });
 
+const airport = (code, name, cityName, countryCode, parent) => ({ code, type: 'AIRPORT', name, cityName, countryCode, ...(parent ? { parent } : {}) });
+const MUMBAI = [airport('BOM', 'Chhatrapati Shivaji Maharaj International Airport', 'Mumbai', 'IN')];
+const DUB = [airport('DUB', 'Dublin Airport', 'Dublin', 'IE'), airport('DXB', 'Dubai International Airport', 'Dubai', 'AE')];
+
 let airportAnswers;
 beforeEach(() => {
   localStorage.setItem('userCurrency', 'USD');
-  airportAnswers = {};
+  clearCache();
+  airportAnswers = { mumbai: () => reply({ success: true, data: MUMBAI }), dub: () => reply({ success: true, data: DUB }) };
   globalThis.fetch = vi.fn((url, init) => {
     if (String(url).includes('/airports/search')) {
       const { keyword } = JSON.parse(init.body);
@@ -49,34 +58,21 @@ describe('the local airport list', () => {
   });
 });
 
-describe("merging the API's answer", () => {
-  const local = [{ code: 'DUB', name: 'Dublin' }, { code: 'DXB', name: 'Dubai' }];
-
-  it('keeps what is already listed where it is, and adds new places after it', () => {
-    const merged = mergeAirportResults(local, [
-      { code: 'DBV', name: 'Dubrovnik Airport', cityName: 'Dubrovnik' },
-      { code: 'DXB', name: 'Dubai International Airport', cityName: 'Dubai' },
-    ], 'dub');
-
-    expect(codes(merged)).toEqual(['DUB', 'DXB', 'DBV']);
-    expect(merged[1].name).toBe('Dubai');
+describe('a row of the list', () => {
+  it('names a city with several airports, and says it searches them all', () => {
+    expect(toPlace({ code: 'NYC', type: 'CITY', name: 'New York', countryCode: 'US' }))
+      .toMatchObject({ name: 'New York', title: 'New York', subtitle: 'All airports · United States' });
   });
 
-  it('leaves out places that do not match what was typed', () => {
-    const merged = mergeAirportResults(local, [
-      { code: 'TZL', name: 'Tuzla International Airport', cityName: 'Tuzla' },
-      { code: 'DBV', name: 'Dubrovnik Airport', cityName: 'Dubrovnik' },
-    ], 'dub');
-
-    expect(codes(merged)).not.toContain('TZL');
+  it("names an airport under its city by the airport, and puts it in the box without 'International Airport'", () => {
+    expect(toPlace(airport('MXP', 'Milan Malpensa International Airport', 'Ferno (VA)', 'IT', 'MIL'), 'Milan'))
+      .toMatchObject({ name: 'Milan Malpensa', title: 'Milan Malpensa International Airport', subtitle: 'Milan, Italy', parent: 'MIL' });
   });
 
-  it('matches a city by its city name, for airports named after a person', () => {
-    const merged = mergeAirportResults([], [
-      { code: 'JFK', name: 'John F. Kennedy International Airport', cityName: 'New York' },
-    ], 'new york');
-
-    expect(codes(merged)).toEqual(['JFK']);
+  it('names an airport on its own by its city, without what OurAirports adds to it', () => {
+    expect(toPlace(airport('CDG', 'Charles de Gaulle International Airport', "Paris (Roissy-en-France, Val-d'Oise)", 'FR')))
+      .toMatchObject({ name: 'Paris', subtitle: 'Charles de Gaulle International Airport · France' });
+    expect(toPlace(airport('HKG', 'Hong Kong International Airport', 'Hong Kong', 'HK')).subtitle).toMatch(/· Hong Kong$/);
   });
 });
 
@@ -96,23 +92,64 @@ const typeInto = (name, text) => {
 const options = () => screen.queryAllByRole('option').map((option) => option.textContent);
 
 describe('the To box', () => {
-  it("does not reorder the list when the API's answer comes in", async () => {
+  it("lists the API's answer in its order, a city's airports under it", async () => {
     vi.useFakeTimers();
-    airportAnswers.dub = () => reply({ success: true, data: [
-      { code: 'DUB', name: 'Dublin Airport', cityName: 'Dublin' },
-      { code: 'DBV', name: 'Dubrovnik Airport', cityName: 'Dubrovnik' },
-      { code: 'DXB', name: 'Dubai International Airport', cityName: 'Dubai' },
+    airportAnswers['new york'] = () => reply({ success: true, data: [
+      { code: 'NYC', type: 'CITY', name: 'New York', cityName: 'New York', countryCode: 'US' },
+      airport('JFK', 'John F. Kennedy International Airport', 'New York', 'US', 'NYC'),
+      airport('EWR', 'Newark Liberty International Airport', 'Newark', 'US', 'NYC'),
+      airport('LGA', 'LaGuardia Airport', 'New York', 'US', 'NYC'),
+      airport('DEL', 'Indira Gandhi International Airport', 'New Delhi', 'IN'),
     ] });
     renderForm();
 
-    typeInto('to', 'dub');
-    const before = options();
-    expect(before.length).toBeGreaterThan(1);
-    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
-    const after = options();
+    typeInto('to', 'new york');
+    await act(async () => { await vi.advanceTimersByTimeAsync(300); });
 
-    expect(after.slice(0, before.length)).toEqual(before);
-    expect(after.some((text) => text.includes('Dubrovnik'))).toBe(true);
+    expect(options()).toEqual([
+      'New YorkAll airports · United StatesNYC',
+      'John F. Kennedy International AirportNew York, United StatesJFK',
+      'Newark Liberty International AirportNew York, United StatesEWR',
+      'LaGuardia AirportNew York, United StatesLGA',
+      'New DelhiIndira Gandhi International Airport · IndiaDEL',
+    ]);
+    expect(screen.getAllByRole('option')[1].className).toMatch(/pl-10/);
+  });
+
+  it('says it is searching until the first answer comes', async () => {
+    vi.useFakeTimers();
+    renderForm();
+
+    typeInto('to', 'mumbai');
+    expect(screen.getByText('Searching airports…')).toBeTruthy();
+    await act(async () => { await vi.advanceTimersByTimeAsync(300); });
+
+    expect(screen.queryByText('Searching airports…')).toBeNull();
+    expect(options()[0]).toMatch(/^Mumbai/);
+  });
+
+  it('uses the built-in list when the API cannot be reached', async () => {
+    vi.useFakeTimers();
+    airportAnswers.mumbai = () => Promise.reject(new TypeError('Failed to fetch'));
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    renderForm();
+
+    typeInto('to', 'mumbai');
+    await act(async () => { await vi.advanceTimersByTimeAsync(300); });
+
+    expect(options().some((text) => text.includes('Mumbai'))).toBe(true);
+  });
+
+  it('picks the row under the pointer when it is pressed, before the list can change', async () => {
+    vi.useFakeTimers();
+    renderForm();
+    const input = typeInto('to', 'mumbai');
+    await act(async () => { await vi.advanceTimersByTimeAsync(300); });
+
+    fireEvent.mouseDown(screen.getAllByRole('option')[0]);
+
+    expect(input.value).toBe('Mumbai (BOM)');
+    expect(screen.queryAllByRole('option')).toHaveLength(0);
   });
 
   it('ignores an answer for what the box said before', async () => {
@@ -134,6 +171,7 @@ describe('the To box', () => {
     vi.useFakeTimers();
     renderForm();
     const input = typeInto('to', 'mumbai');
+    await act(async () => { await vi.advanceTimersByTimeAsync(300); });
 
     const row = screen.getAllByRole('option').find((option) => option.textContent.includes('Mumbai'));
     expect(fireEvent.mouseDown(row)).toBe(false);
@@ -144,23 +182,27 @@ describe('the To box', () => {
     expect(screen.queryAllByRole('option')).toHaveLength(0);
   });
 
-  it('picks with the arrow keys and Enter, the top match first', () => {
+  it('picks with the arrow keys and Enter, the top match first', async () => {
+    vi.useFakeTimers();
     renderForm();
-    const [first, second] = searchLocalAirports('dub');
 
     const input = typeInto('to', 'dub');
+    await act(async () => { await vi.advanceTimersByTimeAsync(300); });
     fireEvent.keyDown(input, { key: 'Enter' });
-    expect(input.value).toBe(`${first.name} (${first.code})`);
+    expect(input.value).toBe('Dublin (DUB)');
 
     typeInto('to', 'dub');
     fireEvent.keyDown(input, { key: 'ArrowDown' });
     fireEvent.keyDown(input, { key: 'Enter' });
-    expect(input.value).toBe(`${second.name} (${second.code})`);
+    expect(input.value).toBe('Dubai (DXB)');
   });
 });
 
 describe('a multi-city flight box', () => {
-  it('keeps its box focused when a row is pressed, and picks the place', () => {
+  afterEach(() => vi.useRealTimers());
+
+  it('keeps its box focused when a row is pressed, and picks the place', async () => {
+    vi.useFakeTimers();
     render(
       <MemoryRouter>
         <FlightSearchForm onSearch={() => {}} initialData={{ tripType: 'multiCity', legs: [{ from: 'New Delhi (DEL)', fromCode: 'DEL', to: '', departDate: '' }, { from: '', to: '', departDate: '' }] }} />
@@ -169,6 +211,7 @@ describe('a multi-city flight box', () => {
     const input = screen.getByLabelText('Flight 1 to');
     fireEvent.focus(input);
     fireEvent.change(input, { target: { value: 'mumbai' } });
+    await act(async () => { await vi.advanceTimersByTimeAsync(300); });
 
     const row = screen.getAllByRole('option').find((option) => option.textContent.includes('Mumbai'));
     expect(fireEvent.mouseDown(row)).toBe(false);

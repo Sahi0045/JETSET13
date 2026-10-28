@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { Building2, Plane } from 'lucide-react';
 import AirportService from '../../../Services/AirportService';
 
 const LIST_ROOM = 320;
@@ -15,8 +16,9 @@ export function makeRoomBelow(element) {
 }
 
 /**
- * The suggestions for one From or To box: local airports at once, the API's
- * answer added after them, the top match highlighted for Enter.
+ * The suggestions for one From or To box: the API's ranked list for what was
+ * typed, the top match highlighted for Enter. The list for the last text stays
+ * up until the next one arrives.
  *
  * @param {(place: object) => void} onPick
  */
@@ -24,32 +26,38 @@ export function usePlaceSearch(onPick) {
   const [suggestions, setSuggestions] = useState([]);
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
+  const [searching, setSearching] = useState(false);
   const timer = useRef(null);
   const latest = useRef('');
 
   useEffect(() => () => clearTimeout(timer.current), []);
 
+  const show = (places) => {
+    setSuggestions(places);
+    setActive(places.length > 0 ? 0 : -1);
+    setSearching(false);
+  };
+
   const search = (text) => {
     latest.current = text;
-    const local = AirportService.searchLocalAirports(text);
-    setSuggestions(local);
-    setActive(local.length > 0 ? 0 : -1);
-    setOpen(true);
     clearTimeout(timer.current);
-    if (text.trim().length < 2) return;
+    setOpen(true);
+    if (!text.trim()) {
+      show([]);
+      return;
+    }
+    const cached = AirportService.cachedAirports(text);
+    if (cached) {
+      show(cached);
+      return;
+    }
+    setSearching(true);
     timer.current = setTimeout(async () => {
-      let found = [];
-      try {
-        found = await AirportService.searchAirports(text);
-      } catch (error) {
-        console.warn('Airport search API error:', error);
-      }
+      const found = await AirportService.searchAirports(text);
       // The answer to an earlier search, after the customer typed on.
       if (latest.current !== text) return;
-      const merged = AirportService.mergeAirportResults(local, found, text);
-      setSuggestions(merged);
-      if (local.length === 0 && merged.length > 0) setActive(0);
-    }, 250);
+      show(found);
+    }, 120);
   };
 
   const close = () => {
@@ -80,7 +88,9 @@ export function usePlaceSearch(onPick) {
     }
   };
 
-  return { suggestions, isOpen: open && suggestions.length > 0, active, setActive, search, pick, close, onKeyDown };
+  return {
+    suggestions, isOpen: open && (suggestions.length > 0 || searching), searching, active, setActive, search, pick, close, onKeyDown,
+  };
 }
 
 /** What the box needs to act as a combobox over its list. */
@@ -93,12 +103,14 @@ export const comboboxProps = (listId, place) => ({
 });
 
 /**
- * The list under a From or To box. Pressing a row keeps the box focused, so the
- * box never blurs and closes the list before the click lands - with a slow
- * click it did, and nothing was picked.
+ * The list under a From or To box, laid out as booking.com lays it out: a city
+ * with several airports, then its airports under it. A row is picked when it is
+ * pressed: the list can change as the API answers, and picked on release a row
+ * that moved under the pointer was picked instead. Pressing keeps the box
+ * focused, so the list does not close first.
  */
 export function PlaceSuggestions({ id, place }) {
-  const { suggestions, active, setActive, pick, isOpen } = place;
+  const { suggestions, active, setActive, pick, isOpen, searching } = place;
 
   // Keeps the highlighted row in view inside the list only: scrollIntoView
   // moved the page too, and cut short the scroll that makes room for the list.
@@ -117,25 +129,31 @@ export function PlaceSuggestions({ id, place }) {
       id={id}
       role="listbox"
       onMouseDown={(event) => event.preventDefault()}
-      className="absolute z-[60] left-3 top-full mt-1 w-[300px] max-w-[88vw] bg-white rounded-xl shadow-xl border border-gray-200 max-h-72 overflow-auto py-1"
+      className="absolute z-[60] left-3 top-full mt-1 w-[360px] max-w-[calc(100vw-2rem)] bg-white rounded-xl shadow-xl border border-gray-200 max-h-80 overflow-auto py-1"
     >
+      {suggestions.length === 0 && searching && (
+        <li className="px-4 py-3 text-sm text-gray-500">Searching airports…</li>
+      )}
       {suggestions.map((city, index) => {
-        const where = [city.cityName && city.cityName !== city.name ? city.cityName : '', city.country].filter(Boolean).join(', ');
+        const isCity = city.type === 'CITY';
+        const Icon = isCity ? Building2 : Plane;
         return (
           <li
-            key={`${city.code}-${city.name}`}
+            key={`${city.code}-${city.type}-${city.parent || ''}`}
             id={`${id}-${index}`}
             role="option"
             aria-selected={index === active}
             onMouseMove={() => { if (index !== active) setActive(index); }}
+            onMouseDown={(event) => { if (event.button === 0) pick(city); }}
             onClick={() => pick(city)}
-            className={`px-4 py-2.5 cursor-pointer border-b last:border-0 border-gray-100 ${index === active ? 'bg-[#F0FAFC]' : ''}`}
+            className={`flex items-center gap-3 py-2.5 pr-4 cursor-pointer ${city.parent ? 'pl-10' : 'pl-4'} ${index === active ? 'bg-[#F0FAFC]' : ''}`}
           >
-            <div className="flex items-baseline justify-between gap-3">
-              <span className="font-semibold text-gray-800 text-sm truncate">{city.name}</span>
-              <span className="text-xs font-bold text-[#055B75] flex-shrink-0">{city.code}</span>
+            <Icon aria-hidden="true" className={`flex-shrink-0 text-[#055B75] ${city.parent ? 'h-3.5 w-3.5' : 'h-4 w-4'}`} />
+            <div className="min-w-0 flex-1">
+              <div className="font-semibold text-gray-800 text-sm truncate">{city.title || city.name}</div>
+              {(city.subtitle || city.country) && <div className="text-xs text-gray-500 truncate">{city.subtitle || city.country}</div>}
             </div>
-            {where && <div className="text-xs text-gray-500 truncate">{where}</div>}
+            <span className="text-xs font-bold text-[#055B75] flex-shrink-0">{city.code}</span>
           </li>
         );
       })}

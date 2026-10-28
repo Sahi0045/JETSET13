@@ -59,10 +59,10 @@ router.post('/search', async (req, res) => {
     try {
         const { keyword, subType, countryCode, limit } = req.body;
 
-        if (!keyword || keyword.length < 2) {
+        if (!keyword || keyword.length < 1) {
             return res.status(400).json({
                 success: false,
-                error: 'Keyword must be at least 2 characters long'
+                error: 'Keyword is required'
             });
         }
 
