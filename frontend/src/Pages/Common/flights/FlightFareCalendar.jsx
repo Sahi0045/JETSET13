@@ -18,7 +18,7 @@ const extractCode = (str) => {
   if (!str) return '';
   const m = String(str).match(/\(([A-Z]{3})\)$/);
   if (m) return m[1];
-  if (/^[A-Z]{3}$/.test(String(str).trim())) return String(str).trim();
+  if (/^[A-Z]{3}(\s*,\s*[A-Z]{3})*$/.test(String(str).trim())) return String(str).trim().replace(/\s+/g, '');
   return str;
 };
 

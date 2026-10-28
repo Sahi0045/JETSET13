@@ -18,7 +18,7 @@ import { format, parseISO, isValid } from 'date-fns';
 // "Mum" would otherwise be priced as whatever it happens to match.
 const calendarCode = (label, code) => {
   const value = fieldCode(label, code);
-  return /^[A-Z]{3}$/.test(value) ? value : undefined;
+  return /^[A-Z]{3}(,[A-Z]{3})*$/.test(value) ? value : undefined;
 };
 
 // Get this from a config or parent component
@@ -48,13 +48,13 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
 
   const pickPlace = (field, city) => setFormData((prev) => ({
     ...prev,
-    [field]: `${city.name} (${city.code})`,
+    [field]: city.label || `${city.name} (${city.code})`,
     [`${field}Code`]: city.code,
     [`${field}Country`]: city.country,
     [`${field}Type`]: city.type,
   }));
-  const fromPlace = usePlaceSearch((city) => pickPlace('from', city));
-  const toPlace = usePlaceSearch((city) => pickPlace('to', city));
+  const fromPlace = usePlaceSearch((city) => pickPlace('from', city), { multi: true });
+  const toPlace = usePlaceSearch((city) => pickPlace('to', city), { multi: true });
 
   // Create a map of city names to their codes
   const cityCodeMap = allAirports.reduce((acc, city) => {
@@ -275,6 +275,12 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
       errors.returnDate = "Please select return date";
     }
 
+    const fromCodes = fieldCode(formData.from, formData.fromCode).split(',');
+    const toCodes = fieldCode(formData.to, formData.toCode).split(',');
+    if (!errors.from && !errors.to && fromCodes.some((code) => code && toCodes.includes(code))) {
+      errors.to = "Leaving from and going to name the same airport";
+    }
+
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   }
@@ -350,8 +356,13 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
 
   const departParts = getDateParts(formData.departDate);
   const returnParts = getDateParts(formData.returnDate);
-  const fromSubtitle = formData.fromCode ? `${formData.fromCode}${formData.fromCountry ? ', ' + formData.fromCountry : ''}` : '';
-  const toSubtitle = formData.toCode ? `${formData.toCode}${formData.toCountry ? ', ' + formData.toCountry : ''}` : '';
+  const placeSubtitle = (code, country) => {
+    if (!code) return '';
+    const shown = String(code).includes(',') ? `${String(code).split(',').length} airports` : code;
+    return `${shown}${country ? ', ' + country : ''}`;
+  };
+  const fromSubtitle = placeSubtitle(formData.fromCode, formData.fromCountry);
+  const toSubtitle = placeSubtitle(formData.toCode, formData.toCountry);
   const anyCalendarOpen = showDepartCalendar || showReturnCalendar || showTravellers;
   // Make custom (non-native) controls operable via keyboard (Enter / Space)
   const onKeyActivate = (fn) => (e) => {

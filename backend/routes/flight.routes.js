@@ -1,6 +1,6 @@
 import express from 'express';
 import FlightProvider, { providerStatus } from '../services/flightProvider.js';
-import { resolveToIata, searchLocations } from '../services/airportsIndex.js';
+import { resolvePlaces, resolveToIata, searchLocations } from '../services/airportsIndex.js';
 import supabase from '../config/supabase.js';
 import fetch from 'node-fetch';
 import { get as cacheGet, set as cacheSet, withCache, CacheKeys, TTL } from '../services/cache.service.js';
@@ -2282,6 +2282,11 @@ const resolveToIATACode = (location) => {
   return resolveToIata(location) ?? null;
 };
 
+// One side of a search may name several airports, "JFK,EWR", each searched.
+const resolvePlaceList = (location) => (/^[A-Za-z]{3}(\s*,\s*[A-Za-z]{3})+$/.test(String(location ?? '').trim())
+  ? resolvePlaces(location)?.join(',') ?? null
+  : resolveToIATACode(location));
+
 // Transform Amadeus API response to frontend format
 const transformAmadeusFlightData = (flights, dictionaries = {}) => {
   if (!flights || flights.length === 0) return [];
@@ -2467,6 +2472,7 @@ router.post('/search', validate({ body: flightSearchSchema }), async (req, res) 
 
     const { returnDate, travelers } = req.body;
     const isCode = (code) => /^[A-Z]{3}$/.test(String(code || ''));
+    const isCodes = (codes) => /^[A-Z]{3}(,[A-Z]{3})*$/.test(String(codes || ''));
     const legs = Array.isArray(req.body.legs)
       ? req.body.legs.map((leg) => ({ text: leg, from: resolveToIATACode(leg.from), to: resolveToIATACode(leg.to), departDate: String(leg.departDate).trim() }))
       : null;
@@ -2475,8 +2481,8 @@ router.post('/search', validate({ body: flightSearchSchema }), async (req, res) 
     const departDate = legs ? legs[0].departDate : req.body.departDate;
 
     // Resolve city names to IATA codes (handles cases like "New York" -> "JFK")
-    const resolvedFrom = legs ? legs[0].from : resolveToIATACode(from);
-    const resolvedTo = legs ? legs[legs.length - 1].to : resolveToIATACode(to);
+    const resolvedFrom = legs ? legs[0].from : resolvePlaceList(from);
+    const resolvedTo = legs ? legs[legs.length - 1].to : resolvePlaceList(to);
     console.log(`📍 Resolved locations: from="${from}" -> "${resolvedFrom}", to="${to}" -> "${resolvedTo}"`);
 
     // Text that names no place is not searched as a guess. It used to go to
@@ -2485,8 +2491,8 @@ router.post('/search', validate({ body: flightSearchSchema }), async (req, res) 
     // departures from Ouagadougou.
     const unplacedLeg = legs?.find((leg) => !isCode(leg.from) || !isCode(leg.to));
     const unknownPlace = unplacedLeg ? (!isCode(unplacedLeg.from) ? unplacedLeg.text.from : unplacedLeg.text.to)
-      : !isCode(resolvedFrom) ? from
-        : !isCode(resolvedTo) ? to
+      : !isCodes(resolvedFrom) ? from
+        : !isCodes(resolvedTo) ? to
           : null;
     if (unknownPlace) {
       return res.status(400).json({
@@ -2798,8 +2804,8 @@ router.post('/date-prices', async (req, res) => {
     // key and the strip quoted prices no JFK flight sells. The search page
     // resolves through the same table, so the strip matches the search it
     // links to.
-    const origin = resolveToIATACode(from) || from;
-    const destination = resolveToIATACode(to) || to;
+    const origin = resolvePlaceList(from) || from;
+    const destination = resolvePlaceList(to) || to;
     const ws = describeWsConfig();
     const cacheKey = CacheKeys.flightBrowse('date-prices', [
       origin, destination,
@@ -5444,8 +5450,8 @@ router.post('/calendar-prices', async (req, res) => {
     // Resolved once and used for both the key and the search, as /date-prices
     // does and for the same reason: the key read "New York" as JFK while the
     // search read it as NYC.
-    const from = resolveToIATACode(origin) || origin;
-    const to = resolveToIATACode(destination) || destination;
+    const from = resolvePlaceList(origin) || origin;
+    const to = resolvePlaceList(destination) || destination;
     const ws = describeWsConfig();
 
     // Redis-backed, replacing an in-process Map that was per-instance and lost

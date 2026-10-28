@@ -32,7 +32,7 @@ import FlightAppliedFilters from './FlightAppliedFilters';
 import FlightFareCalendar from './FlightFareCalendar';
 import { sortFlights } from './flightSort';
 import { citySearchInstead } from './multiCityHelp';
-import { buildSearchPayload, fieldCode, isMultiCity, searchFromQuery, searchKeyOf, searchToQuery } from './searchQuery';
+import { airportListLabel, buildSearchPayload, fieldCode, isMultiCity, searchFromQuery, searchKeyOf, searchToQuery } from './searchQuery';
 import { tripTypeOf } from '../../../../../shared/bookingItineraries';
 import { airportClockLabel, buildDateStrip, filtersWithin, journeyBounds, layoverBounds, legDateLabel, matchesFilters, minutesBetweenAirportTimes, priceStep, searchFailureMessage, shiftDateStrip, stopsSummary, withDepartureDate } from './searchResults';
 
@@ -41,7 +41,7 @@ const extractRouteCode = (str) => {
   if (!str) return '';
   const match = str.match?.(/\(([A-Z]{3})\)$/);
   if (match) return match[1];
-  if (/^[A-Z]{3}$/.test(String(str).trim())) return String(str).trim();
+  if (/^[A-Z]{3}(\s*,\s*[A-Z]{3})*$/.test(String(str).trim())) return String(str).trim().replace(/\s+/g, '');
   return str;
 };
 
@@ -721,7 +721,7 @@ function FlightSearchPage() {
   const handleSearch = (formData) => {
     const from = fieldCode(formData.from, formData.fromCode);
     const to = fieldCode(formData.to, formData.toCode);
-    const isIata = (code) => /^[A-Z]{3}$/.test(code);
+    const isIata = (code) => /^[A-Z]{3}(,[A-Z]{3})*$/.test(code);
     const next = {
       ...formData,
       from,
@@ -1038,8 +1038,8 @@ function FlightSearchPage() {
   // Resolve readable origin/destination city names for the results header
   const fromCode = searchParams.fromCode || extractRouteCode(searchParams.from);
   const toCode = searchParams.toCode || extractRouteCode(searchParams.to);
-  const fromCityName = cityMap[fromCode] || String(searchParams.from || '').replace(/\s*\([A-Z]{3}\)$/, '') || fromCode;
-  const toCityName = cityMap[toCode] || String(searchParams.to || '').replace(/\s*\([A-Z]{3}\)$/, '') || toCode;
+  const fromCityName = airportListLabel(fromCode) || cityMap[fromCode] || String(searchParams.from || '').replace(/\s*\([A-Z]{3}\)$/, '') || fromCode;
+  const toCityName = airportListLabel(toCode) || cityMap[toCode] || String(searchParams.to || '').replace(/\s*\([A-Z]{3}\)$/, '') || toCode;
   const multiCitySearch = isMultiCity(searchParams);
   const cityInstead = multiCitySearch ? citySearchInstead(searchData?.legs || []) : null;
   const searchCityInstead = () => {

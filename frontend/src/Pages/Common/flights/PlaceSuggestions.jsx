@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { MapPin, Plane, X } from 'lucide-react';
+import { Check, MapPin, Plane, X } from 'lucide-react';
 import AirportService from '../../../Services/AirportService';
 
 const LIST_ROOM = 320;
+const MAX_CHOSEN = 6;
 const isPhone = () => typeof window !== 'undefined' && Boolean(window.matchMedia?.('(max-width: 639px)').matches);
 
 /**
@@ -22,14 +23,19 @@ export function makeRoomBelow(element) {
  * typed, the top match highlighted for Enter. The list for the last text stays
  * up until the next one arrives.
  *
+ * With `multi`, places can be ticked, as on booking.com, and searched together:
+ * the pick is then one place standing for all of them ("JFK,EWR").
+ *
  * @param {(place: object) => void} onPick
+ * @param {{ multi?: boolean }} options
  */
-export function usePlaceSearch(onPick) {
+export function usePlaceSearch(onPick, { multi = false } = {}) {
   const [suggestions, setSuggestions] = useState([]);
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
   const [searching, setSearching] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [chosen, setChosen] = useState([]);
   const timer = useRef(null);
   const latest = useRef('');
 
@@ -63,22 +69,46 @@ export function usePlaceSearch(onPick) {
     }, 120);
   };
 
-  const close = () => {
+  const hide = () => {
     setOpen(false);
     setActive(-1);
-  };
-
-  const closeSheet = () => {
-    close();
     setSheetOpen(false);
   };
 
   const pick = (place) => {
     clearTimeout(timer.current);
     latest.current = '';
-    closeSheet();
+    setChosen([]);
+    hide();
     onPick(place);
   };
+
+  const isChosen = (place) => chosen.some((other) => other.code === place.code);
+
+  const toggle = (place) => setChosen((current) => (current.some((other) => other.code === place.code)
+    ? current.filter((other) => other.code !== place.code)
+    : current.length < MAX_CHOSEN ? [...current, place] : current));
+
+  /** The ticked places, picked as one. */
+  const pickChosen = () => {
+    if (chosen.length === 1) return pick(chosen[0]);
+    const codes = chosen.map((place) => place.code);
+    const countries = [...new Set(chosen.map((place) => place.country))];
+    return pick({
+      code: codes.join(','),
+      name: codes.join(', '),
+      label: codes.join(', '),
+      type: 'MULTI',
+      country: countries.length === 1 ? countries[0] : '',
+      places: chosen,
+    });
+  };
+
+  // Leaving the box keeps what was ticked: losing ticks to a stray click is worse.
+  const close = () => (chosen.length > 0 ? pickChosen() : hide());
+  const closeSheet = close;
+
+  const choose = (place) => (multi && chosen.length > 0 ? toggle(place) : pick(place));
 
   // On a phone the box opens a search page of its own, as on booking.com: a
   // list under the box was half hidden by the keyboard.
@@ -100,6 +130,9 @@ export function usePlaceSearch(onPick) {
     } else if (event.key === 'ArrowUp') {
       event.preventDefault();
       setActive((index) => (index <= 0 ? suggestions.length - 1 : index - 1));
+    } else if (event.key === 'Enter' && chosen.length > 0) {
+      event.preventDefault();
+      pickChosen();
     } else if (event.key === 'Enter' && active >= 0) {
       event.preventDefault();
       pick(suggestions[active]);
@@ -109,8 +142,9 @@ export function usePlaceSearch(onPick) {
   };
 
   return {
-    suggestions, isOpen: open && (suggestions.length > 0 || searching), searching, active, setActive, search, pick, close, onKeyDown,
-    sheetOpen, closeSheet, onFocus,
+    suggestions, isOpen: open && (suggestions.length > 0 || searching || chosen.length > 0), searching, active, setActive,
+    search, pick, choose, close, onKeyDown, sheetOpen, closeSheet, onFocus,
+    multi, chosen, isChosen, toggle, pickChosen,
   };
 }
 
@@ -125,7 +159,7 @@ export const comboboxProps = (listId, place) => ({
 
 /** The rows of the list, as booking.com lays them: the code, the place, and under it the country or the distance. */
 function PlaceRows({ id, place }) {
-  const { suggestions, active, setActive, pick, searching } = place;
+  const { suggestions, active, setActive, choose, searching, multi, isChosen, toggle } = place;
   return (
     <>
       {suggestions.length === 0 && searching && (
@@ -142,8 +176,8 @@ function PlaceRows({ id, place }) {
             role="option"
             aria-selected={index === active}
             onMouseMove={() => { if (index !== active) setActive(index); }}
-            onMouseDown={(event) => { if (event.button === 0) pick(city); }}
-            onClick={() => pick(city)}
+            onMouseDown={(event) => { if (event.button === 0) choose(city); }}
+            onClick={() => choose(city)}
             className={`flex items-start gap-3 py-2.5 pr-4 cursor-pointer ${city.parent ? 'pl-10' : 'pl-4'} ${index === active ? 'bg-[#F0FAFC]' : ''}`}
           >
             <Icon aria-hidden="true" className="mt-0.5 h-4 w-4 flex-shrink-0 text-[#055B75]" />
@@ -153,10 +187,55 @@ function PlaceRows({ id, place }) {
               </div>
               {below && <div className="mt-0.5 text-xs text-gray-500 truncate">{below}</div>}
             </div>
+            {multi && (
+              <button
+                type="button"
+                role="checkbox"
+                tabIndex={-1}
+                aria-checked={isChosen(city)}
+                aria-label={`Search ${city.code} too`}
+                onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); if (event.button === 0) toggle(city); }}
+                onClick={(event) => event.stopPropagation()}
+                className={`mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded border-2 ${isChosen(city) ? 'border-[#055B75] bg-[#055B75] text-white' : 'border-gray-300 bg-white'}`}
+              >
+                {isChosen(city) && <Check className="h-3.5 w-3.5" aria-hidden="true" />}
+              </button>
+            )}
           </li>
         );
       })}
     </>
+  );
+}
+
+/** The ticked places, each removable, and the button that searches them. */
+function ChosenBar({ place, action, wide = false }) {
+  if (!place.multi || place.chosen.length === 0) return null;
+  return (
+    <div className={`flex items-center gap-2 border-t border-gray-100 bg-white px-4 py-2.5 ${wide ? 'flex-col items-stretch' : ''}`}>
+      <div className="flex min-w-0 flex-1 flex-wrap gap-1.5" aria-label="Airports to search">
+        {place.chosen.map((chosen) => (
+          <span key={chosen.code} className="inline-flex items-center gap-1 rounded-full bg-[#F1FBFD] px-2.5 py-1 text-xs font-bold text-[#034457] ring-1 ring-[#65B3CF]/50">
+            {chosen.code}
+            <button
+              type="button"
+              aria-label={`Remove ${chosen.code}`}
+              onMouseDown={(event) => { event.preventDefault(); place.toggle(chosen); }}
+              className="text-[#055B75] hover:text-[#034457]"
+            >
+              <X className="h-3 w-3" aria-hidden="true" />
+            </button>
+          </span>
+        ))}
+      </div>
+      <button
+        type="button"
+        onMouseDown={(event) => { event.preventDefault(); place.pickChosen(); }}
+        className={`rounded-full bg-[#055B75] px-4 py-2 text-sm font-semibold text-white hover:bg-[#034457] ${wide ? 'w-full py-3 text-base' : ''}`}
+      >
+        {action}
+      </button>
+    </div>
   );
 }
 
@@ -192,9 +271,10 @@ function PlaceSheet({ id, place, title, value, onType }) {
           className="w-full rounded-lg border-2 border-[#055B75] px-3 py-3 text-base text-gray-900 outline-none focus:border-[#055B75] focus:ring-2 focus:ring-[#65B3CF]/40 placeholder:text-gray-400"
         />
       </div>
-      <ul id={id} role="listbox" onMouseDown={(event) => event.preventDefault()} className="flex-1 overflow-auto border-t border-gray-100 py-1">
+      <ul id={id} role="listbox" aria-multiselectable={place.multi || undefined} onMouseDown={(event) => event.preventDefault()} className="flex-1 overflow-auto border-t border-gray-100 py-1">
         <PlaceRows id={id} place={place} />
       </ul>
+      <ChosenBar place={place} action="Apply" wide />
     </div>
   );
 }
@@ -229,13 +309,17 @@ export function PlaceSuggestions({ id, place, title, value, onType }) {
   if (!isOpen) return null;
 
   return (
-    <ul
-      id={id}
-      role="listbox"
-      onMouseDown={(event) => event.preventDefault()}
-      className="absolute z-[60] left-3 top-full mt-1 w-[360px] max-w-[calc(100vw-2rem)] bg-white rounded-xl shadow-xl border border-gray-200 max-h-80 overflow-auto py-1"
-    >
-      <PlaceRows id={id} place={place} />
-    </ul>
+    <div className="absolute z-[60] left-3 top-full mt-1 w-[360px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl">
+      <ul
+        id={id}
+        role="listbox"
+        aria-multiselectable={place.multi || undefined}
+        onMouseDown={(event) => event.preventDefault()}
+        className="max-h-80 overflow-auto py-1"
+      >
+        <PlaceRows id={id} place={place} />
+      </ul>
+      <ChosenBar place={place} action="Done" />
+    </div>
   );
 }
