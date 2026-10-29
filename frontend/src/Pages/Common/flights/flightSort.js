@@ -1,5 +1,7 @@
 // Shared helpers for sorting / scoring flight results.
 
+import { farePerTraveller } from '../../../../../shared/farePerTraveller';
+
 const UNKNOWN = Number.MAX_SAFE_INTEGER;
 
 /**
@@ -55,8 +57,31 @@ export const formatMinutes = (minutes) => (Number.isFinite(minutes) && minutes !
   ? `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, '0')}m`
   : '');
 
-export const priceOf = (f) =>
-  typeof f?.price?.amount === 'number' ? f.price.amount : parseFloat(f?.price?.total) || Infinity;
+const totalOf = (f) => {
+  const amount = typeof f?.price?.amount === 'number'
+    ? f.price.amount
+    : parseFloat(String(f?.price?.total ?? '').replace(/,/g, ''));
+  return Number.isFinite(amount) ? amount : null;
+};
+
+/**
+ * One traveller's fare for a result, and the total for all of them. Every
+ * price on the results page is `amount`; `flight.price` stays the
+ * all-traveller total that checkout charges.
+ */
+export const fareOf = (f) => {
+  const total = totalOf(f);
+  const { each, unit, travellers } = farePerTraveller(f?.originalOffer);
+  return {
+    amount: each ?? total,
+    total,
+    unit: each != null ? unit : null,
+    travellers,
+    currency: f?.price?.currency || 'USD',
+  };
+};
+
+export const priceOf = (f) => fareOf(f).amount || Infinity;
 
 // Min/max bounds for price and duration across a list (for normalization).
 // Unknown durations are left out: one of them would stretch the range so far
@@ -103,7 +128,7 @@ const arrivalAt = (f) => {
 /** A sorted copy of `flights` in the order the sort control names. */
 export const sortFlights = (flights = [], sortOrder = 'price') => {
   const bounds = computeBounds(flights);
-  const amount = (f) => f.price?.amount || 0;
+  const amount = (f) => fareOf(f).amount || 0;
 
   const compare = {
     price: (a, b) => amount(a) - amount(b),

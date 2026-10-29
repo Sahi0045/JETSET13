@@ -4,7 +4,7 @@ import Price from '../../../Components/Price';
 import apiConfig from '@/config/api';
 import { fareCheckFor } from '../../../utils/fareCheckHandoff';
 import { formatCheckedBag } from '../../../utils/baggage';
-import { legsOf, tripAirlineNames, tripAirlines } from './flightSort';
+import { fareOf, legsOf, tripAirlineNames, tripAirlines } from './flightSort';
 
 const prettyFare = (opt) => {
   // "This fare" rather than an invented "Standard" brand.
@@ -188,6 +188,8 @@ function FlightFareOptions({ flight, onClose, onSelect }) {
     onSelect(merged, fareCheck);
   };
 
+  const flightFare = fareOf(flight);
+
   return (
     <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center p-0 sm:p-4">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
@@ -239,6 +241,7 @@ function FlightFareOptions({ flight, onClose, onSelect }) {
                 const perks = freeAmenityLabels(opt);
                 const checked = opt.baggageDetails?.checked;
                 const cabinBag = opt.baggageDetails?.cabin;
+                const fare = fareOf(opt);
                 return (
                   <div
                     key={opt.id ?? i}
@@ -250,8 +253,15 @@ function FlightFareOptions({ flight, onClose, onSelect }) {
                           badge compared it with nothing. */}
                       {i === 0 && options.length > 1 && <span className="text-[10px] font-bold text-white bg-[#055B75] px-2 py-0.5 rounded-full">CHEAPEST</span>}
                     </div>
-                    <div className="text-xl font-bold text-[#055B75] mb-3">
-                      <Price amount={opt.price} />
+                    <div className="mb-3">
+                      <div className="text-xl font-bold text-[#055B75] leading-tight">
+                        <Price amount={fare} />
+                      </div>
+                      {fare.unit && fare.travellers > 1 && (
+                        <div className="text-[11px] text-gray-500">
+                          per {fare.unit} · <Price amount={opt.price} /> for {fare.travellers} travellers
+                        </div>
+                      )}
                     </div>
 
                     <div className="space-y-1.5 text-xs text-gray-600 flex-1">
@@ -309,7 +319,7 @@ function FlightFareOptions({ flight, onClose, onSelect }) {
                   disabled={Boolean(checkingKey)}
                   className="px-6 py-2.5 rounded-lg bg-[#055B75] hover:bg-[#034457] disabled:opacity-60 text-white text-sm font-bold transition-colors inline-flex items-center gap-2"
                 >
-                  {checkingKey ? (<><Loader2 className="h-4 w-4 animate-spin" /> Checking…</>) : (<>Continue with this fare <span className="font-normal"><Price amount={flight.price} /></span></>)}
+                  {checkingKey ? (<><Loader2 className="h-4 w-4 animate-spin" /> Checking…</>) : (<>Continue with this fare <span className="font-normal"><Price amount={flightFare} />{flightFare.unit && flightFare.travellers > 1 ? ` per ${flightFare.unit}` : ''}</span></>)}
                 </button>
               )}
             </div>

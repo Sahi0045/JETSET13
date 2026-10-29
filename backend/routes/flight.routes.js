@@ -2811,6 +2811,8 @@ router.post('/date-prices', async (req, res) => {
       origin, destination,
       `${adults || 1}-${children || 0}-${infants || 0}-${travelClass || 'any'}`,
       dates.slice().sort().join(','),
+      // Payloads cached before pricesEach existed would leave the strip blank.
+      'each',
       // The strip quotes the cheapest fare of the day, so it has to be built
       // under the same rules as the search it links to. Without this the strip
       // kept advertising a blocked carrier's fare for the life of the cache.
