@@ -8,7 +8,7 @@ import Price from '../../../Components/Price';
 import { formatCheckedBag } from '../../../utils/baggage';
 import { formatCalendarDate } from '../../../utils/dateUtils';
 import { arrivalDayOffset, layoverLabel, layoversOf, legDateLabel, seatsLeftLabel } from './searchResults';
-import { fareOf, tripAirlineNames, tripAirlines } from './flightSort';
+import { fareOf, fareTotalParts, travellerFares, tripAirlineNames, tripAirlines } from './flightSort';
 
 const AIRLINE_LOGO_FALLBACK = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiByeD0iOCIgZmlsbD0iIzM3NzNmNCIvPgo8dGV4dCB4PSIyMCIgeT0iMjgiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxOCIgZmlsbD0id2hpdGUiIHRleHQtYW5jaG9yPSJtaWRkbGUiPuKciO+4jzwvdGV4dD4KPHN2Zz4K';
 
@@ -247,20 +247,6 @@ function SegmentList({ segments = [], stopDetails = [], cityMap = {} }) {
 
 const TRAVELLER_TYPE_LABEL = { ADULT: 'Adult', CHILD: 'Child', SEATED_INFANT: 'Infant (own seat)', HELD_INFANT: 'Infant (on lap)' };
 
-// The airline's fare for each type of traveller on the offer, for the fare breakup.
-const travellerFareLines = (offer) => {
-  const lines = new Map();
-  for (const pricing of offer?.travelerPricings || []) {
-    const type = String(pricing?.travelerType || 'ADULT').toUpperCase();
-    const each = Number(pricing?.price?.total);
-    if (!Number.isFinite(each) || each <= 0) return [];
-    const line = lines.get(type) || { type, label: TRAVELLER_TYPE_LABEL[type] || 'Traveller', count: 0, each };
-    line.count += 1;
-    lines.set(type, line);
-  }
-  return [...lines.values()];
-};
-
 const travellersLabel = (count) => `${count} traveller${count === 1 ? '' : 's'}`;
 
 function FlightCard({ flight, onBook, onViewPrices, priceStats, cityMap = {} }) {
@@ -303,9 +289,13 @@ function FlightCard({ flight, onBook, onViewPrices, priceStats, cityMap = {} }) 
   // Fare breakup figures (in the offer's source currency; <Price> converts for display)
   const currency = flight.price?.currency || 'USD';
   const baseFare = parseFloat(flight.price?.base) || 0;
-  const totalFare = parseFloat(flight.price?.total || flight.price?.grandTotal || flight.price?.amount) || 0;
-  const taxesAndFees = Math.max(0, totalFare - baseFare);
-  const fareLines = fare.travellers > 1 && fare.unit ? travellerFareLines(flight.originalOffer) : [];
+  const fares = travellerFares(flight);
+  const fareLines = fare.travellers > 1 ? fares : [];
+  const totalParts = fareTotalParts(flight, fares);
+  const baseParts = fares.length > 0 && fares.every((line) => line.base != null)
+    ? fares.map((line) => ({ amount: line.base, currency, times: line.count }))
+    : [{ amount: baseFare, currency }];
+  const taxParts = [...totalParts, ...baseParts.map((part) => ({ ...part, times: -(part.times ?? 1) }))];
 
   return (
     <div className="group bg-white border-b border-gray-100 last:border-b-0 first:rounded-t-[15px] last:rounded-b-[15px] hover:bg-[#FAFBFB] transition-colors duration-200">
@@ -380,7 +370,7 @@ function FlightCard({ flight, onBook, onViewPrices, priceStats, cityMap = {} }) 
                   <div className="text-[12px] font-semibold text-gray-600 mt-1">per {fare.unit}</div>
                   {fare.travellers > 1 && fare.total > 0 && (
                     <div className="text-[11px] text-gray-400 whitespace-nowrap">
-                      <Price amount={{ amount: fare.total, currency }} /> for {travellersLabel(fare.travellers)}
+                      <Price amount={totalParts} /> for {travellersLabel(fare.travellers)}
                     </div>
                   )}
                 </>
@@ -410,24 +400,24 @@ function FlightCard({ flight, onBook, onViewPrices, priceStats, cityMap = {} }) 
                   <div className="space-y-1.5 text-xs">
                     {fareLines.map((line) => (
                       <div key={line.type} className="flex justify-between gap-2 text-gray-600">
-                        <span>{line.label} × {line.count}</span>
+                        <span>{TRAVELLER_TYPE_LABEL[line.type] || 'Traveller'} × {line.count}</span>
                         <span className="font-medium text-gray-800"><Price amount={{ amount: line.each, currency }} /> each</span>
                       </div>
                     ))}
                     {fareLines.length > 0 && <div className="border-t border-gray-100 pt-0.5" />}
                     <div className="flex justify-between text-gray-600">
                       <span>Base fare</span>
-                      <span className="font-medium text-gray-800"><Price amount={{ amount: baseFare, currency }} /></span>
+                      <span className="font-medium text-gray-800"><Price amount={baseParts} /></span>
                     </div>
                     <div className="flex justify-between text-gray-600">
                       <span>Taxes &amp; fees</span>
-                      <span className="font-medium text-gray-800"><Price amount={{ amount: taxesAndFees, currency }} /></span>
+                      <span className="font-medium text-gray-800"><Price amount={taxParts} /></span>
                     </div>
                     <div className="flex justify-between border-t border-gray-100 pt-1.5 mt-1.5">
                       <span className="font-bold text-gray-800">
                         Total{fare.travellers > 1 ? ` (${travellersLabel(fare.travellers)})` : ''}
                       </span>
-                      <span className="font-bold text-[#055B75]"><Price amount={{ amount: totalFare, currency }} /></span>
+                      <span className="font-bold text-[#055B75]"><Price amount={totalParts} /></span>
                     </div>
                   </div>
                   <div className="text-[10px] text-gray-400 mt-2">Platform fee shown at checkout{cabinClass ? ` · ${cabinClass}` : ''}</div>

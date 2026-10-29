@@ -83,6 +83,40 @@ export const fareOf = (f) => {
 
 export const priceOf = (f) => fareOf(f).amount || Infinity;
 
+const amountOrNull = (value) => {
+  const amount = Number(value);
+  return Number.isFinite(amount) && amount >= 0 ? amount : null;
+};
+
+/**
+ * The airline's fare for each type of traveller on a result:
+ * `{ type, count, each, base }`. Empty when the fare per traveller is unknown.
+ */
+export const travellerFares = (f) => {
+  if (!fareOf(f).unit) return [];
+  const lines = new Map();
+  for (const pricing of f.originalOffer.travelerPricings) {
+    const type = String(pricing?.travelerType || 'ADULT').toUpperCase();
+    const each = amountOrNull(pricing?.price?.total);
+    if (!each) return [];
+    const line = lines.get(type) || { type, count: 0, each, base: amountOrNull(pricing?.price?.base) };
+    line.count += 1;
+    lines.set(type, line);
+  }
+  return [...lines.values()];
+};
+
+/**
+ * A result's total as `<Price>` parts: each traveller's fare as shown, added
+ * up, so the total is exactly 2 x the fare per person in any currency.
+ */
+export const fareTotalParts = (f, lines = travellerFares(f)) => {
+  const { total, currency } = fareOf(f);
+  return lines.length > 0
+    ? lines.map((line) => ({ amount: line.each, currency, times: line.count }))
+    : [{ amount: total, currency }];
+};
+
 // Min/max bounds for price and duration across a list (for normalization).
 // Unknown durations are left out: one of them would stretch the range so far
 // that every known duration normalized to zero.

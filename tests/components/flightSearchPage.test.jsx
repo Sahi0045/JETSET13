@@ -391,3 +391,29 @@ describe('prices for two travellers', () => {
     expect(screen.getByText(/prices per person/)).toBeTruthy();
   });
 });
+
+describe('the cheapest day on the strip', () => {
+  afterEach(() => localStorage.setItem('userCurrency', 'USD'));
+
+  // Mon 2 Nov was marked "Cheapest" beside the searched Wed 4 Nov at the same
+  // ₹9,530: the server picked one day by its exact dollar fare, and the
+  // searched day was never marked.
+  it('marks every day showing the lowest fare, the searched day too', async () => {
+    localStorage.setItem('userCurrency', 'INR');
+    globalThis.fetch = vi.fn((url) => {
+      const target = String(url);
+      if (target.includes('/flights/search')) return answer(200, { success: true, data: [card('searched-day')] });
+      if (target.includes('/flights/date-prices')) {
+        return answer(200, { success: true, currency: 'USD', pricesEach: { [D1]: 109.83, [D2]: 109.82, [D3]: 130 }, lowestPriceEach: 109.82 });
+      }
+      return answer(404, {});
+    });
+    renderPage();
+    await screen.findByText('searched-day');
+
+    await waitFor(() => expect(stripButton(D3).textContent).toMatch(/₹/));
+    expect(stripButton(D1).textContent).toContain('Cheapest');
+    expect(stripButton(D2).textContent).toContain('Cheapest');
+    expect(stripButton(D3).textContent).not.toContain('Cheapest');
+  });
+});

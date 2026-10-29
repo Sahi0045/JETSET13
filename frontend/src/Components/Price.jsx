@@ -6,7 +6,8 @@ import currencyService from '../Services/CurrencyService';
  * Displays a price in the user's selected currency
  * 
  * @param {Object} props
- * @param {number|string} props.amount - The price amount in USD (can be numeric or string)
+ * @param {number|string|Object|Object[]} props.amount - The price amount in USD (can be numeric or string),
+ *   `{ amount, currency }`, or a list of `{ amount, currency, times }` to add up
  * @param {string} props.className - Additional CSS classes for the price display
  * @param {boolean} props.showCode - Whether to show the currency code (e.g., USD, INR)
  */
@@ -38,6 +39,17 @@ const Price = ({ amount, className = '', showCode = false }) => {
     }
     
     try {
+      // Several amounts added up as each is shown, so a total reads exactly
+      // 2 x the fare beside it: [{ amount, currency, times }].
+      if (Array.isArray(amount)) {
+        const targetCurrency = currency || currencyService.getCurrency();
+        const total = amount.reduce((sum, part) => (
+          sum + (part.times ?? 1) * (currencyService.displayAmount(part.amount, part.currency, targetCurrency) ?? 0)
+        ), 0);
+        setFormattedPrice(currencyService.formatPrice(total, targetCurrency));
+        return;
+      }
+
       // Check if amount is an object with currency info
       if (typeof amount === 'object' && amount.amount && amount.currency) {
         const targetCurrency = currency || currencyService.getCurrency();

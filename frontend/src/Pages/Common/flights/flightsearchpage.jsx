@@ -34,7 +34,7 @@ import { fareOf, priceOf, sortFlights } from './flightSort';
 import { citySearchInstead } from './multiCityHelp';
 import { airportListLabel, buildSearchPayload, fieldCode, isMultiCity, searchFromQuery, searchKeyOf, searchToQuery } from './searchQuery';
 import { tripTypeOf } from '../../../../../shared/bookingItineraries';
-import { airportClockLabel, buildDateStrip, filtersWithin, journeyBounds, layoverBounds, legDateLabel, matchesFilters, minutesBetweenAirportTimes, priceStep, searchFailureMessage, shiftDateStrip, stopsSummary, withDepartureDate } from './searchResults';
+import { airportClockLabel, buildDateStrip, cheapestDays, filtersWithin, journeyBounds, layoverBounds, legDateLabel, matchesFilters, minutesBetweenAirportTimes, priceStep, searchFailureMessage, shiftDateStrip, stopsSummary, withDepartureDate } from './searchResults';
 
 // The IATA code in "New Delhi (DEL)", or a bare code as typed.
 const extractRouteCode = (str) => {
@@ -825,6 +825,11 @@ function FlightSearchPage() {
     return known;
   }, [dateRange, flights, searchParams?.departDate]);
 
+  const stripCheapest = useMemo(
+    () => cheapestDays(dateRange, (day) => currencyService.displayAmount(day.price, day.currency || 'USD')),
+    [dateRange, displayCurrency]
+  );
+
   const fareUnit = useMemo(() => {
     const fare = flights.length > 0 ? fareOf(flights[0]) : null;
     return fare?.unit && fare.travellers > 1 ? fare.unit : null;
@@ -993,7 +998,6 @@ function FlightSearchPage() {
             ...d,
             price: price != null ? price : d.price,
             currency: price != null ? (data.currency || 'USD') : d.currency,
-            isLowestPrice: data.lowestPriceEach != null && price === data.lowestPriceEach,
           };
         }));
       }
@@ -1090,9 +1094,7 @@ function FlightSearchPage() {
                 that said nothing. */}
             <div ref={dateStripRef} className="flex flex-1 min-w-0 items-center justify-start md:justify-center gap-1.5 overflow-x-auto hide-scrollbar mx-2 sm:mx-4">
               {dateRange.map((date, index) => {
-                const fares = dateRange.map((d) => Number(d.price) || 0).filter(Boolean);
-                const spread = fares.length > 1 && Math.max(...fares) > Math.min(...fares);
-                const cheapest = spread && date.isLowestPrice && !date.selected;
+                const cheapest = stripCheapest.has(date.isoDate);
                 return (
                   <button
                     key={index}
@@ -1120,7 +1122,7 @@ function FlightSearchPage() {
                         : '—'}
                     </span>
                     {cheapest && (
-                      <span className="text-[9.5px] font-bold uppercase tracking-[0.12em] leading-none text-emerald-600">
+                      <span className={`text-[9.5px] font-bold uppercase tracking-[0.12em] leading-none ${date.selected ? 'text-white/85' : 'text-emerald-600'}`}>
                         Cheapest
                       </span>
                     )}

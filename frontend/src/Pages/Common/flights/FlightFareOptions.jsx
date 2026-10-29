@@ -4,7 +4,7 @@ import Price from '../../../Components/Price';
 import apiConfig from '@/config/api';
 import { fareCheckFor } from '../../../utils/fareCheckHandoff';
 import { formatCheckedBag } from '../../../utils/baggage';
-import { fareOf, legsOf, tripAirlineNames, tripAirlines } from './flightSort';
+import { fareOf, fareTotalParts, legsOf, tripAirlineNames, tripAirlines } from './flightSort';
 
 const prettyFare = (opt) => {
   // "This fare" rather than an invented "Standard" brand.
@@ -259,7 +259,7 @@ function FlightFareOptions({ flight, onClose, onSelect }) {
                       </div>
                       {fare.unit && fare.travellers > 1 && (
                         <div className="text-[11px] text-gray-500">
-                          per {fare.unit} · <Price amount={opt.price} /> for {fare.travellers} travellers
+                          per {fare.unit} · <Price amount={fareTotalParts(opt)} /> for {fare.travellers} travellers
                         </div>
                       )}
                     </div>
