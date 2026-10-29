@@ -30,7 +30,7 @@ import FlightMobileSortFilter from './FlightMobileSortFilter';
 import FlightFareOptions from './FlightFareOptions';
 import FlightAppliedFilters from './FlightAppliedFilters';
 import FlightFareCalendar from './FlightFareCalendar';
-import { sortFlights } from './flightSort';
+import { fareOf, priceOf, sortFlights } from './flightSort';
 import { citySearchInstead } from './multiCityHelp';
 import { airportListLabel, buildSearchPayload, fieldCode, isMultiCity, searchFromQuery, searchKeyOf, searchToQuery } from './searchQuery';
 import { tripTypeOf } from '../../../../../shared/bookingItineraries';
@@ -753,18 +753,7 @@ function FlightSearchPage() {
   // Returns the price converted to the user's display currency so filters match what the user sees
   const getFlightPriceAmount = (flight) => {
     if (!flight || !flight.price) return 0;
-    let amount = flight.price.amount;
-    if (typeof amount === 'string') {
-      amount = parseFloat(amount.replace(/,/g, ''));
-    }
-    if (typeof amount !== 'number' || Number.isNaN(amount)) {
-      const total = flight.price.total;
-      if (typeof total === 'string') {
-        amount = parseFloat(total.replace(/,/g, ''));
-      } else if (typeof total === 'number') {
-        amount = total;
-      }
-    }
+    let amount = fareOf(flight).amount;
     if (!Number.isFinite(amount)) return 0;
 
     // Convert from source currency (API) to user's display currency
@@ -831,15 +820,20 @@ function FlightSearchPage() {
       .filter((day) => Number(day.price) > 0)
       .map((day) => [day.isoDate, Number(day.price)]));
     const searched = searchParams?.departDate;
-    const cheapest = flights.reduce((min, flight) => Math.min(min, Number(flight.price?.amount) || Infinity), Infinity);
+    const cheapest = flights.reduce((min, flight) => Math.min(min, priceOf(flight)), Infinity);
     if (searched && Number.isFinite(cheapest)) known[searched] = Math.min(known[searched] ?? Infinity, cheapest);
     return known;
   }, [dateRange, flights, searchParams?.departDate]);
 
+  const fareUnit = useMemo(() => {
+    const fare = flights.length > 0 ? fareOf(flights[0]) : null;
+    return fare?.unit && fare.travellers > 1 ? fare.unit : null;
+  }, [flights]);
+
   // Price distribution across current results — powers the per-card deal badge
   const priceStats = useMemo(() => {
     const ps = filteredFlights
-      .map(f => f.price?.amount)
+      .map(f => fareOf(f).amount)
       .filter(n => typeof n === 'number' && n > 0)
       .sort((a, b) => a - b);
     if (ps.length < 3) return null;
@@ -892,7 +886,7 @@ function FlightSearchPage() {
     flights.forEach(f => {
       const name = f.airline?.name || f.airline;
       if (!name) return;
-      const price = f.price?.amount ?? 0;
+      const price = fareOf(f).amount ?? 0;
       const existing = stats.get(name);
       if (existing) {
         existing.count += 1;
@@ -912,7 +906,7 @@ function FlightSearchPage() {
   // What each sidebar control can offer, across every result: the "from" price
   // under each stops box, and the ends of the journey and layover sliders.
   const stopsStats = useMemo(
-    () => stopsSummary(flights || [], (f) => Number(f.price?.amount) || null),
+    () => stopsSummary(flights || [], (f) => fareOf(f).amount || null),
     [flights]
   );
   const journeyRange = useMemo(() => journeyBounds(flights || []), [flights]);
@@ -992,14 +986,14 @@ function FlightSearchPage() {
       });
       const data = await res.json();
       if (requestId !== datePricesRequest.current) return;
-      if (data.success && data.dateWisePrices) {
+      if (data.success && data.pricesEach) {
         setDateRange(prev => prev.map(d => {
-          const price = data.dateWisePrices[d.isoDate];
+          const price = data.pricesEach[d.isoDate];
           return {
             ...d,
             price: price != null ? price : d.price,
             currency: price != null ? (data.currency || 'USD') : d.currency,
-            isLowestPrice: data.lowestPrice != null && price === data.lowestPrice,
+            isLowestPrice: data.lowestPriceEach != null && price === data.lowestPriceEach,
           };
         }));
       }
@@ -1267,6 +1261,7 @@ function FlightSearchPage() {
                     {sortOrder === 'recommended' && ' · recommended for you'}
                     {sortOrder === 'nonstop_first' && ' · non-stop first'}
                     {sortOrder === 'duration' && ' · fastest first'}
+                    {fareUnit && ` · prices per ${fareUnit}`}
                   </p>
                 </div>
 

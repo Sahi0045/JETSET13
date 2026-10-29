@@ -26,10 +26,13 @@ const modifyBar = read('FlightModifyBar.jsx');
 const form = read('flight-search-form.jsx');
 
 describe('the results card says who its price is for', () => {
-  it('labels the total with the travellers the airline priced, not "per adult"', () => {
+  // A two-adult total was labelled "per adult". The "per" price is now one
+  // traveller's own fare (farePerTraveller.test.jsx) and the total says how
+  // many travellers it covers.
+  it('labels the total with the travellers the airline priced', () => {
     expect(card).not.toMatch(/>per adult</i);
-    expect(card).toMatch(/offer\?\.travelerPricings\?\.length/);
-    expect(card).toMatch(/\{pricedForLabel\(flight\.originalOffer\)\}/);
+    expect(card).toMatch(/per \{fare\.unit\}/);
+    expect(card).toMatch(/for \{travellersLabel\(fare\.travellers\)\}/);
   });
 });
 

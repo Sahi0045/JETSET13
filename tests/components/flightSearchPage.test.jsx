@@ -364,3 +364,30 @@ describe('modify search', () => {
     await waitFor(() => expect(searchBodies()).toHaveLength(3));
   });
 });
+
+describe('prices for two travellers', () => {
+  // The strip quoted the total for both travellers, which read as one ticket.
+  it("puts one traveller's fare on the date strip, and says the prices are per person", async () => {
+    const twoAdults = {
+      ...card('two-adults', { price: 400 }),
+      originalOffer: { price: { total: '400.00' }, travelerPricings: [
+        { travelerType: 'ADULT', price: { total: '200.00' } },
+        { travelerType: 'ADULT', price: { total: '200.00' } },
+      ] },
+    };
+    globalThis.fetch = vi.fn((url) => {
+      const target = String(url);
+      if (target.includes('/flights/search')) return answer(200, { success: true, data: [twoAdults] });
+      if (target.includes('/flights/date-prices')) {
+        return answer(200, { success: true, currency: 'USD', dateWisePrices: { [D2]: 400 }, lowestPrice: 400, pricesEach: { [D2]: 200 }, lowestPriceEach: 200 });
+      }
+      return answer(404, {});
+    });
+    renderPage(`from=DEL&to=BOM&date=${D1}&adults=2`);
+    await screen.findByText('two-adults');
+
+    await waitFor(() => expect(stripButton(D2).textContent).toMatch(/\$200/));
+    expect(stripButton(D2).textContent).not.toMatch(/\$400/);
+    expect(screen.getByText(/prices per person/)).toBeTruthy();
+  });
+});

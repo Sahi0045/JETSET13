@@ -8,7 +8,7 @@ import Price from '../../../Components/Price';
 import { formatCheckedBag } from '../../../utils/baggage';
 import { formatCalendarDate } from '../../../utils/dateUtils';
 import { arrivalDayOffset, layoverLabel, layoversOf, legDateLabel, seatsLeftLabel } from './searchResults';
-import { tripAirlineNames, tripAirlines } from './flightSort';
+import { fareOf, tripAirlineNames, tripAirlines } from './flightSort';
 
 const AIRLINE_LOGO_FALLBACK = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiByeD0iOCIgZmlsbD0iIzM3NzNmNCIvPgo8dGV4dCB4PSIyMCIgeT0iMjgiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxOCIgZmlsbD0id2hpdGUiIHRleHQtYW5jaG9yPSJtaWRkbGUiPuKciO+4jzwvdGV4dD4KPHN2Zz4K';
 
@@ -245,18 +245,23 @@ function SegmentList({ segments = [], stopDetails = [], cityMap = {} }) {
   );
 }
 
-// What the price on the card covers. The airline's total is for every traveller
-// the search priced; a two-adult total was labelled "per adult", so the
-// customer read half the real price per person.
-//
-// And the price is the airline's fare: the service fee is added on the review
-// page, so the card says so rather than sit under "No hidden fees".
-const pricedForLabel = (offer) => {
-  const travellers = offer?.travelerPricings?.length || 0;
-  if (travellers > 1) return `for ${travellers} travellers + platform fee`;
-  if (travellers === 1) return 'for 1 traveller + platform fee';
-  return 'fare + platform fee';
+const TRAVELLER_TYPE_LABEL = { ADULT: 'Adult', CHILD: 'Child', SEATED_INFANT: 'Infant (own seat)', HELD_INFANT: 'Infant (on lap)' };
+
+// The airline's fare for each type of traveller on the offer, for the fare breakup.
+const travellerFareLines = (offer) => {
+  const lines = new Map();
+  for (const pricing of offer?.travelerPricings || []) {
+    const type = String(pricing?.travelerType || 'ADULT').toUpperCase();
+    const each = Number(pricing?.price?.total);
+    if (!Number.isFinite(each) || each <= 0) return [];
+    const line = lines.get(type) || { type, label: TRAVELLER_TYPE_LABEL[type] || 'Traveller', count: 0, each };
+    line.count += 1;
+    lines.set(type, line);
+  }
+  return [...lines.values()];
 };
+
+const travellersLabel = (count) => `${count} traveller${count === 1 ? '' : 's'}`;
 
 function FlightCard({ flight, onBook, onViewPrices, priceStats, cityMap = {} }) {
   const otherLegs = flight.returnLeg
@@ -267,8 +272,10 @@ function FlightCard({ flight, onBook, onViewPrices, priceStats, cityMap = {} }) 
   const [showBreakup, setShowBreakup] = useState(false);
   const handleCta = () => (onViewPrices ? onViewPrices(flight) : onBook?.(flight));
 
+  const fare = fareOf(flight);
+
   // Deal badge derived from the current result-set price distribution
-  const myPrice = flight.price?.amount;
+  const myPrice = fare.amount;
   let deal = null;
   if (priceStats && typeof myPrice === 'number') {
     if (myPrice <= priceStats.min * 1.02) deal = { label: 'Cheapest', cls: 'bg-emerald-100 text-emerald-700 border-emerald-200' };
@@ -298,6 +305,7 @@ function FlightCard({ flight, onBook, onViewPrices, priceStats, cityMap = {} }) 
   const baseFare = parseFloat(flight.price?.base) || 0;
   const totalFare = parseFloat(flight.price?.total || flight.price?.grandTotal || flight.price?.amount) || 0;
   const taxesAndFees = Math.max(0, totalFare - baseFare);
+  const fareLines = fare.travellers > 1 && fare.unit ? travellerFareLines(flight.originalOffer) : [];
 
   return (
     <div className="group bg-white border-b border-gray-100 last:border-b-0 first:rounded-t-[15px] last:rounded-b-[15px] hover:bg-[#FAFBFB] transition-colors duration-200">
@@ -365,9 +373,22 @@ function FlightCard({ flight, onBook, onViewPrices, priceStats, cityMap = {} }) 
           <div className="flex flex-row lg:flex-col items-center lg:items-end justify-between lg:justify-center gap-3 lg:gap-2 lg:w-[180px] lg:flex-shrink-0 lg:border-l lg:border-gray-100 lg:pl-5">
             <div className="text-left lg:text-right relative">
               <div className="font-grotesk text-[26px] font-bold text-ink leading-none tracking-tight">
-                <Price amount={flight.price} />
+                <Price amount={{ amount: fare.amount, currency }} />
               </div>
-              <div className="text-[11px] text-gray-400 mt-1">{pricedForLabel(flight.originalOffer)}</div>
+              {fare.unit ? (
+                <>
+                  <div className="text-[12px] font-semibold text-gray-600 mt-1">per {fare.unit}</div>
+                  {fare.travellers > 1 && fare.total > 0 && (
+                    <div className="text-[11px] text-gray-400 whitespace-nowrap">
+                      <Price amount={{ amount: fare.total, currency }} /> for {travellersLabel(fare.travellers)}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="text-[11px] text-gray-400 mt-1">
+                  {fare.travellers > 1 ? `total for ${travellersLabel(fare.travellers)}` : 'total fare'}
+                </div>
+              )}
               {baseFare > 0 && (
                 <button
                   onClick={() => setShowBreakup(v => !v)}
@@ -387,6 +408,13 @@ function FlightCard({ flight, onBook, onViewPrices, priceStats, cityMap = {} }) 
                     </button>
                   </div>
                   <div className="space-y-1.5 text-xs">
+                    {fareLines.map((line) => (
+                      <div key={line.type} className="flex justify-between gap-2 text-gray-600">
+                        <span>{line.label} × {line.count}</span>
+                        <span className="font-medium text-gray-800"><Price amount={{ amount: line.each, currency }} /> each</span>
+                      </div>
+                    ))}
+                    {fareLines.length > 0 && <div className="border-t border-gray-100 pt-0.5" />}
                     <div className="flex justify-between text-gray-600">
                       <span>Base fare</span>
                       <span className="font-medium text-gray-800"><Price amount={{ amount: baseFare, currency }} /></span>
@@ -396,13 +424,13 @@ function FlightCard({ flight, onBook, onViewPrices, priceStats, cityMap = {} }) 
                       <span className="font-medium text-gray-800"><Price amount={{ amount: taxesAndFees, currency }} /></span>
                     </div>
                     <div className="flex justify-between border-t border-gray-100 pt-1.5 mt-1.5">
-                      <span className="font-bold text-gray-800">Total</span>
+                      <span className="font-bold text-gray-800">
+                        Total{fare.travellers > 1 ? ` (${travellersLabel(fare.travellers)})` : ''}
+                      </span>
                       <span className="font-bold text-[#055B75]"><Price amount={{ amount: totalFare, currency }} /></span>
                     </div>
                   </div>
-                  {/* The airline's total covers every traveller on the search;
-                      it was labelled "Per adult". */}
-                  <div className="text-[10px] text-gray-400 mt-2">Total for all travellers{cabinClass ? ` · ${cabinClass}` : ''}</div>
+                  <div className="text-[10px] text-gray-400 mt-2">Platform fee shown at checkout{cabinClass ? ` · ${cabinClass}` : ''}</div>
                 </div>
               )}
             </div>
