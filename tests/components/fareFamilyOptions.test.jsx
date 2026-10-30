@@ -75,8 +75,10 @@ describe('the fare families', () => {
     render(<FlightFareOptions flight={flight()} onClose={() => {}} onSelect={() => {}} />);
 
     await screen.findByText('Economy Light');
-    expect(screen.queryByText('Checked baggage')).toBeNull();
-    expect(screen.getAllByText('Date change')).toHaveLength(1);
+    expect(screen.queryByText(/checked baggage/i)).toBeNull();
+    expect(screen.getByText('No checked bag')).toBeTruthy();
+    expect(screen.getByText('1 cabin bag up to 8 kg')).toBeTruthy();
+    expect(screen.getAllByText('Date change included')).toHaveLength(1);
     expect(screen.getByText('Earns miles')).toBeTruthy();
     expect(screen.queryByText('Lounge access')).toBeNull();
   });
