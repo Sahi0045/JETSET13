@@ -261,6 +261,12 @@ export const isHeldForReview = (review) => {
 export const UNTICKETED_REVIEW_REASON = 'PNR committed, never ticketed';
 
 /**
+ * How a booking whose ticket the airline refused is cancelled (flight.routes.js),
+ * the only mark that tells that failure from a customer's cancellation.
+ */
+export const TICKET_REFUSED_REASON = 'Ticket refused by the airline';
+
+/**
  * Whether the flag on top of a booking says it is waiting on its ticket and
  * nothing else: held for staff after a later step failed (isHeldForReview), or
  * a paid reservation never ticketed (UNTICKETED_REVIEW_REASON). A later flag on
