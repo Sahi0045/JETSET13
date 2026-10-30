@@ -4,6 +4,7 @@ import { FaMapMarkedAlt, FaPlane, FaHotel, FaShip, FaPassport, FaGlobe, FaCalend
 import Navbar from './Common/Navbar';
 import Footer from './Common/Footer';
 import Breadcrumb from '../components/Breadcrumb';
+import { isShownToCustomers } from '../../../shared/siteSections';
 
 const Resources = () => {
   const travelGuides = [
@@ -23,7 +24,7 @@ const Resources = () => {
       title: "Travel Safety Guide",
       description: "Important safety tips and precautions for traveling to different destinations.",
       icon: <FaShieldAlt className="text-3xl text-red-600" />,
-      link: "/visa"
+      link: "/faqs"
     }
   ];
 
@@ -132,7 +133,7 @@ const Resources = () => {
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              {travelTools.map((tool, index) => (
+              {travelTools.filter((tool) => isShownToCustomers(tool.link)).map((tool, index) => (
                 <div key={index} className="bg-white rounded-xl shadow-lg p-8 hover:shadow-xl transition-shadow duration-300">
                   <div className="text-center mb-6">
                     {tool.icon}

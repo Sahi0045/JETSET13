@@ -9,6 +9,7 @@ import JetWalletPanel from "./JetWalletPanel"
 import useMembership from "../../../hooks/useMembership"
 import { registerForPushNotifications } from "../../../lib/pushNotifications"
 import './profile.css'
+import { VISA_SERVICES_VISIBLE } from '../../../../../shared/siteSections'
 
 export default function ProfilePage() {
   const navigate = useNavigate()
@@ -1054,7 +1055,7 @@ export default function ProfilePage() {
                 </div>
                 <div className="preference-card">
                   <h4>Push Notifications</h4>
-                  <p>Get booking and visa updates on this device</p>
+                  <p>{VISA_SERVICES_VISIBLE ? 'Get booking and visa updates on this device' : 'Get booking updates on this device'}</p>
                   {pushStatus === 'enabled' ? (
                     <span className="alert success" style={{ margin: 0 }}>✓ Enabled on this device</span>
                   ) : (
