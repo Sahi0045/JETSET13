@@ -59,3 +59,21 @@ describe('the date strip at phone width', () => {
     expect(results).toMatch(/selected\.scrollIntoView\(\{ inline: 'center', block: 'nearest' \}\)/);
   });
 });
+
+// The owner had "Self-Service Portal Coming Soon" taken off the home page
+// (31 Oct). The phone number and email beside it were hidden on a phone.
+describe('the contact strip above the home page hero', () => {
+  const landing = read('flightlanding.jsx');
+  const classOf = (href) => (landing.match(new RegExp(`<a href="${href.replace(/[+.]/g, '\\$&')}" className="([^"]*)"`)) || [])[1];
+
+  it('promises no self-service portal', () => {
+    expect(landing).not.toMatch(/self-service portal/i);
+  });
+
+  it('shows the phone number and email at every width, and both can be tapped', () => {
+    for (const href of ['tel:+18775387380', 'mailto:support@jetsetterss.com']) {
+      expect(classOf(href)).toBeTruthy();
+      expect(classOf(href)).not.toMatch(/(^|\s)hidden(\s|$)/);
+    }
+  });
+});
