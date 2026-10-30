@@ -21,7 +21,11 @@ vi.mock('../../frontend/src/components/Breadcrumb', () => ({ default: () => null
 const { default: Navbar } = await import('../../frontend/src/Pages/Common/Navbar.jsx');
 const { default: Footer } = await import('../../frontend/src/Pages/Common/Footer.jsx');
 const { default: HelpCenter } = await import('../../frontend/src/Pages/Common/HelpCenter.jsx');
-const { INDEXABLE_ROUTE_SEO } = await import('../../frontend/src/seo/routeSeo.js');
+const { DEFAULT_ROUTE_SEO, INDEXABLE_ROUTE_SEO, SITE_WIDE_SCHEMA } = await import('../../frontend/src/seo/routeSeo.js');
+const { default: Company } = await import('../../frontend/src/Pages/Company.jsx');
+const { default: FAQs } = await import('../../frontend/src/Pages/FAQs.jsx');
+const { default: Support } = await import('../../frontend/src/Pages/Support.jsx');
+const { default: Resources } = await import('../../frontend/src/Pages/Resources.jsx');
 
 const read = (file) => readFileSync(path.resolve(process.cwd(), file), 'utf8');
 const visaLinks = (container) => [...container.querySelectorAll('a[href]')]
@@ -38,6 +42,29 @@ describe('the visa section, while hidden', () => {
       expect(visaLinks(container), name).toEqual([]);
       unmount();
     }
+  });
+
+  // The home page's source still told search engines we offer "visa
+  // services" (29 Oct), in the company description every page carries.
+  it('is not claimed in what search engines read', () => {
+    const seo = JSON.stringify([DEFAULT_ROUTE_SEO, SITE_WIDE_SCHEMA, INDEXABLE_ROUTE_SEO]);
+    expect(seo).not.toMatch(/visa service/i);
+  });
+
+  it('has no link or claim on the about, FAQ, support and resources pages', () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({}) })));
+    for (const [name, Page] of [['about', Company], ['faqs', FAQs], ['support', Support], ['resources', Resources]]) {
+      const { container, unmount } = render(<MemoryRouter><Page /></MemoryRouter>);
+      expect(visaLinks(container), name).toEqual([]);
+      expect(container.textContent, name).not.toMatch(/visa service|visa requirements/i);
+      unmount();
+    }
+  });
+
+  it('offers no visa guides in the help centre', () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({}) })));
+    const { container } = render(<MemoryRouter><HelpCenter /></MemoryRouter>);
+    expect(container.textContent).not.toMatch(/visa/i);
   });
 
   it('is in neither the sitemap nor the pre-rendered pages', () => {

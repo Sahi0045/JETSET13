@@ -1,7 +1,10 @@
 import { DESTINATION_IMAGES } from '../data/destinationImages.js';
-import { isShownToCustomers } from '../../../shared/siteSections.js';
+import { VISA_SERVICES_VISIBLE, isShownToCustomers } from '../../../shared/siteSections.js';
 
 const SITE_NAME = 'Jetsetters';
+const OFFERINGS = VISA_SERVICES_VISIBLE
+  ? 'flights, hotels, cruises, vacation packages, and visa services'
+  : 'flights, hotels, cruises, and vacation packages';
 export const SITE_URL = 'https://www.jetsetterss.com';
 export const DEFAULT_OG_IMAGE = `${SITE_URL}/images/logos/jetsetters_3d_logo_final.png`;
 
@@ -24,7 +27,7 @@ const breadcrumb = (...items) => ({
 
 export const DEFAULT_ROUTE_SEO = {
   title: 'Luxury Travel, Simply Planned | Jetsetters',
-  description: 'Plan flights, hotels, cruises, vacation packages, and visa services with Jetsetters. Expert travel support for every journey.',
+  description: `Plan ${OFFERINGS} with Jetsetters. Expert travel support for every journey.`,
   shouldIndex: false,
 };
 
@@ -39,7 +42,7 @@ export const SITE_WIDE_SCHEMA = [
       '@type': 'ImageObject',
       url: DEFAULT_OG_IMAGE,
     },
-    description: 'Jetsetters is a luxury travel platform offering flights, hotels, cruises, vacation packages, and visa services with personalized expert support.',
+    description: `Jetsetters is a luxury travel platform offering ${OFFERINGS} with personalized expert support.`,
     contactPoint: {
       '@type': 'ContactPoint',
       contactType: 'customer service',
@@ -646,7 +649,7 @@ export const ROUTE_SEO = {
   },
   '/faqs': {
     title: 'Travel Booking FAQs | Jetsetters',
-    description: 'Find answers to common questions about flights, hotels, cruises, vacation packages, visa services, payments, and travel bookings.',
+    description: `Find answers to common questions about flights, hotels, cruises, vacation packages, ${VISA_SERVICES_VISIBLE ? 'visa services, ' : ''}payments, and travel bookings.`,
     schema: [
       breadcrumb({ name: 'FAQs' }),
       {

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { FaSearch, FaChevronDown, FaChevronUp, FaQuestionCircle, FaPlane, FaHotel, FaShip, FaCreditCard, FaPassport, FaGlobe } from 'react-icons/fa';
 import Navbar from './Common/Navbar';
 import Footer from './Common/Footer';
+import { VISA_SERVICES_VISIBLE } from '../../../shared/siteSections';
 import Breadcrumb from '../components/Breadcrumb';
 
 const FAQs = () => {
@@ -327,8 +328,12 @@ const FAQs = () => {
               <span className="text-gray-300">|</span>
               <Link to="/packages" className="text-primary-500 hover:text-primary-600 font-medium">Vacation Packages</Link>
               <span className="text-gray-300">|</span>
-              <Link to="/visa" className="text-primary-500 hover:text-primary-600 font-medium">Visa Services</Link>
-              <span className="text-gray-300">|</span>
+              {VISA_SERVICES_VISIBLE && (
+                <>
+                  <Link to="/visa" className="text-primary-500 hover:text-primary-600 font-medium">Visa Services</Link>
+                  <span className="text-gray-300">|</span>
+                </>
+              )}
               <Link to="/hotels" className="text-primary-500 hover:text-primary-600 font-medium">Hotels & Stays</Link>
             </div>
           </section>

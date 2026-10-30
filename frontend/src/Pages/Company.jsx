@@ -4,6 +4,7 @@ import { FaGlobe, FaHeart, FaShieldAlt, FaRocket, FaHandshake, FaLightbulb, FaCh
 import Navbar from './Common/Navbar';
 import Footer from './Common/Footer';
 import Breadcrumb from '../components/Breadcrumb';
+import { VISA_SERVICES_VISIBLE } from '../../../shared/siteSections';
 
 const Company = () => {
   const values = [
@@ -63,7 +64,7 @@ const Company = () => {
               <div className="prose prose-lg mx-auto text-gray-600">
                 <p className="mb-6">
                   Jetsetters Corporation is a travel agency based in Tracy, California. We book flights,
-                  cruises, holiday packages and visa services, and our team is a phone call or an email
+                  {VISA_SERVICES_VISIBLE ? ' cruises, holiday packages and visa services' : ' cruises and holiday packages'}, and our team is a phone call or an email
                   away when you need help.
                 </p>
                 <p>
@@ -147,7 +148,7 @@ const Company = () => {
           {/* Explore Our Services */}
           <section className="mt-16">
             <h2 className="text-2xl font-bold text-gray-900 mb-6">Explore Our Services</h2>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            <div className={`grid grid-cols-2 md:grid-cols-3 ${VISA_SERVICES_VISIBLE ? 'lg:grid-cols-6' : 'lg:grid-cols-5'} gap-4`}>
               <Link to="/flights" className="bg-white rounded-xl shadow-md p-5 text-center hover:shadow-lg transition-shadow group">
                 <FaGlobe className="text-2xl text-gray-400 group-hover:text-blue-600 transition-colors mx-auto mb-2" />
                 <span className="text-sm font-medium text-gray-700">Flights</span>
@@ -164,10 +165,12 @@ const Company = () => {
                 <FaGlobe className="text-2xl text-gray-400 group-hover:text-blue-600 transition-colors mx-auto mb-2" />
                 <span className="text-sm font-medium text-gray-700">Packages</span>
               </Link>
-              <Link to="/visa" className="bg-white rounded-xl shadow-md p-5 text-center hover:shadow-lg transition-shadow group">
-                <FaGlobe className="text-2xl text-gray-400 group-hover:text-blue-600 transition-colors mx-auto mb-2" />
-                <span className="text-sm font-medium text-gray-700">Visa Services</span>
-              </Link>
+              {VISA_SERVICES_VISIBLE && (
+                <Link to="/visa" className="bg-white rounded-xl shadow-md p-5 text-center hover:shadow-lg transition-shadow group">
+                  <FaGlobe className="text-2xl text-gray-400 group-hover:text-blue-600 transition-colors mx-auto mb-2" />
+                  <span className="text-sm font-medium text-gray-700">Visa Services</span>
+                </Link>
+              )}
               <Link to="/destinations" className="bg-white rounded-xl shadow-md p-5 text-center hover:shadow-lg transition-shadow group">
                 <FaGlobe className="text-2xl text-gray-400 group-hover:text-blue-600 transition-colors mx-auto mb-2" />
                 <span className="text-sm font-medium text-gray-700">Destinations</span>
