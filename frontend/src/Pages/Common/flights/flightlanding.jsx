@@ -8,7 +8,7 @@ import Footer from "../Footer"
 import ScrollFlightProgress from "../../../Components/ScrollFlightProgress"
 import withPageElements from "../PageWrapper"
 import { searchToQuery } from "./searchQuery"
-import { Mail, Phone, ExternalLink, Calendar, MessageSquare, Clock, ArrowLeft, User, CheckCircle2, Ticket, Sparkles, ArrowRight, ArrowUpRight, ShieldCheck, Headphones, BadgePercent, Check, Plane, Compass, Star, Lock } from 'lucide-react';
+import { Mail, Phone, ExternalLink, Calendar, MessageSquare, Clock, ArrowLeft, User, CheckCircle2, Ticket, ArrowRight, ArrowUpRight, ShieldCheck, Headphones, BadgePercent, Check, Plane, Compass, Star, Lock } from 'lucide-react';
 // Importing data from the data file
 import { heroImage } from "./data.js"
 // Import airports database for dynamic city-to-IATA mapping
@@ -122,14 +122,14 @@ function FlightLanding() {
 
       {/* Special Offer Banner — refined, slim */}
       <div className="w-full bg-ink text-white/90 border-b border-white/10">
-        <div className="container mx-auto px-4 py-2 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-center text-[11px] md:text-xs tracking-wide leading-tight">
-          <span className="inline-flex items-center gap-1.5 text-brand-sky">
-            <Sparkles className="h-3.5 w-3.5" /> Self-Service Portal Coming Soon
-          </span>
-          <span className="hidden sm:inline text-white/25">·</span>
-          <span className="hidden sm:inline">Call <span className="font-semibold text-white">(877) 538-7380</span></span>
-          <span className="hidden md:inline text-white/25">·</span>
-          <a href="mailto:support@jetsetterss.com" className="hidden md:inline text-white underline decoration-white/30 underline-offset-2 hover:decoration-white">support@jetsetterss.com</a>
+        <div className="container mx-auto px-4 py-2.5 md:py-3 flex flex-wrap items-center justify-center gap-x-4 md:gap-x-6 gap-y-1.5 text-center text-sm md:text-lg font-semibold tracking-wide leading-tight">
+          <a href="tel:+18775387380" className="inline-flex items-center gap-2 text-white hover:text-brand-sky transition-colors">
+            <Phone className="h-4 w-4 md:h-5 md:w-5 text-brand-sky" aria-hidden="true" /> (877) 538-7380
+          </a>
+          <span className="hidden sm:inline text-white/25" aria-hidden="true">·</span>
+          <a href="mailto:support@jetsetterss.com" className="inline-flex items-center gap-2 text-white hover:text-brand-sky transition-colors">
+            <Mail className="h-4 w-4 md:h-5 md:w-5 text-brand-sky" aria-hidden="true" /> support@jetsetterss.com
+          </a>
           {/* A pill promising a fifty-dollar discount for one day sat here every
               day. No coupon or price rule stood behind it, so nobody who booked
               ever got it. */}
