@@ -106,3 +106,39 @@ describe('the airline fee table', () => {
     expect(res.body.fareRules.penalties).toBeNull();
   });
 });
+
+// Air India Eco Value on a one-stop DEL-HYD, production, 31 Oct 2026: the
+// filed text charges INR 5000 per fare component and says a no-show ticket is
+// non-refundable; MiniRules said refund before departure allowed, $106.
+describe('the airline\'s refund rule on the review page', () => {
+  const airIndia = {
+    ...filed([{
+      descriptionType: 'CANCELLATIONS',
+      text: 'CHARGE INR 5000 FOR CANCEL/REFUND.\nTILL 02 HRS CHARGE INR 5000 PER COMPONENT FOR CANCELLATION.\nTICKET IS NON-REFUNDABLE IN CASE OF NO-SHOW.',
+    }]),
+    penalties: {
+      currency: 'USD',
+      bookBy: null,
+      change: { before: { allowed: true, amount: null, varies: true } },
+      refund: { before: { allowed: true, amount: 106, varies: false }, noShowBefore: { allowed: false, amount: null, varies: true } },
+    },
+  };
+
+  it('says refundable before departure, for the whole trip\'s fee, and not on a no-show', async () => {
+    const server = await app(airIndia);
+    const res = await request(server).post('/api/flights/price').send({ flightOffer: offer, withFareRules: true });
+    expect(res.body.fareRules.cancellation).toMatchObject({
+      refundable: true,
+      noShowRefundable: false,
+      airlineFees: { cancel: { amount: 106, currency: 'USD' }, change: null },
+    });
+  });
+
+  // The app reads cancelFee with `currency`: a USD figure beside "INR" would
+  // print a $106 fee as INR 106.
+  it('leaves the fee the app reads as the text filed it', async () => {
+    const server = await app(airIndia);
+    const res = await request(server).post('/api/flights/fare-rules').send({ flightOffer: offer });
+    expect(res.body.cancellation).toMatchObject({ cancelFee: 5000, currency: 'INR' });
+  });
+});

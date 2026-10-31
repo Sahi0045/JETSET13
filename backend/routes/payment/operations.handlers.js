@@ -32,7 +32,7 @@ import { coinsBackOnCancel, coinsToUsd, grossPaidOf } from '../../../shared/jetC
 import {
     captureCoins, releaseCoins, returnAllCoins, returnCoins, reverseEarnedCoins, tripVoucherOf, voidTripReward,
 } from '../../services/wallet.service.js';
-import { customerCancelTerms, fareRuleOf, isWithinFreeWindow, serviceFeeKeptOf } from '../../../shared/flightCancelPolicy.js';
+import { airlineLookInOf, customerCancelTerms, fareRuleOf, isWithinFreeWindow, serviceFeeKeptOf } from '../../../shared/flightCancelPolicy.js';
 import { readBookedFeeTable } from '../../services/bookedFeeTable.service.js';
 import { officeTimeZoneOf } from '../../services/amadeusSoap/config.js';
 import {
@@ -499,6 +499,12 @@ export function decideFlightRefund({ heldAmount, paidInFull, everCaptured, hasRe
 
 const dollars = (amount) => (Number(amount) || 0).toFixed(2);
 
+// The order route saves the validating carrier, whose rules the fare follows,
+// as `airline_name`, and the first flight's carrier as `airline`.
+const validatingCarrierOf = (details) => [details.airline_name, details.airline]
+    .map((code) => String(code || '').trim().toUpperCase())
+    .find((code) => /^[A-Z0-9]{2}$/.test(code)) || null;
+
 function keepServiceFee(heldCents, customer, policy, basis) {
     const keptCents = Math.round((Number(customer.serviceFeeKept) || 0) * 100);
     if (keptCents <= 0) return { action: 'refund_all', fee: 0, refundAmount: heldCents / 100, reason: basis, policy, serviceFeeKept: 0 };
@@ -527,15 +533,19 @@ function customerTicketedDecision({ heldCents, unvoided, customer, review }) {
     }
     const tickets = unvoided ? 'claim the refund from the airline' : 'the tickets were voided, so nothing is owed to the airline';
     const rule = customer.fareRule || {};
+    const lookIn = customer.airlineLookIn
+        ? `. ${customer.airlineLookIn.carrier} waives its penalty on a cancel within 48 hours of a booking made more than 7 days before travel, and this one is: `
+            + 'check its fare rules before keeping any airline penalty'
+        : '';
     if (rule.refundable === false) {
-        return held('non_refundable', `non-refundable fare cancelled after the free cancellation time: the fare is not returned; return any unused taxes (${tickets})`);
+        return held('non_refundable', `non-refundable fare cancelled after the free cancellation time: the fare is not returned; return any unused taxes (${tickets})${lookIn}`);
     }
     if (rule.refundable === true) {
         const penalty = rule.penalty === null || rule.penalty === undefined ? 'not stated' : [dollars(rule.penalty), rule.currency, 'per adult'].filter(Boolean).join(' ');
         return held('refundable', `refundable fare cancelled after the free cancellation time: return ${airlinePrice} (the airline price) less the airline's penalty (${penalty}) `
-            + `and the ${dollars(customer.cancellationFee)} cancellation fee; the ${dollars(kept)} service fee is kept (${tickets})`);
+            + `and the ${dollars(customer.cancellationFee)} cancellation fee; the ${dollars(kept)} service fee is kept (${tickets})${lookIn}`);
     }
-    return held('rules_unknown', `fare cancelled after the free cancellation time and its rules could not be read: check them with the airline before refunding (${tickets})`);
+    return held('rules_unknown', `fare cancelled after the free cancellation time and its rules could not be read: check them with the airline before refunding (${tickets})${lookIn}`);
 }
 
 /** Carry out a refund decision at ARC. Never moves more than the decision says. */
@@ -846,12 +856,19 @@ async function cancelFlightBooking(res, booking, { reason, email, customer = fal
     const flightFee = await readFlightCancellationFee(supabase, paidFor(details.verified_charge) ?? payment.heldAmount);
     let customerTerms = null;
     if (customerRule) {
-        const freeWindow = isWithinFreeWindow(booking.created_at, earliestTime(customerAskedAt, customer ? requestedAt : null), officeTimeZoneOf());
+        const askedAt = earliestTime(customerAskedAt, customer ? requestedAt : null);
+        const freeWindow = isWithinFreeWindow(booking.created_at, askedAt, officeTimeZoneOf());
         customerTerms = {
             freeWindow,
             serviceFeeKept: serviceFeeKeptOf(details.verified_charge),
             fareRule: pnr && !freeWindow ? fareRuleOf(await readBookedFeeTable(booking)) : null,
             cancellationFee: flightFee,
+            airlineLookIn: airlineLookInOf({
+                carrier: validatingCarrierOf(details),
+                bookedAt: booking.created_at,
+                departureDate: details.departure_date,
+                now: askedAt,
+            }),
         };
     }
 

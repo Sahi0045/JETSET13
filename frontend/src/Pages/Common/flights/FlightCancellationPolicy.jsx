@@ -105,10 +105,12 @@ function FlightCancellationPolicy({ flightOffer, fromCode, toCode, departureAt, 
   const cutoffHours = Number.isFinite(c?.cutoffHours) ? c.cutoffHours : null;
   const cutoff = dep && cutoffHours != null ? new Date(dep.getTime() - cutoffHours * 3600000) : null;
   const feeCurrency = c?.currency || c?.fareCurrency || '';
-  const cancelFee = describeFee(c?.cancelFee, feeCurrency);
-  const changeFee = describeFee(c?.changeFee, feeCurrency);
+  const feeOf = (rule, amount) => (rule ? describeFee(rule.amount, rule.currency) : describeFee(amount, feeCurrency));
+  const cancelFee = feeOf(c?.airlineFees?.cancel, c?.cancelFee);
+  const changeFee = feeOf(c?.airlineFees?.change, c?.changeFee);
   const estimated = Boolean(cancelFee?.estimated || changeFee?.estimated);
-  const tier2 = c?.refundable === false ? 'Non-refundable' : 'See fare rules';
+  const tier2 = c?.refundable === false ? 'Non-refundable' : c?.noShowRefundable === false ? 'Fare not refunded' : 'See fare rules';
+  const fareNotReturned = c?.refundable === false || c?.noShowRefundable === false;
 
   return (
     <div className="booking-card mb-8">
@@ -156,7 +158,7 @@ function FlightCancellationPolicy({ flightOffer, fromCode, toCode, departureAt, 
                 <span className="text-[11px] sm:text-xs text-gray-500 w-[92px] sm:w-[150px] flex-shrink-0">Cancellation Penalty :</span>
                 <div className="flex-1 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 min-h-5">
                   <span className="text-xs sm:text-sm font-bold text-gray-800">{cancelFee ? <Fee fee={cancelFee} /> : 'See fare rules'}</span>
-                  <span className={`text-xs sm:text-sm font-bold whitespace-nowrap ${c.refundable === false ? 'text-red-500' : 'text-gray-800'}`}>{tier2}</span>
+                  <span className={`text-xs sm:text-sm font-bold whitespace-nowrap ${fareNotReturned ? 'text-red-500' : 'text-gray-800'}`}>{tier2}</span>
                 </div>
               </div>
 
@@ -204,9 +206,12 @@ function FlightCancellationPolicy({ flightOffer, fromCode, toCode, departureAt, 
                 <span className="text-gray-400">Refundable:</span>{' '}
                 {/* Unknown is not "No". */}
                 <span className={`font-semibold ${c.refundable === true ? 'text-emerald-600' : c.refundable === false ? 'text-red-500' : 'text-gray-600'}`}>
-                  {c.refundable === true ? 'Yes' : c.refundable === false ? 'No' : 'See fare rules'}
+                  {c.refundable === true ? (cancelFee ? 'Yes, for a fee' : 'Yes') : c.refundable === false ? 'No' : 'See fare rules'}
                 </span>
               </span>
+              {c.refundable === true && c.noShowRefundable === false && (
+                <span><span className="text-gray-400">No-show:</span> <span className="font-semibold text-gray-800">fare not refunded</span></span>
+              )}
               <span className="text-gray-400">
                 Charges per the airline fare rules; taxes/GST may apply.
                 {estimated && ' The US$ amount is an estimate at today\'s rate; the airline converts at its own rate when you cancel.'}
