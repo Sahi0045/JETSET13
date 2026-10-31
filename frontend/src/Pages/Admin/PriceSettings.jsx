@@ -3,6 +3,12 @@ import { getApiUrl } from '../../utils/apiHelper';
 import { useRegisterRefresh } from './shell/RefreshContext';
 import './AdminPanel.css';
 import { adminHeaders } from '../../utils/adminAuth';
+import { coinBandsProblem, coinLimitFor, DEFAULT_COIN_BANDS, MAX_COIN_BANDS, usableCoinBands } from '../../../../shared/jetCoins.js';
+
+const toBandDraft = (bands) => usableCoinBands(bands).map(({ from, usd }) => ({ from: String(from), usd: String(usd) }));
+const readAmount = (value) => (String(value).trim() === '' ? NaN : Number(value));
+const bandInputStyle = { width: '100%', padding: '8px 10px', border: '2px solid #e5e7eb', borderRadius: '8px', fontSize: '14px', boxSizing: 'border-box' };
+const visuallyHidden = { position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap' };
 
 const PriceSettings = () => {
   const [settings, setSettings] = useState({
@@ -21,6 +27,7 @@ const PriceSettings = () => {
     flight_cancellation_fee_percent: null
   });
   
+  const [coinBands, setCoinBands] = useState(() => toBandDraft(DEFAULT_COIN_BANDS));
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
@@ -50,6 +57,7 @@ const PriceSettings = () => {
         const data = await response.json();
         if (data.success && data.data) {
           setSettings({ ...settings, ...data.data });
+          setCoinBands(toBandDraft(data.data.flight_coin_bands));
         }
       }
     } catch (error) {
@@ -66,14 +74,25 @@ const PriceSettings = () => {
     }));
   };
 
+  const parsedBands = coinBands.map(({ from, usd }) => ({ from: readAmount(from), usd: readAmount(usd) }));
+  const bandsProblem = coinBandsProblem(parsedBands);
+
+  const updateBand = (index, key, value) => {
+    setCoinBands((bands) => bands.map((band, i) => (i === index ? { ...band, [key]: value } : band)));
+  };
+
   const savePriceSettings = async () => {
+    if (bandsProblem) {
+      setMessage({ type: 'error', text: `Jet Coins per booking: ${bandsProblem} Nothing was saved.` });
+      return;
+    }
     try {
       setSaving(true);
       const response = await fetch(getApiUrl('admin/price-settings'), {
         method: 'PUT',
         headers: getAuthHeaders(),
         credentials: 'include',
-        body: JSON.stringify(settings)
+        body: JSON.stringify({ ...settings, flight_coin_bands: parsedBands })
       });
 
       const data = await response.json();
@@ -107,6 +126,7 @@ const PriceSettings = () => {
       flight_cancellation_fee: 50.00,
       flight_cancellation_fee_percent: null
     });
+    setCoinBands(toBandDraft(DEFAULT_COIN_BANDS));
     setMessage({ type: 'info', text: 'Settings reset to defaults. Click Save to apply.' });
   };
 
@@ -293,6 +313,74 @@ const PriceSettings = () => {
                   Example: $200 + ${settings.flight_taxes_fees} + ($200 × {settings.flight_taxes_fees_percentage}%) = {formatCurrency(200 + settings.flight_taxes_fees + (200 * settings.flight_taxes_fees_percentage / 100))}
                 </div>
               </div>
+            </div>
+
+            <div style={{ marginTop: '32px', padding: '20px', backgroundColor: '#F1FBFD', border: '1px solid #65B3CF', borderRadius: '8px' }}>
+              <h3 style={{ margin: '0 0 6px', fontSize: '16px', color: '#034457' }}>Jet Coins per booking</h3>
+              <p style={{ margin: '0 0 12px', fontSize: '12px', color: '#4b5563', lineHeight: '1.5' }}>
+                The most Jet Coins one flight booking can use, by its airline fare for all travellers, before our fee and any coupon. The same in every country. Customers see this table in their Jet Wallet.
+              </p>
+              <table aria-label="Jet Coins per flight booking" style={{ width: '100%', maxWidth: '520px', borderCollapse: 'collapse', fontSize: '14px' }}>
+                <thead>
+                  <tr style={{ textAlign: 'left', color: '#034457' }}>
+                    <th scope="col" style={{ padding: '4px 8px 4px 0' }}>Fare from (USD)</th>
+                    <th scope="col" style={{ padding: '4px 8px' }}>Coins up to (USD)</th>
+                    <th scope="col"><span style={visuallyHidden}>Remove</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {coinBands.map((band, i) => (
+                    <tr key={i}>
+                      <td style={{ padding: '4px 8px 4px 0' }}>
+                        <input
+                          aria-label={`Band ${i + 1} fare from`}
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={band.from}
+                          readOnly={i === 0}
+                          onChange={(e) => updateBand(i, 'from', e.target.value)}
+                          style={{ ...bandInputStyle, backgroundColor: i === 0 ? '#f3f4f6' : 'white' }}
+                        />
+                      </td>
+                      <td style={{ padding: '4px 8px' }}>
+                        <input
+                          aria-label={`Band ${i + 1} coins up to`}
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={band.usd}
+                          onChange={(e) => updateBand(i, 'usd', e.target.value)}
+                          style={bandInputStyle}
+                        />
+                      </td>
+                      <td style={{ padding: '4px 0' }}>
+                        {coinBands.length > 1 && (
+                          <button
+                            type="button"
+                            aria-label={`Remove band ${i + 1}`}
+                            onClick={() => setCoinBands((bands) => bands.filter((_, j) => j !== i))}
+                            style={{ padding: '6px 10px', border: '1px solid #65B3CF', borderRadius: '6px', backgroundColor: 'white', color: '#034457', cursor: 'pointer' }}
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <button
+                type="button"
+                onClick={() => setCoinBands((bands) => [...bands, { from: '', usd: '' }])}
+                disabled={coinBands.length >= MAX_COIN_BANDS}
+                style={{ marginTop: '10px', padding: '8px 14px', border: 'none', borderRadius: '6px', backgroundColor: '#055B75', color: 'white', fontWeight: '600', cursor: 'pointer', opacity: coinBands.length >= MAX_COIN_BANDS ? 0.5 : 1 }}
+              >
+                Add band
+              </button>
+              <p style={{ margin: '12px 0 0', fontSize: '13px', color: bandsProblem ? '#dc2626' : '#034457' }}>
+                {bandsProblem || `Example: a $120 fare can use up to ${formatCurrency(coinLimitFor(120, parsedBands) / 100)} of coins.`}
+              </p>
             </div>
           </div>
         )}

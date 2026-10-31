@@ -1,7 +1,7 @@
 import React from 'react';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { airline, offer, renderReviewPage, reviewFlight, segment, signedInUser } from './reviewPageHarness.jsx';
+import { airline, offer, priceConfig, renderReviewPage, reviewFlight, segment, signedInUser } from './reviewPageHarness.jsx';
 
 /**
  * The flight review page with a Jet Coins balance.
@@ -60,8 +60,12 @@ beforeEach(() => {
   authState.user = undefined;
   wallets.replies = [];
   wallets.requests = 0;
+  priceConfig.flight_coin_bands = [{ from: 0, usd: 1000 }];
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  delete priceConfig.flight_coin_bands;
+});
 
 /** The review page for a 200 + 10 fee = 210 trip, the lead traveller typed in. */
 async function openPage(...balances) {
@@ -165,6 +169,42 @@ describe('paying part of a flight with Jet Coins', () => {
     await payButton('210.00');
     await waitFor(() => expect(wallets.requests).toBeGreaterThan(0));
     expect(screen.queryByRole('switch')).toBeNull();
+  });
+});
+
+describe('the coins one booking may use', () => {
+  beforeEach(() => { delete priceConfig.flight_coin_bands; });
+
+  it('uses at most $4 of coins on a $200 fare, and says so', async () => {
+    await openPage(5000);
+    expect(await screen.findByText(/This booking can use up to \$4\.00 of your Jet Coins/)).toBeTruthy();
+    fireEvent.click(await screen.findByRole('switch'));
+    fireEvent.click(await payButton('206.00'));
+
+    await waitFor(() => expect(checkout.calls).toHaveLength(1));
+    expect(checkout.calls[0]).toMatchObject({ amount: 206, walletCoins: 400 });
+  });
+
+  it('follows the bands an admin saved, by the airline fare without our fee', async () => {
+    priceConfig.flight_coin_bands = [{ from: 0, usd: 2 }, { from: 205, usd: 7 }];
+    await openPage(5000);
+    fireEvent.click(await screen.findByRole('switch'));
+    fireEvent.click(await payButton('208.00'));
+
+    await waitFor(() => expect(checkout.calls).toHaveLength(1));
+    expect(checkout.calls[0]).toMatchObject({ amount: 208, walletCoins: 200 });
+  });
+
+  it('picks the band from the fare, before the coupon', async () => {
+    await openPage(5000);
+    fireEvent.change(screen.getByPlaceholderText('Coupon or voucher code'), { target: { value: 'SAVE20' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+    await payButton('190.00');
+    fireEvent.click(await screen.findByRole('switch'));
+    fireEvent.click(await payButton('186.00'));
+
+    await waitFor(() => expect(checkout.calls).toHaveLength(1));
+    expect(checkout.calls[0]).toMatchObject({ amount: 186, walletCoins: 400, couponCode: 'SAVE20' });
   });
 });
 

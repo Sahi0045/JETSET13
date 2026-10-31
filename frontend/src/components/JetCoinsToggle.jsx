@@ -3,9 +3,11 @@ import { coinsToUsd, formatCoins, maxWalletCoinsFor } from '../../../shared/jetC
 
 const usd = (amount) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
 
-export default function JetCoinsToggle({ balance = 0, held = 0, afterCoupon, useCoins, onChange }) {
+export default function JetCoinsToggle({ balance = 0, held = 0, afterCoupon, limit, useCoins, onChange }) {
   if (!(balance > 0) && !(held > 0)) return null;
-  const usable = maxWalletCoinsFor(afterCoupon, balance);
+  const usable = maxWalletCoinsFor(afterCoupon, balance, limit);
+  const allowed = Math.floor(Number(limit) || 0);
+  const isLimited = usable > 0 && usable === allowed && usable < balance;
   return (
     <div className="mt-4 rounded-xl border border-[#B9D0DC] bg-[#F1FBFD] p-3">
       {balance > 0 && (
@@ -28,8 +30,13 @@ export default function JetCoinsToggle({ balance = 0, held = 0, afterCoupon, use
           <span className="relative h-6 w-11 flex-shrink-0 rounded-full bg-gray-300 transition-colors peer-checked:bg-[#055B75] peer-disabled:opacity-50 after:absolute after:top-0.5 after:left-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:shadow after:transition-transform peer-checked:after:translate-x-5" />
         </label>
       )}
+      {isLimited && (
+        <p className="mt-1 text-xs text-gray-600">This booking can use up to {usd(coinsToUsd(usable))} of your Jet Coins. The rest stay in your wallet for your next trip.</p>
+      )}
       {balance > 0 && usable <= 0 && (
-        <p className="mt-1 text-xs text-gray-500">At least $1.00 has to be paid by card, so coins cannot be used on this total.</p>
+        <p className="mt-1 text-xs text-gray-500">
+          {allowed > 0 ? 'At least $1.00 has to be paid by card, so coins cannot be used on this total.' : 'Jet Coins cannot be used on this fare.'}
+        </p>
       )}
       {held > 0 && (
         <p className="mt-1 text-xs text-gray-500">

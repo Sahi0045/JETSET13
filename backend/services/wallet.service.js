@@ -1,4 +1,4 @@
-import { coinsToUsd } from '../../shared/jetCoins.js';
+import { coinsToUsd, usableCoinBands } from '../../shared/jetCoins.js';
 
 export class WalletError extends Error {
   constructor(code, message) {
@@ -76,6 +76,17 @@ export async function walletSummary(client, userId) {
     dueAt: row.due_at || null,
   }));
   return { balance, balanceUsd: coinsToUsd(balance), held, entries: customerEntries, pending };
+}
+
+/** The coins one flight booking may use, as checkout reads them, or null when the settings cannot be read. */
+export async function flightCoinBands(client) {
+  try {
+    const { data, error } = await client.from('price_settings').select('settings').maybeSingle();
+    if (error || !data) return null;
+    return usableCoinBands(data.settings?.flight_coin_bands);
+  } catch {
+    return null;
+  }
 }
 
 export const holdCoins = (client, { userId, bookingReference, coins }) =>

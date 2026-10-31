@@ -23,8 +23,8 @@ const paid = (over = {}) => ({ status: 'paid', applied: true, coins: 5000, user_
  * The slice of the query builder the jobs use, over arrays. `errors` fails a
  * whole table ('bookings') or one of its filters ('bookings.in').
  */
-function fakeClient({ voucher_redemptions = [], bookings = [], users = [], wallet_entries = [], wallet_holds = [], errors = {} } = {}) {
-  const tables = { voucher_redemptions, bookings, users, wallet_entries, wallet_holds };
+function fakeClient({ voucher_redemptions = [], bookings = [], users = [], wallet_entries = [], wallet_holds = [], price_settings = [], errors = {} } = {}) {
+  const tables = { voucher_redemptions, bookings, users, wallet_entries, wallet_holds, price_settings };
   return {
     from(table) {
       const filters = [];
@@ -480,6 +480,25 @@ describe('the "Your Jet Coins have arrived" email', () => {
     expect(html).toContain('5,000 Jet Coins');
     expect(html).toContain('SHUBHAM');
     expect(html).toContain('FLT1 · JFK → LHR');
+  });
+
+  it('says how much of the coins one booking can use', async () => {
+    const client = fakeClient({
+      users: [{ id: 'u1', email: 'jane@example.com' }],
+      price_settings: [{ settings: { flight_coin_bands: [{ from: 0, usd: 1 }, { from: 300, usd: 6 }] } }],
+    });
+    const send = vi.fn(async () => ({ id: 'e1' }));
+    await sendTripRewardEmail({ client, reward: paid(), booking: flown(), send });
+
+    expect(send.mock.calls[0][0].html).toContain('Each flight booking can use up to $6.00 of them, depending on its fare.');
+  });
+
+  it('leaves the limit out, and still sends, when the settings cannot be read', async () => {
+    const client = fakeClient({ users: [{ id: 'u1', email: 'jane@example.com' }], errors: { price_settings: 'down' } });
+    const send = vi.fn(async () => ({ id: 'e1' }));
+    expect(await sendTripRewardEmail({ client, reward: paid(), booking: flown(), send })).toBe(true);
+
+    expect(send.mock.calls[0][0].html).not.toContain('Each flight booking can use');
   });
 
   it("goes to the booking's contact when the account has no address", async () => {

@@ -6,15 +6,39 @@ import JetCoinsToggle from '../../frontend/src/components/JetCoinsToggle.jsx';
 describe('the Jet Coins switch', () => {
   it('offers the coins the total can take, and says what they take off', () => {
     const onChange = vi.fn();
-    render(<JetCoinsToggle balance={5000} held={0} afterCoupon={122.2} useCoins={false} onChange={onChange} />);
+    render(<JetCoinsToggle balance={5000} held={0} afterCoupon={122.2} limit={5000} useCoins={false} onChange={onChange} />);
     expect(screen.getByText(/5,000 Jet Coins available/)).toBeTruthy();
     fireEvent.click(screen.getByRole('switch'));
     expect(onChange).toHaveBeenCalledWith(true);
   });
 
   it('caps at $1 left on the card', () => {
-    render(<JetCoinsToggle balance={50000} held={0} afterCoupon={30} useCoins onChange={() => {}} />);
+    render(<JetCoinsToggle balance={50000} held={0} afterCoupon={30} limit={50000} useCoins onChange={() => {}} />);
     expect(screen.getByText(/−\$29\.00/)).toBeTruthy();
+  });
+
+  it('uses no more than this booking may, and says the rest stays in the wallet', () => {
+    render(<JetCoinsToggle balance={5000} held={0} afterCoupon={122.2} limit={300} useCoins onChange={() => {}} />);
+    expect(screen.getByText(/−\$3\.00/)).toBeTruthy();
+    expect(screen.getByText('This booking can use up to $3.00 of your Jet Coins. The rest stay in your wallet for your next trip.')).toBeTruthy();
+  });
+
+  it('says what the booking can use before the switch is on', () => {
+    render(<JetCoinsToggle balance={5000} held={0} afterCoupon={122.2} limit={300} useCoins={false} onChange={() => {}} />);
+    expect(screen.getByText(/This booking can use up to \$3\.00/)).toBeTruthy();
+  });
+
+  it('says coins cannot be used on a fare whose band allows none, not that the card needs $1', () => {
+    render(<JetCoinsToggle balance={5000} held={0} afterCoupon={122.2} limit={0} useCoins={false} onChange={() => {}} />);
+    expect(screen.getByText('Jet Coins cannot be used on this fare.')).toBeTruthy();
+    expect(screen.queryByText(/At least \$1\.00/)).toBeNull();
+    expect(screen.getByRole('switch').disabled).toBe(true);
+  });
+
+  it('says nothing about a limit the balance is under', () => {
+    render(<JetCoinsToggle balance={120} held={0} afterCoupon={122.2} limit={300} useCoins onChange={() => {}} />);
+    expect(screen.getByText(/−\$1\.20/)).toBeTruthy();
+    expect(screen.queryByText(/This booking can use up to/)).toBeNull();
   });
 
   it('says coins are held for an open payment page', () => {
