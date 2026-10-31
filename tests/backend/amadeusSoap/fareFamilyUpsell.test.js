@@ -99,6 +99,20 @@ describe('the upsell reply', () => {
   });
 
   // Premium economy is sold in class G, not the class the search found.
+  // Air India's families came back "15 K", and the fare card printed "15 K check-in".
+  it('writes a weight allowance in kilograms, not "K"', () => {
+    const weighed = fixture('upsell-lh-1adt').replace(
+      '<bagAllowanceDetails><baggageQuantity>1</baggageQuantity><baggageType>N</baggageType></bagAllowanceDetails>',
+      '<bagAllowanceDetails><baggageWeight>15</baggageWeight><baggageType>W</baggageType><measureUnit>K</measureUnit></bagAllowanceDetails>',
+    );
+    const bags = mapUpsellReply(bodyOf(weighed), lufthansa())
+      .map((option) => option.travelerPricings[0].fareDetailsBySegment[0].includedCheckedBags)
+      .filter((bag) => bag?.weight);
+
+    expect(bags.length).toBeGreaterThan(0);
+    expect(bags.every((bag) => bag.weightUnit === 'KG')).toBe(true);
+  });
+
   it('sells a family in its own booking class', () => {
     const premium = mapUpsellReply(bodyOf(fixture('upsell-lh-1adt')), lufthansa()).find((o) => o._ama.fareFamily === 'PRELIGHT');
 
@@ -187,6 +201,17 @@ describe('the family description', () => {
     expect(amenities).toContainEqual(expect.objectContaining({ description: '1 CHECKED BAG UP TO 23KG', isChargeable: false }));
     expect(amenities).toContainEqual(expect.objectContaining({ description: 'LOUNGE ACCESS', isChargeable: true }));
     expect(described('ECOFLEX').travelerPricings[0].fareDetailsBySegment[0].includedCabinBags).toEqual({ weight: 8, weightUnit: 'KG' });
+  });
+
+  // The fare cards say "Non-refundable" and "No date changes" from these;
+  // dropped, the page could only say "see fare rules".
+  it('keeps every service with its status, what is not offered too', () => {
+    const light = described('ECOLIGHT').travelerPricings[0].fareDetailsBySegment[0];
+
+    expect(light.fareServices).toContainEqual({ text: 'REFUND BEFORE DEPARTURE', status: 'notOffered', code: '06K' });
+    expect(light.fareServices).toContainEqual({ text: 'CHANGE BEFORE DEPARTURE', status: 'notOffered', code: '06I' });
+    expect(light.fareServices).toContainEqual({ text: 'STANDARD SEAT RESERVATION', status: 'charged', code: '050' });
+    expect(light.amenities.map((a) => a.description)).not.toContain('REFUND BEFORE DEPARTURE');
   });
 
   it('reads refundability from the family, not from a guess', () => {

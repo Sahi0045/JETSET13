@@ -2453,6 +2453,7 @@ const transformAmadeusFlightData = (flights, dictionaries = {}) => {
         isUpsellOffer: flight.isUpsellOffer || false,
         // Richer Amadeus fare data surfaced to the UI
         amenities: fareDetails?.amenities || [],
+        fareServices: fareDetails?.fareServices || [],
         fareBasis: fareDetails?.fareBasis || null,
         bookingClass: fareDetails?.class || null,
         validatingAirlineCodes: flight.validatingAirlineCodes || [],

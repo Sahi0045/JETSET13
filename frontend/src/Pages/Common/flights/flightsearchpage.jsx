@@ -540,6 +540,7 @@ function FlightSearchPage() {
           flightNumber: flight.flightNumber,
           refundable: flight.refundable ?? null,
           amenities: flight.amenities || flight.originalOffer?.travelerPricings?.[0]?.fareDetailsBySegment?.[0]?.amenities || [],
+          fareServices: flight.fareServices || flight.originalOffer?.travelerPricings?.[0]?.fareDetailsBySegment?.[0]?.fareServices || [],
           fareBasis: flight.fareBasis || null,
           bookingClass: flight.bookingClass || null,
           validatingAirlineCodes: flight.validatingAirlineCodes || [],

@@ -154,9 +154,9 @@ function FlightCancellationPolicy({ flightOffer, fromCode, toCode, departureAt, 
               {/* Amounts over the two tiers */}
               <div className="flex items-center mb-1.5">
                 <span className="text-[11px] sm:text-xs text-gray-500 w-[92px] sm:w-[150px] flex-shrink-0">Cancellation Penalty :</span>
-                <div className="relative flex-1 h-5">
-                  <span className="absolute left-0 text-xs sm:text-sm font-bold text-gray-800 whitespace-nowrap">{cancelFee ? <Fee fee={cancelFee} /> : 'See fare rules'}</span>
-                  <span className={`absolute right-0 text-xs sm:text-sm font-bold whitespace-nowrap ${c.refundable === false ? 'text-red-500' : 'text-gray-800'}`}>{tier2}</span>
+                <div className="flex-1 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 min-h-5">
+                  <span className="text-xs sm:text-sm font-bold text-gray-800">{cancelFee ? <Fee fee={cancelFee} /> : 'See fare rules'}</span>
+                  <span className={`text-xs sm:text-sm font-bold whitespace-nowrap ${c.refundable === false ? 'text-red-500' : 'text-gray-800'}`}>{tier2}</span>
                 </div>
               </div>
 

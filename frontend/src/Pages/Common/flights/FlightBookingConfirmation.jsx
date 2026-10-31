@@ -29,6 +29,8 @@ import { formatCalendarDate } from '../../../utils/dateUtils';
 import { clearStaleStoredBookings } from '../../../utils/bookingStorage';
 import { formatCheckedBag } from '../../../utils/baggage';
 import FlightCancellationPolicy from './FlightCancellationPolicy';
+import FareInclusionList from './FareInclusionList';
+import { STATES as FARE_STATES, alignedFareInclusions, fareInclusions } from '../../../../../shared/fareInclusions';
 import { searchToQuery } from './searchQuery';
 import { airportClockLabel, minutesBetweenAirportTimes, seatsLeftLabel } from './searchResults';
 import apiConfig from '@/config/api';
@@ -66,6 +68,15 @@ const isInternationalRoute = (depCode, arrCode) => {
 /** A US airport, where Secure Flight needs every traveller's date of birth (shared/travellerDetails.js). */
 const isUnitedStatesAirport = (code) => IATA_TO_COUNTRY.get((code || '').toUpperCase()) === 'United States';
 
+
+const hasFareTerms = (flight) => Boolean((flight?.fareServices || []).length || (flight?.amenities || []).length);
+
+/** The airline's own cancellation terms for the chosen fare, when it states them. */
+const statedCancelOf = (flight) => {
+  if (!hasFareTerms(flight)) return null;
+  const cancel = fareInclusions(flight).rows.cancel;
+  return cancel && cancel.state !== FARE_STATES.UNKNOWN ? cancel : null;
+};
 
 function FlightBookingConfirmation() {
   const routerLocation = useLocation();
@@ -452,6 +463,8 @@ function FlightBookingConfirmation() {
         brandedFare: match.brandedFare ?? reviewState.flightData.brandedFare,
         brandedFareLabel: match.brandedFareLabel ?? reviewState.flightData.brandedFareLabel,
         cabin: match.cabin ?? reviewState.flightData.cabin,
+        amenities: match.amenities ?? [],
+        fareServices: match.fareServices ?? [],
       };
       setPassengerData((current) => rebuildTravellers(current, match.originalOffer.travelerPricings, blankTraveller));
       setExpandedPassengerId(null);
@@ -1959,7 +1972,7 @@ function FlightBookingConfirmation() {
                     </span>
                   </div>
                   <span className="inline-flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs font-semibold text-[#055B75]">
-                    <span className="inline-flex items-center gap-1.5"><ShieldCheck className="h-4 w-4" />{bookingDetails?.flight?.refundable === true ? 'Refundable (fees may apply)' : bookingDetails?.flight?.refundable === false ? 'Non-refundable' : 'Refunds: see fare rules'}</span>
+                    <span className="inline-flex items-center gap-1.5"><ShieldCheck className="h-4 w-4" />{statedCancelOf(reviewState?.flightData)?.label || (bookingDetails?.flight?.refundable === true ? 'Refundable (fees may apply)' : bookingDetails?.flight?.refundable === false ? 'Non-refundable' : 'Refunds: see fare rules')}</span>
                     {/* Amadeus reports at most 9 seats, so 9 is "9+" (searchResults.js). */}
                     {seatsLeftLabel(bookingDetails?.flight?.numberOfBookableSeats) && (
                       <span className={seatsLeftLabel(bookingDetails.flight.numberOfBookableSeats).urgent ? 'text-red-600' : 'text-gray-500 font-normal'}>
@@ -1974,6 +1987,23 @@ function FlightBookingConfirmation() {
                     )}
                   </span>
                 </div>
+
+                {(() => {
+                  const chosen = reviewState?.flightData;
+                  if (!hasFareTerms(chosen)) return null;
+                  const [{ rows, extras }] = alignedFareInclusions([chosen]);
+                  const stated = rows.filter((row) => row.state !== FARE_STATES.UNKNOWN);
+                  if (!stated.length && !extras.length) return null;
+                  const fareName = String(bookingDetails?.flight?.brandedFareLabel || '').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+                  return (
+                    <div className="mt-3 px-4 py-3 rounded-lg border border-gray-100" data-testid="review-fare-inclusions">
+                      <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">
+                        {fareName ? `${fareName} fare includes` : 'Your fare includes'}
+                      </div>
+                      <FareInclusionList rows={stated} extras={extras} className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 text-sm" />
+                    </div>
+                  );
+                })()}
               </div>
             </div>
 

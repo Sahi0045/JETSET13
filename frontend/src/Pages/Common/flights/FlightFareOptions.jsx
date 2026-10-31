@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { X, Check, Luggage, Briefcase, ShieldCheck, ArrowRight, Loader2 } from 'lucide-react';
+import { X, ArrowRight, Loader2 } from 'lucide-react';
 import Price from '../../../Components/Price';
 import apiConfig from '@/config/api';
 import { fareCheckFor } from '../../../utils/fareCheckHandoff';
-import { formatCheckedBag } from '../../../utils/baggage';
 import { fareOf, fareTotalParts, legsOf, tripAirlineNames, tripAirlines } from './flightSort';
+import { STATES, alignedFareInclusions } from '../../../../../shared/fareInclusions';
+import FareInclusionList, { FareInclusionLegend } from './FareInclusionList';
 
 const prettyFare = (opt) => {
   // "This fare" rather than an invented "Standard" brand.
@@ -16,35 +17,23 @@ const prettyFare = (opt) => {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 };
 
-// Bags and refunds have their own lines on the card, and a cabin bag is not
-// checked baggage.
-const SHOWN_ELSEWHERE = /BAG|PERSONAL ITEM|REFUND/;
-const PERKS = [
-  [/CHANGE/, 'Date change'],
-  [/SEAT/, 'Seat selection'],
-  [/MEAL|SNACK|CATERING/, 'Meal'],
-  [/WIFI|WI-FI/, 'Wi-Fi'],
-  [/LOUNGE/, 'Lounge access'],
-  [/PRIORITY/, 'Priority boarding'],
-  [/MILEAGE|MILES/, 'Earns miles'],
-];
+const flightNumberOf = (value) => String(value || '').replace(/^([A-Z0-9]{2})-?\s*(\d+)/, '$1 $2');
 
-const freeAmenityLabels = (opt) => {
-  const list = Array.isArray(opt.amenities) ? opt.amenities : [];
-  const labels = list
-    .filter((a) => a && a.isChargeable === false)
-    .map((a) => (a.description || '').toUpperCase())
-    .filter((d) => d && !SHOWN_ELSEWHERE.test(d))
-    .map((d) => {
-      const known = PERKS.findIndex(([pattern]) => pattern.test(d));
-      return known >= 0
-        ? { rank: known, label: PERKS[known][1] }
-        : { rank: PERKS.length, label: d.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase()) };
-    })
-    .sort((a, b) => a.rank - b.rank)
-    .map((p) => p.label);
-  return [...new Set(labels)];
+const legFlights = (leg) => {
+  const numbers = Array.isArray(leg?.segments) && leg.segments.length > 0
+    ? leg.segments.map((segment) => segment.flightNumber)
+    : [leg?.flightNumber];
+  return [...new Set(numbers.filter(Boolean).map(flightNumberOf))].join(', ');
 };
+
+const knownAircraft = (leg) => {
+  const names = Array.isArray(leg?.segments) && leg.segments.length > 1
+    ? leg.segments.map((segment) => segment.aircraft)
+    : [leg?.aircraft];
+  return [...new Set(names.filter((name) => name && !/^unknown/i.test(name)))].join(', ');
+};
+
+const terminalOf = (place) => (place?.terminal ? ` T${place.terminal}` : '');
 
 function FlightFareOptions({ flight, onClose, onSelect }) {
   const [loading, setLoading] = useState(true);
@@ -73,6 +62,7 @@ function FlightFareOptions({ flight, onClose, onSelect }) {
       brandedFare: flight.brandedFare,
       brandedFareLabel: flight.brandedFareLabel,
       amenities: flight.amenities,
+      fareServices: flight.fareServices,
       refundable: flight.refundable,
       baggageDetails: flight.baggage
         ? { checked: flight.baggage.checked, cabin: flight.baggage.cabin }
@@ -179,7 +169,10 @@ function FlightFareOptions({ flight, onClose, onSelect }) {
       brandedFare: opt.brandedFare || flight.brandedFare,
       brandedFareLabel: opt.brandedFareLabel || flight.brandedFareLabel,
       amenities: opt.amenities || flight.amenities,
-      refundable: typeof opt.refundable === 'boolean' ? opt.refundable : flight.refundable,
+      fareServices: opt.fareServices || [],
+      // Another family's terms are its own: the clicked fare's "non-refundable"
+      // sat on Eco Flex, whose airline terms refund it for a fee.
+      refundable: typeof opt.refundable === 'boolean' ? opt.refundable : (opt.isOriginal ? flight.refundable : null),
       baggage: opt.baggageDetails
         ? { checked: opt.baggageDetails.checked || flight.baggage?.checked, cabin: opt.baggageDetails.cabin || flight.baggage?.cabin }
         : flight.baggage,
@@ -189,46 +182,63 @@ function FlightFareOptions({ flight, onClose, onSelect }) {
   };
 
   const flightFare = fareOf(flight);
+  const inclusions = alignedFareInclusions(options);
+  const cheapest = options.length > 1 ? fareOf(options[0]) : null;
+  const statesChange = inclusions.some(({ rows }) => rows.some((row) => row.key === 'change' && row.state !== STATES.UNKNOWN));
+  const legs = legsOf(flight);
 
   return (
     <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center p-0 sm:p-4">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
 
-      <div className="relative w-full sm:max-w-3xl max-h-[90vh] bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl flex flex-col animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-200">
-        {/* Header */}
+      <div role="dialog" aria-modal="true" aria-labelledby="fare-options-title" className="relative w-full sm:max-w-4xl max-h-[92vh] bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl flex flex-col animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-200">
         <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-gray-100">
-          <div className="flex items-center gap-3 min-w-0">
+          <div className="flex items-start gap-3 min-w-0">
             <img
               src={flight.airline?.logo}
               alt=""
-              className="w-9 h-9 object-contain rounded-md border border-gray-100 flex-shrink-0"
+              className="w-10 h-10 object-contain rounded-md border border-gray-100 flex-shrink-0 mt-0.5"
               onError={(e) => { e.target.style.display = 'none'; }}
             />
-            <div className="min-w-0" data-testid="fare-options-trip">
-              <div className="font-bold text-gray-900 text-sm truncate">
+            <div className="min-w-0 space-y-1.5" data-testid="fare-options-trip">
+              <div className="font-bold text-gray-900 text-sm sm:text-base truncate">
                 {tripAirlines(flight).length > 1 ? tripAirlineNames(flight) : flight.airline?.name}
               </div>
-              {legsOf(flight).map((leg, index, legs) => (
-                <div key={index} className="text-xs text-gray-500 flex items-center gap-1.5 flex-wrap">
-                  {legs.length > 1 && (
-                    <span className="font-semibold text-gray-400">{flight.returnLeg ? (index === 0 ? 'Onward' : 'Return') : `Flight ${index + 1}`}</span>
-                  )}
-                  <span className="font-medium text-gray-700">{leg.departure?.airport} {leg.departure?.time}</span>
-                  <ArrowRight className="h-3 w-3" />
-                  <span className="font-medium text-gray-700">{leg.arrival?.airport} {leg.arrival?.time}</span>
-                  <span className="text-gray-400">· {leg.stops === 0 ? 'Non stop' : `${leg.stops} stop${leg.stops > 1 ? 's' : ''}`}</span>
+              {legs.map((leg, index) => (
+                <div key={index} className="text-xs text-gray-600 leading-snug">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {legs.length > 1 && (
+                      <span className="font-semibold text-gray-400">{flight.returnLeg ? (index === 0 ? 'Onward' : 'Return') : `Flight ${index + 1}`}</span>
+                    )}
+                    {leg.departure?.date && <span className="font-semibold text-gray-700">{leg.departure.date}</span>}
+                    <span className="font-medium text-gray-800">{leg.departure?.airport}{terminalOf(leg.departure)} {leg.departure?.time}</span>
+                    <ArrowRight className="h-3 w-3" aria-hidden="true" />
+                    <span className="font-medium text-gray-800">{leg.arrival?.airport}{terminalOf(leg.arrival)} {leg.arrival?.time}</span>
+                  </div>
+                  <div className="text-gray-500">
+                    {[
+                      leg.duration,
+                      leg.stops === 0 ? 'Non stop' : `${leg.stops} stop${leg.stops > 1 ? 's' : ''}`,
+                      legFlights(leg),
+                      knownAircraft(leg),
+                    ].filter(Boolean).join(' · ')}
+                  </div>
                 </div>
               ))}
             </div>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-full hover:bg-gray-100 text-gray-500 flex-shrink-0">
+          <button onClick={onClose} aria-label="Close" className="p-1.5 rounded-full hover:bg-gray-100 text-gray-500 flex-shrink-0">
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        {/* Body */}
         <div className="px-5 py-4 overflow-y-auto">
-          <h3 className="text-sm font-bold text-gray-800 mb-3">Choose your fare</h3>
+          <div className="flex items-baseline justify-between gap-3 mb-3">
+            <h3 id="fare-options-title" className="text-base font-bold text-gray-900">Choose your fare</h3>
+            {!loading && options.length > 1 && (
+              <span className="text-xs text-gray-500">{options.length} fares · same flight, different rules</span>
+            )}
+          </div>
 
           {loading ? (
             <div className="flex flex-col items-center justify-center py-12 text-gray-500">
@@ -236,76 +246,68 @@ function FlightFareOptions({ flight, onClose, onSelect }) {
               <p className="text-sm">Fetching fare options…</p>
             </div>
           ) : options.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {options.map((opt, i) => {
-                const perks = freeAmenityLabels(opt);
-                const checked = opt.baggageDetails?.checked;
-                const cabinBag = opt.baggageDetails?.cabin;
-                const fare = fareOf(opt);
-                return (
-                  <div
-                    key={opt.id ?? i}
-                    className={`flex flex-col rounded-xl border p-4 transition-all hover:shadow-md ${i === 0 ? 'border-[#055B75] ring-1 ring-[#055B75]/20' : 'border-gray-200'}`}
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-sm font-bold text-gray-900">{prettyFare(opt)}</span>
-                      {/* Cheapest of several. On the one fare there was, the
-                          badge compared it with nothing. */}
-                      {i === 0 && options.length > 1 && <span className="text-[10px] font-bold text-white bg-[#055B75] px-2 py-0.5 rounded-full">CHEAPEST</span>}
-                    </div>
-                    <div className="mb-3">
-                      <div className="text-xl font-bold text-[#055B75] leading-tight">
-                        <Price amount={fare} />
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {options.map((opt, i) => {
+                  const fare = fareOf(opt);
+                  const { rows, extras } = inclusions[i];
+                  const dearer = cheapest && i > 0 && Number.isFinite(fare.amount) && Number.isFinite(cheapest.amount) && fare.amount > cheapest.amount;
+                  return (
+                    <div
+                      key={opt.id ?? i}
+                      data-testid="fare-option"
+                      className={`flex flex-col rounded-xl border p-4 transition-all hover:shadow-md ${i === 0 ? 'border-[#055B75] ring-1 ring-[#055B75]/20' : 'border-gray-200'}`}
+                    >
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <span className="text-sm font-bold text-gray-900">{prettyFare(opt)}</span>
+                        {/* Cheapest of several. On the one fare there was, the
+                            badge compared it with nothing. */}
+                        {i === 0 && options.length > 1 && <span className="text-[10px] font-bold text-white bg-[#055B75] px-2 py-0.5 rounded-full">CHEAPEST</span>}
                       </div>
-                      {fare.unit && fare.travellers > 1 && (
-                        <div className="text-[11px] text-gray-500">
-                          per {fare.unit} · <Price amount={fareTotalParts(opt)} /> for {fare.travellers} travellers
+                      <div className="mb-3">
+                        <div className="flex items-baseline gap-2 flex-wrap">
+                          <span className="text-xl font-bold text-[#055B75] leading-tight"><Price amount={fare} /></span>
+                          {dearer && (
+                            <span className="text-xs font-semibold text-gray-500">
+                              +<Price amount={[{ amount: fare.amount, currency: fare.currency, times: 1 }, { amount: cheapest.amount, currency: cheapest.currency, times: -1 }]} />
+                            </span>
+                          )}
                         </div>
+                        {fare.unit && fare.travellers > 1 && (
+                          <div className="text-[11px] text-gray-500">
+                            per {fare.unit} · <Price amount={fareTotalParts(opt)} /> for {fare.travellers} travellers
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">Included in this fare</div>
+                      <FareInclusionList rows={rows} extras={extras} className="space-y-1.5 text-xs flex-1" />
+
+                      {withdrawn.has(keyOf(opt)) ? (
+                        <p className="mt-3 text-xs font-semibold text-amber-700" role="status">
+                          The airline has just stopped selling this fare. Choose another fare or flight.
+                        </p>
+                      ) : (
+                        <button
+                          onClick={() => handleSelect(opt)}
+                          disabled={Boolean(checkingKey)}
+                          className="mt-4 w-full py-2.5 rounded-lg bg-[#055B75] hover:bg-[#034457] disabled:opacity-60 text-white text-sm font-bold transition-colors inline-flex items-center justify-center gap-2"
+                        >
+                          {checkingKey === keyOf(opt) ? (<><Loader2 className="h-4 w-4 animate-spin" /> CHECKING…</>) : 'BOOK'}
+                        </button>
                       )}
                     </div>
+                  );
+                })}
+              </div>
 
-                    <div className="space-y-1.5 text-xs text-gray-600 flex-1">
-                      <div className="flex items-center gap-1.5">
-                        <Luggage className="h-3.5 w-3.5 text-gray-400" />
-                        {formatCheckedBag(checked)
-                          ? `${formatCheckedBag(checked)} check-in`
-                          : (opt.baggage || (checked != null ? 'No checked bag' : 'Baggage: see fare rules'))}
-                      </div>
-                      {cabinBag?.weight ? (
-                        <div className="flex items-center gap-1.5">
-                          <Briefcase className="h-3.5 w-3.5 text-gray-400" />
-                          {cabinBag.weight}{cabinBag.weightUnit || 'KG'} cabin
-                        </div>
-                      ) : null}
-                      <div className="flex items-center gap-1.5">
-                        <ShieldCheck className={`h-3.5 w-3.5 ${opt.refundable === true ? 'text-emerald-500' : 'text-gray-400'}`} />
-                        {opt.refundable === true ? 'Refundable' : opt.refundable === false ? 'Non-refundable' : 'Refunds: see fare rules'}
-                      </div>
-                      {perks.slice(0, 3).map((p, idx) => (
-                        <div key={idx} className="flex items-center gap-1.5 text-emerald-700">
-                          <Check className="h-3.5 w-3.5 text-emerald-500" />
-                          {p}
-                        </div>
-                      ))}
-                    </div>
-
-                    {withdrawn.has(keyOf(opt)) ? (
-                      <p className="mt-3 text-xs font-semibold text-amber-700" role="status">
-                        The airline has just stopped selling this fare. Choose another fare or flight.
-                      </p>
-                    ) : (
-                      <button
-                        onClick={() => handleSelect(opt)}
-                        disabled={Boolean(checkingKey)}
-                        className="mt-3 w-full py-2 rounded-lg bg-[#055B75] hover:bg-[#034457] disabled:opacity-60 text-white text-sm font-bold transition-colors inline-flex items-center justify-center gap-2"
-                      >
-                        {checkingKey === keyOf(opt) ? (<><Loader2 className="h-4 w-4 animate-spin" /> CHECKING…</>) : 'BOOK'}
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+              <div className="mt-4"><FareInclusionLegend /></div>
+              <ul className="mt-2 space-y-0.5 text-[11px] text-gray-500 list-disc pl-4">
+                <li>The exact fees for cancelling or changing are in the fare rules on the next page, before you pay.</li>
+                {statesChange && <li>On a date change you also pay any difference in fare.</li>}
+                <li>Platform fee shown at checkout.</li>
+              </ul>
+            </>
           ) : (
             <div className="text-center py-8">
               <p className="text-sm text-gray-500 mb-4">{error || 'No alternate fares available.'}</p>
