@@ -33,7 +33,7 @@ import {
   HELD_REVIEW_REASON_PREFIXES, liveTicketNumbersMissingOf, unrecordedCancellationForCustomerOf,
   voidedTicketsOf, commitUnknownOf, SCHEDULE_CHANGED_REVIEW_REASON, isHeldForReview, ticketIssuedBeforeHoldOf,
   openFailedCancellationOf, ATTENTION_JOBS, cancellationRecordedByHandOf,
-  notHeldStillPaidOf, scheduleChangeOf, isWalletAttention, walletIssueKeyOf,
+  notHeldStillPaidOf, scheduleChangeOf, isWalletAttention, walletIssueKeyOf, TICKET_REFUSED_REASON,
 } from '../../shared/reviewQueue.js';
 import { errorSummary } from '../utils/errorSummary.js';
 import { flightSearchLimiter, guestBookingLimiter } from '../middleware/security.js';
@@ -745,7 +745,7 @@ async function releaseRefusedTicket(bookingReference, providerError, req) {
 
   const refusal = [providerError.amadeusCode, providerError.technicalError].filter(Boolean).join(' ');
   const { statusCode, payload } = await invokeOrchestratedCancel(
-    bookingReference, `Ticket refused by the airline: ${refusal}`, req, { system: true });
+    bookingReference, `${TICKET_REFUSED_REASON}: ${refusal}`, req, { system: true });
   console.warn('🎫 Ticket refused for good; cancel flow answered', { bookingReference, pnr, refusal, statusCode, paymentAction: payload?.cancellation?.paymentAction });
   reportError(providerError, { service: 'amadeus-ws', flow: 'booking', step: providerError.step, pnr, bookingReference, released: statusCode === 200 });
 

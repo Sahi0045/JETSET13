@@ -51,6 +51,7 @@ import { startTicketSyncJob } from "./backend/jobs/ticketSync.job.js";
 import { startWalletEarnJob } from "./backend/jobs/walletEarn.job.js";
 import { startNeedsReviewAlertJob } from "./backend/jobs/needsReviewAlert.job.js";
 import { startPaymentFailureAlertJob } from "./backend/jobs/paymentFailureAlert.job.js";
+import { startBookingFeedJob } from "./backend/jobs/bookingFeed.job.js";
 import { startAbandonedCheckoutJob } from "./backend/jobs/abandonedCheckout.job.js";
 import {
   apiLimiter,
@@ -347,6 +348,8 @@ if (process.env.NODE_ENV !== "test") {
     // Says so when a cancellation failed to return the customer's money. The
     // booking row calls itself refunded either way, so nothing else would.
     startPaymentFailureAlertJob();
+    // Posts every new booking, failed booking and cancellation to the same channel.
+    startBookingFeedJob();
     // Finishes a paid flight checkout whose customer closed the tab before the
     // booking step: books it or refunds it, as the browser would have.
     startAbandonedCheckoutJob({ port: PORT });
