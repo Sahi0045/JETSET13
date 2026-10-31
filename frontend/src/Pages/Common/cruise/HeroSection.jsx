@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { CalendarDays, ChevronDown, Clock3, MapPin, Search, Ship } from 'lucide-react';
+import ServiceTabs from '../../../Components/ServiceTabs';
 import './HeroSection.css';
 import { NIGHT_RANGES, monthName, searchOptions, searchQuery } from './searchSailings';
 import { usePublishedSailings } from './useSailings';
@@ -58,6 +59,7 @@ const HeroSection = () => {
 
         <div className="max-w-6xl mx-auto w-full">
           <form onSubmit={handleSearch} className="search-container w-full">
+            <ServiceTabs active="cruise" className="-mx-6 md:-mx-7 -mt-6 md:-mt-7 mb-5 pt-3 border-b border-gray-100 bg-transparent" />
             <div className="search-grid">
               <Choice id="cruise-search-region" label="Destination" icon={MapPin} value={criteria.region} onChange={choose('region')}>
                 <option value="">Any destination</option>
