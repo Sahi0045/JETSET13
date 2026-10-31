@@ -2929,21 +2929,36 @@ const fareRulesFrom = (priced, flightOffer) => {
       penaltyText.match(/0?(\d{1,2})\s*HOURS?\s+(?:BEFORE|PRIOR)/);
     const cutoffHours = cutoffMatch ? parseInt(cutoffMatch[1], 10) : null;
 
-    const isNonRefundable = /NON[\s-]?REFUND/i.test(penaltyText);
-
-    // Refundability as the fare itself states it (null when it does not).
-    // This read `refundableTaxes`, a tax amount, as a yes/no answer.
-    const refundableFlag = flightOffer._ama?.refundable ?? (isNonRefundable ? false : null);
+    // The airline's refund and change rules (MiniRules cat 33 and 31) before
+    // the text. A scan of the whole text for "NON-REFUNDABLE" read Air India
+    // Eco Flex's "TICKET IS NON-REFUNDABLE IN CASE OF NO-SHOW" as the answer for
+    // cancelling a week ahead, which the airline allows for INR 999. And the
+    // text's charge is per fare component: INR 5000 where MiniRules said $106
+    // for a one-stop trip on two.
+    const rules = priced?.penalties || null;
+    const pricedOffer = priced?.data?.flightOffers?.[0];
+    const ruleFee = (cell) => (cell?.allowed === true && Number(cell.amount) > 0 && rules?.currency
+      ? { amount: Number(cell.amount), currency: rules.currency }
+      : null);
+    const ruleCancelFee = ruleFee(rules?.refund?.before);
+    const ruleChangeFee = ruleFee(rules?.change?.before);
+    const stated = (value) => (typeof value === 'boolean' ? value : null);
+    const refundableFlag = stated(rules?.refund?.before?.allowed)
+      ?? stated(pricedOffer?._ama?.refundable)
+      ?? stated(flightOffer._ama?.refundable);
 
     cancellation = {
-      hasData: charges.length > 0 || cutoffMatch != null,
+      hasData: charges.length > 0 || cutoffMatch != null || Boolean(ruleCancelFee || ruleChangeFee),
       // Fall back to the fare's own currency, not a fixed one: offers are
       // priced in the office currency and ARC Pay charges in it.
       currency: (cancelCharge || changeCharge)?.currency || flightOffer.price?.currency || 'USD',
       cutoffHours,
+      // The mobile app reads these two with `currency`, so they stay the text's.
       changeFee: changeCharge?.amount ?? null,
       cancelFee: cancelCharge?.amount ?? null,
+      airlineFees: { cancel: ruleCancelFee, change: ruleChangeFee },
       refundable: refundableFlag,
+      noShowRefundable: stated(rules?.refund?.noShowBefore?.allowed),
       fareTotal: flightOffer.price ? parseFloat(flightOffer.price.grandTotal || flightOffer.price.total) : null,
       fareCurrency: flightOffer.price?.currency || null,
     };

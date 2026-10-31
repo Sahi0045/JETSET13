@@ -83,3 +83,17 @@ describe('the refund line on the review page', () => {
     expect(await screen.findByText('Non-refundable')).toBeTruthy();
   });
 });
+
+// Booking.com gives each bag's size; Amadeus sends weights only, so these are
+// Air India's published limits (airindia.com cabin baggage page, 31 Oct 2026).
+describe('the review page\'s bag sizes', () => {
+  it('gives the airline\'s size limits for the cabin booked', async () => {
+    renderReviewPage(FlightBookingConfirmation, { state: { flightData: reviewFlight(fare(), { cabin: 'BUSINESS' }), searchData: { from: 'DEL', to: 'HYD', departDate: '2026-11-06' } } });
+
+    const sizes = await screen.findByTestId('bag-size-limits');
+    expect(sizes.textContent).toContain('Air India size limits');
+    expect(sizes.textContent).toContain('Cabin bag: 55 × 40 × 20 cm · 10 kg');
+    expect(sizes.textContent).toContain('Checked bag: 158 cm in total');
+  });
+});
+

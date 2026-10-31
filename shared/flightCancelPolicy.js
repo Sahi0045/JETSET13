@@ -80,6 +80,29 @@ export function isWithinFreeWindow(paidAt, now = new Date(), timeZone) {
   return until !== null && Number.isFinite(at) && at < Date.parse(until);
 }
 
+/**
+ * Air India's fare rules (cat 16, read 31 Oct 2026) let a booking made more
+ * than 7 days before travel be cancelled within 48 hours of booking without
+ * the airline's penalty. Past our free window that is still a refund the
+ * airline owes, and the desk was told to keep its penalty. Only Air India's
+ * rule has been read, so only Air India's is named.
+ *
+ * @returns {{ carrier: string, until: string } | null}
+ */
+const AIRLINE_LOOK_IN = Object.freeze({ AI: { name: 'Air India', hours: 48, daysAhead: 7 } });
+
+export function airlineLookInOf({ carrier, bookedAt, departureDate, now = new Date() } = {}) {
+  const rule = AIRLINE_LOOK_IN[String(carrier || '').trim().toUpperCase()];
+  const booked = timeOf(bookedAt);
+  const at = timeOf(now);
+  const day = /^(\d{4}-\d{2}-\d{2})/.exec(String(departureDate || ''))?.[1];
+  if (!rule || !day || !Number.isFinite(booked) || !Number.isFinite(at)) return null;
+  const bookedDay = Date.parse(new Date(booked).toISOString().slice(0, 10));
+  const daysAhead = (Date.parse(day) - bookedDay) / (24 * HOUR_MS);
+  if (at - booked > rule.hours * HOUR_MS || daysAhead <= rule.daysAhead) return null;
+  return { carrier: rule.name, until: new Date(booked + rule.hours * HOUR_MS).toISOString() };
+}
+
 export function fareRuleOf(penalties) {
   const cell = penalties?.refund?.before;
   const refundable = cell?.allowed === true ? true : cell?.allowed === false ? false : null;

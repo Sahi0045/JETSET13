@@ -6,6 +6,7 @@ import { fareCheckFor } from '../../../utils/fareCheckHandoff';
 import { fareOf, fareTotalParts, legsOf, tripAirlineNames, tripAirlines } from './flightSort';
 import { STATES, alignedFareInclusions } from '../../../../../shared/fareInclusions';
 import FareInclusionList, { FareInclusionLegend } from './FareInclusionList';
+import BagSizeLimits, { carrierOf } from './BagSizeLimits';
 
 const prettyFare = (opt) => {
   // "This fare" rather than an invented "Standard" brand.
@@ -282,6 +283,7 @@ function FlightFareOptions({ flight, onClose, onSelect }) {
 
                       <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">Included in this fare</div>
                       <FareInclusionList rows={rows} extras={extras} className="space-y-1.5 text-xs flex-1" />
+                      <BagSizeLimits carrier={carrierOf(flight)} cabin={opt.cabin || flight.cabin} aircraft={flight.aircraft} />
 
                       {withdrawn.has(keyOf(opt)) ? (
                         <p className="mt-3 text-xs font-semibold text-amber-700" role="status">

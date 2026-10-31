@@ -30,6 +30,7 @@ import { clearStaleStoredBookings } from '../../../utils/bookingStorage';
 import { formatCheckedBag } from '../../../utils/baggage';
 import FlightCancellationPolicy from './FlightCancellationPolicy';
 import FareInclusionList from './FareInclusionList';
+import BagSizeLimits, { carrierOf } from './BagSizeLimits';
 import { STATES as FARE_STATES, alignedFareInclusions, fareInclusions } from '../../../../../shared/fareInclusions';
 import { searchToQuery } from './searchQuery';
 import { airportClockLabel, minutesBetweenAirportTimes, seatsLeftLabel } from './searchResults';
@@ -2004,6 +2005,7 @@ function FlightBookingConfirmation() {
                     </div>
                   );
                 })()}
+                <BagSizeLimits carrier={carrierOf(reviewState?.flightData)} cabin={reviewState?.flightData?.cabin} aircraft={reviewState?.flightData?.aircraft} />
               </div>
             </div>
 
