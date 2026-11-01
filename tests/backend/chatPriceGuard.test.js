@@ -28,6 +28,18 @@ describe('guardPrices', () => {
     expect(guardPrices('The cheapest is $189.40 on Delta.', allowed)).toEqual({ text: 'The cheapest is $189.40 on Delta.', removed: 0 });
   });
 
+  it("keeps a card's fare per person, as the card shows it", () => {
+    const twoAdults = {
+      ...card(173.4),
+      originalOffer: {
+        price: { total: '173.40' },
+        travelerPricings: [{ travelerType: 'ADULT', price: { total: '86.70' } }, { travelerType: 'ADULT', price: { total: '86.70' } }],
+      },
+    };
+
+    expect(guardPrices('Air India is $86.70 per person, $173.40 for both of you.', allowedAmounts({ cards: [twoAdults] })).removed).toBe(0);
+  });
+
   it("keeps booking amounts and the customer's budget", () => {
     const allowed = allowedAmounts({
       context: { bookings: [{ totalAmount: 512 }], upcomingBookings: [{ totalAmount: '77.10' }], quotes: [{ amount: 1200 }] },

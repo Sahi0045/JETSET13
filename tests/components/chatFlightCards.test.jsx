@@ -47,10 +47,13 @@ beforeEach(() => {
 });
 
 describe('flight cards in the chat', () => {
-  it("shows each card's airline, times and price with the service fee label", () => {
+  it("shows each card's airline, times, and fare per person with the total under it, as the results page does", async () => {
     renderCards();
 
-    expect(screen.getAllByText('for 2 travellers + service fee')).toHaveLength(2);
+    expect(screen.getAllByText('per person')).toHaveLength(2);
+    expect(await screen.findByText('$86.70')).toBeTruthy();
+    expect((await screen.findByText('$173.40')).parentElement.textContent).toBe('$173.40 for 2 travellers');
+    expect(screen.queryByText(/service fee/)).toBeNull();
     expect(screen.getByText(new RegExp(`${offers[0].departure.time}.*${offers[0].arrival.time}`))).toBeTruthy();
     expect(screen.getAllByText(offers[0].airline).length).toBeGreaterThan(0);
     expect(screen.getByText(/Nonstop/)).toBeTruthy();

@@ -15,7 +15,7 @@ import {
 import { allowedAmounts, guardPrices } from '../services/chat/priceGuard.js';
 import { takeSearchSlot } from '../services/chat/chatSearchLimit.js';
 
-const CARDS_FALLBACK = 'Here are the best flights I found. Prices are the airline fare plus our service fee, confirmed at checkout.';
+const CARDS_FALLBACK = 'Here are the best flights I found. Prices are the airline fare plus our platform fee, confirmed at checkout.';
 const SEARCH_FAILED = "I couldn't search flights just now. You can search on our flights page.";
 const SEARCH_LINK = '/flights';
 const BUSY_MESSAGE = 'The flight search is busy right now.';

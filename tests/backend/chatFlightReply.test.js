@@ -126,7 +126,7 @@ describe('the bot searches flights', () => {
     const { contents, config } = generateContent.mock.calls[1][0];
     expect(contents[contents.length - 2]).toBe(first.candidates[0].content);
     expect(functionResponse().name).toBe('search_flights');
-    expect(functionResponse().response.result.summary).toContain('+ service fee');
+    expect(functionResponse().response.result.summary).toContain('+ platform fee');
     expect(functionResponse().response.result.searched).toEqual({ from: 'DEL', to: 'BOM', departDate: inDays(30) });
     expect(config.tools[0].functionDeclarations[0].name).toBe('search_flights');
     expect(config.toolConfig.functionCallingConfig.mode).toBe('NONE');
@@ -145,7 +145,7 @@ describe('the bot searches flights', () => {
 
     const parts = generateContent.mock.calls[1][0].contents.at(-1).parts;
     expect(parts).toHaveLength(2);
-    expect(parts[0].functionResponse.response.result.summary).toContain('+ service fee');
+    expect(parts[0].functionResponse.response.result.summary).toContain('+ platform fee');
     expect(parts[1].functionResponse.response.result).toEqual({ skipped: 'one search per message' });
     expect(axios.post).toHaveBeenCalledTimes(1);
     expect(res.body.flightResults.offers.length).toBeGreaterThan(0);
@@ -158,7 +158,7 @@ describe('the bot searches flights', () => {
     const res = await send('Delhi to Mumbai one way, 2 adults');
 
     expect(res.statusCode).toBe(200);
-    expect(res.body.message).toBe('Here are the best flights I found. Prices are the airline fare plus our service fee, confirmed at checkout.');
+    expect(res.body.message).toBe('Here are the best flights I found. Prices are the airline fare plus our platform fee, confirmed at checkout.');
     expect(res.body.flightResults.offers.length).toBeGreaterThan(0);
   });
 
@@ -233,7 +233,7 @@ describe('the bot searches flights', () => {
 
     const res = await send('Delhi to Mumbai one way, 2 adults');
 
-    expect(res.body.message).toBe('Here are the best flights I found. Prices are the airline fare plus our service fee, confirmed at checkout.');
+    expect(res.body.message).toBe('Here are the best flights I found. Prices are the airline fare plus our platform fee, confirmed at checkout.');
     expect(res.body.flightResults.offers.length).toBeGreaterThanOrEqual(1);
   });
 

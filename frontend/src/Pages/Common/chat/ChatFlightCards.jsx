@@ -4,7 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import Price from '../../../Components/Price';
 import useCityNames, { airportCodesOf } from '../../../hooks/useCityNames';
 import FlightFareOptions from '../flights/FlightFareOptions';
-import { pricedForLabel } from '../flights/FlightCard';
+import { fareOf, fareTotalParts } from '../flights/flightSort';
 import { toDisplayFlights } from '../flights/flightOffers';
 import { bookingHandoffState } from '../flights/bookingHandoff';
 import { searchFromQuery, searchToQuery } from '../flights/searchQuery';
@@ -27,6 +27,28 @@ const travellersLabel = ({ adults = 1, children = 0, infants = 0 }) => [
   ...(children ? [`${children} ${children === 1 ? 'child' : 'children'}`] : []),
   ...(infants ? [plural(infants, 'infant')] : []),
 ].join(', ');
+
+function FarePrice({ flight }) {
+  const fare = fareOf(flight);
+  const travellers = plural(fare.travellers, 'traveller');
+  return (
+    <div className="text-right shrink-0">
+      <span className="block text-sm font-bold text-[#055B75] whitespace-nowrap">
+        <Price amount={{ amount: fare.amount, currency: fare.currency }} />
+      </span>
+      <span className="block text-[11px] text-gray-400 whitespace-nowrap">
+        {fare.unit ? (
+          <>
+            <span className="block font-semibold text-gray-600">{`per ${fare.unit}`}</span>
+            {fare.travellers > 1 && fare.total > 0 && (
+              <span className="block"><Price amount={fareTotalParts(flight)} />{` for ${travellers}`}</span>
+            )}
+          </>
+        ) : (fare.travellers > 1 ? `total for ${travellers}` : 'total fare')}
+      </span>
+    </div>
+  );
+}
 
 const placeLabel = (code, cityMap) => (cityMap[code] && cityMap[code] !== code ? `${cityMap[code]} (${code})` : code);
 
@@ -67,7 +89,7 @@ function ChatFlightCards({ results, sessionId }) {
       </div>
       {flights.map((flight) => (
         <div key={flight.id} className="rounded-lg border border-[#65B3CF]/50 bg-white p-3 shadow-sm">
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex items-start justify-between gap-2">
             <div className="flex items-center gap-2 min-w-0">
               <img
                 src={flight.airline?.logo}
@@ -77,11 +99,10 @@ function ChatFlightCards({ results, sessionId }) {
               />
               <span className="text-sm font-semibold text-[#034457] truncate">{flight.airline?.name}</span>
             </div>
-            <span className="text-sm font-bold text-[#055B75] whitespace-nowrap"><Price amount={flight.price} /></span>
+            <FarePrice flight={flight} />
           </div>
-          <div className="mt-1 flex items-center justify-between gap-2 text-xs text-gray-600">
+          <div className="mt-1 text-xs text-gray-600">
             <span>{`${flight.departure.time} ${flight.departure.airport} → ${flight.arrival.time} ${flight.arrival.airport}`}</span>
-            <span className="text-[11px] text-gray-400 text-right">{pricedForLabel(flight.originalOffer)}</span>
           </div>
           {flight.returnLeg && (
             <div className="mt-1 text-xs text-gray-600">

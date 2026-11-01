@@ -1,3 +1,5 @@
+import { farePerTraveller } from '../../../shared/farePerTraveller.js';
+
 const NUMBER = String.raw`(\d{1,3}(?:,\d{2,3})+(?:\.\d+)?|\d+(?:\.\d+)?)`;
 const MONEY = new RegExp(
   String.raw`(?:(?<![A-Za-z])(?:US\$|USD|INR|Rs\.?)|\$|₹|€|£)\s?${NUMBER}|${NUMBER}\s?(?:USD|INR|dollars?|rupees?|euros?)\b`,
@@ -21,6 +23,7 @@ export function allowedAmounts({ cards = [], context = {}, customerTexts = [] } 
   cards.forEach((card) => {
     add(card?.price?.total);
     add(card?.price?.amount);
+    add(farePerTraveller(card?.originalOffer).each);
   });
   [...(context.bookings || []), ...(context.upcomingBookings || [])].forEach((booking) => add(booking?.totalAmount));
   (context.quotes || []).forEach((quote) => add(quote?.amount));

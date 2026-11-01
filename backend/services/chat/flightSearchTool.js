@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { Type } from '@google/genai';
+import { farePerTraveller } from '../../../shared/farePerTraveller.js';
 
 const CABINS = ['ECONOMY', 'PREMIUM_ECONOMY', 'BUSINESS', 'FIRST'];
 const TIMES_OF_DAY = ['morning', 'afternoon', 'evening', 'night'];
@@ -187,12 +188,18 @@ const travellersOf = (offer, search) => offer?.originalOffer?.travelerPricings?.
 
 const stopsLabel = (stops) => (stops === 0 ? 'nonstop' : `${stops} stop${stops === 1 ? '' : 's'}`);
 
+const fareWords = (offer, travellers) => {
+  const total = `USD ${offer.price?.total} for ${travellers} traveller${travellers === 1 ? '' : 's'}`;
+  const { each, unit } = farePerTraveller(offer?.originalOffer);
+  return each != null && travellers > 1 ? `USD ${each.toFixed(2)} per ${unit}, ${total}` : total;
+};
+
 export function cardSummary(cards, search) {
   return cards.map((offer, index) => {
     const travellers = travellersOf(offer, search);
     const back = returnStops(offer);
     const stops = back === null ? stopsLabel(offer.stops) : `${stopsLabel(offer.stops)} out, ${stopsLabel(back)} back`;
     return `${index + 1}. ${offer.airline}, ${offer.departure?.time}–${offer.arrival?.time}, ${stops}, ${offer.duration}, `
-      + `USD ${offer.price?.total} for ${travellers} traveller${travellers === 1 ? '' : 's'} + service fee`;
+      + `${fareWords(offer, travellers)} + platform fee`;
   }).join('\n');
 }

@@ -42,6 +42,7 @@ exports[`the search page hands checkout the flight it showed > BOOK hands checko
     "duration": "5h 35m",
     "durationMinutes": 335,
     "fareBasis": "QK1YXYDD",
+    "fareServices": [],
     "flightNumber": "AI-9567",
     "id": "41-1",
     "isRoundTrip": false,

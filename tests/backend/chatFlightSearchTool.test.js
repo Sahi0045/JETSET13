@@ -186,14 +186,20 @@ describe('the cards', () => {
     expect(pickCards(nine, { maxPrice: 165 }).map((c) => c.id)).toEqual(['b', 'e']);
   });
 
-  it('summary lines carry the card total and the service fee words', () => {
+  it('summary lines carry the fare per person, the total and the platform fee words', () => {
     const summary = cardSummary(offers, { adults: 2, children: 0, infants: 0 });
     const lines = summary.split('\n');
 
     expect(lines).toHaveLength(2);
-    expect(lines[0]).toContain(`USD ${offers[0].price.total} for 2 travellers + service fee`);
+    expect(lines[0]).toContain('USD 86.70 per person, USD 173.40 for 2 travellers + platform fee');
     expect(lines[0]).toContain('nonstop');
     expect(lines[1]).toContain('1 stop');
+  });
+
+  it('a summary for one traveller gives the one fare', () => {
+    const one = { ...offers[0], originalOffer: { ...offers[0].originalOffer, travelerPricings: offers[0].originalOffer.travelerPricings.slice(0, 1) } };
+
+    expect(cardSummary([one], { adults: 1, children: 0, infants: 0 })).toContain(`USD ${offers[0].price.total} for 1 traveller + platform fee`);
   });
 });
 
