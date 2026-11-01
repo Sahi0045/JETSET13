@@ -80,6 +80,15 @@ describe('flight cards in the chat', () => {
     expect(JSON.parse(init.body)).toEqual({ sessionId: 'chat-session-1', event: 'flight_book_clicked', offerId: offers[1].id });
   });
 
+  it('says when a flight lands the next day, as the results page does', () => {
+    const late = structuredClone(offers[0]);
+    late.arrival = { ...late.arrival, time: '01:25', date: '2026-11-24' };
+    late.originalOffer.itineraries[0].segments.slice(-1)[0].arrival.at = '2026-11-24T01:25:00';
+    renderCards({ offers: [late] });
+
+    expect(screen.getByText(`${late.departure.time} DEL → 01:25 (+1 day) BOM`)).toBeTruthy();
+  });
+
   it('See all links to the full results for the same search', async () => {
     renderCards();
 

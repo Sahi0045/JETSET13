@@ -6,6 +6,7 @@ import useCityNames, { airportCodesOf } from '../../../hooks/useCityNames';
 import FlightFareOptions from '../flights/FlightFareOptions';
 import { fareOf, fareTotalParts } from '../flights/flightSort';
 import { toDisplayFlights } from '../flights/flightOffers';
+import { arrivalDayOffset } from '../flights/searchResults';
 import { bookingHandoffState } from '../flights/bookingHandoff';
 import { searchFromQuery, searchToQuery } from '../flights/searchQuery';
 
@@ -19,6 +20,11 @@ const cabinLabel = (cabin) => String(cabin || 'ECONOMY')
 
 const tripDay = (isoDate) => new Date(`${isoDate}T00:00:00Z`)
   .toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
+
+const legTimes = (leg) => {
+  const days = arrivalDayOffset(leg.departure?.rawDate, leg.arrival?.rawDate);
+  return `${leg.departure.time} ${leg.departure.airport} → ${leg.arrival.time}${days ? ` (${days} day)` : ''} ${leg.arrival.airport}`;
+};
 
 const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`;
 
@@ -102,11 +108,11 @@ function ChatFlightCards({ results, sessionId }) {
             <FarePrice flight={flight} />
           </div>
           <div className="mt-1 text-xs text-gray-600">
-            <span>{`${flight.departure.time} ${flight.departure.airport} → ${flight.arrival.time} ${flight.arrival.airport}`}</span>
+            <span>{legTimes(flight)}</span>
           </div>
           {flight.returnLeg && (
             <div className="mt-1 text-xs text-gray-600">
-              <span>{`Return ${flight.returnLeg.departure.time} ${flight.returnLeg.departure.airport} → ${flight.returnLeg.arrival.time} ${flight.returnLeg.arrival.airport} · ${stopsLabel(flight.returnLeg.stops)}`}</span>
+              <span>{`Return ${legTimes(flight.returnLeg)} · ${stopsLabel(flight.returnLeg.stops)}`}</span>
             </div>
           )}
           <div className="mt-2 flex items-center justify-between gap-2">
