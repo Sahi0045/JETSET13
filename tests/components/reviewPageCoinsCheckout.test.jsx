@@ -68,7 +68,9 @@ afterEach(() => {
 });
 
 /** The review page for a 200 + 10 fee = 210 trip, the lead traveller typed in. */
-async function openPage(...balances) {
+const openPage = (...balances) => openPageFor(fare, ...balances);
+
+async function openPageFor(amadeusOffer, ...balances) {
   wallets.replies = balances.map((entry) => (typeof entry === 'number' ? walletBody(entry) : entry));
   const flights = airline();
   vi.stubGlobal('fetch', vi.fn((url, init) => {
@@ -84,7 +86,7 @@ async function openPage(...balances) {
     return flights(url, init);
   }));
 
-  renderReviewPage(FlightBookingConfirmation, { state: { flightData: reviewFlight(fare), searchData: { from: 'DEL', to: 'BOM', departDate: '2026-11-15' } } });
+  renderReviewPage(FlightBookingConfirmation, { state: { flightData: reviewFlight(amadeusOffer), searchData: { from: 'DEL', to: 'BOM', departDate: '2026-11-15' } } });
 
   fireEvent.change(await screen.findByLabelText(/First Name/), { target: { value: 'Jane' } });
   fireEvent.change(screen.getByLabelText(/Last Name/), { target: { value: 'Doe' } });
@@ -183,6 +185,18 @@ describe('the coins one booking may use', () => {
 
     await waitFor(() => expect(checkout.calls).toHaveLength(1));
     expect(checkout.calls[0]).toMatchObject({ amount: 206, walletCoins: 400 });
+  });
+
+  it('reads the band from the base fare, not the fare with taxes', async () => {
+    const taxed = offer({ id: '1', total: '170.36', itineraries: fare.itineraries });
+    taxed.price.base = '141.00';
+    await openPageFor(taxed, 5000);
+    expect(await screen.findByText(/This booking can use up to \$3\.00 of your Jet Coins/)).toBeTruthy();
+    fireEvent.click(await screen.findByRole('switch'));
+    fireEvent.click(await payButton('177.36'));
+
+    await waitFor(() => expect(checkout.calls).toHaveLength(1));
+    expect(checkout.calls[0]).toMatchObject({ amount: 177.36, walletCoins: 300 });
   });
 
   it('follows the bands an admin saved, by the airline fare without our fee', async () => {

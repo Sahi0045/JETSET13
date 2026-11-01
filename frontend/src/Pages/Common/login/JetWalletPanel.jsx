@@ -7,9 +7,9 @@ const farePrice = (amount) => (Number.isInteger(amount) ? `$${amount.toLocaleStr
 
 const bandRows = (bands) => bands.map((band, i) => {
   const next = bands[i + 1];
-  const label = i === 0 && next ? `Fare under ${farePrice(next.from)}`
-    : next ? `Fare ${farePrice(band.from)} to ${usd(Math.round(next.from * 100 - 1) / 100)}`
-      : i === 0 ? 'Any fare' : `Fare ${farePrice(band.from)} and over`;
+  const label = i === 0 && next ? `Base fare under ${farePrice(next.from)}`
+    : next ? `Base fare ${farePrice(band.from)} to ${usd(Math.round(next.from * 100 - 1) / 100)}`
+      : i === 0 ? 'Any fare' : `Base fare ${farePrice(band.from)} and over`;
   return { label, coins: band.usd > 0 ? `Up to ${usd(band.usd)}` : 'None' };
 });
 
@@ -126,10 +126,10 @@ export default function JetWalletPanel() {
         {wallet?.coinBands?.length > 0 && (
           <div className="rounded-2xl border border-gray-200 bg-white p-5">
             <h3 className="text-sm font-semibold text-gray-900">How many coins a flight can use</h3>
-            <p className="mt-1 text-xs text-gray-500">Each flight booking can use some of your coins, depending on its fare for all travellers. The rest stay in your wallet for your next trip.</p>
+            <p className="mt-1 text-xs text-gray-500">Each flight booking can use some of your coins, depending on its base fare for all travellers, before taxes. The rest stay in your wallet for your next trip.</p>
             <table aria-label="Jet Coins you can use on one flight booking" className="mt-3 w-full text-sm">
               <thead className="sr-only">
-                <tr><th scope="col">Fare</th><th scope="col">Jet Coins you can use</th></tr>
+                <tr><th scope="col">Base fare</th><th scope="col">Jet Coins you can use</th></tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {bandRows(wallet.coinBands).map((row) => (

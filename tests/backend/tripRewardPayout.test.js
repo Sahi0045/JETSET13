@@ -490,7 +490,7 @@ describe('the "Your Jet Coins have arrived" email', () => {
     const send = vi.fn(async () => ({ id: 'e1' }));
     await sendTripRewardEmail({ client, reward: paid(), booking: flown(), send });
 
-    expect(send.mock.calls[0][0].html).toContain('Each flight booking can use up to $6.00 of them, depending on its fare.');
+    expect(send.mock.calls[0][0].html).toContain('Each flight booking can use up to $6.00 of them, depending on its base fare.');
   });
 
   it('leaves the limit out, and still sends, when the settings cannot be read', async () => {

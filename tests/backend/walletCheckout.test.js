@@ -84,6 +84,29 @@ describe('the coins one booking may use', () => {
     expect(verdict.wallet).toEqual({ coins: 100, amount: 1 });
   });
 
+  it('picks the band from the base fare, not the fare with taxes', async () => {
+    const taxed = vi.fn(async () => ({
+      price: { total: '170.36', grandTotal: '170.36', currency: 'USD', base: '141.00' },
+      _ama: { bookingEnabled: true, international: false },
+    }));
+    const verdict = await verify({ priceOffer: taxed, amount: 170.06, walletCoins: 5000 });
+
+    expect(verdict.ok).toBe(true);
+    expect(verdict.wallet).toEqual({ coins: 300, amount: 3 });
+    expect(verdict.charge).toMatchObject({ fare: 170.36, walletCoins: 300, total: 170.06 });
+  });
+
+  it('picks the band from the whole fare when the airline sent no base fare', async () => {
+    const noBase = vi.fn(async () => ({
+      price: { total: '170.36', grandTotal: '170.36', currency: 'USD' },
+      _ama: { bookingEnabled: true, international: false },
+    }));
+    const verdict = await verify({ priceOffer: noBase, amount: 169.06, walletCoins: 5000 });
+
+    expect(verdict.ok).toBe(true);
+    expect(verdict.wallet).toEqual({ coins: 400, amount: 4 });
+  });
+
   it('picks the band from the fare, before the coupon', async () => {
     rows.coupons = { id: 'c1', code: 'FLY30', discount_type: 'fixed', discount_value: 30, min_order_value: 0, max_uses: null, applicable_to: 'all', is_active: true };
     const verdict = await verify({ amount: 89.2, couponCode: 'FLY30', walletCoins: 5000 });
