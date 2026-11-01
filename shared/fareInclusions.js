@@ -92,7 +92,7 @@ function cabinBagRow(fare, service) {
 
 function cancelRow(fare, service) {
   if (service?.status === 'included') return { state: STATES.INCLUDED, label: 'Refundable if you cancel' };
-  if (service?.status === 'charged') return { state: STATES.FEE, label: 'Cancellation for a fee' };
+  if (service?.status === 'charged') return { state: STATES.FEE, label: 'Refundable, minus a cancellation fee' };
   if (service?.status === 'notOffered') return { state: STATES.NO, label: 'Non-refundable' };
   if (fare?.refundable === true) return { state: STATES.INCLUDED, label: 'Refundable if you cancel' };
   if (fare?.refundable === false) return { state: STATES.NO, label: 'Non-refundable' };

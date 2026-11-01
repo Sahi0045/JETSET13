@@ -49,7 +49,7 @@ describe('the review page', () => {
     expect(within(box).getByText('Eco Flex fare includes')).toBeTruthy();
     expect(within(box).getByText('25 kg checked bag')).toBeTruthy();
     expect(within(box).getByText('Date change included')).toBeTruthy();
-    expect(within(box).getByText('Cancellation for a fee')).toBeTruthy();
+    expect(within(box).getByText('Refundable, minus a cancellation fee')).toBeTruthy();
     expect(within(box).getByText('Free seat selection')).toBeTruthy();
   });
 
@@ -74,7 +74,7 @@ describe('the refund line on the review page', () => {
 
     await screen.findByTestId('review-fare-inclusions');
     expect(screen.queryByText('Non-refundable')).toBeNull();
-    expect(screen.getAllByText('Cancellation for a fee').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Refundable, minus a cancellation fee').length).toBeGreaterThan(0);
   });
 
   it('keeps the search\'s word when the airline states no terms', async () => {
