@@ -8,6 +8,7 @@ import { adminFetch, readAdminResponse } from '../../utils/adminAuth';
 import { needsManualRefund } from '../../utils/bookingStatus';
 import { adminCancelOutcome, canVoidPayment, statusOptionsFor } from '../../utils/adminBookingActions';
 import { attentionLabel, refundOwedOf, refundPrefillOf } from '../../../../shared/reviewQueue';
+import { cancellationFeeWords } from '../../../../shared/flightCancelPolicy';
 
 /** How a message looks, by what it is telling the admin. */
 const TONE = {
@@ -72,8 +73,13 @@ const BookingsList = () => {
                     credentials: 'include'
                 });
                 const data = await response.json();
-                if (data.success && data.data?.cancellation_fee != null) {
-                    setCancellationFeeConfig(data.data.cancellation_fee);
+                if (data.success) {
+                    setCancellationFeeConfig(cancellationFeeWords({
+                        flat: data.data?.cancellation_fee,
+                        percent: data.data?.cancellation_fee_percent,
+                        money: formatCurrency,
+                        whoPaid: 'what was paid',
+                    }) ?? formatCurrency(0));
                 }
             } catch (e) {
                 console.warn('Could not fetch cancellation fee config, using default');
@@ -935,7 +941,7 @@ const BookingsList = () => {
                                 marginBottom: '16px', border: '1px solid #fbbf24', fontSize: '13px', color: '#92400e'
                             }}>
                                 💰 <strong>The refund is worked out when the booking is cancelled.</strong> ARC Pay is asked what it holds, and that is what can go back:
-                                in full if no ticket was issued; less the {cancellationFeeConfig != null ? formatCurrency(cancellationFeeConfig) : 'configured'} cancellation fee if tickets were voided or the fare is refundable.
+                                in full if no ticket was issued; less the {cancellationFeeConfig ?? 'configured'} cancellation fee if tickets were voided or the fare is refundable.
                                 A non-refundable ticket, or one the airline and the booking disagree about, goes to review instead. The result is shown after cancelling.
                             </div>
                         )}

@@ -11,15 +11,16 @@
  * Output is committed so builds and tests are offline and deterministic.
  * Re-run when the dataset needs refreshing:
  *
- *   node scripts/build-airports-dataset.js [path/to/airports.csv]
+ *   node scripts/build-airports-dataset.js [path/to/airports.csv] [path/to/regions.csv]
  *
- * Without an argument it downloads the current file.
+ * Without arguments it downloads the current files.
  */
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 
 const SOURCE_URL = 'https://davidmegginson.github.io/ourairports-data/airports.csv';
+const REGIONS_URL = 'https://davidmegginson.github.io/ourairports-data/regions.csv';
 const OUTPUT = resolve('backend/data/airports/airports.min.json');
 
 /** RFC 4180 CSV: fields may be quoted and contain commas or escaped quotes. */
@@ -117,17 +118,29 @@ const CITY_ALIASES = Object.freeze({
   chisinau: ['Kishinev'],
 });
 
-const build = async (csvPath) => {
-  const csv = csvPath
-    ? await readFile(csvPath, 'utf8')
-    : await fetch(SOURCE_URL).then((r) => {
+const readCsv = async (path, url) => {
+  const csv = path
+    ? await readFile(path, 'utf8')
+    : await fetch(url).then((r) => {
       if (!r.ok) throw new Error(`Download failed: ${r.status}`);
       return r.text();
     });
-
   const [header, ...lines] = csv.split('\n');
   const cols = parseCsvLine(header).map((c) => c.replace(/^"|"$/g, ''));
-  const idx = Object.fromEntries(cols.map((c, i) => [c, i]));
+  return { lines, idx: Object.fromEntries(cols.map((c, i) => [c, i])) };
+};
+
+/** State, island or province names by ISO code ("US-HI" -> "Hawaii"), so a search for "Hawaii" finds Honolulu. */
+const readRegionNames = async (path) => {
+  const { lines, idx } = await readCsv(path, REGIONS_URL);
+  return new Map(lines.filter((line) => line.trim()).map(parseCsvLine)
+    .map((f) => [f[idx.code], (f[idx.name] || '').trim()])
+    .filter(([, name]) => name && name !== '(unassigned)'));
+};
+
+const build = async (csvPath, regionsPath) => {
+  const { lines, idx } = await readCsv(csvPath, SOURCE_URL);
+  const regionNames = await readRegionNames(regionsPath);
 
   const airports = [];
   const metroSeen = new Set();
@@ -164,6 +177,7 @@ const build = async (csvPath) => {
       country,
       countryCode: country,
       aliases: CITY_ALIASES[cityKey] ?? CITY_ALIASES[cityKey.split(' (')[0]] ?? [],
+      region: regionNames.get((f[idx.iso_region] || '').trim()) ?? null,
       score: scoreOf(type, Boolean(municipality)),
       lat: Number.parseFloat(f[idx.latitude_deg]) || null,
       lon: Number.parseFloat(f[idx.longitude_deg]) || null,
@@ -184,6 +198,7 @@ const build = async (csvPath) => {
       country: m.countryCode,
       countryCode: m.countryCode,
       aliases: CITY_ALIASES[m.name.toLowerCase()] ?? [],
+      region: null,
       score: 99,
       lat: null,
       lon: null,
@@ -203,7 +218,7 @@ const build = async (csvPath) => {
   console.log(`Wrote ${OUTPUT}: ${airports.length} airports + ${cities.length} cities = ${data.length} records (${Math.round(bytes / 1024)} KB)`);
 };
 
-build(process.argv[2]).catch((error) => {
+build(process.argv[2], process.argv[3]).catch((error) => {
   console.error('Failed to build the airport dataset:', error.message);
   process.exitCode = 1;
 });

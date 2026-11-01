@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -147,10 +147,12 @@ const renderMyTrips = (bookings) => {
   );
 };
 
-/** The card that names this reference. */
+/** The trip on My Trips that names this reference, with its details and buttons open. */
 const cardFor = async (reference) => {
-  const label = await screen.findByText(`#${reference}`);
-  return label.closest('.group');
+  const card = await screen.findByTestId(`trip-${reference}`);
+  const toggle = within(card).queryByRole('button', { name: /^(Booking details|Details)$/ });
+  if (toggle) fireEvent.click(toggle);
+  return card;
 };
 
 describe('My Trips', () => {
@@ -161,7 +163,7 @@ describe('My Trips', () => {
 
     const card = await cardFor('FLTUNK1');
     expect(card.textContent).toMatch(CHECKING);
-    expect(within(card).queryByRole('button', { name: /Cancel Booking/ })).toBeNull();
+    expect(within(card).queryByRole('button', { name: /cancel booking/i })).toBeNull();
   });
 
   // Fence.
@@ -169,6 +171,6 @@ describe('My Trips', () => {
     renderMyTrips([commitUnknown, held]);
 
     const card = await cardFor('FLTHELD1');
-    await waitFor(() => expect(within(card).getByRole('button', { name: /Cancel Booking/ })).toBeTruthy());
+    await waitFor(() => expect(within(card).getByRole('button', { name: /cancel booking/i })).toBeTruthy());
   });
 });

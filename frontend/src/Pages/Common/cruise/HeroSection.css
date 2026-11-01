@@ -1526,24 +1526,6 @@ select.search-input {
   }
 }
 
-/* Animation Classes */
-.fade-in {
-  opacity: 0;
-  animation: fadeIn 0.6s ease-out forwards;
-}
-
-.fade-in-delay-1 {
-  animation-delay: 0.2s;
-}
-
-.fade-in-delay-2 {
-  animation-delay: 0.4s;
-}
-
-.fade-in-delay-3 {
-  animation-delay: 0.6s;
-}
-
 /* Trust badges under the search card (redesigned hero) */
 .hero-trust-badges {
   display: flex;

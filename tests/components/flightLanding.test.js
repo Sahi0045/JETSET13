@@ -25,7 +25,7 @@ describe('a search from the landing page', () => {
   // Result prices leave out the service fee added before payment.
   it('promises no "no hidden fees"', () => {
     expect(landing).not.toMatch(/No hidden fees/);
-    expect(landing).toMatch(/Service fee shown before you pay/);
+    expect(landing).toMatch(/Platform fee shown before you pay/);
   });
 
   // Nothing handles a price-match request: no rules, no form, no refund path.
@@ -57,5 +57,23 @@ describe('the date strip at phone width', () => {
   it('starts at the left where it does not fit, and brings the searched date into view', () => {
     expect(results).toMatch(/ref=\{dateStripRef\} className="flex flex-1 min-w-0 items-center justify-start md:justify-center/);
     expect(results).toMatch(/selected\.scrollIntoView\(\{ inline: 'center', block: 'nearest' \}\)/);
+  });
+});
+
+// The owner had "Self-Service Portal Coming Soon" taken off the home page
+// (31 Oct). The phone number and email beside it were hidden on a phone.
+describe('the contact strip above the home page hero', () => {
+  const landing = read('flightlanding.jsx');
+  const classOf = (href) => (landing.match(new RegExp(`<a href="${href.replace(/[+.]/g, '\\$&')}" className="([^"]*)"`)) || [])[1];
+
+  it('promises no self-service portal', () => {
+    expect(landing).not.toMatch(/self-service portal/i);
+  });
+
+  it('shows the phone number and email at every width, and both can be tapped', () => {
+    for (const href of ['tel:+18775387380', 'mailto:support@jetsetterss.com']) {
+      expect(classOf(href)).toBeTruthy();
+      expect(classOf(href)).not.toMatch(/(^|\s)hidden(\s|$)/);
+    }
   });
 });

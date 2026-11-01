@@ -96,15 +96,6 @@ describe('the itinerary page', () => {
     expect(within(bar).getByRole('link', { name: /Call/ }).getAttribute('href')).toBe('tel:+18775387380');
   });
 
-  it('moves the floating chat and contact buttons above the phone bar while it shows', async () => {
-    serve({ success: true, data: SAILING });
-    const { unmount } = show(`?sailing=${SAILING.slug}`);
-    await screen.findByTestId('phone-price-bar');
-    expect(document.body.classList.contains('phone-action-bar')).toBe(true);
-    unmount();
-    expect(document.body.classList.contains('phone-action-bar')).toBe(false);
-  });
-
   it('tells our team which cruise a call back is about', async () => {
     serve({ success: true, data: SAILING });
     show(`?sailing=${SAILING.slug}`);

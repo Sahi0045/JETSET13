@@ -1,8 +1,17 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { apiGet, apiPost } from '../../../utils/apiHelper';
-import { coinsToUsd, formatCoins } from '../../../../../shared/jetCoins.js';
+import { coinsToUsd, formatCoins, maxCoinLimitOf } from '../../../../../shared/jetCoins.js';
 
 const usd = (amount) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
+const farePrice = (amount) => (Number.isInteger(amount) ? `$${amount.toLocaleString('en-US')}` : usd(amount));
+
+const bandRows = (bands) => bands.map((band, i) => {
+  const next = bands[i + 1];
+  const label = i === 0 && next ? `Base fare under ${farePrice(next.from)}`
+    : next ? `Base fare ${farePrice(band.from)} to ${usd(Math.round(next.from * 100 - 1) / 100)}`
+      : i === 0 ? 'Any fare' : `Base fare ${farePrice(band.from)} and over`;
+  return { label, coins: band.usd > 0 ? `Up to ${usd(band.usd)}` : 'None' };
+});
 
 const DESCRIBE = {
   voucher: (entry) => {
@@ -69,7 +78,11 @@ export default function JetWalletPanel() {
       if (!response.ok || !body?.success) {
         setNotice({ tone: 'error', text: isCustomerMessage(body) ? body.error : 'The voucher could not be redeemed.' });
       } else {
-        setNotice({ tone: 'success', text: `${formatCoins(body.data.coins)} Jet Coins added to your wallet.` });
+        const perBooking = wallet?.coinBands ? maxCoinLimitOf(wallet.coinBands) : 0;
+        setNotice({
+          tone: 'success',
+          text: `${formatCoins(body.data.coins)} Jet Coins added to your wallet.${perBooking > 0 ? ` A flight booking can use up to ${usd(coinsToUsd(perBooking))} of your coins.` : ''}`,
+        });
         setCode('');
         const balance = Number(body.data.balance);
         if (Number.isFinite(balance)) setWallet((current) => (current ? { ...current, balance } : current));
@@ -109,6 +122,26 @@ export default function JetWalletPanel() {
           )}
           <p className="mt-3 text-xs opacity-80">100 Jet Coins = $1. Earn 1 coin for every $1 you pay for flights, and use them at checkout.</p>
         </div>
+
+        {wallet?.coinBands?.length > 0 && (
+          <div className="rounded-2xl border border-gray-200 bg-white p-5">
+            <h3 className="text-sm font-semibold text-gray-900">How many coins a flight can use</h3>
+            <p className="mt-1 text-xs text-gray-500">Each flight booking can use some of your coins, depending on its base fare for all travellers, before taxes. The rest stay in your wallet for your next trip.</p>
+            <table aria-label="Jet Coins you can use on one flight booking" className="mt-3 w-full text-sm">
+              <thead className="sr-only">
+                <tr><th scope="col">Base fare</th><th scope="col">Jet Coins you can use</th></tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {bandRows(wallet.coinBands).map((row) => (
+                  <tr key={row.label}>
+                    <td className="py-2 text-gray-700">{row.label}</td>
+                    <td className="py-2 text-right font-semibold text-[#034457]">{row.coins}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
 
         {wallet?.pending?.length > 0 && (
           <div className="rounded-2xl border border-[#65B3CF] bg-[#F1FBFD]">

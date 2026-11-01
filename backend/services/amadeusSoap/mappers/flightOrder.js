@@ -45,6 +45,34 @@ export const readRecordLocator = (reply) => {
   return /^[A-Z0-9]{6}$/i.test(value.trim()) ? value.trim() : '';
 };
 
+const AIRLINE_LOCATOR = /^[A-Z0-9-]{1,19}$/;
+
+const airlineLocatorOf = (reservation) => {
+  const carrierCode = atTxt(reservation, 'companyId').trim().toUpperCase();
+  const locator = atTxt(reservation, 'controlNumber').trim().toUpperCase();
+  return carrierCode && carrierCode !== '1A' && AIRLINE_LOCATOR.test(locator) ? { carrierCode, locator } : null;
+};
+
+// An airline hosted outside Amadeus keeps its own booking code, and its
+// check-in asks for that one. The flights carry it once the airline confirms;
+// a commit can carry it in the PNR header instead (Asiana, PDT 15 Sep 2026).
+export const readAirlineLocators = (reply) => {
+  const flights = arr(at(reply, 'originDestinationDetails'))
+    .flatMap((details) => arr(at(details, 'itineraryInfo')))
+    .filter((item) => atTxt(item, 'elementManagementItinerary.segmentName') === 'AIR')
+    .map((item) => airlineLocatorOf(at(item, 'itineraryReservationInfo.reservation')));
+  const header = arr(at(reply, 'pnrHeader'))
+    .flatMap((entry) => arr(at(entry, 'reservationInfo.reservation')))
+    .map(airlineLocatorOf);
+  const seen = new Set();
+  return [...flights, ...header].filter((entry) => {
+    const key = entry && `${entry.carrierCode}:${entry.locator}`;
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
+
 /** Creation date, when the reply carries one (DDMMYY). */
 const readCreationDate = (reply) => atTxt(amadeusReservation(reply), 'date') || '';
 
@@ -105,6 +133,13 @@ const fromDDMMMYY = (value) => {
   return `20${m[3]}-${String(MONTHS[m[2]] + 1).padStart(2, '0')}-${m[1]}`;
 };
 
+const conjunctionEnd = (first, lastTwo) => {
+  const start = Number(first);
+  let end = start - (start % 100) + Number(lastTwo);
+  if (end < start) end += 100;
+  return String(end).padStart(10, '0');
+};
+
 export const readTickets = (reply) => {
   const tickets = [];
 
@@ -114,7 +149,7 @@ export const readTickets = (reply) => {
     const freetext = arr(at(element, 'otherDataFreetext'))
       .map((entry) => txt(entry.longFreetext))
       .join(' ');
-    const match = freetext.match(/(\d{3})-?(\d{10})/);
+    const match = freetext.match(/(\d{3})-?(\d{10})(?:-(\d{2}))?/);
     if (!match) continue;
 
     // FA PAX 057-2412345678/ETAI/USD221.70/04SEP26/SCK1S2400/...
@@ -144,8 +179,14 @@ export const readTickets = (reply) => {
       .map((r) => txt(r.number))[0] ?? null;
     const onLap = /(?:^|\s)INF\s+\d{3}-?\d{10}/.test(freetext);
 
+    // A fare with more flights than one ticket's four coupons is issued as a
+    // conjunction set, written with the last number's final two digits:
+    // FA PAX 057-7513754072-73/... is 057-7513754072 and 057-7513754073.
+    const lastOfSet = match[3] ? conjunctionEnd(match[2], match[3]) : null;
+
     tickets.push({
       number: `${match[1]}-${match[2]}`,
+      ...(lastOfSet ? { conjunctionTo: `${match[1]}-${lastOfSet}` } : {}),
       // The id readTravelers gives the same infant: `<adult reference>-INF`.
       travelerId: passengerRef && onLap ? `${passengerRef}-INF` : passengerRef,
       ...(onLap ? { travelerType: 'HELD_INFANT', associatedAdultId: passengerRef } : {}),
@@ -236,6 +277,7 @@ export const buildFlightOrder = (reply, { flightOffers = [], bookingReference } 
     flightOffers,
     travelers: readTravelers(reply),
     tickets,
+    airlineLocators: readAirlineLocators(reply),
     bookingReference,
   };
 };

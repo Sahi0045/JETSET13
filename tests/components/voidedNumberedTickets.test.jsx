@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
+import { readMyTrips } from '../helpers/source.js';
 
 const mockUseFlightBooking = vi.fn();
 
@@ -36,6 +37,7 @@ const { attentionMessage, bookingStatusBadge, isCompletedTrip } = await import('
 
 const A = '125-2412345671';
 const B = '125-2412345672';
+const printed = (number) => number.replace('-', '');
 const REFUSED = 'GDS cancellation failed; refund withheld to avoid paying out against a live booking';
 
 const travellers = [
@@ -137,9 +139,9 @@ describe('every recorded ticket voided, then the cancel refused', () => {
   it('My Trips shows no void number and says voided; the trip is never "completed"', () => {
     expect(eTicket.liveTickets(allVoided)).toEqual([]);
     expect(eTicket.ticketsVoided(allVoided)).toBe(true);
-    const trips = readFileSync(path.resolve(process.cwd(), 'frontend/src/Pages/Common/login/mytrips.jsx'), 'utf8');
-    expect(trips).toMatch(/liveTickets\(booking\)\.map\(\(t\) => t\?\.number\)/);
-    expect(trips).toMatch(/if \(ticketsVoided\(booking\)\) return 'Voided';/);
+    const trips = readMyTrips();
+    expect(trips).toMatch(/liveTickets\(booking\)\.filter\(\(t\) => t\?\.number\)\.map\(printedTicketNumber\)/);
+    expect(trips).toMatch(/if \(ticketsVoided\(booking\)\) return 'Voided'/);
     expect(isCompletedTrip({ ...allVoided, departureDate: '2020-01-15' })).toBe(false);
   });
 });
@@ -148,9 +150,9 @@ describe('one ticket of two voided', () => {
   it('the voided traveller\'s line says voided, and the other ticket prints as today', () => {
     const text = documentText(oneVoided);
 
-    expect(text).not.toMatch(new RegExp(`Ticket #: ${A}`));
+    expect(text).not.toMatch(new RegExp(`Ticket #: ${A.replace('-', '-?')}`));
     expect(text).toMatch(/Ticket voided — not valid for travel/);
-    expect(text).toMatch(new RegExp(`Ticket #: ${B}`));
+    expect(text).toMatch(new RegExp(`Ticket #: ${printed(B)}`));
     expect(text).toMatch(/E-Ticket/);
     expect(eTicket.liveTickets(oneVoided).map((t) => t.number)).toEqual([B]);
   });
@@ -169,8 +171,8 @@ describe('fence: tickets nobody voided, and the states next to it', () => {
 
     const doc = documentText(ticketed);
     expect(doc).toMatch(/E-Ticket/);
-    expect(doc).toMatch(new RegExp(`Ticket #: ${A}`));
-    expect(doc).toMatch(new RegExp(`Ticket #: ${B}`));
+    expect(doc).toMatch(new RegExp(`Ticket #: ${printed(A)}`));
+    expect(doc).toMatch(new RegExp(`Ticket #: ${printed(B)}`));
     expect(doc).toMatch(/Date of Issue/);
 
     const manage = manageBookingText(ticketed, { openCancel: true });

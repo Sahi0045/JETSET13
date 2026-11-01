@@ -175,14 +175,6 @@ const Itinerary = () => {
   const slug = searchParams.get('sailing');
   const [isCallbackOpen, setIsCallbackOpen] = useState(false);
   const { data: sailing, isLoading, isError } = usePublishedSailing(slug);
-  const showsPhoneBar = Boolean(sailing);
-
-  useEffect(() => {
-    if (!showsPhoneBar) return undefined;
-    document.body.classList.add('phone-action-bar');
-    return () => document.body.classList.remove('phone-action-bar');
-  }, [showsPhoneBar]);
-
   if (slug && isLoading) {
     return (
       <div className="min-h-screen bg-[#F4F7F8]">

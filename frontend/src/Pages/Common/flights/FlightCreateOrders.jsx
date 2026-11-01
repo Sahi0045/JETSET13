@@ -431,6 +431,7 @@ function FlightCreateOrders() {
           queued: result === 'queued',
           ticketed: result === 'ticketed',
           tickets: Array.isArray(body.tickets) ? body.tickets : [],
+          airlineLocators: Array.isArray(body.airlineLocators) ? body.airlineLocators : [],
           // The tickets a cancel voided (ALREADY_BOOKED), for the confirmation
           // page's voided wording: without them it read the booking as issued.
           voided_tickets: Array.isArray(body.voided_tickets) ? body.voided_tickets : [],
@@ -874,7 +875,7 @@ function FlightCreateOrders() {
                           <span className="font-semibold text-gray-800">{bookingReference || 'Pending'}</span>
                         </div>
                         <div className="flex justify-between text-sm">
-                          <span className="text-gray-500">Airline Reference (PNR):</span>
+                          <span className="text-gray-500">Booking code (PNR):</span>
                           <span className="font-semibold text-gray-800">
                             {pnr || (outcome === 'queued' ? 'Pending airline confirmation' : 'Not yet assigned')}
                           </span>

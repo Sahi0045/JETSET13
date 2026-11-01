@@ -27,7 +27,7 @@ describe('CancelQuote', () => {
 
   it('gives the amount the cancel returns', () => {
     render(<CancelQuote query={{ isLoading: false, data: quote }} />);
-    expect(screen.getByText('No ticket has been issued yet. You get back $287.50; the $12.50 service fee is not refundable.')).toBeTruthy();
+    expect(screen.getByText('No ticket has been issued yet. You get back $287.50; the $12.50 platform fee is not refundable.')).toBeTruthy();
   });
 
   it('says it could not work the refund out when there is no quote', () => {

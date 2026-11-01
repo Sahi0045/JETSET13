@@ -84,7 +84,7 @@ describe('the confirmation page after checkout', () => {
     expect(container.textContent).toMatch(/BH9F9H/);
     await flush(2500);
 
-    expect(container.textContent).toMatch(/Airline Reference/);
+    expect(container.textContent).toMatch(/Booking code \(PNR\)/);
     expect(container.textContent).toMatch(new RegExp(`Transaction ID\\s*${RECEIPT}`));
     expect(container.textContent).not.toMatch(new RegExp(orderData.transactionId));
   });

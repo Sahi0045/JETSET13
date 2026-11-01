@@ -111,20 +111,23 @@ const buildTravelFlightInfo = ({ travelClass, nonStop, includedAirlineCodes, exc
   ]);
 };
 
-/** The legs of a trip. A metro code (LON, NYC) is qualified 'C', an airport 'A'. */
+/**
+ * The legs of a trip, each with the places it leaves from and goes to. A metro
+ * code (LON, NYC) is qualified 'C', an airport 'A'. One side may name several
+ * places (fromPlaces / toPlaces): the return leg reverses them.
+ */
 const buildLegs = (p) => {
-  const fromIsCity = Boolean(p.fromIsCity);
-  const toIsCity = Boolean(p.toIsCity);
-  const legs = [{
-    origin: p.from, destination: p.to, date: p.departDate,
-    originIsCity: fromIsCity, destinationIsCity: toIsCity,
-  }];
-  if (p.returnDate) {
-    legs.push({
-      origin: p.to, destination: p.from, date: p.returnDate,
-      originIsCity: toIsCity, destinationIsCity: fromIsCity,
-    });
+  if (Array.isArray(p.legs) && p.legs.length > 0) {
+    return p.legs.map((leg) => ({
+      origins: [{ code: leg.from, isCity: Boolean(leg.fromIsCity) }],
+      destinations: [{ code: leg.to, isCity: Boolean(leg.toIsCity) }],
+      date: leg.departDate,
+    }));
   }
+  const origins = p.fromPlaces?.length ? p.fromPlaces : [{ code: p.from, isCity: Boolean(p.fromIsCity) }];
+  const destinations = p.toPlaces?.length ? p.toPlaces : [{ code: p.to, isCity: Boolean(p.toIsCity) }];
+  const legs = [{ origins, destinations, date: p.departDate }];
+  if (p.returnDate) legs.push({ origins: destinations, destinations: origins, date: p.returnDate });
   return legs;
 };
 
@@ -135,14 +138,14 @@ const buildLegs = (p) => {
  */
 const buildItinerary = (leg, index, dayInterval = null) => wrap('itinerary', [
   wrap('requestedSegmentRef', el('segRef', String(index + 1))),
-  wrap('departureLocalization', wrap('depMultiCity', [
-    el('locationId', leg.origin),
-    el('airportCityQualifier', leg.originIsCity ? 'C' : 'A'),
-  ])),
-  wrap('arrivalLocalization', wrap('arrivalMultiCity', [
-    el('locationId', leg.destination),
-    el('airportCityQualifier', leg.destinationIsCity ? 'C' : 'A'),
-  ])),
+  wrap('departureLocalization', each(leg.origins, (place) => wrap('depMultiCity', [
+    el('locationId', place.code),
+    el('airportCityQualifier', place.isCity ? 'C' : 'A'),
+  ]))),
+  wrap('arrivalLocalization', each(leg.destinations, (place) => wrap('arrivalMultiCity', [
+    el('locationId', place.code),
+    el('airportCityQualifier', place.isCity ? 'C' : 'A'),
+  ]))),
   // DateAndTimeInformationType orders firstDateTimeDetail then rangeOfDate.
   wrap('timeDetails', [
     wrap('firstDateTimeDetail', el('date', toDDMMYY(leg.date))),
@@ -154,7 +157,11 @@ const buildItinerary = (leg, index, dayInterval = null) => wrap('itinerary', [
 ]);
 
 const normalize = (p) => {
-  if (!p.from || !p.to || !p.departDate) throw new Error('from, to and departDate are required');
+  const legsGiven = Array.isArray(p.legs) && p.legs.length > 0;
+  if (legsGiven && p.legs.some((leg) => !leg?.from || !leg?.to || !leg?.departDate)) {
+    throw new Error('every leg needs from, to and departDate');
+  }
+  if (!legsGiven && (!p.from || !p.to || !p.departDate)) throw new Error('from, to and departDate are required');
   const group = {
     adults: Number(p.adults ?? 1) || 1,
     children: Number(p.children ?? 0) || 0,

@@ -168,10 +168,17 @@ describe('My Trips, when the cancel is not carried through', () => {
     render(<MemoryRouter initialEntries={['/my-trips']}><MyTrips /></MemoryRouter>);
     return reads;
   };
+/** The trip on My Trips that names this reference, with its details and buttons open. */
+  const openCard = async (reference) => {
+    const card = await screen.findByTestId(`trip-${reference}`);
+    const toggle = within(card).queryByRole('button', { name: /^(Booking details|Details)$/ });
+    if (toggle) fireEvent.click(toggle);
+    return card;
+  };
   const cancelFromTheCard = async () => {
-    const card = (await screen.findByText('#FLTSD1')).closest('.group');
-    fireEvent.click(await within(card).findByRole('button', { name: /Cancel Booking/ }));
-    fireEvent.click(within(card).getByRole('button', { name: /Yes, Cancel/ }));
+    const card = await openCard('FLTSD1');
+    fireEvent.click(await within(card).findByRole('button', { name: /cancel booking/i }));
+    fireEvent.click(within(card).getByRole('button', { name: /yes, cancel/i }));
   };
 
   it('the airline refused after voiding the ticket: the card stops printing the void number as the ticket', async () => {
@@ -181,7 +188,7 @@ describe('My Trips, when the cancel is not carried through', () => {
     await waitFor(() => expect(screen.getByRole('alertdialog').textContent).toContain(REFUSED_TEXT));
 
     await waitFor(() => expect(reads.bookings).toBe(2), { timeout: 2000 });
-    await waitFor(() => expect((screen.getByText('#FLTSD1')).closest('.group').textContent).not.toMatch(new RegExp(`Ticket${A}`)));
+    await waitFor(() => expect(within(screen.getByTestId('trip-FLTSD1')).getByTestId('trip-details').textContent).not.toMatch(new RegExp(`Ticket${A}`)));
     expect(screen.getByRole('alertdialog').textContent).toContain(REFUSED_TEXT);
   });
 
@@ -193,8 +200,8 @@ describe('My Trips, when the cancel is not carried through', () => {
     await waitFor(() => expect(screen.getByRole('alertdialog').textContent).toContain(IN_PROGRESS_409.error));
 
     await waitFor(() => expect(reads.bookings).toBe(2), { timeout: 2000 });
-    const card = (await screen.findByText('#FLTSD1')).closest('.group');
+    const card = await openCard('FLTSD1');
     expect(card.textContent).toMatch(/Ticketed/);
-    expect(within(card).getByRole('button', { name: /Cancel Booking/ })).toBeTruthy();
+    expect(within(card).getByRole('button', { name: /cancel booking/i })).toBeTruthy();
   });
 });

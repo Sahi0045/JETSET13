@@ -5,6 +5,7 @@ import { Plane, Calendar, Users, ArrowRight, X, Search, ChevronDown, ChevronUp, 
 import Navbar from '../Navbar';
 import Footer from '../Footer';
 import withPageElements from '../PageWrapper';
+import { clearOfHelpButtons } from '../helpButtonsLane';
 import Price from '../../../Components/Price';
 import currencyService from '../../../Services/CurrencyService';
 import {
@@ -29,16 +30,18 @@ import FlightMobileSortFilter from './FlightMobileSortFilter';
 import FlightFareOptions from './FlightFareOptions';
 import FlightAppliedFilters from './FlightAppliedFilters';
 import FlightFareCalendar from './FlightFareCalendar';
-import { sortFlights } from './flightSort';
-import { buildSearchPayload, fieldCode, searchFromQuery, searchKeyOf, searchToQuery } from './searchQuery';
-import { airportClockLabel, buildDateStrip, filtersWithin, journeyBounds, layoverBounds, legDateLabel, matchesFilters, minutesBetweenAirportTimes, priceStep, searchFailureMessage, shiftDateStrip, stopsSummary, withDepartureDate } from './searchResults';
+import { fareOf, priceOf, sortFlights } from './flightSort';
+import { citySearchInstead } from './multiCityHelp';
+import { airportListLabel, buildSearchPayload, fieldCode, isMultiCity, searchFromQuery, searchKeyOf, searchToQuery } from './searchQuery';
+import { tripTypeOf } from '../../../../../shared/bookingItineraries';
+import { airportClockLabel, buildDateStrip, cheapestDays, filtersWithin, journeyBounds, layoverBounds, legDateLabel, matchesFilters, minutesBetweenAirportTimes, priceStep, searchFailureMessage, shiftDateStrip, stopsSummary, withDepartureDate } from './searchResults';
 
 // The IATA code in "New Delhi (DEL)", or a bare code as typed.
 const extractRouteCode = (str) => {
   if (!str) return '';
   const match = str.match?.(/\(([A-Z]{3})\)$/);
   if (match) return match[1];
-  if (/^[A-Z]{3}$/.test(String(str).trim())) return String(str).trim();
+  if (/^[A-Z]{3}(\s*,\s*[A-Z]{3})*$/.test(String(str).trim())) return String(str).trim().replace(/\s+/g, '');
   return str;
 };
 
@@ -189,7 +192,8 @@ function FlightSearchPage() {
       setError(null);
 
       const payload = buildSearchPayload(searchData);
-      if (!payload.from || !payload.to || !payload.departDate) {
+      const hasRoute = payload.legs ? payload.legs.length >= 2 : Boolean(payload.from && payload.to && payload.departDate);
+      if (!hasRoute) {
         setFlights([]);
         setError('Please choose where you are flying from, where to, and the date.');
         setLoading(false);
@@ -286,6 +290,7 @@ function FlightSearchPage() {
   const cityMap = useCityNames([
     searchParams.fromCode || extractRouteCode(searchParams.from),
     searchParams.toCode || extractRouteCode(searchParams.to),
+    ...(searchParams.legs || []).flatMap((leg) => [extractRouteCode(leg.from), extractRouteCode(leg.to)]),
     ...flights.flatMap(airportCodesOf),
   ]);
 
@@ -295,6 +300,91 @@ function FlightSearchPage() {
   // Dynamic aircraft names - populated from Amadeus API responses (no hardcoding)
   // The backend transform already resolves aircraft codes to names using Amadeus dictionaries.aircraft
   const [dynamicAircraftMap, setDynamicAircraftMap] = useState({});
+
+  const legFromItinerary = (itin) => {
+    const segs = itin?.segments;
+    if (!segs || segs.length === 0) return null;
+    const first = segs[0];
+    const last = segs[segs.length - 1];
+    const layover = (from, to) => {
+      const minutes = minutesBetweenAirportTimes(from, to);
+      return Number.isFinite(minutes) ? `${Math.floor(minutes / 60)}h ${minutes % 60}m` : '';
+    };
+    // Technical stops inside a flight count too: the plane lands on the way.
+    const stopDetails = segs.flatMap((seg, idx) => {
+      const technical = (seg.stops || []).map((stop) => ({
+        airport: stop.iataCode, duration: layover(stop.arrivalAt, stop.departureAt), technical: true,
+      }));
+      const next = segs[idx + 1];
+      return next ? [...technical, { airport: seg.arrival.iataCode, duration: layover(seg.arrival.at, next.departure.at) }] : technical;
+    });
+    return {
+      departure: {
+        time: airportClockLabel(first.departure.at),
+        rawDate: first.departure.at?.split('T')[0],
+        airport: first.departure.iataCode,
+        terminal: first.departure.terminal || '',
+        cityName: cityMap[first.departure.iataCode] || first.departure.iataCode,
+      },
+      arrival: {
+        time: airportClockLabel(last.arrival.at),
+        rawDate: last.arrival.at?.split('T')[0],
+        airport: last.arrival.iataCode,
+        terminal: last.arrival.terminal || '',
+        cityName: cityMap[last.arrival.iataCode] || last.arrival.iataCode,
+      },
+      duration: itin.duration,
+      stops: stopDetails.length,
+      stopDetails,
+      airline: {
+        code: first.carrierCode,
+        name: dynamicAirlineMap[first.carrierCode] || first.carrierCode,
+        logo: `https://pics.avs.io/200/200/${first.carrierCode.toUpperCase()}.png`,
+      },
+      segments: segs.map(segment => ({
+        departure: {
+          time: airportClockLabel(segment.departure.at),
+          airport: segment.departure.iataCode,
+          terminal: segment.departure.terminal || '',
+          cityName: cityMap[segment.departure.iataCode] || segment.departure.iataCode,
+          at: segment.departure.at,
+        },
+        arrival: {
+          time: airportClockLabel(segment.arrival.at),
+          airport: segment.arrival.iataCode,
+          terminal: segment.arrival.terminal || '',
+          cityName: cityMap[segment.arrival.iataCode] || segment.arrival.iataCode,
+          at: segment.arrival.at,
+        },
+        airline: {
+          code: segment.carrierCode,
+          name: dynamicAirlineMap[segment.carrierCode] || segment.carrierCode,
+          logo: `https://pics.avs.io/200/200/${segment.carrierCode.toUpperCase()}.png`,
+        },
+        // Who flies it. A return sold as Delta and flown by Air France was
+        // shown as Delta: a different check-in desk, and a codeshare a US
+        // ticket agent has to disclose (14 CFR 257).
+        operatingCarrier: segment.operating?.carrierCode || null,
+        operatingAirlineName: segment.operating?.carrierCode ? (dynamicAirlineMap[segment.operating.carrierCode] || segment.operating.carrierCode) : null,
+        duration: segment.duration,
+        flightNumber: `${segment.carrierCode} ${segment.number}`,
+        aircraft: dynamicAircraftMap[segment.aircraft?.code] || segment.aircraft?.code || 'Unknown Aircraft',
+        stops: 0,
+      })),
+    };
+  };
+
+  const tripLegsOf = (itineraries = []) => {
+    const type = tripTypeOf(itineraries.map((itin) => ({
+      origin: itin?.segments?.[0]?.departure?.iataCode,
+      destination: itin?.segments?.slice(-1)[0]?.arrival?.iataCode,
+    })));
+    return {
+      isRoundTrip: type === 'roundTrip',
+      returnLeg: type === 'roundTrip' ? legFromItinerary(itineraries[1]) : null,
+      laterLegs: type === 'multiCity' ? itineraries.slice(1).map(legFromItinerary).filter(Boolean) : [],
+    };
+  };
 
   // Transform Amadeus API flight data to our format
   const transformFlightData = (data) => {
@@ -450,6 +540,7 @@ function FlightSearchPage() {
           flightNumber: flight.flightNumber,
           refundable: flight.refundable ?? null,
           amenities: flight.amenities || flight.originalOffer?.travelerPricings?.[0]?.fareDetailsBySegment?.[0]?.amenities || [],
+          fareServices: flight.fareServices || flight.originalOffer?.travelerPricings?.[0]?.fareDetailsBySegment?.[0]?.fareServices || [],
           fareBasis: flight.fareBasis || null,
           bookingClass: flight.bookingClass || null,
           validatingAirlineCodes: flight.validatingAirlineCodes || [],
@@ -523,81 +614,8 @@ function FlightSearchPage() {
               stops: 0
             }];
           })(),
-          // Return leg (round trips) — built from the second Amadeus itinerary
-          isRoundTrip: (flight.originalOffer?.itineraries?.length || 1) > 1,
-          returnLeg: (() => {
-            const itin = flight.originalOffer?.itineraries?.[1];
-            const segs = itin?.segments;
-            if (!segs || segs.length === 0) return null;
-            const first = segs[0];
-            const last = segs[segs.length - 1];
-            const layover = (from, to) => {
-              const minutes = minutesBetweenAirportTimes(from, to);
-              return Number.isFinite(minutes) ? `${Math.floor(minutes / 60)}h ${minutes % 60}m` : '';
-            };
-            // Technical stops inside a flight count too: the plane lands on the way.
-            const stopDetails = segs.flatMap((seg, idx) => {
-              const technical = (seg.stops || []).map((stop) => ({
-                airport: stop.iataCode, duration: layover(stop.arrivalAt, stop.departureAt), technical: true,
-              }));
-              const next = segs[idx + 1];
-              return next ? [...technical, { airport: seg.arrival.iataCode, duration: layover(seg.arrival.at, next.departure.at) }] : technical;
-            });
-            return {
-              departure: {
-                time: airportClockLabel(first.departure.at),
-                rawDate: first.departure.at?.split('T')[0],
-                airport: first.departure.iataCode,
-                terminal: first.departure.terminal || '',
-                cityName: cityMap[first.departure.iataCode] || first.departure.iataCode,
-              },
-              arrival: {
-                time: airportClockLabel(last.arrival.at),
-                rawDate: last.arrival.at?.split('T')[0],
-                airport: last.arrival.iataCode,
-                terminal: last.arrival.terminal || '',
-                cityName: cityMap[last.arrival.iataCode] || last.arrival.iataCode,
-              },
-              duration: itin.duration,
-              stops: stopDetails.length,
-              stopDetails,
-              airline: {
-                code: first.carrierCode,
-                name: dynamicAirlineMap[first.carrierCode] || first.carrierCode,
-                logo: `https://pics.avs.io/200/200/${first.carrierCode.toUpperCase()}.png`,
-              },
-              segments: segs.map(segment => ({
-                departure: {
-                  time: airportClockLabel(segment.departure.at),
-                  airport: segment.departure.iataCode,
-                  terminal: segment.departure.terminal || '',
-                  cityName: cityMap[segment.departure.iataCode] || segment.departure.iataCode,
-                  at: segment.departure.at,
-                },
-                arrival: {
-                  time: airportClockLabel(segment.arrival.at),
-                  airport: segment.arrival.iataCode,
-                  terminal: segment.arrival.terminal || '',
-                  cityName: cityMap[segment.arrival.iataCode] || segment.arrival.iataCode,
-                  at: segment.arrival.at,
-                },
-                airline: {
-                  code: segment.carrierCode,
-                  name: dynamicAirlineMap[segment.carrierCode] || segment.carrierCode,
-                  logo: `https://pics.avs.io/200/200/${segment.carrierCode.toUpperCase()}.png`,
-                },
-                // Who flies it. A return sold as Delta and flown by Air France was
-                // shown as Delta: a different check-in desk, and a codeshare a US
-                // ticket agent has to disclose (14 CFR 257).
-                operatingCarrier: segment.operating?.carrierCode || null,
-                operatingAirlineName: segment.operating?.carrierCode ? (dynamicAirlineMap[segment.operating.carrierCode] || segment.operating.carrierCode) : null,
-                duration: segment.duration,
-                flightNumber: `${segment.carrierCode} ${segment.number}`,
-                aircraft: dynamicAircraftMap[segment.aircraft?.code] || segment.aircraft?.code || 'Unknown Aircraft',
-                stops: 0,
-              })),
-            };
-          })(),
+          // Return leg (round trips) and later flights (multi-city), from the offer's itineraries
+          ...tripLegsOf(flight.originalOffer?.itineraries),
           // IMPORTANT: Preserve original Amadeus offer for booking API
           originalOffer: flight.originalOffer
         };
@@ -704,7 +722,7 @@ function FlightSearchPage() {
   const handleSearch = (formData) => {
     const from = fieldCode(formData.from, formData.fromCode);
     const to = fieldCode(formData.to, formData.toCode);
-    const isIata = (code) => /^[A-Z]{3}$/.test(code);
+    const isIata = (code) => /^[A-Z]{3}(,[A-Z]{3})*$/.test(code);
     const next = {
       ...formData,
       from,
@@ -736,18 +754,7 @@ function FlightSearchPage() {
   // Returns the price converted to the user's display currency so filters match what the user sees
   const getFlightPriceAmount = (flight) => {
     if (!flight || !flight.price) return 0;
-    let amount = flight.price.amount;
-    if (typeof amount === 'string') {
-      amount = parseFloat(amount.replace(/,/g, ''));
-    }
-    if (typeof amount !== 'number' || Number.isNaN(amount)) {
-      const total = flight.price.total;
-      if (typeof total === 'string') {
-        amount = parseFloat(total.replace(/,/g, ''));
-      } else if (typeof total === 'number') {
-        amount = total;
-      }
-    }
+    let amount = fareOf(flight).amount;
     if (!Number.isFinite(amount)) return 0;
 
     // Convert from source currency (API) to user's display currency
@@ -809,10 +816,30 @@ function FlightSearchPage() {
     setCurrentPage(1);
   }, [flights, filters, sortOrder]);
 
+  const fareCalendarKnownPrices = useMemo(() => {
+    const known = Object.fromEntries(dateRange
+      .filter((day) => Number(day.price) > 0)
+      .map((day) => [day.isoDate, Number(day.price)]));
+    const searched = searchParams?.departDate;
+    const cheapest = flights.reduce((min, flight) => Math.min(min, priceOf(flight)), Infinity);
+    if (searched && Number.isFinite(cheapest)) known[searched] = Math.min(known[searched] ?? Infinity, cheapest);
+    return known;
+  }, [dateRange, flights, searchParams?.departDate]);
+
+  const stripCheapest = useMemo(
+    () => cheapestDays(dateRange, (day) => currencyService.displayAmount(day.price, day.currency || 'USD')),
+    [dateRange, displayCurrency]
+  );
+
+  const fareUnit = useMemo(() => {
+    const fare = flights.length > 0 ? fareOf(flights[0]) : null;
+    return fare?.unit && fare.travellers > 1 ? fare.unit : null;
+  }, [flights]);
+
   // Price distribution across current results — powers the per-card deal badge
   const priceStats = useMemo(() => {
     const ps = filteredFlights
-      .map(f => f.price?.amount)
+      .map(f => fareOf(f).amount)
       .filter(n => typeof n === 'number' && n > 0)
       .sort((a, b) => a - b);
     if (ps.length < 3) return null;
@@ -865,7 +892,7 @@ function FlightSearchPage() {
     flights.forEach(f => {
       const name = f.airline?.name || f.airline;
       if (!name) return;
-      const price = f.price?.amount ?? 0;
+      const price = fareOf(f).amount ?? 0;
       const existing = stats.get(name);
       if (existing) {
         existing.count += 1;
@@ -885,7 +912,7 @@ function FlightSearchPage() {
   // What each sidebar control can offer, across every result: the "from" price
   // under each stops box, and the ends of the journey and layover sliders.
   const stopsStats = useMemo(
-    () => stopsSummary(flights || [], (f) => Number(f.price?.amount) || null),
+    () => stopsSummary(flights || [], (f) => fareOf(f).amount || null),
     [flights]
   );
   const journeyRange = useMemo(() => journeyBounds(flights || []), [flights]);
@@ -950,7 +977,7 @@ function FlightSearchPage() {
     // from the origin, so every figure on a round trip's strip was the price of
     // a different journey. Counted as a request, so a one-way answer still on
     // its way cannot land on the round trip's strip.
-    if (sp.returnDate) {
+    if (sp.returnDate || isMultiCity(sp)) {
       datePricesRequest.current += 1;
       return;
     }
@@ -965,14 +992,13 @@ function FlightSearchPage() {
       });
       const data = await res.json();
       if (requestId !== datePricesRequest.current) return;
-      if (data.success && data.dateWisePrices) {
+      if (data.success && data.pricesEach) {
         setDateRange(prev => prev.map(d => {
-          const price = data.dateWisePrices[d.isoDate];
+          const price = data.pricesEach[d.isoDate];
           return {
             ...d,
             price: price != null ? price : d.price,
             currency: price != null ? (data.currency || 'USD') : d.currency,
-            isLowestPrice: data.lowestPrice != null && price === data.lowestPrice,
           };
         }));
       }
@@ -1011,8 +1037,21 @@ function FlightSearchPage() {
   // Resolve readable origin/destination city names for the results header
   const fromCode = searchParams.fromCode || extractRouteCode(searchParams.from);
   const toCode = searchParams.toCode || extractRouteCode(searchParams.to);
-  const fromCityName = cityMap[fromCode] || String(searchParams.from || '').replace(/\s*\([A-Z]{3}\)$/, '') || fromCode;
-  const toCityName = cityMap[toCode] || String(searchParams.to || '').replace(/\s*\([A-Z]{3}\)$/, '') || toCode;
+  const fromCityName = airportListLabel(fromCode) || cityMap[fromCode] || String(searchParams.from || '').replace(/\s*\([A-Z]{3}\)$/, '') || fromCode;
+  const toCityName = airportListLabel(toCode) || cityMap[toCode] || String(searchParams.to || '').replace(/\s*\([A-Z]{3}\)$/, '') || toCode;
+  const multiCitySearch = isMultiCity(searchParams);
+  const cityInstead = multiCitySearch ? citySearchInstead(searchData?.legs || []) : null;
+  const searchCityInstead = () => {
+    const next = { ...searchData, legs: cityInstead.legs };
+    navigate(`/flights/search?${searchToQuery(next)}`, { state: { searchData: next } });
+  };
+  const placeName = (label) => {
+    const code = extractRouteCode(label);
+    return cityMap[code] || String(label || '').replace(/\s*\([A-Z]{3}\)$/, '') || code;
+  };
+  const routeChain = multiCitySearch
+    ? [searchParams.legs[0].from, ...searchParams.legs.map((leg) => leg.to)].map(placeName).join(' → ')
+    : '';
 
   return (
     <div className="bg-gray-100 min-h-screen">
@@ -1030,7 +1069,8 @@ function FlightSearchPage() {
         open={!searchData}
       />
 
-      {/* Date Navigation Bar */}
+      {/* Date Navigation Bar - one-way fares by day, so none for a multi-city trip */}
+      {!multiCitySearch && (<>
       <div className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-20">
         <div className="container mx-auto max-w-[1400px] px-5 py-3">
           {/* Date selector */}
@@ -1055,9 +1095,7 @@ function FlightSearchPage() {
                 that said nothing. */}
             <div ref={dateStripRef} className="flex flex-1 min-w-0 items-center justify-start md:justify-center gap-1.5 overflow-x-auto hide-scrollbar mx-2 sm:mx-4">
               {dateRange.map((date, index) => {
-                const fares = dateRange.map((d) => Number(d.price) || 0).filter(Boolean);
-                const spread = fares.length > 1 && Math.max(...fares) > Math.min(...fares);
-                const cheapest = spread && date.isLowestPrice && !date.selected;
+                const cheapest = stripCheapest.has(date.isoDate);
                 return (
                   <button
                     key={index}
@@ -1085,7 +1123,7 @@ function FlightSearchPage() {
                         : '—'}
                     </span>
                     {cheapest && (
-                      <span className="text-[9.5px] font-bold uppercase tracking-[0.12em] leading-none text-emerald-600">
+                      <span className={`text-[9.5px] font-bold uppercase tracking-[0.12em] leading-none ${date.selected ? 'text-white/85' : 'text-emerald-600'}`}>
                         Cheapest
                       </span>
                     )}
@@ -1112,6 +1150,7 @@ function FlightSearchPage() {
           </div>
         </div>
       </div>
+      </>)}
 
       <div className="bg-[#F0FAFC] min-h-screen pb-12 pt-6">
         <div className="container mx-auto max-w-[1400px] px-5">
@@ -1120,9 +1159,9 @@ function FlightSearchPage() {
             <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
               {/* With no search there is no route, and "Flights from  to" with
                   two blanks reads like a page that failed to load. */}
-              {searchData
-                ? <>Flights from {fromCityName} <span className="text-gray-400 font-normal">to</span> {toCityName}</>
-                : 'Find a flight'}
+              {!searchData ? 'Find a flight'
+                : multiCitySearch ? <>Multi-city: {routeChain}</>
+                  : <>Flights from {fromCityName} <span className="text-gray-400 font-normal">to</span> {toCityName}</>}
             </h1>
             {!loading && !error && (
               <p className="text-sm text-gray-500 mt-0.5">
@@ -1166,7 +1205,10 @@ function FlightSearchPage() {
               )}
             </div>
           ) : (
-            <div className="flex gap-6 items-start">
+            // Select flight, Fare breakup and Flight Details are at the right
+            // of each card, where the help buttons float: on a laptop they sat
+            // on them as the list scrolled by.
+            <div className={`flex gap-6 items-start ${clearOfHelpButtons}`}>
               <FlightFilterSidebar
                 filters={filters}
                 priceRangeBounds={priceRangeBounds}
@@ -1222,6 +1264,7 @@ function FlightSearchPage() {
                     {sortOrder === 'recommended' && ' · recommended for you'}
                     {sortOrder === 'nonstop_first' && ' · non-stop first'}
                     {sortOrder === 'duration' && ' · fastest first'}
+                    {fareUnit && ` · prices per ${fareUnit}`}
                   </p>
                 </div>
 
@@ -1231,15 +1274,34 @@ function FlightSearchPage() {
                     <div className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-[#F0FAFC] mb-8 animate-bounce-gentle">
                       <Plane className="h-12 w-12 text-[#055B75]" />
                     </div>
-                    <h3 className="text-xl font-bold text-gray-800 mb-4">No flights found</h3>
-                    <p className="text-gray-600 mb-8 max-w-md mx-auto">We couldn't find any flights matching your criteria. Try adjusting your search filters or dates.</p>
-                    <button
-                      onClick={handleResetAllFilters}
-                      className="px-6 py-3 bg-[#055B75] text-white rounded-lg font-medium hover:bg-[#034457] transition-colors"
-                    >
-                      <X className="h-4 w-4 mr-2 inline" />
-                      Reset All Filters
-                    </button>
+                    {multiCitySearch && flights.length === 0 ? (
+                      <>
+                        <h3 className="text-xl font-bold text-gray-800 mb-4">No flights found for this trip</h3>
+                        <p className="text-gray-600 mb-8 max-w-md mx-auto">
+                          {`No airline sells these flights together on one ticket for these dates. Try other dates${cityInstead ? `, or every ${cityInstead.cityNames.join(' and ')} airport` : ''}.`}
+                        </p>
+                        {cityInstead && (
+                          <button
+                            onClick={searchCityInstead}
+                            className="px-6 py-3 bg-[#055B75] text-white rounded-lg font-medium hover:bg-[#034457] transition-colors"
+                          >
+                            {`Search ${cityInstead.cityNames.join(' and ')} (all airports) instead`}
+                          </button>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <h3 className="text-xl font-bold text-gray-800 mb-4">No flights found</h3>
+                        <p className="text-gray-600 mb-8 max-w-md mx-auto">We couldn't find any flights matching your criteria. Try adjusting your search filters or dates.</p>
+                        <button
+                          onClick={handleResetAllFilters}
+                          className="px-6 py-3 bg-[#055B75] text-white rounded-lg font-medium hover:bg-[#034457] transition-colors"
+                        >
+                          <X className="h-4 w-4 mr-2 inline" />
+                          Reset All Filters
+                        </button>
+                      </>
+                    )}
                   </div>
                 ) : (
                   <div className="bg-white rounded-2xl border border-[#EFE9DD] shadow-[0_10px_26px_-20px_rgba(12,42,51,0.45)]">
@@ -1328,11 +1390,12 @@ function FlightSearchPage() {
       </div>
 
       {/* Fare calendar (month grid) */}
-      {showFareCalendar && (
+      {showFareCalendar && !multiCitySearch && (
         <FlightFareCalendar
           searchParams={searchParams}
           initialDate={dateRange.find(d => d.selected)?.isoDate || searchParams.departDate}
           selectedDate={dateRange.find(d => d.selected)?.isoDate || searchParams.departDate}
+          knownPrices={fareCalendarKnownPrices}
           onSelectDate={(isoDate) => handleDateSelect({ isoDate, isPast: false })}
           onClose={() => setShowFareCalendar(false)}
         />
@@ -1340,7 +1403,7 @@ function FlightSearchPage() {
 
       {/* Mobile filter drawer */}
       {showMobileFilters && (
-        <div className="fixed inset-0 z-[10000] lg:hidden flex">
+        <div className="fixed inset-0 z-[10000] xl:hidden flex">
           <div className="absolute inset-0 bg-black/50" onClick={() => setShowMobileFilters(false)} />
           <div className="relative ml-auto w-[88%] max-w-sm h-full bg-white shadow-2xl flex flex-col animate-in slide-in-from-right duration-200">
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 flex-shrink-0">

@@ -90,9 +90,9 @@ describe('recorded cancelled by hand after its payment was voided', () => {
     })));
     render(<MemoryRouter initialEntries={['/my-trips']}><MyTrips /></MemoryRouter>);
     await waitFor(() => expect(fetch).toHaveBeenCalled());
-    fireEvent.click(screen.getByRole('button', { name: /^Cancelled$/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Cancelled \(\d+\)$/ }));
 
-    const card = (await screen.findByText('#FLTHELD1')).closest('.group');
+    const card = await screen.findByTestId('trip-FLTHELD1');
     expect(card.textContent).toMatch(/Refunded \$291\.00/);
     expect(card.textContent).not.toMatch(PENDING);
   });

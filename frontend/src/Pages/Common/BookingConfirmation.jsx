@@ -1,15 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { CheckCircle, Ship, Plane, Calendar, CreditCard, ArrowLeft, Clock, MapPin, Users, XCircle } from 'lucide-react';
+import { CheckCircle, Ship, Plane, Calendar, CreditCard, ArrowLeft, Clock, MapPin, Users, XCircle, Download } from 'lucide-react';
 import Navbar from './Navbar';
 import { attentionMessage, paymentReturned, refundStatus } from '../../utils/bookingStatus';
 import {
-  documentState, hasNoConfirmedSeat, isCancellationUnrecorded, isCommitUnknown, isPaid, isVoidedTicket, ticketState, ticketsVoided,
-  voidedTicketDigits,
+  bookingCodeOf, canDownloadDocument, documentState, hasNoConfirmedSeat, isCancellationUnrecorded, isCommitUnknown, isPaid, isVoidedTicket, ticketState,
+  ticketsVoided, voidedTicketDigits,
 } from '../../utils/eTicket';
+import { downloadTicketPdf } from '../../utils/ticketDownload';
 import { daysUntilDate, formatCalendarDate } from '../../utils/dateUtils';
 import { cancellationMessage } from '../../../../shared/cancellationOutcome';
-import { bookingItineraries, returnDateOf } from '../../../../shared/bookingItineraries';
+import { bookingItineraries, multiCityRoute, returnDateOf } from '../../../../shared/bookingItineraries';
 import BookingItinerary from './flights/BookingItinerary';
 import { bookingChargeLines, formatUsd, tripRewardLine } from '../../utils/bookingCharge';
 
@@ -32,6 +33,8 @@ function BookingConfirmation() {
   const location = useLocation();
   const [bookingData, setBookingData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState(null);
 
   useEffect(() => {
     // First check if data was passed via navigation state
@@ -80,6 +83,20 @@ function BookingConfirmation() {
   const isCruise = bookingData.type === 'cruise';
   const isHotel = bookingData.type === 'hotel';
   const isFlight = bookingData.type === 'flight';
+
+  const downloadDocument = async () => {
+    setDownloadError(null);
+    setDownloading(true);
+    try {
+      await downloadTicketPdf(bookingData.bookingReference || bookingData.orderId, {
+        email: bookingData.email || bookingData.bookingDetails?.contact?.email || null,
+      });
+    } catch (err) {
+      setDownloadError(err.message);
+    } finally {
+      setDownloading(false);
+    }
+  };
   const isPackage = bookingData.type === 'package';
 
   // Every leg and flight. This page read a `returnDate` nothing set and the
@@ -426,6 +443,9 @@ function BookingConfirmation() {
               {/* Visual Route Display for Flights */}
               {isFlight && (bookingData.origin || bookingData.destination || bookingData.flightData) && (
                 <div className="bg-white/10 rounded-xl p-4 backdrop-blur-sm">
+                  {multiCityRoute(legs) && (
+                    <p className="mb-3 text-center text-sm font-semibold">{`Multi-city: ${multiCityRoute(legs)}`}</p>
+                  )}
                   <div className="flex items-center justify-between">
                     <div className="text-center">
                       <p className="text-xl sm:text-3xl font-bold">{bookingData.origin || bookingData.flightData?.origin || 'DEP'}</p>
@@ -578,12 +598,15 @@ function BookingConfirmation() {
                 </div>
                 {bookingData.pnr ? (
                   <div className="border-r-0 md:border-r border-gray-200 pr-0 md:pr-6">
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Airline Reference (PNR)</p>
-                    <p className="text-lg font-bold text-blue-600 font-mono">{bookingData.pnr}</p>
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">{bookingCodeOf(bookingData).label}</p>
+                    <p className="text-lg font-bold text-[#055B75] font-mono">{bookingCodeOf(bookingData).value}</p>
+                    {bookingCodeOf(bookingData).amadeusReference && (
+                      <p className="mt-1 text-xs text-gray-500">{`GDS PNR ${bookingCodeOf(bookingData).amadeusReference}`}</p>
+                    )}
                   </div>
                 ) : isFlight && (
                   <div className="border-r-0 md:border-r border-gray-200 pr-0 md:pr-6">
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Airline Reference (PNR)</p>
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Booking code (PNR)</p>
                     <p className="text-sm font-semibold text-gray-500">
                       {outcome === 'queued' ? 'Assigned once the airline confirms' : 'Not yet assigned'}
                     </p>
@@ -701,6 +724,16 @@ function BookingConfirmation() {
 
           {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            {isFlight && canDownloadDocument(bookingData) && (
+              <button
+                onClick={downloadDocument}
+                disabled={downloading}
+                className="flex items-center justify-center gap-2 px-6 py-3 bg-[#055B75] text-white font-semibold rounded-xl hover:bg-[#034457] transition-colors shadow-lg disabled:opacity-60"
+              >
+                <Download className="w-4 h-4" />
+                {downloading ? 'Preparing your PDF…' : (ticketState(bookingData) === 'issued' ? 'Download E-Ticket' : 'Download Booking Confirmation')}
+              </button>
+            )}
             <button
               onClick={() => navigate('/my-trips')}
               className="flex items-center justify-center gap-2 px-6 py-3 bg-gray-100 text-gray-700 font-semibold rounded-xl hover:bg-gray-200 transition-colors"
@@ -716,6 +749,8 @@ function BookingConfirmation() {
               Book Another {tripType}
             </button>
           </div>
+
+          {downloadError && <p role="alert" className="text-center text-sm text-red-700 mt-4">{downloadError}</p>}
 
           <p className="text-center text-sm text-gray-500 mt-6">
             📧 {copy.mail}

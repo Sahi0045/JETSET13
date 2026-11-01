@@ -8,8 +8,7 @@ vi.mock('../../frontend/src/contexts/SupabaseAuthContext', () => ({
 vi.mock('../../frontend/src/lib/supabase', () => ({ default: { from: vi.fn() } }));
 
 const { default: FlightCard } = await import('../../frontend/src/Pages/Common/flights/FlightCard.jsx');
-const { default: ContactPopup } = await import('../../frontend/src/Pages/Common/ContactPopup.jsx');
-const { default: AIChatbot } = await import('../../frontend/src/Pages/Common/AIChatbot.jsx');
+const { default: FloatingHelp } = await import('../../frontend/src/Pages/Common/FloatingHelp.jsx');
 
 /**
  * What a result card and the floating buttons look like on a phone. jsdom has
@@ -100,9 +99,9 @@ describe('the floating buttons', () => {
   // On a phone Contact Us collapses to a blue circle; it showed the chatbot's
   // speech bubble, so the page looked like it had two chat buttons.
   it('gives Contact Us an icon of its own, not the chatbot bubble', () => {
-    const { container } = render(<><ContactPopup /><AIChatbot /></>);
+    render(<FloatingHelp />);
     const contact = screen.getByRole('button', { name: 'Contact us' });
-    const chat = container.querySelector('.chat-toggle-button');
+    const chat = screen.getByRole('button', { name: 'Chat with our assistant' });
     expect(iconOf(contact)).not.toBe(iconOf(chat));
   });
 });

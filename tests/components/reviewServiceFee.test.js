@@ -28,9 +28,4 @@ describe('the service fee on the review page', () => {
     expect(review).not.toMatch(/computeFlightCharge\(\{[^}]*passengers/);
     expect(checkout).not.toMatch(/computeFlightCharge\(\{[^}]*passengers/);
   });
-
-  it('shows the breakdown from that same computation', () => {
-    expect(review).toMatch(/fixedFeeByType: charge\.fixedFeeByType/);
-    expect(review).toMatch(/describeServiceFee\(calculatedFare\)/);
-  });
 });

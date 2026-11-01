@@ -7,7 +7,7 @@ const BUILT_IN_NAMES = Object.freeze(Object.fromEntries(allAirports.map((airport
 /** Every airport code a flight, as the flight pages hold it, touches. */
 export const airportCodesOf = (flight) => {
   if (!flight) return [];
-  const legs = [flight, flight.returnLeg].filter(Boolean);
+  const legs = [flight, ...(flight.laterLegs || []), flight.returnLeg].filter(Boolean);
   return legs.flatMap((leg) => [
     leg.departure?.airport,
     leg.arrival?.airport,

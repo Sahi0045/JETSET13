@@ -80,6 +80,29 @@ export function isWithinFreeWindow(paidAt, now = new Date(), timeZone) {
   return until !== null && Number.isFinite(at) && at < Date.parse(until);
 }
 
+/**
+ * Air India's fare rules (cat 16, read 31 Oct 2026) let a booking made more
+ * than 7 days before travel be cancelled within 48 hours of booking without
+ * the airline's penalty. Past our free window that is still a refund the
+ * airline owes, and the desk was told to keep its penalty. Only Air India's
+ * rule has been read, so only Air India's is named.
+ *
+ * @returns {{ carrier: string, until: string } | null}
+ */
+const AIRLINE_LOOK_IN = Object.freeze({ AI: { name: 'Air India', hours: 48, daysAhead: 7 } });
+
+export function airlineLookInOf({ carrier, bookedAt, departureDate, now = new Date() } = {}) {
+  const rule = AIRLINE_LOOK_IN[String(carrier || '').trim().toUpperCase()];
+  const booked = timeOf(bookedAt);
+  const at = timeOf(now);
+  const day = /^(\d{4}-\d{2}-\d{2})/.exec(String(departureDate || ''))?.[1];
+  if (!rule || !day || !Number.isFinite(booked) || !Number.isFinite(at)) return null;
+  const bookedDay = Date.parse(new Date(booked).toISOString().slice(0, 10));
+  const daysAhead = (Date.parse(day) - bookedDay) / (24 * HOUR_MS);
+  if (at - booked > rule.hours * HOUR_MS || daysAhead <= rule.daysAhead) return null;
+  return { carrier: rule.name, until: new Date(booked + rule.hours * HOUR_MS).toISOString() };
+}
+
 export function fareRuleOf(penalties) {
   const cell = penalties?.refund?.before;
   const refundable = cell?.allowed === true ? true : cell?.allowed === false ? false : null;
@@ -138,7 +161,7 @@ export function cancelTermsLines(terms, { money = usd, time = clock } = {}) {
 function policyLines(terms, { money, time }) {
   const back = known(terms.airlinePrice) ? money(terms.airlinePrice) : 'what you paid';
   const kept = Number(terms.serviceFeeKept) > 0 ? money(terms.serviceFeeKept) : null;
-  const youGetBack = `You get back ${back}${kept ? `; the ${kept} service fee is not refundable.` : '.'}`;
+  const youGetBack = `You get back ${back}${kept ? `; the ${kept} platform fee is not refundable.` : '.'}`;
   switch (terms.policy) {
     case 'never_booked':
       return ['This booking was never confirmed with the airline, so everything you paid is returned.'];
@@ -151,7 +174,7 @@ function policyLines(terms, { money, time }) {
       const fee = Number(terms.cancellationFee) > 0 ? ` and our ${money(terms.cancellationFee)} cancellation fee` : '';
       return [
         `This fare is refundable. You get back ${back} less the airline's cancellation penalty${penalty}${fee}.`,
-        ...(kept ? [`The ${kept} service fee is not refundable.`] : []),
+        ...(kept ? [`The ${kept} platform fee is not refundable.`] : []),
         'Our team confirms the amount with the airline and emails you within 2 business days.',
       ];
     }
@@ -165,13 +188,26 @@ function policyLines(terms, { money, time }) {
   }
 }
 
+/**
+ * Our cancellation fee in words: "$50.00 plus 10% of what you paid", "10% of
+ * what you paid" or "$50.00"; null when both parts are 0.
+ */
+export function cancellationFeeWords({ flat = null, percent = null, money = usd, whoPaid = 'what you paid' } = {}) {
+  const flatPart = Number(flat) > 0 ? money(flat) : '';
+  const percentPart = known(percent) && Number(percent) > 0 ? `${Number(percent)}% of ${whoPaid}` : '';
+  if (flatPart && percentPart) return `${flatPart} plus ${percentPart}`;
+  return flatPart || percentPart || null;
+}
+
 /** `freeUntil`: when a booking made now stops being free to cancel, when known. */
-export function cancelPolicyLines({ cancellationFee = null, freeUntil = null, money = usd, time = clock } = {}) {
-  const fee = Number(cancellationFee) > 0 ? ` and our ${money(cancellationFee)} cancellation fee` : '';
+export function cancelPolicyLines({ cancellationFee = null, cancellationFeePercent = null, freeUntil = null, money = usd, time = clock } = {}) {
+  const words = cancellationFeeWords({ flat: cancellationFee, percent: cancellationFeePercent, money });
+  const hasPercent = known(cancellationFeePercent) && Number(cancellationFeePercent) > 0;
+  const fee = !words ? '' : (hasPercent ? ` and our cancellation fee of ${words}` : ` and our ${words} cancellation fee`);
   return [
     freeUntil
-      ? `Book now and you can cancel free until ${time(freeUntil)}: you get back the airline price. The service fee is not refundable.`
-      : "You can cancel free until 11:59 PM on the day you book (our ticketing office's time): you get back the airline price. The service fee is not refundable.",
+      ? `Book now and you can cancel free until ${time(freeUntil)}: you get back the airline price. The platform fee is not refundable.`
+      : "You can cancel free until 11:59 PM on the day you book (our ticketing office's time): you get back the airline price. The platform fee is not refundable.",
     `After that the airline's fare rules apply: a refundable fare returns the airline price less the airline's penalty${fee}; a non-refundable fare returns only unused taxes.`,
     'If the airline cancels or changes your flight, you get back everything you paid.',
   ];

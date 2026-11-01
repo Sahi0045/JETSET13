@@ -1,5 +1,7 @@
 // Shared helpers for sorting / scoring flight results.
 
+import { farePerTraveller } from '../../../../../shared/farePerTraveller';
+
 const UNKNOWN = Number.MAX_SAFE_INTEGER;
 
 /**
@@ -22,8 +24,21 @@ export const parseDurationMin = (duration) => {
 
 const minutesOf = (leg) => (Number.isFinite(leg?.durationMinutes) ? leg.durationMinutes : parseDurationMin(leg?.duration));
 
-/** The outbound leg and, on a round trip, the return. */
-export const legsOf = (f) => [f, f?.returnLeg].filter(Boolean);
+/** The outbound leg, the later flights of a multi-city trip, or a round trip's return. */
+export const legsOf = (f) => [f, ...(f?.laterLegs || []), f?.returnLeg].filter(Boolean);
+
+export const tripAirlines = (f) => {
+  const airlines = new Map();
+  for (const leg of legsOf(f)) {
+    const flown = Array.isArray(leg.segments) && leg.segments.length > 0 ? leg.segments.map((segment) => segment.airline) : [leg.airline];
+    for (const airline of flown) {
+      if (airline?.code && !airlines.has(airline.code)) airlines.set(airline.code, airline);
+    }
+  }
+  return [...airlines.values()];
+};
+
+export const tripAirlineNames = (f) => tripAirlines(f).map((airline) => airline.name || airline.code).join(' + ');
 
 /** The outbound duration in minutes - the one the card shows. */
 export const legMinutes = (f) => minutesOf(f);
@@ -42,8 +57,65 @@ export const formatMinutes = (minutes) => (Number.isFinite(minutes) && minutes !
   ? `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, '0')}m`
   : '');
 
-export const priceOf = (f) =>
-  typeof f?.price?.amount === 'number' ? f.price.amount : parseFloat(f?.price?.total) || Infinity;
+const totalOf = (f) => {
+  const amount = typeof f?.price?.amount === 'number'
+    ? f.price.amount
+    : parseFloat(String(f?.price?.total ?? '').replace(/,/g, ''));
+  return Number.isFinite(amount) ? amount : null;
+};
+
+/**
+ * One traveller's fare for a result, and the total for all of them. Every
+ * price on the results page is `amount`; `flight.price` stays the
+ * all-traveller total that checkout charges.
+ */
+export const fareOf = (f) => {
+  const total = totalOf(f);
+  const { each, unit, travellers } = farePerTraveller(f?.originalOffer);
+  return {
+    amount: each ?? total,
+    total,
+    unit: each != null ? unit : null,
+    travellers,
+    currency: f?.price?.currency || 'USD',
+  };
+};
+
+export const priceOf = (f) => fareOf(f).amount || Infinity;
+
+const amountOrNull = (value) => {
+  const amount = Number(value);
+  return Number.isFinite(amount) && amount >= 0 ? amount : null;
+};
+
+/**
+ * The airline's fare for each type of traveller on a result:
+ * `{ type, count, each, base }`. Empty when the fare per traveller is unknown.
+ */
+export const travellerFares = (f) => {
+  if (!fareOf(f).unit) return [];
+  const lines = new Map();
+  for (const pricing of f.originalOffer.travelerPricings) {
+    const type = String(pricing?.travelerType || 'ADULT').toUpperCase();
+    const each = amountOrNull(pricing?.price?.total);
+    if (!each) return [];
+    const line = lines.get(type) || { type, count: 0, each, base: amountOrNull(pricing?.price?.base) };
+    line.count += 1;
+    lines.set(type, line);
+  }
+  return [...lines.values()];
+};
+
+/**
+ * A result's total as `<Price>` parts: each traveller's fare as shown, added
+ * up, so the total is exactly 2 x the fare per person in any currency.
+ */
+export const fareTotalParts = (f, lines = travellerFares(f)) => {
+  const { total, currency } = fareOf(f);
+  return lines.length > 0
+    ? lines.map((line) => ({ amount: line.each, currency, times: line.count }))
+    : [{ amount: total, currency }];
+};
 
 // Min/max bounds for price and duration across a list (for normalization).
 // Unknown durations are left out: one of them would stretch the range so far
@@ -90,7 +162,7 @@ const arrivalAt = (f) => {
 /** A sorted copy of `flights` in the order the sort control names. */
 export const sortFlights = (flights = [], sortOrder = 'price') => {
   const bounds = computeBounds(flights);
-  const amount = (f) => f.price?.amount || 0;
+  const amount = (f) => fareOf(f).amount || 0;
 
   const compare = {
     price: (a, b) => amount(a) - amount(b),

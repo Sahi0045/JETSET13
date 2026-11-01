@@ -18,6 +18,7 @@ const WEBHOOK = 'https://hooks.slack.invalid/services/T000/B000/XXXX';
 const jobs = [
   ['the paid-but-not-ticketed alarm', '../../backend/jobs/needsReviewAlert.job.js', 'startNeedsReviewAlertJob'],
   ['the failed-refund alarm', '../../backend/jobs/paymentFailureAlert.job.js', 'startPaymentFailureAlertJob'],
+  ['the booking feed', '../../backend/jobs/bookingFeed.job.js', 'startBookingFeedJob'],
 ];
 
 let supabase;

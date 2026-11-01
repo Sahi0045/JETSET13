@@ -8,6 +8,7 @@ import Price from '../../../Components/Price';
 import { formatCheckedBag } from '../../../utils/baggage';
 import { formatCalendarDate } from '../../../utils/dateUtils';
 import { arrivalDayOffset, layoverLabel, layoversOf, legDateLabel, seatsLeftLabel } from './searchResults';
+import { fareOf, fareTotalParts, travellerFares, tripAirlineNames, tripAirlines } from './flightSort';
 
 const AIRLINE_LOGO_FALLBACK = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiByeD0iOCIgZmlsbD0iIzM3NzNmNCIvPgo8dGV4dCB4PSIyMCIgeT0iMjgiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxOCIgZmlsbD0id2hpdGUiIHRleHQtYW5jaG9yPSJtaWRkbGUiPuKciO+4jzwvdGV4dD4KPHN2Zz4K';
 
@@ -102,11 +103,18 @@ const operatorsOf = (segments = []) => [...new Set(segments
   .filter((seg) => seg?.operatingCarrier && seg.operatingCarrier !== seg.airline?.code)
   .map((seg) => seg.operatingAirlineName || seg.operatingCarrier))];
 
+const flightNumbersOf = (segments = []) => segments.map((segment) => segment?.flightNumber).filter(Boolean).join(', ');
+
 function Leg({ leg, label, operators = [], cityMap = {} }) {
   const dayOffset = arrivalDayOffset(leg.departure?.rawDate, leg.arrival?.rawDate);
   return (
     <div>
-      {label && <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1">{label}</div>}
+      {label && (
+        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1">
+          <span>{label}</span>
+          {flightNumbersOf(leg.segments) && <span className="ml-1.5 normal-case font-semibold text-gray-500">{flightNumbersOf(leg.segments)}</span>}
+        </div>
+      )}
       {operators.length > 0 && (
         <div className="text-[10px] text-amber-600 mb-1">Operated by {operators.join(', ')}</div>
       )}
@@ -237,26 +245,23 @@ function SegmentList({ segments = [], stopDetails = [], cityMap = {} }) {
   );
 }
 
-// What the price on the card covers. The airline's total is for every traveller
-// the search priced; a two-adult total was labelled "per adult", so the
-// customer read half the real price per person.
-//
-// And the price is the airline's fare: the service fee is added on the review
-// page, so the card says so rather than sit under "No hidden fees".
-const pricedForLabel = (offer) => {
-  const travellers = offer?.travelerPricings?.length || 0;
-  if (travellers > 1) return `for ${travellers} travellers + service fee`;
-  if (travellers === 1) return 'for 1 traveller + service fee';
-  return 'fare + service fee';
-};
+const TRAVELLER_TYPE_LABEL = { ADULT: 'Adult', CHILD: 'Child', SEATED_INFANT: 'Infant (own seat)', HELD_INFANT: 'Infant (on lap)' };
+
+const travellersLabel = (count) => `${count} traveller${count === 1 ? '' : 's'}`;
 
 function FlightCard({ flight, onBook, onViewPrices, priceStats, cityMap = {} }) {
+  const otherLegs = flight.returnLeg
+    ? [{ leg: flight.returnLeg, label: 'Return' }]
+    : (flight.laterLegs || []).map((leg, index) => ({ leg, label: `Flight ${index + 2}` }));
+  const firstLegLabel = flight.returnLeg ? 'Onward' : 'Flight 1';
   const [expanded, setExpanded] = useState(false);
   const [showBreakup, setShowBreakup] = useState(false);
   const handleCta = () => (onViewPrices ? onViewPrices(flight) : onBook?.(flight));
 
+  const fare = fareOf(flight);
+
   // Deal badge derived from the current result-set price distribution
-  const myPrice = flight.price?.amount;
+  const myPrice = fare.amount;
   let deal = null;
   if (priceStats && typeof myPrice === 'number') {
     if (myPrice <= priceStats.min * 1.02) deal = { label: 'Cheapest', cls: 'bg-emerald-100 text-emerald-700 border-emerald-200' };
@@ -284,8 +289,13 @@ function FlightCard({ flight, onBook, onViewPrices, priceStats, cityMap = {} }) 
   // Fare breakup figures (in the offer's source currency; <Price> converts for display)
   const currency = flight.price?.currency || 'USD';
   const baseFare = parseFloat(flight.price?.base) || 0;
-  const totalFare = parseFloat(flight.price?.total || flight.price?.grandTotal || flight.price?.amount) || 0;
-  const taxesAndFees = Math.max(0, totalFare - baseFare);
+  const fares = travellerFares(flight);
+  const fareLines = fare.travellers > 1 ? fares : [];
+  const totalParts = fareTotalParts(flight, fares);
+  const baseParts = fares.length > 0 && fares.every((line) => line.base != null)
+    ? fares.map((line) => ({ amount: line.base, currency, times: line.count }))
+    : [{ amount: baseFare, currency }];
+  const taxParts = [...totalParts, ...baseParts.map((part) => ({ ...part, times: -(part.times ?? 1) }))];
 
   return (
     <div className="group bg-white border-b border-gray-100 last:border-b-0 first:rounded-t-[15px] last:rounded-b-[15px] hover:bg-[#FAFBFB] transition-colors duration-200">
@@ -307,7 +317,7 @@ function FlightCard({ flight, onBook, onViewPrices, priceStats, cityMap = {} }) 
             </div>
             <div className="min-w-0">
               <h3 className="font-semibold text-gray-900 text-sm leading-tight truncate">
-                {flight.airline?.name || 'Unknown Airline'}
+                {tripAirlines(flight).length > 1 ? tripAirlineNames(flight) : (flight.airline?.name || 'Unknown Airline')}
               </h3>
               <div className="text-xs text-gray-400 truncate">
                 {flight.segments?.[0]?.flightNumber || flight.flightNumber || ''}
@@ -325,16 +335,20 @@ function FlightCard({ flight, onBook, onViewPrices, priceStats, cityMap = {} }) 
             </div>
           </div>
 
-          {/* Timeline(s): one leg for one-way, two for round trip */}
-          {flight.returnLeg ? (
+          {/* Timeline(s): one leg for one-way, two for round trip, one per flight multi-city */}
+          {otherLegs.length > 0 ? (
             <div className="flex-1 space-y-3">
               <Leg
                 leg={{ departure: flight.departure, arrival: flight.arrival, duration: flight.duration, stops: flight.stops, stopDetails: flight.stopDetails, segments: flight.segments }}
-                label="Onward"
+                label={firstLegLabel}
                 cityMap={cityMap}
               />
-              <div className="border-t border-dashed border-gray-200" />
-              <Leg leg={flight.returnLeg} label="Return" operators={operatorsOf(flight.returnLeg.segments)} cityMap={cityMap} />
+              {otherLegs.map(({ leg, label }) => (
+                <React.Fragment key={label}>
+                  <div className="border-t border-dashed border-gray-200" />
+                  <Leg leg={leg} label={label} operators={operatorsOf(leg.segments)} cityMap={cityMap} />
+                </React.Fragment>
+              ))}
             </div>
           ) : (
             <div className="flex-1">
@@ -349,9 +363,22 @@ function FlightCard({ flight, onBook, onViewPrices, priceStats, cityMap = {} }) 
           <div className="flex flex-row lg:flex-col items-center lg:items-end justify-between lg:justify-center gap-3 lg:gap-2 lg:w-[180px] lg:flex-shrink-0 lg:border-l lg:border-gray-100 lg:pl-5">
             <div className="text-left lg:text-right relative">
               <div className="font-grotesk text-[26px] font-bold text-ink leading-none tracking-tight">
-                <Price amount={flight.price} />
+                <Price amount={{ amount: fare.amount, currency }} />
               </div>
-              <div className="text-[11px] text-gray-400 mt-1">{pricedForLabel(flight.originalOffer)}</div>
+              {fare.unit ? (
+                <>
+                  <div className="text-[12px] font-semibold text-gray-600 mt-1">per {fare.unit}</div>
+                  {fare.travellers > 1 && fare.total > 0 && (
+                    <div className="text-[11px] text-gray-400 whitespace-nowrap">
+                      <Price amount={totalParts} /> for {travellersLabel(fare.travellers)}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="text-[11px] text-gray-400 mt-1">
+                  {fare.travellers > 1 ? `total for ${travellersLabel(fare.travellers)}` : 'total fare'}
+                </div>
+              )}
               {baseFare > 0 && (
                 <button
                   onClick={() => setShowBreakup(v => !v)}
@@ -371,22 +398,29 @@ function FlightCard({ flight, onBook, onViewPrices, priceStats, cityMap = {} }) 
                     </button>
                   </div>
                   <div className="space-y-1.5 text-xs">
+                    {fareLines.map((line) => (
+                      <div key={line.type} className="flex justify-between gap-2 text-gray-600">
+                        <span>{TRAVELLER_TYPE_LABEL[line.type] || 'Traveller'} × {line.count}</span>
+                        <span className="font-medium text-gray-800"><Price amount={{ amount: line.each, currency }} /> each</span>
+                      </div>
+                    ))}
+                    {fareLines.length > 0 && <div className="border-t border-gray-100 pt-0.5" />}
                     <div className="flex justify-between text-gray-600">
                       <span>Base fare</span>
-                      <span className="font-medium text-gray-800"><Price amount={{ amount: baseFare, currency }} /></span>
+                      <span className="font-medium text-gray-800"><Price amount={baseParts} /></span>
                     </div>
                     <div className="flex justify-between text-gray-600">
                       <span>Taxes &amp; fees</span>
-                      <span className="font-medium text-gray-800"><Price amount={{ amount: taxesAndFees, currency }} /></span>
+                      <span className="font-medium text-gray-800"><Price amount={taxParts} /></span>
                     </div>
                     <div className="flex justify-between border-t border-gray-100 pt-1.5 mt-1.5">
-                      <span className="font-bold text-gray-800">Total</span>
-                      <span className="font-bold text-[#055B75]"><Price amount={{ amount: totalFare, currency }} /></span>
+                      <span className="font-bold text-gray-800">
+                        Total{fare.travellers > 1 ? ` (${travellersLabel(fare.travellers)})` : ''}
+                      </span>
+                      <span className="font-bold text-[#055B75]"><Price amount={totalParts} /></span>
                     </div>
                   </div>
-                  {/* The airline's total covers every traveller on the search;
-                      it was labelled "Per adult". */}
-                  <div className="text-[10px] text-gray-400 mt-2">Total for all travellers{cabinClass ? ` · ${cabinClass}` : ''}</div>
+                  <div className="text-[10px] text-gray-400 mt-2">Platform fee shown at checkout{cabinClass ? ` · ${cabinClass}` : ''}</div>
                 </div>
               )}
             </div>
@@ -460,17 +494,17 @@ function FlightCard({ flight, onBook, onViewPrices, priceStats, cityMap = {} }) 
       {/* ===== Expanded details ===== */}
       {expanded && (
         <div className="px-4 sm:px-5 py-4 border-t border-gray-100 bg-white rounded-b-[15px]">
-          {flight.returnLeg && (
-            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-2">Onward</div>
+          {otherLegs.length > 0 && (
+            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-2">{firstLegLabel}</div>
           )}
           <SegmentList segments={segments} stopDetails={flight.stopDetails} cityMap={cityMap} />
 
-          {flight.returnLeg && (
-            <>
-              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mt-4 mb-2 pt-3 border-t border-dashed border-gray-200">Return</div>
-              <SegmentList segments={flight.returnLeg.segments} stopDetails={flight.returnLeg.stopDetails} cityMap={cityMap} />
-            </>
-          )}
+          {otherLegs.map(({ leg, label }) => (
+            <React.Fragment key={label}>
+              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mt-4 mb-2 pt-3 border-t border-dashed border-gray-200">{label}</div>
+              <SegmentList segments={leg.segments} stopDetails={leg.stopDetails} cityMap={cityMap} />
+            </React.Fragment>
+          ))}
 
           {/* Amenities (full list, free + paid) */}
           {amenities.length > 0 && (

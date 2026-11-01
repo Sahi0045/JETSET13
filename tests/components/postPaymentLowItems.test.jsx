@@ -5,6 +5,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { describe, expect, it, vi } from 'vitest';
+import { readMyTrips } from '../helpers/source.js';
 
 const mockUseFlightBooking = vi.fn();
 
@@ -109,8 +110,8 @@ describe('Manage Booking', () => {
 
 describe('My Trips', () => {
   it('shows amounts in the USD charged', () => {
-    const src = readFileSync(path.resolve(process.cwd(), 'frontend/src/Pages/Common/login/mytrips.jsx'), 'utf8');
+    const src = readMyTrips();
     expect(src).not.toMatch(/<Price /);
-    expect(src).toMatch(/amt > 0 \? formatUsd\(amt\)/);
+    expect(src).toMatch(/amount > 0 \? formatUsd\(amount\)/);
   });
 });

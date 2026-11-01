@@ -144,8 +144,8 @@ describe('the results page offering a way on', () => {
   });
 
   it('does not head the page "Flights from  to" with two blanks', () => {
-    expect(results).toMatch(/searchData\s*\?\s*<>Flights from/);
-    expect(results).toMatch(/'Find a flight'/);
+    expect(results).toMatch(/!searchData\s*\?\s*'Find a flight'/);
+    expect(results).toMatch(/<>Flights from \{fromCityName\}/);
   });
 });
 

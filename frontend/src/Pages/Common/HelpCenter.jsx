@@ -3,6 +3,9 @@ import { Link } from 'react-router-dom';
 import { FileText, Video, Download, Play, Search, Eye } from 'lucide-react';
 import Navbar from './Navbar';
 import Footer from './Footer';
+import { VISA_SERVICES_VISIBLE, isShownToCustomers } from '../../../../shared/siteSections';
+
+const isShownCategory = (category) => VISA_SERVICES_VISIBLE || category !== 'visa';
 import Breadcrumb from '../../components/Breadcrumb';
 
 const API_BASE = '/api';
@@ -73,13 +76,13 @@ export default function HelpCenter() {
   const filteredDocs = documents.filter(d => {
     const matchesSearch = d.name.toLowerCase().includes(searchTerm.toLowerCase()) || d.description.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = selectedCategory === 'all' || d.category === selectedCategory;
-    return matchesSearch && matchesCategory;
+    return matchesSearch && matchesCategory && isShownCategory(d.category);
   });
 
   const filteredVideos = videos.filter(v => {
     const matchesSearch = v.title.toLowerCase().includes(searchTerm.toLowerCase()) || v.description.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = selectedCategory === 'all' || v.category === selectedCategory;
-    return matchesSearch && matchesCategory;
+    return matchesSearch && matchesCategory && isShownCategory(v.category);
   });
 
   const formatDuration = (seconds) => {
@@ -101,7 +104,7 @@ export default function HelpCenter() {
         <nav aria-label="Help Center topics" style={{ marginBottom: '32px' }}>
           <h2 style={{ fontSize: '18px', margin: '0 0 12px' }}>Explore travel help</h2>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
-            {helpLinks.map(({ label, to }) => (
+            {helpLinks.filter(({ to }) => isShownToCustomers(to)).map(({ label, to }) => (
               <Link
                 key={to}
                 to={to}
@@ -129,7 +132,7 @@ export default function HelpCenter() {
         </div>
         <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)} style={{ padding: '12px 16px', background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', color: '#f1f5f9' }}>
           <option value="all">All Categories</option>
-          {defaultCategories.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
+          {defaultCategories.filter((c) => isShownCategory(c.id)).map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
         </select>
       </div>
 

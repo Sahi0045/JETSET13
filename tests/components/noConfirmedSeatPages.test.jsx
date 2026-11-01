@@ -3,6 +3,7 @@ import { render } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { documentNoticeOf } from '../../shared/ticketDocument.js';
 
 const mockUseFlightBooking = vi.fn();
 
@@ -127,10 +128,10 @@ describe('Manage Booking for a PNR with no confirmed seat', () => {
   });
 
   it('still offers the booking confirmation, worded as today, for a held reservation', () => {
-    const { container, getByRole } = renderManageBooking(held);
+    const { getByRole } = renderManageBooking(held);
 
     expect(getByRole('button', { name: 'Download Booking Confirmation' })).toBeTruthy();
-    expect(container.textContent).toMatch(/This is a confirmed reservation, not a ticket\./);
-    expect(container.textContent).toMatch(/Your seat is held under the PNR below\./);
+    expect(documentNoticeOf(held).title).toMatch(/This is a confirmed reservation, not a ticket\./);
+    expect(documentNoticeOf(held).body).toMatch(/Your seat is held under the PNR below\./);
   });
 });

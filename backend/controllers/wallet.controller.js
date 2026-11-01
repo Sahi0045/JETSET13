@@ -1,7 +1,7 @@
 import supabase from '../config/supabase.js';
 import {
   CHECKOUT_VOUCHER_MESSAGES, VOUCHER_CODE_PATTERN, VOUCHER_MESSAGES, captureCoins, checkTripVoucher, normalizeVoucherCode,
-  redeemVoucher, returnCoins, reverseEarnedCoins, walletSummary,
+  flightCoinBands, redeemVoucher, returnCoins, reverseEarnedCoins, walletSummary,
 } from '../services/wallet.service.js';
 import { patchBookingDetails } from '../routes/flight.routes.js';
 
@@ -17,7 +17,8 @@ const MAX_REASON_LENGTH = 200;
 
 export async function getWallet(req, res) {
   try {
-    return res.json({ success: true, data: await walletSummary(supabase, req.user.id) });
+    const [summary, coinBands] = await Promise.all([walletSummary(supabase, req.user.id), flightCoinBands(supabase)]);
+    return res.json({ success: true, data: { ...summary, coinBands } });
   } catch (error) {
     console.error('⚠️ Wallet could not be read:', error.message);
     return res.status(503).json({ success: false, code: 'WALLET_UNAVAILABLE', error: 'Your Jet Wallet could not be loaded just now. Please try again.' });

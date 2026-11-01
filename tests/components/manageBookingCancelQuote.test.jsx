@@ -79,7 +79,7 @@ describe('the cancel dialog', () => {
     renderPage();
     fireEvent.click(screen.getAllByRole('button', { name: /Cancel Booking/ })[0]);
 
-    expect(screen.getByText('No ticket has been issued yet. You get back $287.50; the $12.50 service fee is not refundable.')).toBeTruthy();
+    expect(screen.getByText('No ticket has been issued yet. You get back $287.50; the $12.50 platform fee is not refundable.')).toBeTruthy();
     expect(screen.queryByText(/so no cancellation fee applies and what you paid is returned/)).toBeNull();
   });
 
@@ -107,7 +107,7 @@ describe('the refund breakdown after a customer cancel', () => {
     });
     renderPage();
 
-    expect(screen.getByText('Service fee (not refundable)')).toBeTruthy();
+    expect(screen.getByText('Platform fee (not refundable)')).toBeTruthy();
     expect(screen.queryByText('Cancellation Fee')).toBeNull();
   });
 

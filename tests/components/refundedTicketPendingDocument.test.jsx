@@ -64,7 +64,7 @@ describe('fence: the documents next to it', () => {
   it('a ticket with its number, refunded in part: an E-Ticket with its number and no pending notice', () => {
     const doc = text({ ...pending('partially_refunded'), tickets: [{ number: '220-7491174926', travelerId: '1' }], needs_review: null });
     expect(doc).toMatch(/E-Ticket/);
-    expect(doc).toMatch(/Ticket #: 220-7491174926/);
+    expect(doc).toMatch(/Ticket #: 2207491174926/);
     expect(doc).not.toMatch(/ticket number is still being confirmed|If you need your ticket number/);
   });
 });

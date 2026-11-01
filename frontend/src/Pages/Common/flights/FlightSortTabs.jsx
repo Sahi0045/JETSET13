@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { ArrowUpDown, ChevronDown, ThumbsUp, TrendingDown, Plane } from 'lucide-react';
 import Price from '../../../Components/Price';
-import { computeBounds, formatMinutes, legMinutes, maxStops, recommendScore, priceOf } from './flightSort';
+import { computeBounds, fareOf, formatMinutes, legMinutes, maxStops, recommendScore, priceOf } from './flightSort';
 
 // The tabs' durations come from flightSort, which reads both "PT2H35M" and the
 // search card's "2h 35m". A parser here that knew only the first printed
@@ -9,6 +9,7 @@ import { computeBounds, formatMinutes, legMinutes, maxStops, recommendScore, pri
 
 const OTHER_SORTS = [
   { value: 'duration', label: 'Fastest' },
+  { value: 'price', label: 'Price – Low to High' },
   { value: '-price', label: 'Price – High to Low' },
   { value: 'departure', label: 'Departure – Earliest' },
   { value: 'arrival', label: 'Arrival – Earliest' },
@@ -85,7 +86,7 @@ function FlightSortTabs({ flights = [], sortOrder, onSortChange }) {
               </div>
               <div className="flex items-baseline gap-2 whitespace-nowrap">
                 <span className={`font-grotesk text-lg font-semibold tracking-tight ${active ? 'text-[#055B75]' : 'text-ink'}`}>
-                  {flight ? <Price amount={flight.price} /> : '—'}
+                  {flight ? <Price amount={fareOf(flight)} /> : '—'}
                 </span>
                 {sub && <span className="text-[12px] text-gray-500">{sub}</span>}
               </div>

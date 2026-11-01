@@ -6,6 +6,7 @@ import currencyService from '../../frontend/src/Services/CurrencyService.js';
 import { formatDateToISO, getSafeDate } from '../../frontend/src/utils/dateUtils.js';
 import FlightSearchPage from '../../frontend/src/Pages/Common/flights/flightsearchpage.jsx';
 import { withDepartureDate } from '../../frontend/src/Pages/Common/flights/searchResults.js';
+import { clearOfHelpButtons } from '../../frontend/src/Pages/Common/helpButtonsLane.jsx';
 
 /**
  * The flight results page, driven through its own fetches.
@@ -274,6 +275,17 @@ describe('pages of results', () => {
     const box = (await screen.findByTestId('flight-card')).parentElement;
     expect(box.className).not.toMatch(/\boverflow-(hidden|clip)\b/);
   });
+
+  // Select flight, Fare breakup and Flight Details sit at the right of each
+  // card, where the help buttons float: from 1024 to 1536 px wide they lay on
+  // them as the list scrolled by (jetsetterss.com, 27 Oct).
+  it('keeps the cards clear of the help buttons in the corner', async () => {
+    searchAnswer = () => answer(200, { success: true, data: [card('f0')] });
+    renderPage();
+
+    const row = (await screen.findByTestId('flight-card')).closest('.flex.gap-6');
+    expect(row.className.split(/\s+/)).toContain(clearOfHelpButtons);
+  });
 });
 
 /**
@@ -350,5 +362,58 @@ describe('modify search', () => {
     // The same search again still searches again.
     fireEvent.click(screen.getByRole('button', { name: 'Modify search' }));
     await waitFor(() => expect(searchBodies()).toHaveLength(3));
+  });
+});
+
+describe('prices for two travellers', () => {
+  // The strip quoted the total for both travellers, which read as one ticket.
+  it("puts one traveller's fare on the date strip, and says the prices are per person", async () => {
+    const twoAdults = {
+      ...card('two-adults', { price: 400 }),
+      originalOffer: { price: { total: '400.00' }, travelerPricings: [
+        { travelerType: 'ADULT', price: { total: '200.00' } },
+        { travelerType: 'ADULT', price: { total: '200.00' } },
+      ] },
+    };
+    globalThis.fetch = vi.fn((url) => {
+      const target = String(url);
+      if (target.includes('/flights/search')) return answer(200, { success: true, data: [twoAdults] });
+      if (target.includes('/flights/date-prices')) {
+        return answer(200, { success: true, currency: 'USD', dateWisePrices: { [D2]: 400 }, lowestPrice: 400, pricesEach: { [D2]: 200 }, lowestPriceEach: 200 });
+      }
+      return answer(404, {});
+    });
+    renderPage(`from=DEL&to=BOM&date=${D1}&adults=2`);
+    await screen.findByText('two-adults');
+
+    await waitFor(() => expect(stripButton(D2).textContent).toMatch(/\$200/));
+    expect(stripButton(D2).textContent).not.toMatch(/\$400/);
+    expect(screen.getByText(/prices per person/)).toBeTruthy();
+  });
+});
+
+describe('the cheapest day on the strip', () => {
+  afterEach(() => localStorage.setItem('userCurrency', 'USD'));
+
+  // Mon 2 Nov was marked "Cheapest" beside the searched Wed 4 Nov at the same
+  // ₹9,530: the server picked one day by its exact dollar fare, and the
+  // searched day was never marked.
+  it('marks every day showing the lowest fare, the searched day too', async () => {
+    localStorage.setItem('userCurrency', 'INR');
+    globalThis.fetch = vi.fn((url) => {
+      const target = String(url);
+      if (target.includes('/flights/search')) return answer(200, { success: true, data: [card('searched-day')] });
+      if (target.includes('/flights/date-prices')) {
+        return answer(200, { success: true, currency: 'USD', pricesEach: { [D1]: 109.83, [D2]: 109.82, [D3]: 130 }, lowestPriceEach: 109.82 });
+      }
+      return answer(404, {});
+    });
+    renderPage();
+    await screen.findByText('searched-day');
+
+    await waitFor(() => expect(stripButton(D3).textContent).toMatch(/₹/));
+    expect(stripButton(D1).textContent).toContain('Cheapest');
+    expect(stripButton(D2).textContent).toContain('Cheapest');
+    expect(stripButton(D3).textContent).not.toContain('Cheapest');
   });
 });

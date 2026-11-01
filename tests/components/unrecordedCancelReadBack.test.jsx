@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { readMyTrips } from '../helpers/source.js';
 
 const mockUseFlightBooking = vi.fn();
 
@@ -148,9 +149,9 @@ describe('a cancel that went through and could not be recorded, read from its ro
   });
 
   it('the My Trips card prints no void number as a ticket, and offers no second cancel', () => {
-    const trips = readFileSync(path.resolve(process.cwd(), 'frontend/src/Pages/Common/login/mytrips.jsx'), 'utf8');
-    expect(trips).toMatch(/if \(ticketState\(booking\) === 'cancelled'\) return 'Cancelled';/);
-    expect(trips).toMatch(/statusUp !== 'CANCELLED' && statusUp !== 'FAILED' && ticketState\(booking\) !== 'cancelled' && \(daysUntilTrip/);
+    const trips = readMyTrips();
+    expect(trips).toMatch(/ticketState\(booking\) === 'cancelled'\) return 'Cancelled'/);
+    expect(trips).toMatch(/status !== 'CANCELLED' && status !== 'FAILED' && ticketState\(booking\) !== 'cancelled'\s*&& \(days === null \|\| days >= 0\)/);
   });
 });
 

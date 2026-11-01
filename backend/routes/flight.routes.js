@@ -1,6 +1,6 @@
 import express from 'express';
 import FlightProvider, { providerStatus } from '../services/flightProvider.js';
-import { resolveToIata, searchLocations } from '../services/airportsIndex.js';
+import { resolvePlaces, resolveToIata, searchLocations } from '../services/airportsIndex.js';
 import supabase from '../config/supabase.js';
 import fetch from 'node-fetch';
 import { get as cacheGet, set as cacheSet, withCache, CacheKeys, TTL } from '../services/cache.service.js';
@@ -33,7 +33,7 @@ import {
   HELD_REVIEW_REASON_PREFIXES, liveTicketNumbersMissingOf, unrecordedCancellationForCustomerOf,
   voidedTicketsOf, commitUnknownOf, SCHEDULE_CHANGED_REVIEW_REASON, isHeldForReview, ticketIssuedBeforeHoldOf,
   openFailedCancellationOf, ATTENTION_JOBS, cancellationRecordedByHandOf,
-  notHeldStillPaidOf, scheduleChangeOf, isWalletAttention, walletIssueKeyOf,
+  notHeldStillPaidOf, scheduleChangeOf, isWalletAttention, walletIssueKeyOf, TICKET_REFUSED_REASON,
 } from '../../shared/reviewQueue.js';
 import { errorSummary } from '../utils/errorSummary.js';
 import { flightSearchLimiter, guestBookingLimiter } from '../middleware/security.js';
@@ -42,6 +42,8 @@ import { isUsableEmail } from '../services/guestBooking.service.js';
 import { readBookedFeeTable } from '../services/bookedFeeTable.service.js';
 import { freeUntilOf } from '../../shared/flightCancelPolicy.js';
 import { isInternalRequest } from '../utils/internalRequest.js';
+import { buildTicketPdf } from '../services/ticketPdf.js';
+import { documentTitleOf } from '../../shared/ticketDocument.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -71,15 +73,52 @@ const searchDateProblem = ({ departDate, returnDate }, now = Date.now()) => {
   return null;
 };
 
+const MULTI_CITY_LEGS = { min: 2, max: 6 };
+
+const legsProblem = (legs, returnDate, now = Date.now()) => {
+  if (!Array.isArray(legs) || legs.length < MULTI_CITY_LEGS.min || legs.length > MULTI_CITY_LEGS.max) {
+    return { field: 'legs', message: 'A multi-city trip has 2 to 6 flights.' };
+  }
+  if (returnDate) {
+    return { field: 'returnDate', message: 'A multi-city trip has no return date. Add the way back as another flight.' };
+  }
+  const yesterday = new Date(now - DAY_MS).toISOString().slice(0, 10);
+  for (const [index, leg] of legs.entries()) {
+    const n = index + 1;
+    const date = String(leg?.departDate ?? '').trim();
+    if (!String(leg?.from ?? '').trim() || !String(leg?.to ?? '').trim() || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return { field: 'legs', message: `Flight ${n} needs where from, where to and a date.` };
+    }
+    if (String(leg.from).trim().toUpperCase() === String(leg.to).trim().toUpperCase()) {
+      return { field: 'legs', message: `Flight ${n} starts and ends in the same place.` };
+    }
+    if (date < yesterday) {
+      return { field: 'legs', message: `Flight ${n}: the date has already passed. Please choose today or a later date.` };
+    }
+    if (index > 0 && date < String(legs[index - 1].departDate).trim()) {
+      return { field: 'legs', message: `Flight ${n} leaves before flight ${n - 1}. Please put the flights in date order.` };
+    }
+  }
+  return null;
+};
+
 // Only the fields the handler genuinely requires; passthrough keeps the rest.
 const flightSearchSchema = z
   .object({
-    from: z.string().min(1, 'from is required'),
-    to: z.string().min(1, 'to is required'),
-    departDate: z.string().min(1, 'departDate is required'),
+    from: z.string().optional(),
+    to: z.string().optional(),
+    departDate: z.string().optional(),
   })
   .passthrough()
   .superRefine((body, ctx) => {
+    if (body.legs !== undefined) {
+      const problem = legsProblem(body.legs, body.returnDate);
+      if (problem) ctx.addIssue({ code: 'custom', path: [problem.field], message: problem.message });
+    } else {
+      for (const field of ['from', 'to', 'departDate']) {
+        if (!String(body[field] ?? '').trim()) ctx.addIssue({ code: 'custom', path: [field], message: `${field} is required` });
+      }
+    }
     const problem = searchDateProblem(body);
     if (problem) ctx.addIssue({ code: 'custom', path: [problem.field], message: problem.message });
     // This WSAP's Master Pricer request has no price ceiling. maxPrice was
@@ -706,7 +745,7 @@ async function releaseRefusedTicket(bookingReference, providerError, req) {
 
   const refusal = [providerError.amadeusCode, providerError.technicalError].filter(Boolean).join(' ');
   const { statusCode, payload } = await invokeOrchestratedCancel(
-    bookingReference, `Ticket refused by the airline: ${refusal}`, req, { system: true });
+    bookingReference, `${TICKET_REFUSED_REASON}: ${refusal}`, req, { system: true });
   console.warn('🎫 Ticket refused for good; cancel flow answered', { bookingReference, pnr, refusal, statusCode, paymentAction: payload?.cancellation?.paymentAction });
   reportError(providerError, { service: 'amadeus-ws', flow: 'booking', step: providerError.step, pnr, bookingReference, released: statusCode === 200 });
 
@@ -1983,6 +2022,7 @@ export function buildBookingRow(bookingData, userId) {
       // whether it ticketed and what it priced at.
       gds: bookingData.gds || null,
       tickets: bookingData.tickets || [],
+      airline_locators: bookingData.airlineLocators || [],
       // Fare breakdown for itemized display & refund support
       fare_breakdown: bookingData.fareBreakdown || null,
       // Store the original userId in booking_details so we can identify the user
@@ -2242,6 +2282,11 @@ const resolveToIATACode = (location) => {
   return resolveToIata(location) ?? null;
 };
 
+// One side of a search may name several airports, "JFK,EWR", each searched.
+const resolvePlaceList = (location) => (/^[A-Za-z]{3}(\s*,\s*[A-Za-z]{3})+$/.test(String(location ?? '').trim())
+  ? resolvePlaces(location)?.join(',') ?? null
+  : resolveToIATACode(location));
+
 // Transform Amadeus API response to frontend format
 const transformAmadeusFlightData = (flights, dictionaries = {}) => {
   if (!flights || flights.length === 0) return [];
@@ -2408,6 +2453,7 @@ const transformAmadeusFlightData = (flights, dictionaries = {}) => {
         isUpsellOffer: flight.isUpsellOffer || false,
         // Richer Amadeus fare data surfaced to the UI
         amenities: fareDetails?.amenities || [],
+        fareServices: fareDetails?.fareServices || [],
         fareBasis: fareDetails?.fareBasis || null,
         bookingClass: fareDetails?.class || null,
         validatingAirlineCodes: flight.validatingAirlineCodes || [],
@@ -2425,20 +2471,30 @@ router.post('/search', validate({ body: flightSearchSchema }), async (req, res) 
   try {
     console.log('🔍 Flight search request received:', req.body);
 
-    const { from, to, departDate, returnDate, tripType, travelers } = req.body;
+    const { returnDate, travelers } = req.body;
+    const isCode = (code) => /^[A-Z]{3}$/.test(String(code || ''));
+    const isCodes = (codes) => /^[A-Z]{3}(,[A-Z]{3})*$/.test(String(codes || ''));
+    const legs = Array.isArray(req.body.legs)
+      ? req.body.legs.map((leg) => ({ text: leg, from: resolveToIATACode(leg.from), to: resolveToIATACode(leg.to), departDate: String(leg.departDate).trim() }))
+      : null;
+    const from = legs ? legs[0].text.from : req.body.from;
+    const to = legs ? legs[legs.length - 1].text.to : req.body.to;
+    const departDate = legs ? legs[0].departDate : req.body.departDate;
 
     // Resolve city names to IATA codes (handles cases like "New York" -> "JFK")
-    const resolvedFrom = resolveToIATACode(from);
-    const resolvedTo = resolveToIATACode(to);
+    const resolvedFrom = legs ? legs[0].from : resolvePlaceList(from);
+    const resolvedTo = legs ? legs[legs.length - 1].to : resolvePlaceList(to);
     console.log(`📍 Resolved locations: from="${from}" -> "${resolvedFrom}", to="${to}" -> "${resolvedTo}"`);
 
     // Text that names no place is not searched as a guess. It used to go to
     // Amadeus as typed - or, before that, as the first suggestion for its first
     // word - and the page headed "Flights from San Francisco, CA" listed
     // departures from Ouagadougou.
-    const unknownPlace = !/^[A-Z]{3}$/.test(String(resolvedFrom || '')) ? from
-      : !/^[A-Z]{3}$/.test(String(resolvedTo || '')) ? to
-        : null;
+    const unplacedLeg = legs?.find((leg) => !isCode(leg.from) || !isCode(leg.to));
+    const unknownPlace = unplacedLeg ? (!isCode(unplacedLeg.from) ? unplacedLeg.text.from : unplacedLeg.text.to)
+      : !isCodes(resolvedFrom) ? from
+        : !isCodes(resolvedTo) ? to
+          : null;
     if (unknownPlace) {
       return res.status(400).json({
         success: false,
@@ -2452,7 +2508,8 @@ router.post('/search', validate({ body: flightSearchSchema }), async (req, res) 
       from: resolvedFrom,
       to: resolvedTo,
       departDate,
-      returnDate: returnDate && returnDate.trim() !== '' ? returnDate : undefined,
+      returnDate: !legs && returnDate && returnDate.trim() !== '' ? returnDate : undefined,
+      ...(legs ? { legs: legs.map(({ from: legFrom, to: legTo, departDate: legDate }) => ({ from: legFrom, to: legTo, departDate: legDate })) } : {}),
       adults: parseInt(req.body.adults || travelers) || 1,
       children: parseInt(req.body.children) || 0,
       infants: parseInt(req.body.infants) || 0,
@@ -2482,7 +2539,9 @@ router.post('/search', validate({ body: flightSearchSchema }), async (req, res) 
       const flightCacheKey = CacheKeys.flightSearch(
         searchParams.from,
         searchParams.to,
-        `${searchParams.departDate}|${searchParams.returnDate || 'ow'}`,
+        searchParams.legs
+          ? `mc|${searchParams.legs.map((leg) => `${leg.from}-${leg.to}-${leg.departDate}`).join('~')}`
+          : `${searchParams.departDate}|${searchParams.returnDate || 'ow'}`,
         `${searchParams.adults}-${searchParams.children}-${searchParams.infants}-${searchParams.travelClass || 'any'}-${searchParams.nonStop ? 'ns' : 'any'}-${filterKey}`
       );
       let amadeusResponse = await cacheGet(flightCacheKey);
@@ -2746,13 +2805,15 @@ router.post('/date-prices', async (req, res) => {
     // key and the strip quoted prices no JFK flight sells. The search page
     // resolves through the same table, so the strip matches the search it
     // links to.
-    const origin = resolveToIATACode(from) || from;
-    const destination = resolveToIATACode(to) || to;
+    const origin = resolvePlaceList(from) || from;
+    const destination = resolvePlaceList(to) || to;
     const ws = describeWsConfig();
     const cacheKey = CacheKeys.flightBrowse('date-prices', [
       origin, destination,
       `${adults || 1}-${children || 0}-${infants || 0}-${travelClass || 'any'}`,
       dates.slice().sort().join(','),
+      // Payloads cached before pricesEach existed would leave the strip blank.
+      'each',
       // The strip quotes the cheapest fare of the day, so it has to be built
       // under the same rules as the search it links to. Without this the strip
       // kept advertising a blocked carrier's fare for the life of the cache.
@@ -2868,21 +2929,36 @@ const fareRulesFrom = (priced, flightOffer) => {
       penaltyText.match(/0?(\d{1,2})\s*HOURS?\s+(?:BEFORE|PRIOR)/);
     const cutoffHours = cutoffMatch ? parseInt(cutoffMatch[1], 10) : null;
 
-    const isNonRefundable = /NON[\s-]?REFUND/i.test(penaltyText);
-
-    // Refundability as the fare itself states it (null when it does not).
-    // This read `refundableTaxes`, a tax amount, as a yes/no answer.
-    const refundableFlag = flightOffer._ama?.refundable ?? (isNonRefundable ? false : null);
+    // The airline's refund and change rules (MiniRules cat 33 and 31) before
+    // the text. A scan of the whole text for "NON-REFUNDABLE" read Air India
+    // Eco Flex's "TICKET IS NON-REFUNDABLE IN CASE OF NO-SHOW" as the answer for
+    // cancelling a week ahead, which the airline allows for INR 999. And the
+    // text's charge is per fare component: INR 5000 where MiniRules said $106
+    // for a one-stop trip on two.
+    const rules = priced?.penalties || null;
+    const pricedOffer = priced?.data?.flightOffers?.[0];
+    const ruleFee = (cell) => (cell?.allowed === true && Number(cell.amount) > 0 && rules?.currency
+      ? { amount: Number(cell.amount), currency: rules.currency }
+      : null);
+    const ruleCancelFee = ruleFee(rules?.refund?.before);
+    const ruleChangeFee = ruleFee(rules?.change?.before);
+    const stated = (value) => (typeof value === 'boolean' ? value : null);
+    const refundableFlag = stated(rules?.refund?.before?.allowed)
+      ?? stated(pricedOffer?._ama?.refundable)
+      ?? stated(flightOffer._ama?.refundable);
 
     cancellation = {
-      hasData: charges.length > 0 || cutoffMatch != null,
+      hasData: charges.length > 0 || cutoffMatch != null || Boolean(ruleCancelFee || ruleChangeFee),
       // Fall back to the fare's own currency, not a fixed one: offers are
       // priced in the office currency and ARC Pay charges in it.
       currency: (cancelCharge || changeCharge)?.currency || flightOffer.price?.currency || 'USD',
       cutoffHours,
+      // The mobile app reads these two with `currency`, so they stay the text's.
       changeFee: changeCharge?.amount ?? null,
       cancelFee: cancelCharge?.amount ?? null,
+      airlineFees: { cancel: ruleCancelFee, change: ruleChangeFee },
       refundable: refundableFlag,
+      noShowRefundable: stated(rules?.refund?.noShowBefore?.allowed),
       fareTotal: flightOffer.price ? parseFloat(flightOffer.price.grandTotal || flightOffer.price.total) : null,
       fareCurrency: flightOffer.price?.currency || null,
     };
@@ -4186,6 +4262,7 @@ router.post('/order', optionalProtect, async (req, res) => {
       // numbers the customer's document prints.
       gds: orderResponse.gds || null,
       tickets: orderResponse.tickets || [],
+      airlineLocators: orderResponse.airlineLocators || [],
       ticketed: orderResponse.ticketed === true,
       // The chain's "issued, but the numbers had not surfaced" verdict. It was
       // returned in the HTTP body and never written, so the alarm that watches
@@ -4338,6 +4415,7 @@ router.post('/order', optionalProtect, async (req, res) => {
       mode: orderResponse.mode,
       ticketed: orderResponse.ticketed ?? false,
       tickets: orderResponse.tickets || [],
+      airlineLocators: orderResponse.airlineLocators || [],
       transactionId: payment?.arcReceipt || null,
       savedToDatabase: !!dbBooking,
       ...(tripReward ? { tripReward } : {}),
@@ -4760,26 +4838,7 @@ router.get('/bookings/:bookingRef', optionalProtect, guestBookingLimiter, async 
     //
     // Passport numbers arrive masked except for staff. The stored number is
     // for the airline; nobody opening their booking needs it back.
-    const showPassports = isStaff(req.user);
-    const formattedBooking = {
-      // The camelCase shape the bookings list sends. Manage Booking read
-      // camelCase fields that this endpoint never had, so a refreshed page
-      // showed "Date N/A" and "--:--".
-      ...toClientBooking(data, { showPassports }),
-      // The passenger list lives in its own column, not inside booking_details,
-      // and was never included here. Manage Booking therefore showed "No
-      // passenger information available" whenever it loaded the booking itself
-      // — a refresh, or a shared link — and showed it correctly only when My
-      // Trips handed the record over through router state.
-      travelers: clientTravellers(data.booking_details?.travelers ?? data.passenger_details, { showPassports }),
-      passengerData: clientTravellers(data.passenger_details ?? data.booking_details?.travelers, { showPassports }),
-      status: data.status,
-      payment_status: data.payment_status,
-      bookingReference: data.booking_reference,
-      type: data.travel_type,
-      bookingDate: data.created_at,
-      source: 'database'
-    };
+    const formattedBooking = singleBookingView(data, { showPassports: isStaff(req.user) });
 
     res.json({
       success: true,
@@ -4796,6 +4855,41 @@ router.get('/bookings/:bookingRef', optionalProtect, guestBookingLimiter, async 
 
 // The airline's cancel and change-date fees for a booked trip, read from its
 // PNR. Opened exactly as the booking itself is (loadOwnedBooking).
+router.get('/bookings/:bookingRef/ticket.pdf', optionalProtect, guestBookingLimiter, async (req, res) => {
+  try {
+    if (!supabase) {
+      return res.status(503).json({ success: false, error: 'Database not configured' });
+    }
+    const { booking: data, notFound } = await loadOwnedBooking(req.params.bookingRef, req.user, {
+      email: req.get('x-booking-email')
+    });
+    if (notFound || !data) {
+      return res.status(404).json({ success: false, error: 'Booking not found' });
+    }
+
+    const booking = singleBookingView(data, { showPassports: false });
+    let pdf;
+    try {
+      pdf = await buildTicketPdf(booking);
+    } catch (error) {
+      if (error?.code === 'NO_DOCUMENT') {
+        return res.status(409).json({ success: false, code: 'NO_DOCUMENT', error: error.message });
+      }
+      throw error;
+    }
+
+    const label = documentTitleOf(booking) === 'E-Ticket' ? 'ETicket' : 'BookingConfirmation';
+    const reference = String(booking.bookingReference || 'Booking').replace(/[^A-Za-z0-9-]/g, '');
+    res.set('Content-Type', 'application/pdf');
+    res.set('Content-Disposition', `attachment; filename="Jetsetters-${label}-${reference}.pdf"`);
+    res.set('Cache-Control', 'private, no-store');
+    return res.send(Buffer.from(pdf));
+  } catch (error) {
+    console.error('❌ Ticket PDF error:', error);
+    return res.status(500).json({ success: false, error: 'Could not prepare the ticket. Please try again.' });
+  }
+});
+
 router.get('/bookings/:bookingRef/fee-rules', optionalProtect, guestBookingLimiter, async (req, res) => {
   try {
     if (!supabase) {
@@ -4868,6 +4962,29 @@ const CLIENT_TRAVELLER_FIELDS = [
 ];
 
 /** Travellers as a response carries them, with passports masked unless `showPassports`. */
+/** One booking as Manage Booking, the e-ticket and the app read it. */
+function singleBookingView(data, { showPassports }) {
+  return {
+    // The camelCase shape the bookings list sends. Manage Booking read
+    // camelCase fields that this endpoint never had, so a refreshed page
+    // showed "Date N/A" and "--:--".
+    ...toClientBooking(data, { showPassports }),
+    // The passenger list lives in its own column, not inside booking_details,
+    // and was never included here. Manage Booking therefore showed "No
+    // passenger information available" whenever it loaded the booking itself
+    // — a refresh, or a shared link — and showed it correctly only when My
+    // Trips handed the record over through router state.
+    travelers: clientTravellers(data.booking_details?.travelers ?? data.passenger_details, { showPassports }),
+    passengerData: clientTravellers(data.passenger_details ?? data.booking_details?.travelers, { showPassports }),
+    status: data.status,
+    payment_status: data.payment_status,
+    bookingReference: data.booking_reference,
+    type: data.travel_type,
+    bookingDate: data.created_at,
+    source: 'database'
+  };
+}
+
 function clientTravellers(list, { showPassports = false } = {}) {
   if (!Array.isArray(list)) return [];
   return list.map((traveller) => {
@@ -5010,6 +5127,7 @@ export function toClientBooking(booking, { showPassports = false } = {}) {
     bookingDate: booking.created_at,
     // Core booking_details
     pnr: booking.booking_details?.pnr,
+    airlineLocators: Array.isArray(booking.booking_details?.airline_locators) ? booking.booking_details.airline_locators : [],
     orderId: booking.booking_details?.order_id,
     amadeusOrderId: booking.booking_details?.amadeus_order_id || booking.booking_details?.order_id || null,
     // Only the bank's reference. Older rows hold ARC's per-order count ("1"),
@@ -5350,8 +5468,8 @@ router.post('/calendar-prices', async (req, res) => {
     // Resolved once and used for both the key and the search, as /date-prices
     // does and for the same reason: the key read "New York" as JFK while the
     // search read it as NYC.
-    const from = resolveToIATACode(origin) || origin;
-    const to = resolveToIATACode(destination) || destination;
+    const from = resolvePlaceList(origin) || origin;
+    const to = resolvePlaceList(destination) || destination;
     const ws = describeWsConfig();
 
     // Redis-backed, replacing an in-process Map that was per-instance and lost

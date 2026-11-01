@@ -101,10 +101,9 @@ describe('where a flight is cancelled', () => {
   });
 
   it('My Trips cancels a flight through the same call', async () => {
-    const { readFileSync } = await import('node:fs');
-    const path = await import('node:path');
-    const trips = readFileSync(path.resolve(process.cwd(), 'frontend/src/Pages/Common/login/mytrips.jsx'), 'utf8');
-    expect(trips).toMatch(/result = await ArcPayService\.cancelFlightBooking\(ref, userEmail, 'Customer request'\)/);
+    const { readMyTrips } = await import('../helpers/source.js');
+    const trips = readMyTrips();
+    expect(trips).toMatch(/await ArcPayService\.cancelFlightBooking\(ref, userEmail, 'Customer request'\)/);
     expect(trips).not.toMatch(/method: 'DELETE'/);
   });
 });

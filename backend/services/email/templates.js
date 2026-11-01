@@ -17,6 +17,8 @@ import {
   REFUND_STUCK_ACTIONS, REFUND_DONE_ACTIONS, coinsSentence, customerReviewSentence, feeCoversSentence, refundOutcome, serviceFeeKeptBy,
 } from '../../../shared/cancellationOutcome.js';
 import { clockTime, itinerariesFromOffer, layoverBetween, legLabel } from '../../../shared/bookingItineraries.js';
+import { printedTicketNumber } from '../../../shared/ticketNumber.js';
+import { bookingCodeOf } from '../../../shared/eTicket.js';
 
 const money = (amount, currency = 'USD') =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(Number(amount) || 0);
@@ -532,13 +534,15 @@ export function generateBookingConfirmationTemplate(data) {
     },
   });
 
+  const code = bookingCodeOf({ pnr: d.PNR || d.pnr, airline_locators: d.airline_locators });
   const rows = [
     ['Booking Type', title],
     travelDate ? ['Travel Date', longDate(travelDate)] : null,
     ['Travelers', `${passengers} ${passengers === 1 ? 'Person' : 'People'}`],
     d.hotelName ? ['Hotel', d.hotelName] : null,
     d.cruiseLine ? ['Cruise Line', d.cruiseLine] : null,
-    d.PNR || d.pnr ? ['Airline reference', d.PNR || d.pnr] : null,
+    code ? [code.label, code.value] : null,
+    code?.amadeusReference ? ['GDS PNR', code.amadeusReference] : null,
     // The one number a customer actually needs at a check-in desk, and the one
     // this email never carried: a ticketed booking said "Confirmed" and listed
     // its booking reference, its PNR and its transaction id, and nowhere the
@@ -547,7 +551,7 @@ export function generateBookingConfirmationTemplate(data) {
       .filter((ticket) => ticket?.number)
       .map((ticket, index, all) => [
         all.length === 1 ? 'E-ticket number' : `E-ticket · ${ticket.travelerName || ticket.passengerName || `Traveller ${index + 1}`}`,
-        ticket.number,
+        printedTicketNumber(ticket),
       ]),
     d.Cabin || d.cabin ? ['Cabin', d.Cabin || d.cabin] : null,
   ].filter(Boolean);
@@ -712,10 +716,11 @@ export function generateTicketIssuedTemplate(data = {}) {
   const { customerName, bookingReference, tickets = [], bookingDetails = {} } = data;
   const details = bookingDetails || {};
   const issued = (Array.isArray(tickets) ? tickets : []).filter((t) => t?.number);
+  const code = bookingCodeOf({ pnr: details.pnr || details.PNR, airline_locators: details.airline_locators ?? details.airlineLocators });
 
   const named = issued.map((ticket) => [
     ticket.travelerName || ticket.passengerName || 'Traveller',
-    `<span style="letter-spacing:1px;">${ticket.number}</span>`,
+    `<span style="letter-spacing:1px;">${printedTicketNumber(ticket)}</span>`,
   ]);
 
   const opening = issued.length === 1
@@ -728,17 +733,18 @@ export function generateTicketIssuedTemplate(data = {}) {
     ${paragraph(opening)}
     ${figureBlock([
     issued.length === 1
-      ? { label: 'E-ticket number', value: issued[0].number, mono: true, note: statusPill('Issued', 'success') }
+      ? { label: 'E-ticket number', value: printedTicketNumber(issued[0]), mono: true, note: statusPill('Issued', 'success') }
       : { label: 'E-tickets issued', value: String(issued.length), note: statusPill('Issued', 'success') },
     { label: 'Booking reference', value: bookingReference, mono: true, small: true },
   ])}
     ${named.length > 1 ? detailCard('Ticket numbers', named) : ''}
     ${paragraph(
     'Use the ticket number if the airline asks for one — at check-in, at the airport, '
-    + 'or on the phone. The airline reference below is the one on its own website.',
+    + `or on the phone.${code?.isAirlines ? ' The airline PNR below is the one on its own website.' : ''}`,
   )}
     ${detailCard('Your booking', [
-    details.pnr || details.PNR ? ['Airline reference', details.pnr || details.PNR] : null,
+    code ? [code.label, code.value] : null,
+    code?.amadeusReference ? ['GDS PNR', code.amadeusReference] : null,
     ['Booking reference', bookingReference],
   ].filter(Boolean))}
     ${actionRow([
@@ -881,7 +887,7 @@ export function generateCancellationTemplate(data) {
   const fmt = (a) => money(a, currency);
   const outcome = refundOutcome({ paymentAction, refundAmount });
   const serviceFee = serviceFeeKeptBy(data);
-  const keptRow = serviceFee > 0 ? ['Service fee (not refundable)', fmt(serviceFee)] : ['Cancellation fee', fmt(cancellationFee)];
+  const keptRow = serviceFee > 0 ? ['Platform fee (not refundable)', fmt(serviceFee)] : ['Cancellation fee', fmt(cancellationFee)];
   const policySentence = customerReviewSentence(data);
   const coins = coinsSentence(data);
 
@@ -1160,7 +1166,7 @@ export function generateLogoutNotificationTemplate(data) {
  * ──────────────────────────────────────────────────────────────────────────── */
 
 /** A trip-reward voucher paid out. The coins lead: they are the news. */
-export function generateTripRewardTemplate({ customerName, coins, code, bookingReference, origin, destination } = {}) {
+export function generateTripRewardTemplate({ customerName, coins, code, bookingReference, origin, destination, perBookingCoins } = {}) {
   const count = Math.max(0, Math.floor(Number(coins) || 0));
   const coinsText = new Intl.NumberFormat('en-US').format(count);
   const named = code ? `voucher <strong>${code}</strong>` : 'trip reward';
@@ -1175,7 +1181,7 @@ export function generateTripRewardTemplate({ customerName, coins, code, bookingR
       ${paragraph(`Hi <strong>${firstNameOf(customerName)}</strong>,`)}
       ${figureBlock([{ label: 'Added to your Jet Wallet', value: `${coinsText} Jet Coins`, note: `Worth ${money(count / 100)}` }])}
       ${paragraph(paidOut)}
-      ${highlightBox('Use them on your next flight: switch on <strong>Use my Jet Coins</strong> at checkout. 100 Jet Coins = $1.', { bg: '#F1FBFD', border: '#0890BC', color: '#034457' })}
+      ${highlightBox(`Use them on your next flight: switch on <strong>Use my Jet Coins</strong> at checkout. 100 Jet Coins = $1.${perBookingCoins > 0 ? ` Each flight booking can use up to ${money(perBookingCoins / 100)} of them, depending on its base fare.` : ''}`, { bg: '#F1FBFD', border: '#0890BC', color: '#034457' })}
     `,
     cta: { text: 'Open my Jet Wallet', url: `${BRAND.site}/profiledashboard?tab=wallet` },
   });

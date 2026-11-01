@@ -16,7 +16,7 @@ describe('a cancel that gave Jet Coins back', () => {
       },
     });
     expect(text).toContain('28,750 Jet Coins ($287.50) went back to your Jet Wallet.');
-    expect(text).toMatch(/service fee covers the card payment, so no card refund is due/);
+    expect(text).toMatch(/platform fee covers the card payment, so no card refund is due/);
     expect(text).not.toMatch(/covers the amount paid, so no refund is due/);
   });
 

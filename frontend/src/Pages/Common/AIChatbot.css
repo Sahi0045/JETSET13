@@ -1,6 +1,6 @@
 .ai-chatbot-container {
   position: fixed;
-  bottom: 20px;
+  bottom: calc(20px + var(--floating-lift, 0px));
   right: 20px;
   z-index: 999;
 }
@@ -8,51 +8,6 @@
 /* Set by an open date picker, which on a phone spans the corner this button sits in. */
 body.date-picker-open .ai-chatbot-container {
   visibility: hidden;
-}
-
-/* Set while a page shows its own action bar along the bottom of a phone screen. */
-@media (max-width: 1023px) {
-  body.phone-action-bar .ai-chatbot-container {
-    bottom: 88px;
-  }
-}
-
-@media (max-width: 640px) {
-  body.phone-action-bar .ai-chatbot-container {
-    bottom: 80px;
-  }
-}
-
-.chat-toggle-button {
-  width: 60px;
-  height: 60px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #036cca, #0d99ff);
-  border: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-  transition: all 0.3s ease;
-  position: absolute;
-  bottom: 0;
-  right: 0;
-}
-
-.chat-toggle-button svg {
-  width: 28px;
-  height: 28px;
-  color: white;
-}
-
-.chat-toggle-button:hover {
-  transform: scale(1.05);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
-}
-
-.chat-toggle-button.open {
-  background: #f44336;
 }
 
 .chatbot-window {
@@ -82,11 +37,34 @@ body.date-picker-open .ai-chatbot-container {
 }
 
 .chatbot-header {
-  background: linear-gradient(135deg, #036cca, #0d99ff);
+  background: #055B75;
   color: white;
   padding: 15px 20px;
   display: flex;
   align-items: center;
+  justify-content: space-between;
+}
+
+.chatbot-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: white;
+  cursor: pointer;
+}
+
+.chatbot-close:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.chatbot-close svg {
+  width: 18px;
+  height: 18px;
 }
 
 .chatbot-title {
@@ -128,7 +106,7 @@ body.date-picker-open .ai-chatbot-container {
 .bot-avatar {
   width: 32px;
   height: 32px;
-  background: #f0f8ff;
+  background: #F1FBFD;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -140,7 +118,7 @@ body.date-picker-open .ai-chatbot-container {
 .bot-avatar svg {
   width: 20px;
   height: 20px;
-  color: #0d99ff;
+  color: #055B75;
 }
 
 .message-content {
@@ -151,13 +129,13 @@ body.date-picker-open .ai-chatbot-container {
 }
 
 .bot-message .message-content {
-  background-color: #f0f8ff;
+  background-color: #F1FBFD;
   color: #333;
   border-top-left-radius: 2px;
 }
 
 .user-message .message-content {
-  background: linear-gradient(135deg, #0d99ff, #036cca);
+  background: #055B75;
   color: white;
   border-top-right-radius: 2px;
 }
@@ -167,7 +145,7 @@ body.date-picker-open .ai-chatbot-container {
   align-items: center;
   gap: 4px;
   padding: 10px 16px;
-  background-color: #f0f8ff;
+  background-color: #F1FBFD;
   border-radius: 18px;
   border-top-left-radius: 2px;
 }
@@ -175,7 +153,7 @@ body.date-picker-open .ai-chatbot-container {
 .typing-indicator span {
   width: 8px;
   height: 8px;
-  background-color: #0d99ff;
+  background-color: #055B75;
   border-radius: 50%;
   display: inline-block;
   animation: typing 1.4s infinite ease-in-out both;
@@ -223,13 +201,13 @@ body.date-picker-open .ai-chatbot-container {
 }
 
 .chatbot-input input:focus {
-  border-color: #0d99ff;
+  border-color: #055B75;
 }
 
 .chatbot-input button {
   width: 40px;
   height: 40px;
-  background: linear-gradient(135deg, #036cca, #0d99ff);
+  background: #055B75;
   border: none;
   border-radius: 50%;
   display: flex;
@@ -256,21 +234,10 @@ body.date-picker-open .ai-chatbot-container {
   }
 }
 
-/* Phones: shrink the launcher and tuck it into the corner so it lines up with
-   the compact WhatsApp / Contact buttons instead of crowding page content. */
+/* Phones: the window opens above the Help button (FloatingHelp.css). */
 @media (max-width: 640px) {
   .ai-chatbot-container {
-    bottom: 12px;
-    right: 10px;
-  }
-
-  .chat-toggle-button {
-    width: 46px;
-    height: 46px;
-  }
-
-  .chat-toggle-button svg {
-    width: 22px;
-    height: 22px;
+    bottom: calc(16px + var(--floating-lift, 0px));
+    right: 12px;
   }
 }

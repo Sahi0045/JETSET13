@@ -256,6 +256,8 @@ export const applyPricingToOffer = (reply, offer) => {
   const segmentCount = offer._ama?.segments?.length ?? Math.max(0, ...perGroup.map((g) => g.segments.length));
   const pricedFareFamily = singleFareFamily(perGroup, segmentCount);
   const penalties = perGroup.flatMap((g) => g.text).filter((t) => /REFUND|PENALT|CHANGE/i.test(t.text));
+  // The airline's ticket endorsement ("VLD FI ONLY/NONREF/NON-CHG"), filed with the fare.
+  const endorsements = perGroup.flatMap((g) => g.text).filter((t) => t.informationType === '10');
 
   return {
     priced: true,
@@ -274,7 +276,7 @@ export const applyPricingToOffer = (reply, offer) => {
         // From the airline's pricing, never the offer it was given: checkout
         // and the order route price the offer the browser sent, and bookings
         // record this flag.
-        refundable: readRefundable(penalties.map((t) => t.text).join(' ')),
+        refundable: readRefundable([...penalties, ...endorsements].map((t) => t.text)),
         pricedAt: new Date().toISOString(),
         pricedTotal: total.toFixed(2),
         pricedCurrency: currency,

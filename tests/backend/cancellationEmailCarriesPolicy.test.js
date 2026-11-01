@@ -37,7 +37,7 @@ describe('the customer cancellation email, as sent', () => {
       paymentAction: 'PARTIAL_REFUND', refundAmount: 287.5, cancellationFee: 12.5, policy: 'free_window', terms,
     }));
 
-    expect(customerHtml()).toContain('Service fee (not refundable)');
+    expect(customerHtml()).toContain('Platform fee (not refundable)');
     expect(customerHtml()).not.toContain('Cancellation fee');
   });
 

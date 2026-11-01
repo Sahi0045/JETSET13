@@ -24,7 +24,7 @@
 export const formatCheckedBag = (bag) => {
   if (!bag) return null;
   if (typeof bag === 'string') return bag.trim() || null;
-  if (bag.weight) return `${bag.weight} ${bag.weightUnit || 'KG'}`;
+  if (bag.weight) return `${bag.weight} ${({ K: 'KG', L: 'LB' })[String(bag.weightUnit).toUpperCase()] || bag.weightUnit || 'KG'}`;
   if (bag.quantity) return `${bag.quantity} ${bag.quantity === 1 ? 'Piece' : 'Pieces'}`;
   return null;
 };

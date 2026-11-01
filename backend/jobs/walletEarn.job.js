@@ -23,11 +23,11 @@
  * run, however far off its payout date is, or whether it has none.
  */
 import supabase from '../config/supabase.js';
-import { captureCoins, earnCoins, payTripVoucher, releaseCoins, reverseEarnedCoins, voidTripReward } from '../services/wallet.service.js';
+import { captureCoins, earnCoins, flightCoinBands, payTripVoucher, releaseCoins, reverseEarnedCoins, voidTripReward } from '../services/wallet.service.js';
 import { sendEmail } from '../services/emailService.js';
 import { generateTripRewardTemplate } from '../services/email/templates.js';
 import { isUsableEmail } from '../../shared/email.js';
-import { earnedCoinsFor } from '../../shared/jetCoins.js';
+import { earnedCoinsFor, maxCoinLimitOf } from '../../shared/jetCoins.js';
 import { freeUntilOf } from '../../shared/flightCancelPolicy.js';
 import { isTicketed } from '../../shared/reviewQueue.js';
 import { officeTimeZoneOf } from '../services/amadeusSoap/config.js';
@@ -402,7 +402,10 @@ export function tripRewardVerdict(row, now = Date.now(), timeZone = officeTimeZo
 /** Best effort: a failed email is logged and never retried, so nobody is emailed twice. */
 export async function sendTripRewardEmail({ client = supabase, reward, booking, send = sendEmail }) {
   try {
-    const { data: user } = await client.from('users').select('email, first_name, name').eq('id', reward.user_id).maybeSingle();
+    const [{ data: user }, coinBands] = await Promise.all([
+      client.from('users').select('email, first_name, name').eq('id', reward.user_id).maybeSingle(),
+      flightCoinBands(client),
+    ]);
     const details = booking?.booking_details || {};
     const to = [user?.email, details.customer_email].find(isUsableEmail);
     if (!to) {
@@ -419,6 +422,7 @@ export async function sendTripRewardEmail({ client = supabase, reward, booking, 
         bookingReference: booking?.booking_reference,
         origin: details.origin,
         destination: details.destination,
+        perBookingCoins: coinBands ? maxCoinLimitOf(coinBands) : null,
       }),
     });
     return true;

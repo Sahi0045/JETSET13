@@ -43,7 +43,7 @@ function FlightMobileSortFilter({ filters, priceRangeBounds, sortOrder, onSortCh
   }, [filters, priceRangeBounds]);
 
   return (
-    <div className="lg:hidden -mx-4 mb-3">
+    <div className="xl:hidden -mx-4 mb-3">
       <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar px-4 py-0.5">
         {/* Filters trigger — stays white, count communicated by the badge */}
         <button
