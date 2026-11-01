@@ -104,3 +104,70 @@ describe('a city with several airports', () => {
     expect(resolveToIata('Newark')).toBe('EWR');
   });
 });
+
+/**
+ * A state, island or country finds its airports. "Hawa" found only Hawassa in
+ * Ethiopia, and Hawaii, Florida, Kerala, the Maldives and Jamaica found nothing:
+ * the data had airport and city names only (1 Nov).
+ */
+describe('a state, island or country', () => {
+  it('lists Hawaii\'s airports for "hawa", Honolulu first, and names the state under them', () => {
+    expect(codes('hawa')[0]).toBe('HNL');
+    expect(codes('hawaii').slice(0, 5)).toEqual(['HNL', 'OGG', 'KOA', 'LIH', 'ITO']);
+    expect(rows('hawaii')[0]).toMatchObject({ code: 'HNL', area: 'Hawaii' });
+    expect(codes('hawa')).toContain('AWA');
+  });
+
+  it.each([
+    ['florida', 'MCO'],
+    ['california', 'LAX'],
+    ['kerala', 'COK'],
+    ['kashmir', 'SXR'],
+    ['ladakh', 'IXL'],
+    ['andaman', 'IXZ'],
+    ['sicily', 'CTA'],
+    ['canary islands', 'LPA'],
+    ['bali', 'DPS'],
+    ['big island', 'KOA'],
+    ['tahiti', 'PPT'],
+    ['darjeeling', 'IXB'],
+  ])('"%s" starts with %s', (q, first) => {
+    expect(codes(q)[0]).toBe(first);
+    expect(rows(q)[0].area).toBeTruthy();
+  });
+
+  it.each([
+    ['maldives', 'MLE'],
+    ['jamaica', 'MBJ'],
+    ['bahamas', 'NAS'],
+    ['aruba', 'AUA'],
+    ['puerto rico', 'SJU'],
+    ['cayman islands', 'GCM'],
+    ['turks and caicos', 'PLS'],
+    ['st lucia', 'UVF'],
+    ['saint lucia', 'UVF'],
+    ['virgin islands', 'STT'],
+    ['costa rica', 'SJO'],
+    ['dominican republic', 'PUJ'],
+    ['turkey', 'IST'],
+    ['india', 'DEL'],
+  ])('the country "%s" finds %s, and the row names no state', (q, code) => {
+    const found = rows(q, 12);
+    expect(found.map((row) => row.code)).toContain(code);
+    expect(found.find((row) => row.code === code && row.type === 'AIRPORT')?.area).toBeUndefined();
+  });
+
+  it('keeps cities first when a state or country only starts the same way', () => {
+    expect(codes('ind').slice(0, 1)).toEqual(['IND']);
+    expect(codes('ind', 12)).toContain('IDR');
+    expect(codes('flor')).toEqual(expect.arrayContaining(['FLN', 'FLR']));
+    expect(codes('cal')).toEqual(expect.arrayContaining(['YYC', 'CCU']));
+    expect(codes('new')[0]).toBe('NYC');
+    expect(codes('washington')[0]).toBe('WAS');
+  });
+
+  it('needs three letters, and a word of four inside a name', () => {
+    expect(codes('in')).not.toContain('BOM');
+    expect(codes('and')).not.toContain('SXR');
+  });
+});

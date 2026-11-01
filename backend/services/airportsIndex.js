@@ -1,5 +1,7 @@
 import { createRequire } from 'node:module';
-import { CITY_NAMES, METRO_AIRPORTS, METRO_CENTRES, METRO_CITIES, PASSENGERS, SHORT_NAMES } from '../data/airports/placeRanking.js';
+import {
+  AREA_NAMES, CITY_NAMES, COUNTRY_ALIASES, METRO_AIRPORTS, METRO_CENTRES, METRO_CITIES, PASSENGERS, SHORT_NAMES,
+} from '../data/airports/placeRanking.js';
 
 /**
  * Airport and city lookup, served from a bundled dataset.
@@ -25,6 +27,37 @@ const normalize = (value) => String(value ?? '')
   .normalize('NFD')
   .replace(/[̀-ͯ]/g, '')   // strip accents: "Málaga" matches "malaga"
   .trim();
+
+const wordsOf = (value) => normalize(value).replace(/[^a-z0-9]+/g, ' ').trim();
+
+const COUNTRY_NAMES = (() => {
+  try { return new Intl.DisplayNames(['en'], { type: 'region' }); } catch { return null; }
+})();
+const countryNamesOf = (code) => {
+  let name = null;
+  try { name = COUNTRY_NAMES?.of(code) ?? null; } catch { name = null; }
+  return [name, ...(COUNTRY_ALIASES[code] ?? [])].filter(Boolean);
+};
+const areasByCode = new Map();
+for (const [area, codes] of Object.entries(AREA_NAMES)) {
+  for (const code of codes) areasByCode.set(code, [...(areasByCode.get(code) ?? []), area]);
+}
+
+/**
+ * The state, island and country names a place can be found by: "Hawaii" for
+ * Honolulu, "Maldives" for Male. `shown` goes under a row the name found, and
+ * is null for a country, which the row shows already.
+ */
+const areasOf = (record) => [
+  ...(record.region ? [{ name: record.region, shown: record.region.split(' (')[0] }] : []),
+  ...(areasByCode.get(record.code) ?? []).map((name) => ({ name, shown: name })),
+  ...countryNamesOf(record.countryCode).map((name) => ({ name, shown: null })),
+].flatMap(({ name, shown }) => [...new Set([name, name.replace(/&/g, ' and '), name.replace(/\bSt\.?(?=\s)/g, 'Saint')])]
+  .map((spelling) => ({ text: wordsOf(spelling), shown })));
+
+// Part of a state's or country's name finds only its busiest airports, so
+// "flor" lists Florida's big five and still Florence; the whole name finds all.
+const AREA_PART_LIMIT = 5;
 
 const metroOf = new Map(Object.entries(METRO_AIRPORTS).flatMap(([metro, codes]) => codes.map((code) => [code, metro])));
 
@@ -62,6 +95,8 @@ const load = () => {
     // Historic city names travellers still type ("Bangalore" for Bengaluru).
     _aliases: (r.aliases ?? []).map(normalize),
     _short: (SHORT_NAMES[r.code] ?? []).map(normalize),
+    _areas: areasOf(r),
+    _busiestIn: new Set(),
   }));
 
   for (const city of dataset.filter((r) => r.type === 'CITY')) {
@@ -72,6 +107,14 @@ const load = () => {
     city.popularity = city.members.reduce((sum, airport) => sum + airport.popularity, 0);
   }
 
+  const placesIn = new Map();
+  for (const record of dataset) {
+    for (const { text } of record._areas) placesIn.set(text, [...(placesIn.get(text) ?? []), record]);
+  }
+  for (const [text, places] of placesIn) {
+    for (const place of places.sort((a, b) => b.popularity - a.popularity).slice(0, AREA_PART_LIMIT)) place._busiestIn.add(text);
+  }
+
   byCode = new Map();
   tokens = new Map();
 
@@ -80,7 +123,7 @@ const load = () => {
     // win the lookup for its own code.
     if (!byCode.has(record.code) || record.type === 'CITY') byCode.set(record.code, record);
 
-    const searchable = [record._name, record._city, ...record._aliases, ...record._short].join(' ');
+    const searchable = [record._name, record._city, ...record._aliases, ...record._short, ...record._areas.map((area) => area.text)].join(' ');
     for (const word of new Set(searchable.split(/[^a-z0-9]+/).filter(Boolean))) {
       if (!tokens.has(word)) tokens.set(word, []);
       tokens.get(word).push(record);
@@ -88,7 +131,7 @@ const load = () => {
   }
 };
 
-const present = ({ _name, _city, _country, _aliases, _short, aliases, lat, lon, members, popularity, centre, ...rest }) => rest;
+const present = ({ _name, _city, _country, _aliases, _short, _areas, _busiestIn, aliases, region, lat, lon, members, popularity, centre, ...rest }) => rest;
 
 /** Straight-line kilometres from a city's centre to one of its airports, or null. */
 const kmFromCentre = (centre, airport) => {
@@ -100,7 +143,7 @@ const kmFromCentre = (centre, airport) => {
   return Math.round(2 * 6371 * Math.asin(Math.sqrt(h)));
 };
 
-const MATCH = Object.freeze({ code: 100, start: 60, word: 45, airportWord: 30, inside: 10 });
+const MATCH = Object.freeze({ code: 100, start: 60, areaName: 60, area: 55, areaStart: 52, word: 45, airportWord: 30, inside: 10 });
 
 const atWordStart = (text, words) => ` ${text.replace(/[^a-z0-9]+/g, ' ')}`.includes(` ${words}`);
 
@@ -115,6 +158,33 @@ const matchOf = (record, q, words) => {
   return 0;
 };
 
+const NO_AREA = Object.freeze({ match: 0, area: null });
+
+/**
+ * How well the typed words name a state, island or country the place is in:
+ * all of its name ("bali", over Balice for Krakow), whole words of it ("virgin
+ * islands"), or the start of it ("hawa").
+ * Inside a name only from a word of 4 letters or more, so "and" is not Jammu
+ * and Kashmir, and "new" is only the start of New Zealand, under New Delhi.
+ * Anything short of all of the name finds only the area's busiest airports.
+ */
+const areaMatchOf = (record, words) => {
+  const isWholeEnough = words.split(' ').some((word) => word.length >= 4);
+  let best = NO_AREA;
+  for (const { text, shown } of record._areas) {
+    const padded = ` ${text} `;
+    for (let at = padded.indexOf(` ${words}`); at >= 0; at = padded.indexOf(` ${words}`, at + 1)) {
+      if (at > 0 && text.slice(at).split(' ')[0].length < 4) continue;
+      if (text !== words && !record._busiestIn.has(text)) break;
+      const isWhole = padded.startsWith(` ${words} `, at) && isWholeEnough;
+      const match = text === words ? MATCH.areaName : isWhole ? MATCH.area : MATCH.areaStart;
+      if (match > best.match) best = { match, area: shown };
+      break;
+    }
+  }
+  return best;
+};
+
 /**
  * Search airports and cities.
  *
@@ -123,7 +193,9 @@ const matchOf = (record, q, words) => {
  * or an airport's name - with how busy the place is added, so Hong Kong comes
  * before Honiara. A city with several airports is listed once with its airports
  * under it (`parent` names the city), whether or not each airport's own name
- * matches, and how far it is from the city centre (`distanceKm`).
+ * matches, and how far it is from the city centre (`distanceKm`). From three
+ * letters a state, island or country finds its airports too, and `area` names
+ * the state or island the row was found by.
  */
 export const searchLocations = (keyword, subType = 'CITY,AIRPORT', options = {}) => {
   load();
@@ -136,17 +208,23 @@ export const searchLocations = (keyword, subType = 'CITY,AIRPORT', options = {})
   const allowed = (record) => wanted.has(record.type)
     && (!countryCode || record.countryCode === String(countryCode).toUpperCase());
   const scored = new Map();
-  const add = (record, match) => {
+  const add = (record, match, area = null) => {
     if (match === 0 || !allowed(record)) return;
     const score = match + 10 * Math.log10(1 + record.popularity);
     const key = record.code + record.type;
-    if (!scored.has(key) || scored.get(key).score < score) scored.set(key, { record, score });
+    if (!scored.has(key) || scored.get(key).score < score) scored.set(key, { record, score, area });
   };
 
   const first = words.split(' ')[0];
+  const byArea = q.length >= 3;
   for (const [word, records] of tokens) {
     if (!word.startsWith(first)) continue;
-    for (const record of records) add(record, matchOf(record, q, words));
+    for (const record of records) {
+      const own = matchOf(record, q, words);
+      const viaArea = byArea ? areaMatchOf(record, words) : NO_AREA;
+      if (viaArea.match > own) add(record, viaArea.match, viaArea.area);
+      else add(record, own);
+    }
   }
   if (byCode.has(q.toUpperCase())) {
     for (const record of dataset.filter((r) => r.code === q.toUpperCase())) add(record, MATCH.code);
@@ -167,12 +245,12 @@ export const searchLocations = (keyword, subType = 'CITY,AIRPORT', options = {})
   const data = entries
     .filter(({ record }) => record.type === 'CITY' || !nested.has(record.code))
     .sort((a, b) => b.score - a.score || b.record.popularity - a.record.popularity || a.record.code.localeCompare(b.record.code))
-    .flatMap(({ record }) => (grouping && record.type === 'CITY'
+    .flatMap(({ record, area }) => (grouping && record.type === 'CITY'
       ? [present(record), ...record.members.filter(allowed).map((airport) => {
         const distanceKm = kmFromCentre(record.centre, airport);
         return { ...present(airport), parent: record.code, ...(distanceKm === null ? {} : { distanceKm }) };
       })]
-      : [present(record)]))
+      : [{ ...present(record), ...(area ? { area } : {}) }]))
     .slice(0, limit);
 
   return { success: true, data, meta: { count: data.length } };

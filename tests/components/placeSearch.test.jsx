@@ -75,6 +75,12 @@ describe('a row of the list', () => {
       .toMatchObject({ name: 'Paris', title: 'Charles de Gaulle International Airport', subtitle: 'Paris, France' });
     expect(toPlace(airport('HKG', 'Hong Kong International Airport', 'Hong Kong', 'HK')).subtitle).toBe('Hong Kong, Hong Kong');
   });
+
+  it('names the state or island a row was found by', () => {
+    expect(toPlace({ ...airport('HNL', 'Daniel K. Inouye International Airport', 'Honolulu, Oahu', 'US'), area: 'Hawaii' }))
+      .toMatchObject({ name: 'Honolulu', subtitle: 'Honolulu, Hawaii, United States' });
+    expect(toPlace({ ...airport('GOI', 'Dabolim Airport', 'Goa', 'IN'), area: 'Goa' }).subtitle).toBe('Goa, India');
+  });
 });
 
 const renderForm = () => render(
@@ -115,6 +121,25 @@ describe('the To box', () => {
       'DEL Indira Gandhi International AirportNew Delhi, India',
     ]);
     expect(screen.getAllByRole('option')[1].className).toMatch(/pl-10/);
+  });
+
+  it('lists Hawaii\'s airports for "Hawa", each with the state under it', async () => {
+    vi.useFakeTimers();
+    airportAnswers.Hawa = () => reply({ success: true, data: [
+      { ...airport('HNL', 'Daniel K. Inouye International Airport', 'Honolulu, Oahu', 'US'), area: 'Hawaii' },
+      airport('AWA', 'Hawassa International Airport', 'Hawassa', 'ET'),
+      { ...airport('OGG', 'Kahului International Airport', 'Kahului', 'US'), area: 'Hawaii' },
+    ] });
+    renderForm();
+
+    typeInto('to', 'Hawa');
+    await act(async () => { await vi.advanceTimersByTimeAsync(300); });
+
+    expect(options()).toEqual([
+      'HNL Daniel K. Inouye International AirportHonolulu, Hawaii, United States',
+      'AWA Hawassa International AirportHawassa, Ethiopia',
+      'OGG Kahului International AirportKahului, Hawaii, United States',
+    ]);
   });
 
   it('says it is searching until the first answer comes', async () => {
