@@ -1,7 +1,7 @@
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import JetCoinsToggle from '../../frontend/src/components/JetCoinsToggle.jsx';
+import JetCoinsToggle, { JetCoinsLoginPrompt } from '../../frontend/src/components/JetCoinsToggle.jsx';
 
 describe('the Jet Coins switch', () => {
   it('offers the coins the total can take, and says what they take off', () => {
@@ -49,5 +49,32 @@ describe('the Jet Coins switch', () => {
   it('shows nothing to someone with no coins and none held', () => {
     const { container } = render(<JetCoinsToggle balance={0} held={0} afterCoupon={30} useCoins={false} onChange={() => {}} />);
     expect(container.innerHTML).toBe('');
+  });
+});
+
+describe('the Jet Coins a booking earns', () => {
+  it('says how many coins the booking earns, below the switch', () => {
+    const { container } = render(<JetCoinsToggle balance={5000} held={0} afterCoupon={88.21} limit={200} useCoins={false} earn={88} onChange={() => {}} />);
+    expect(screen.getByRole('switch')).toBeTruthy();
+    expect(container.textContent).toContain("You'll earn 88 Jet Coins ($0.88) on this booking. They're added to your Jet Wallet once free cancellation ends.");
+  });
+
+  it('says what the booking earns to a customer with no coins yet, with no switch', () => {
+    const { container } = render(<JetCoinsToggle balance={0} held={0} afterCoupon={88.21} limit={200} useCoins={false} earn={88} onChange={() => {}} />);
+    expect(screen.queryByRole('switch')).toBeNull();
+    expect(container.textContent).toContain("You'll earn 88 Jet Coins ($0.88) on this booking.");
+  });
+
+  it('asks a guest to log in to earn the coins, and sends them to log in', () => {
+    const onLogin = vi.fn();
+    const { container } = render(<JetCoinsLoginPrompt earn={88} onLogin={onLogin} />);
+    expect(container.textContent).toContain('Log in to earn 88 Jet Coins ($0.88) on this booking and use your Jet Coins at checkout.');
+    fireEvent.click(screen.getByRole('button', { name: 'Log in' }));
+    expect(onLogin).toHaveBeenCalledTimes(1);
+  });
+
+  it('names no number to a guest when the booking earns none', () => {
+    const { container } = render(<JetCoinsLoginPrompt earn={0} onLogin={() => {}} />);
+    expect(container.textContent).toContain('Log in to earn Jet Coins on your bookings and use them at checkout.');
   });
 });

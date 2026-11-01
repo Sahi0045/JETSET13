@@ -21,7 +21,7 @@ import PricingService from '../../../Services/PricingService';
 import { useCancelPolicy, useGuestFlightBooking, usePriceConfig } from '../../../hooks/queries';
 import CouponInput from '../../../components/CouponInput';
 import { checkTripVoucher } from '../../../utils/tripVoucher';
-import JetCoinsToggle from '../../../components/JetCoinsToggle';
+import JetCoinsToggle, { JetCoinsLoginPrompt } from '../../../components/JetCoinsToggle';
 import { apiGet } from '../../../utils/apiHelper';
 import FlightFareRules from './FlightFareRules';
 import CancellationPolicyNote from './CancellationPolicyNote';
@@ -39,7 +39,7 @@ import { handedFareCheck } from '../../../utils/fareCheckHandoff';
 // The same formula checkout verifies the charge with, so this page can never
 // quote a total the server will not accept.
 import { computeFlightCharge, PASSENGER_TYPES, travellerTypesOf } from '../../../../../shared/flightCharge';
-import { coinBandFareOf, coinLimitFor, formatCoins, maxWalletCoinsFor } from '../../../../../shared/jetCoins';
+import { coinBandFareOf, coinLimitFor, earnedCoinsFor, formatCoins, maxWalletCoinsFor } from '../../../../../shared/jetCoins';
 import { describeGroup, groupFromOffer, travellerGroupProblem } from '../../../../../shared/travellerGroup';
 import { lastFlightDepartureDate, needsDateOfBirth, tripDates } from '../../../../../shared/travellerDetails';
 import { CALLING_CODES, COUNTRIES, callingCodeDigits } from '../../../../../shared/countries';
@@ -1284,6 +1284,7 @@ function FlightBookingConfirmation() {
   const coinLimit = coinLimitFor(coinBandFareOf(calculatedFare.fare, calculatedFare.baseFare), priceConfig?.flight_coin_bands);
   const coinsToUse = useCoins ? maxWalletCoinsFor(afterCoupon, wallet.balance, coinLimit) : 0;
   const amountDue = Math.round((afterCoupon - coinsToUse / 100) * 100) / 100;
+  const coinsEarned = earnedCoinsFor(amountDue);
 
   // Handle proceeding to payment - DIRECT to ARC Pay (bypass FlightPayment.jsx)
   const handleProceedToPayment = async () => {
@@ -2648,7 +2649,11 @@ function FlightBookingConfirmation() {
                   )}
                 </div>
 
-                <JetCoinsToggle balance={wallet.balance} held={wallet.held} afterCoupon={afterCoupon} limit={coinLimit} useCoins={useCoins} onChange={(next) => { setWalletProblem(null); setUseCoins(next); }} />
+                {bookingAsGuest ? (
+                  <JetCoinsLoginPrompt earn={coinsEarned} onLogin={() => sendToLogin()} />
+                ) : (
+                  <JetCoinsToggle balance={wallet.balance} held={wallet.held} afterCoupon={afterCoupon} limit={coinLimit} useCoins={useCoins} earn={user ? coinsEarned : 0} onChange={(next) => { setWalletProblem(null); setUseCoins(next); }} />
+                )}
                 {walletProblem && <p ref={walletProblemRef} className="mt-1.5 text-xs text-red-600" role="alert">{walletProblem}</p>}
 
                 <div className="fare-row total">
