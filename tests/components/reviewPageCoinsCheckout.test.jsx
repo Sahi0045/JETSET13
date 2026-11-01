@@ -1,7 +1,7 @@
 import React from 'react';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { airline, offer, priceConfig, renderReviewPage, reviewFlight, segment, signedInUser } from './reviewPageHarness.jsx';
+import { airline, offer, priceConfig, renderReviewPage, reviewFlight, segment, signedInUser, where } from './reviewPageHarness.jsx';
 
 /**
  * The flight review page with a Jet Coins balance.
@@ -219,6 +219,34 @@ describe('the coins one booking may use', () => {
 
     await waitFor(() => expect(checkout.calls).toHaveLength(1));
     expect(checkout.calls[0]).toMatchObject({ amount: 186, walletCoins: 400, couponCode: 'SAVE20' });
+  });
+});
+
+describe('the Jet Coins a booking earns', () => {
+  it('says how many coins the card amount earns, and fewer once coins pay part of it', async () => {
+    await openPage(5000);
+    await screen.findByRole('switch');
+    expect(document.body.textContent).toMatch(/You'll earn 210 Jet Coins \(\$2\.10\) on this booking/);
+    fireEvent.click(screen.getByRole('switch'));
+    await payButton('160.00');
+    expect(document.body.textContent).toMatch(/You'll earn 160 Jet Coins \(\$1\.60\) on this booking/);
+  });
+
+  it('says what the booking earns to a signed-in customer with no coins yet', async () => {
+    await openPage(0);
+    await payButton('210.00');
+    await waitFor(() => expect(document.body.textContent).toMatch(/You'll earn 210 Jet Coins \(\$2\.10\) on this booking/));
+    expect(screen.queryByRole('switch')).toBeNull();
+  });
+
+  it('asks a guest to log in to earn them, below the coupon box, and the button goes to log in', async () => {
+    authState.user = null;
+    await openPage(5000);
+    await payButton('210.00');
+    expect(document.body.textContent).toMatch(/Log in to earn 210 Jet Coins \(\$2\.10\) on this booking and use your Jet Coins at checkout\./);
+    expect(document.body.textContent).not.toMatch(/You'll earn/);
+    fireEvent.click(screen.getByRole('button', { name: 'Log in' }));
+    await waitFor(() => expect(where.current.pathname).toBe('/login'));
   });
 });
 
