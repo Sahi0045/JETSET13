@@ -50,6 +50,7 @@ const COUNTRY_CURRENCY = {
 
 // Default currency
 const DEFAULT_CURRENCY = 'USD';
+const NO_DECIMALS = ['INR', 'JPY', 'THB'];
 
 class CurrencyService {
   constructor() {
@@ -227,14 +228,8 @@ class CurrencyService {
     const currency = currencyCode || this.getCurrency();
     const config = CURRENCY_CONFIG[currency] || CURRENCY_CONFIG[DEFAULT_CURRENCY];
 
-    // Round to 2 decimal places
-    let formattedValue = Math.round(price * 100) / 100;
-
-    // For INR and JPY, round to whole numbers
-    const noDecimals = ['INR', 'JPY', 'THB'].includes(currency);
-    if (noDecimals) {
-      formattedValue = Math.round(formattedValue);
-    }
+    const noDecimals = NO_DECIMALS.includes(currency);
+    let formattedValue = this.roundForDisplay(price, currency);
 
     // Format with thousand separators
     formattedValue = formattedValue.toLocaleString('en-US', {
@@ -244,6 +239,28 @@ class CurrencyService {
 
     // Apply currency-specific formatting
     return config.format(formattedValue);
+  }
+
+  /** Rounded as the page shows it: to the cent, or to the unit for INR, JPY and THB. */
+  roundForDisplay(price, currencyCode = null) {
+    const currency = currencyCode || this.getCurrency();
+    const cents = Math.round(price * 100) / 100;
+    return NO_DECIMALS.includes(currency) ? Math.round(cents) : cents;
+  }
+
+  /**
+   * An amount as the page shows it: converted from its own currency and
+   * rounded. A total built by adding these matches the figures beside it;
+   * converting the total on its own put it a rupee away from 2 x the fare.
+   */
+  displayAmount(amount, sourceCurrency = 'USD', targetCurrency = null) {
+    const currency = targetCurrency || this.getCurrency();
+    const value = Number(amount);
+    if (!Number.isFinite(value)) return null;
+    const source = sourceCurrency || 'USD';
+    if (source === currency) return this.roundForDisplay(value, currency);
+    const usd = source === 'USD' ? value : value / (this.getExchangeRate(source) || 1);
+    return this.roundForDisplay(this.convertPrice(usd, currency), currency);
   }
 
   /**

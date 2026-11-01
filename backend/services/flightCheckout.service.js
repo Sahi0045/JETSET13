@@ -7,7 +7,7 @@ import { NAME_MISSING, travellerNameProblem } from '../../shared/passengerName.j
 import { DEFAULT_PRICE_SETTINGS } from '../config/priceDefaults.js';
 import { couponTripKey, evaluateCoupon } from './coupon.service.js';
 import { internalRequestHeaders } from '../utils/internalRequest.js';
-import { maxWalletCoinsFor, WALLET_CHANGED_MESSAGE } from '../../shared/jetCoins.js';
+import { coinBandFareOf, coinLimitFor, maxWalletCoinsFor, WALLET_CHANGED_MESSAGE } from '../../shared/jetCoins.js';
 import {
   CHECKOUT_VOUCHER_MESSAGES, VOUCHER_CODE_PATTERN, checkTripVoucher, normalizeVoucherCode, readBalance,
 } from './wallet.service.js';
@@ -454,7 +454,7 @@ export async function verifyFlightCharge({
     if (askedCoins > balance) {
       return refuse(409, 'WALLET_CHANGED', WALLET_CHANGED_MESSAGE, { pricedFare });
     }
-    const coins = maxWalletCoinsFor(afterCoupon.total, askedCoins);
+    const coins = maxWalletCoinsFor(afterCoupon.total, askedCoins, coinLimitFor(coinBandFareOf(afterCoupon.fare, pricedFare.base), config.flight_coin_bands));
     if (coins > 0) wallet = { coins, amount: roundMoney(coins / 100) };
   }
 

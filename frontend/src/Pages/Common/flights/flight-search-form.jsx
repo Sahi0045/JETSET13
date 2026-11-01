@@ -9,7 +9,7 @@ import AirportService from "../../../Services/AirportService";
 import { getTodayDate, getNextDay, getSafeDate } from "../../../utils/dateUtils";
 import { useLocationContext } from '../../../Context/LocationContext';
 import CustomFlightCalendar from "./CustomFlightCalendar";
-import { PlaceSuggestions, comboboxProps, makeRoomBelow, usePlaceSearch } from "./PlaceSuggestions";
+import { PlaceSuggestions, comboboxProps, usePlaceSearch } from "./PlaceSuggestions";
 import MultiCityLegs, { MIN_LEGS, nextLegAfter } from "./MultiCityLegs";
 import { fieldCode, normalizeTripType } from './searchQuery';
 import { format, parseISO, isValid } from 'date-fns';
@@ -18,7 +18,7 @@ import { format, parseISO, isValid } from 'date-fns';
 // "Mum" would otherwise be priced as whatever it happens to match.
 const calendarCode = (label, code) => {
   const value = fieldCode(label, code);
-  return /^[A-Z]{3}$/.test(value) ? value : undefined;
+  return /^[A-Z]{3}(,[A-Z]{3})*$/.test(value) ? value : undefined;
 };
 
 // Get this from a config or parent component
@@ -48,13 +48,13 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
 
   const pickPlace = (field, city) => setFormData((prev) => ({
     ...prev,
-    [field]: `${city.name} (${city.code})`,
+    [field]: city.label || `${city.name} (${city.code})`,
     [`${field}Code`]: city.code,
     [`${field}Country`]: city.country,
     [`${field}Type`]: city.type,
   }));
-  const fromPlace = usePlaceSearch((city) => pickPlace('from', city));
-  const toPlace = usePlaceSearch((city) => pickPlace('to', city));
+  const fromPlace = usePlaceSearch((city) => pickPlace('from', city), { multi: true });
+  const toPlace = usePlaceSearch((city) => pickPlace('to', city), { multi: true });
 
   // Create a map of city names to their codes
   const cityCodeMap = allAirports.reduce((acc, city) => {
@@ -275,6 +275,12 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
       errors.returnDate = "Please select return date";
     }
 
+    const fromCodes = fieldCode(formData.from, formData.fromCode).split(',');
+    const toCodes = fieldCode(formData.to, formData.toCode).split(',');
+    if (!errors.from && !errors.to && fromCodes.some((code) => code && toCodes.includes(code))) {
+      errors.to = "Leaving from and going to name the same airport";
+    }
+
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   }
@@ -350,8 +356,13 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
 
   const departParts = getDateParts(formData.departDate);
   const returnParts = getDateParts(formData.returnDate);
-  const fromSubtitle = formData.fromCode ? `${formData.fromCode}${formData.fromCountry ? ', ' + formData.fromCountry : ''}` : '';
-  const toSubtitle = formData.toCode ? `${formData.toCode}${formData.toCountry ? ', ' + formData.toCountry : ''}` : '';
+  const placeSubtitle = (code, country) => {
+    if (!code) return '';
+    const shown = String(code).includes(',') ? `${String(code).split(',').length} airports` : code;
+    return `${shown}${country ? ', ' + country : ''}`;
+  };
+  const fromSubtitle = placeSubtitle(formData.fromCode, formData.fromCountry);
+  const toSubtitle = placeSubtitle(formData.toCode, formData.toCountry);
   const anyCalendarOpen = showDepartCalendar || showReturnCalendar || showTravellers;
   // Make custom (non-native) controls operable via keyboard (Enter / Space)
   const onKeyActivate = (fn) => (e) => {
@@ -479,13 +490,13 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
               <input
                 type="text" name="from" value={formData.from || ""}
                 onChange={handleInputChange} onBlur={fromPlace.close} onKeyDown={fromPlace.onKeyDown}
-                onFocus={(e) => makeRoomBelow(e.currentTarget)} {...comboboxProps('from-places', fromPlace)}
+                onFocus={fromPlace.onFocus} {...comboboxProps('from-places', fromPlace)}
                 placeholder="City or airport"
                 autoComplete="off" autoCorrect="off" spellCheck={false}
                 className="w-full border-0 p-0 bg-transparent outline-none focus:ring-0 font-grotesk text-[20px] leading-tight font-semibold text-ink placeholder:text-gray-300 placeholder:font-normal placeholder:text-[15px]"
               />
               <span className="block text-xs text-gray-500 mt-1 truncate">{fromSubtitle || ' '}</span>
-              <PlaceSuggestions id="from-places" place={fromPlace} />
+              <PlaceSuggestions id="from-places" place={fromPlace} title="Leaving from" value={formData.from} onType={(text) => handleInputChange({ target: { name: 'from', value: text } })} />
               {formErrors.from && <span className="block text-red-500 text-xs mt-1">{formErrors.from}</span>}
             </label>
 
@@ -495,13 +506,13 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
               <input
                 type="text" name="to" value={formData.to || ""}
                 onChange={handleInputChange} onBlur={toPlace.close} onKeyDown={toPlace.onKeyDown}
-                onFocus={(e) => makeRoomBelow(e.currentTarget)} {...comboboxProps('to-places', toPlace)}
+                onFocus={toPlace.onFocus} {...comboboxProps('to-places', toPlace)}
                 placeholder="City or airport"
                 autoComplete="off" autoCorrect="off" spellCheck={false}
                 className="w-full border-0 p-0 bg-transparent outline-none focus:ring-0 font-grotesk text-[20px] leading-tight font-semibold text-ink placeholder:text-gray-300 placeholder:font-normal placeholder:text-[15px]"
               />
               <span className="block text-xs text-gray-500 mt-1 truncate">{toSubtitle || ' '}</span>
-              <PlaceSuggestions id="to-places" place={toPlace} />
+              <PlaceSuggestions id="to-places" place={toPlace} title="Going to" value={formData.to} onType={(text) => handleInputChange({ target: { name: 'to', value: text } })} />
               {formErrors.to && <span className="block text-red-500 text-xs mt-1">{formErrors.to}</span>}
 
               {/* Swap origin / destination — rendered LAST so the To input stays the
@@ -517,11 +528,13 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
               </button>
             </label>
 
-            {/* Departure */}
+            {/* Departure. A click opens the calendar and never shuts it: the
+                second click of a double click on a laptop shut it again, so it
+                seemed not to open. Enter and Space still open and shut it. */}
             <div ref={departCalendarRef}
               role="button" tabIndex={0} aria-haspopup="dialog" aria-expanded={showDepartCalendar} aria-label="Select departure date"
               className={`relative flex-1 px-5 py-4 cursor-pointer hover:bg-[#055B75]/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#055B75]/40 transition-colors border-t lg:border-t-0 lg:border-l border-gray-200 ${showDepartCalendar ? 'z-50' : ''}`}
-              onClick={() => { setShowDepartCalendar((v) => !v); setShowReturnCalendar(false); }}
+              onClick={() => { setShowDepartCalendar(true); setShowReturnCalendar(false); }}
               onKeyDown={onKeyActivate(() => { setShowDepartCalendar((v) => !v); setShowReturnCalendar(false); })}>
               <span className="block text-[10.5px] font-bold uppercase tracking-[0.14em] text-gray-400 mb-1.5">Departure</span>
               {departParts ? (
@@ -555,7 +568,7 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
               className={`relative flex-1 px-5 py-4 cursor-pointer hover:bg-[#055B75]/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#055B75]/40 transition-colors border-t lg:border-t-0 lg:border-l border-gray-200 ${showReturnCalendar ? 'z-50' : ''}`}
               onClick={() => {
                 if (formData.tripType !== 'roundTrip') handleTripTypeChange('roundTrip');
-                setShowReturnCalendar((v) => !v); setShowDepartCalendar(false);
+                setShowReturnCalendar(true); setShowDepartCalendar(false);
               }}
               onKeyDown={onKeyActivate(() => {
                 if (formData.tripType !== 'roundTrip') handleTripTypeChange('roundTrip');

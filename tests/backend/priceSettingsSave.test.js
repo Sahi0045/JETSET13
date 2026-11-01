@@ -75,3 +75,42 @@ describe('saving price settings', () => {
     expect(settings).not.toHaveProperty('not_a_setting');
   });
 });
+
+describe('saving the Jet Coins bands', () => {
+  const bands = [{ from: 0, usd: 1 }, { from: 80, usd: 2.5 }, { from: 300, usd: 6 }];
+
+  it('saves a band list, keeping only the price and the coins of each band', async () => {
+    const res = await save({ flight_coin_bands: bands.map((band) => ({ ...band, note: 'x' })) });
+
+    expect(res.status).toBe(200);
+    expect((await storedSettings()).flight_coin_bands).toEqual(bands);
+  });
+
+  it('refuses bands that do not start at $0 or do not rise, and saves nothing', async () => {
+    for (const bad of [[{ from: 10, usd: 1 }], [{ from: 0, usd: 1 }, { from: 0, usd: 2 }], [{ from: 0, usd: -1 }], [], 'five']) {
+      const res = await save({ flight_coin_bands: bad, cancellation_fee: 10 });
+
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe('INVALID_PRICE_SETTINGS');
+      expect(res.body.fields).toEqual(['flight_coin_bands']);
+      expect(res.body.error).toMatch(/Jet Coins/);
+      expect(table.writes).toEqual([]);
+    }
+  });
+
+  it('serves the default bands until an admin saves some', async () => {
+    vi.resetModules();
+    table = fakeBookingsTable([], { tables: { price_settings: [{ id: 1, settings: { ...STORED } }] } });
+    const supabase = (await import('../../backend/config/supabase.js')).default;
+    supabase.from.mockImplementation(table.from);
+    const routes = (await import('../../backend/routes/admin.routes.js')).default;
+    const app = express();
+    app.use('/api/admin', routes);
+    const res = await request(app).get('/api/admin/price-settings');
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.flight_coin_bands).toEqual([
+      { from: 0, usd: 1 }, { from: 50, usd: 2 }, { from: 100, usd: 3 }, { from: 150, usd: 4 }, { from: 250, usd: 5 },
+    ]);
+  });
+});

@@ -41,7 +41,12 @@ export default function CustomFlightCalendar({
     travelClass = 'ECONOMY',
     showPrices = true,
 }) {
-    const [currentMonth, setCurrentMonth] = useState(() => (minDate instanceof Date && minDate > new Date() ? minDate : new Date()))
+    const [currentMonth, setCurrentMonth] = useState(() => {
+        const firstDay = [getTodayDate(), format(minDate, 'yyyy-MM-dd')].sort().pop()
+        const opening = selectedDate && selectedDate >= firstDay ? selectedDate : firstDay
+        const [year, month] = opening.split('-').map(Number)
+        return new Date(year, month - 1, 1)
+    })
     const [prices, setPrices] = useState({})
     const [currency, setCurrency] = useState('USD')
     const [pending, setPending] = useState(() => new Set())
@@ -91,7 +96,7 @@ export default function CustomFlightCalendar({
     // screen, else the first day that can be chosen - and the arrow keys move
     // from there (calendarKeys.js).
     const inView = (key) => [format(currentMonth, 'yyyy-MM'), format(nextMonth, 'yyyy-MM')].includes(key.slice(0, 7))
-    const firstChoosable = [format(startOfMonth(currentMonth), 'yyyy-MM-dd'), format(minDate, 'yyyy-MM-dd'), today].sort().at(-1)
+    const firstChoosable = [format(startOfMonth(currentMonth), 'yyyy-MM-dd'), format(minDate, 'yyyy-MM-dd'), today].sort().pop()
     const tabbableDate = inView(centerDate) ? centerDate : firstChoosable
 
     // The lowest fare is marked only when there are at least two to compare.
@@ -111,7 +116,7 @@ export default function CustomFlightCalendar({
         })
         : null
     const shownMonth = format(currentMonth, 'yyyy-MM')
-    const firstPriced = [today, format(minDate, 'yyyy-MM-dd')].sort().at(-1)
+    const firstPriced = [today, format(minDate, 'yyyy-MM-dd')].sort().pop()
 
     useEffect(() => {
         if (!search) {
@@ -224,14 +229,17 @@ export default function CustomFlightCalendar({
                     tabIndex={dateKey === tabbableDate ? 0 : -1}
                     onClick={() => onSelect(dateKey)}
                     onKeyDown={moveDayFocus}
+                    // Past days are dimmed with opacity, not light-grey text: Samsung
+                    // Internet's dark mode turns light text white, and the days that
+                    // could not be chosen showed brighter than the ones that could.
                     className={`relative h-11 w-full flex flex-col items-center justify-center transition-all rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[#055B75]/50
-                        ${isPast ? 'text-gray-300 cursor-not-allowed bg-gray-50/30' : ''}
+                        ${isPast ? 'opacity-30 cursor-not-allowed' : ''}
                         ${!isPast && !isSelected ? 'cursor-pointer hover:bg-[#055B75]/5' : ''}
                         ${isSelected ? 'bg-[#055B75] text-white rounded-lg shadow-md cursor-pointer' : ''}
                     `}
                 >
                     <span className="sr-only">{format(day, 'EEEE d MMMM yyyy')}</span>
-                    <span aria-hidden="true" className={`text-[13px] font-semibold leading-tight ${isSelected ? 'text-white' : (isPast ? 'text-gray-300' : 'text-gray-700')}`}>
+                    <span aria-hidden="true" className={`text-[13px] font-semibold leading-tight ${isSelected ? 'text-white' : 'text-gray-700'}`}>
                         {i}
                     </span>
                     {!isPast && price !== undefined && (

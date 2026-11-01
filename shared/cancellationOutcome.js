@@ -70,7 +70,7 @@ export function customerReviewSentence(cancellation) {
   const terms = cancellation.terms || {};
   if (cancellation.policy === 'not_voided') {
     const back = Number.isFinite(Number(terms.airlinePrice)) ? money(terms.airlinePrice, 'USD') : 'the airline price';
-    const kept = Number(terms.serviceFeeKept) > 0 ? `; the ${money(terms.serviceFeeKept, 'USD')} service fee is not refundable` : '';
+    const kept = Number(terms.serviceFeeKept) > 0 ? `; the ${money(terms.serviceFeeKept, 'USD')} platform fee is not refundable` : '';
     return `You cancelled within the free cancellation time, so you get back ${back}${kept}. `
       + 'The airline could not void the ticket, so our team processes this refund and emails you within 2 business days.';
   }
@@ -92,7 +92,7 @@ export const coinsSentence = (cancellation) => {
  * the fee covered the card payment only, and only the card refund is not due.
  */
 export function feeCoversSentence(cancellation, coinsWentBack) {
-  const feeName = serviceFeeKeptBy(cancellation) > 0 ? 'service fee' : 'cancellation fee';
+  const feeName = serviceFeeKeptBy(cancellation) > 0 ? 'platform fee' : 'cancellation fee';
   return coinsWentBack
     ? `The ${feeName} covers the card payment, so no card refund is due.`
     : `The ${feeName} covers the amount paid, so no refund is due.`;
@@ -137,7 +137,7 @@ function outcomeMessage(result, coinsWentBack) {
     case 'refunded':
       if (amount > 0) {
         const serviceFee = serviceFeeKeptBy(cancellation);
-        const kept = serviceFee > 0 ? ` (the ${money(serviceFee, currency)} service fee is not refundable)`
+        const kept = serviceFee > 0 ? ` (the ${money(serviceFee, currency)} platform fee is not refundable)`
           : fee > 0 ? ` (a ${money(fee, currency)} cancellation fee was kept)` : '';
         return `Your booking is cancelled. A refund of ${money(amount, currency)} is on its way to your original payment method${kept}. `
           + 'It usually reaches your card within 5-10 business days.';

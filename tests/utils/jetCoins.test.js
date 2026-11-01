@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { computeFlightCharge, MIN_CARD_CHARGE } from '../../shared/flightCharge.js';
 import {
-  coinsBackOnCancel, coinsToUsd, earnedCoinsFor, formatCoins, grossPaidOf, maxWalletCoinsFor,
+  coinBandFareOf, coinBandsProblem, coinLimitFor, coinsBackOnCancel, coinsToUsd, DEFAULT_COIN_BANDS, earnedCoinsFor, formatCoins,
+  grossPaidOf, maxCoinLimitOf, maxWalletCoinsFor, usableCoinBands,
 } from '../../shared/jetCoins.js';
 import { cancelTermsLines, customerCancelTerms } from '../../shared/flightCancelPolicy.js';
 
@@ -50,10 +51,22 @@ describe('Jet Coins in the charge', () => {
 describe('coin helpers', () => {
   it('converts and caps', () => {
     expect(coinsToUsd(5000)).toBe(50);
-    expect(maxWalletCoinsFor(122.2, 5000)).toBe(5000);
-    expect(maxWalletCoinsFor(30, 5000)).toBe(2900);
-    expect(maxWalletCoinsFor(0.7, 5000)).toBe(0);
-    expect(maxWalletCoinsFor(30, -5)).toBe(0);
+    expect(maxWalletCoinsFor(122.2, 5000, Infinity)).toBe(5000);
+    expect(maxWalletCoinsFor(30, 5000, Infinity)).toBe(2900);
+    expect(maxWalletCoinsFor(0.7, 5000, Infinity)).toBe(0);
+    expect(maxWalletCoinsFor(30, -5, Infinity)).toBe(0);
+  });
+
+  it('never uses more than the booking may', () => {
+    expect(maxWalletCoinsFor(122.2, 5000, 300)).toBe(300);
+    expect(maxWalletCoinsFor(122.2, 120, 300)).toBe(120);
+    expect(maxWalletCoinsFor(2.5, 5000, 300)).toBe(150);
+  });
+
+  it('uses no coins when the booking limit is missing', () => {
+    expect(maxWalletCoinsFor(122.2, 5000)).toBe(0);
+    expect(maxWalletCoinsFor(122.2, 5000, null)).toBe(0);
+    expect(maxWalletCoinsFor(122.2, 5000, 'abc')).toBe(0);
   });
 
   it('knows the whole price paid', () => {
@@ -68,6 +81,57 @@ describe('coin helpers', () => {
 
   it('formats coins', () => {
     expect(formatCoins(5000)).toBe('5,000');
+  });
+});
+
+describe('coins one booking may use', () => {
+  it('goes by the price band, $1 to $5', () => {
+    expect([10, 49.99, 50, 94.67, 99.99, 100, 149.99, 150, 249.99, 250, 1100].map((price) => coinLimitFor(price, DEFAULT_COIN_BANDS)))
+      .toEqual([100, 100, 200, 200, 200, 300, 300, 400, 400, 500, 500]);
+  });
+
+  it('reads the band from the base fare, not the fare with taxes', () => {
+    expect(coinBandFareOf(170.36, 141)).toBe(141);
+    expect(coinLimitFor(coinBandFareOf(170.36, 141), DEFAULT_COIN_BANDS)).toBe(300);
+    expect(coinLimitFor(coinBandFareOf('170.36', '141.00'), DEFAULT_COIN_BANDS)).toBe(300);
+  });
+
+  it('reads the band from the whole fare when the base is unknown or impossible', () => {
+    for (const base of [undefined, null, 0, -1, 'abc', 180]) {
+      expect(coinBandFareOf(170.36, base)).toBe(170.36);
+    }
+    expect(coinBandFareOf(170.36, 170.36)).toBe(170.36);
+  });
+
+  it('allows nothing on a price of nothing', () => {
+    expect(coinLimitFor(0, DEFAULT_COIN_BANDS)).toBe(0);
+    expect(coinLimitFor(-5, DEFAULT_COIN_BANDS)).toBe(0);
+    expect(coinLimitFor('abc', DEFAULT_COIN_BANDS)).toBe(0);
+  });
+
+  it('follows the bands an admin saved', () => {
+    const bands = [{ from: 0, usd: 0.5 }, { from: 300, usd: 7 }];
+    expect(coinLimitFor(299.99, bands)).toBe(50);
+    expect(coinLimitFor(300, bands)).toBe(700);
+    expect(maxCoinLimitOf(bands)).toBe(700);
+  });
+
+  it('falls back to the default bands when the saved ones are unusable', () => {
+    for (const bad of [undefined, null, [], 'x', [{ from: 10, usd: 1 }], [{ from: 0, usd: -1 }], [{ from: 0, usd: 1 }, { from: 0, usd: 2 }]]) {
+      expect(usableCoinBands(bad)).toBe(DEFAULT_COIN_BANDS);
+      expect(coinLimitFor(120, bad)).toBe(300);
+    }
+    expect(maxCoinLimitOf(undefined)).toBe(500);
+  });
+
+  it('says what is wrong with a band list', () => {
+    expect(coinBandsProblem(DEFAULT_COIN_BANDS)).toBeNull();
+    expect(coinBandsProblem([])).toMatch(/at least one/);
+    expect(coinBandsProblem([{ from: 5, usd: 1 }])).toMatch(/start at \$0/);
+    expect(coinBandsProblem([{ from: 0, usd: 1 }, { from: 50, usd: 2 }, { from: 50, usd: 3 }])).toMatch(/Band 3/);
+    expect(coinBandsProblem([{ from: 0, usd: 1.005 }])).toMatch(/Band 1/);
+    expect(coinBandsProblem([{ from: 0, usd: '1' }])).toMatch(/Band 1/);
+    expect(coinBandsProblem(Array.from({ length: 11 }, (_, i) => ({ from: i * 10, usd: 1 })))).toMatch(/10 bands/);
   });
 });
 

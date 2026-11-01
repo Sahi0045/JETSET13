@@ -5,6 +5,7 @@ import { Plane, Calendar, Users, ArrowRight, X, Search, ChevronDown, ChevronUp, 
 import Navbar from '../Navbar';
 import Footer from '../Footer';
 import withPageElements from '../PageWrapper';
+import { clearOfHelpButtons } from '../helpButtonsLane';
 import Price from '../../../Components/Price';
 import currencyService from '../../../Services/CurrencyService';
 import {
@@ -28,19 +29,19 @@ import FlightMobileSortFilter from './FlightMobileSortFilter';
 import FlightFareOptions from './FlightFareOptions';
 import FlightAppliedFilters from './FlightAppliedFilters';
 import FlightFareCalendar from './FlightFareCalendar';
-import { sortFlights } from './flightSort';
+import { fareOf, priceOf, sortFlights } from './flightSort';
 import { toDisplayFlights } from './flightOffers';
 import { bookingHandoffState } from './bookingHandoff';
 import { citySearchInstead } from './multiCityHelp';
-import { buildSearchPayload, fieldCode, isMultiCity, searchFromQuery, searchKeyOf, searchToQuery } from './searchQuery';
-import { buildDateStrip, filtersWithin, journeyBounds, layoverBounds, matchesFilters, priceStep, searchFailureMessage, shiftDateStrip, stopsSummary, withDepartureDate } from './searchResults';
+import { airportListLabel, buildSearchPayload, fieldCode, isMultiCity, searchFromQuery, searchKeyOf, searchToQuery } from './searchQuery';
+import { buildDateStrip, cheapestDays, filtersWithin, journeyBounds, layoverBounds, matchesFilters, priceStep, searchFailureMessage, shiftDateStrip, stopsSummary, withDepartureDate } from './searchResults';
 
 // The IATA code in "New Delhi (DEL)", or a bare code as typed.
 const extractRouteCode = (str) => {
   if (!str) return '';
   const match = str.match?.(/\(([A-Z]{3})\)$/);
   if (match) return match[1];
-  if (/^[A-Z]{3}$/.test(String(str).trim())) return String(str).trim();
+  if (/^[A-Z]{3}(\s*,\s*[A-Z]{3})*$/.test(String(str).trim())) return String(str).trim().replace(/\s+/g, '');
   return str;
 };
 
@@ -312,7 +313,7 @@ function FlightSearchPage() {
   const handleSearch = (formData) => {
     const from = fieldCode(formData.from, formData.fromCode);
     const to = fieldCode(formData.to, formData.toCode);
-    const isIata = (code) => /^[A-Z]{3}$/.test(code);
+    const isIata = (code) => /^[A-Z]{3}(,[A-Z]{3})*$/.test(code);
     const next = {
       ...formData,
       from,
@@ -344,18 +345,7 @@ function FlightSearchPage() {
   // Returns the price converted to the user's display currency so filters match what the user sees
   const getFlightPriceAmount = (flight) => {
     if (!flight || !flight.price) return 0;
-    let amount = flight.price.amount;
-    if (typeof amount === 'string') {
-      amount = parseFloat(amount.replace(/,/g, ''));
-    }
-    if (typeof amount !== 'number' || Number.isNaN(amount)) {
-      const total = flight.price.total;
-      if (typeof total === 'string') {
-        amount = parseFloat(total.replace(/,/g, ''));
-      } else if (typeof total === 'number') {
-        amount = total;
-      }
-    }
+    let amount = fareOf(flight).amount;
     if (!Number.isFinite(amount)) return 0;
 
     // Convert from source currency (API) to user's display currency
@@ -422,15 +412,25 @@ function FlightSearchPage() {
       .filter((day) => Number(day.price) > 0)
       .map((day) => [day.isoDate, Number(day.price)]));
     const searched = searchParams?.departDate;
-    const cheapest = flights.reduce((min, flight) => Math.min(min, Number(flight.price?.amount) || Infinity), Infinity);
+    const cheapest = flights.reduce((min, flight) => Math.min(min, priceOf(flight)), Infinity);
     if (searched && Number.isFinite(cheapest)) known[searched] = Math.min(known[searched] ?? Infinity, cheapest);
     return known;
   }, [dateRange, flights, searchParams?.departDate]);
 
+  const stripCheapest = useMemo(
+    () => cheapestDays(dateRange, (day) => currencyService.displayAmount(day.price, day.currency || 'USD')),
+    [dateRange, displayCurrency]
+  );
+
+  const fareUnit = useMemo(() => {
+    const fare = flights.length > 0 ? fareOf(flights[0]) : null;
+    return fare?.unit && fare.travellers > 1 ? fare.unit : null;
+  }, [flights]);
+
   // Price distribution across current results — powers the per-card deal badge
   const priceStats = useMemo(() => {
     const ps = filteredFlights
-      .map(f => f.price?.amount)
+      .map(f => fareOf(f).amount)
       .filter(n => typeof n === 'number' && n > 0)
       .sort((a, b) => a - b);
     if (ps.length < 3) return null;
@@ -483,7 +483,7 @@ function FlightSearchPage() {
     flights.forEach(f => {
       const name = f.airline?.name || f.airline;
       if (!name) return;
-      const price = f.price?.amount ?? 0;
+      const price = fareOf(f).amount ?? 0;
       const existing = stats.get(name);
       if (existing) {
         existing.count += 1;
@@ -503,7 +503,7 @@ function FlightSearchPage() {
   // What each sidebar control can offer, across every result: the "from" price
   // under each stops box, and the ends of the journey and layover sliders.
   const stopsStats = useMemo(
-    () => stopsSummary(flights || [], (f) => Number(f.price?.amount) || null),
+    () => stopsSummary(flights || [], (f) => fareOf(f).amount || null),
     [flights]
   );
   const journeyRange = useMemo(() => journeyBounds(flights || []), [flights]);
@@ -570,14 +570,13 @@ function FlightSearchPage() {
       });
       const data = await res.json();
       if (requestId !== datePricesRequest.current) return;
-      if (data.success && data.dateWisePrices) {
+      if (data.success && data.pricesEach) {
         setDateRange(prev => prev.map(d => {
-          const price = data.dateWisePrices[d.isoDate];
+          const price = data.pricesEach[d.isoDate];
           return {
             ...d,
             price: price != null ? price : d.price,
             currency: price != null ? (data.currency || 'USD') : d.currency,
-            isLowestPrice: data.lowestPrice != null && price === data.lowestPrice,
           };
         }));
       }
@@ -616,8 +615,8 @@ function FlightSearchPage() {
   // Resolve readable origin/destination city names for the results header
   const fromCode = searchParams.fromCode || extractRouteCode(searchParams.from);
   const toCode = searchParams.toCode || extractRouteCode(searchParams.to);
-  const fromCityName = cityMap[fromCode] || String(searchParams.from || '').replace(/\s*\([A-Z]{3}\)$/, '') || fromCode;
-  const toCityName = cityMap[toCode] || String(searchParams.to || '').replace(/\s*\([A-Z]{3}\)$/, '') || toCode;
+  const fromCityName = airportListLabel(fromCode) || cityMap[fromCode] || String(searchParams.from || '').replace(/\s*\([A-Z]{3}\)$/, '') || fromCode;
+  const toCityName = airportListLabel(toCode) || cityMap[toCode] || String(searchParams.to || '').replace(/\s*\([A-Z]{3}\)$/, '') || toCode;
   const multiCitySearch = isMultiCity(searchParams);
   const cityInstead = multiCitySearch ? citySearchInstead(searchData?.legs || []) : null;
   const searchCityInstead = () => {
@@ -674,9 +673,7 @@ function FlightSearchPage() {
                 that said nothing. */}
             <div ref={dateStripRef} className="flex flex-1 min-w-0 items-center justify-start md:justify-center gap-1.5 overflow-x-auto hide-scrollbar mx-2 sm:mx-4">
               {dateRange.map((date, index) => {
-                const fares = dateRange.map((d) => Number(d.price) || 0).filter(Boolean);
-                const spread = fares.length > 1 && Math.max(...fares) > Math.min(...fares);
-                const cheapest = spread && date.isLowestPrice && !date.selected;
+                const cheapest = stripCheapest.has(date.isoDate);
                 return (
                   <button
                     key={index}
@@ -704,7 +701,7 @@ function FlightSearchPage() {
                         : '—'}
                     </span>
                     {cheapest && (
-                      <span className="text-[9.5px] font-bold uppercase tracking-[0.12em] leading-none text-emerald-600">
+                      <span className={`text-[9.5px] font-bold uppercase tracking-[0.12em] leading-none ${date.selected ? 'text-white/85' : 'text-emerald-600'}`}>
                         Cheapest
                       </span>
                     )}
@@ -786,7 +783,10 @@ function FlightSearchPage() {
               )}
             </div>
           ) : (
-            <div className="flex gap-6 items-start">
+            // Select flight, Fare breakup and Flight Details are at the right
+            // of each card, where the help buttons float: on a laptop they sat
+            // on them as the list scrolled by.
+            <div className={`flex gap-6 items-start ${clearOfHelpButtons}`}>
               <FlightFilterSidebar
                 filters={filters}
                 priceRangeBounds={priceRangeBounds}
@@ -842,6 +842,7 @@ function FlightSearchPage() {
                     {sortOrder === 'recommended' && ' · recommended for you'}
                     {sortOrder === 'nonstop_first' && ' · non-stop first'}
                     {sortOrder === 'duration' && ' · fastest first'}
+                    {fareUnit && ` · prices per ${fareUnit}`}
                   </p>
                 </div>
 
@@ -980,7 +981,7 @@ function FlightSearchPage() {
 
       {/* Mobile filter drawer */}
       {showMobileFilters && (
-        <div className="fixed inset-0 z-[10000] lg:hidden flex">
+        <div className="fixed inset-0 z-[10000] xl:hidden flex">
           <div className="absolute inset-0 bg-black/50" onClick={() => setShowMobileFilters(false)} />
           <div className="relative ml-auto w-[88%] max-w-sm h-full bg-white shadow-2xl flex flex-col animate-in slide-in-from-right duration-200">
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 flex-shrink-0">

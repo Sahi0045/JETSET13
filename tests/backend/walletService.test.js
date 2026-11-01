@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
-  WalletError, captureCoins, holdCoins, readBalance, redeemVoucher, returnAllCoins, returnCoins, walletSummary,
+  WalletError, captureCoins, flightCoinBands, holdCoins, readBalance, redeemVoucher, returnAllCoins, returnCoins, walletSummary,
 } from '../../backend/services/wallet.service.js';
+import { DEFAULT_COIN_BANDS } from '../../shared/jetCoins.js';
 
 const rpcClient = (answer) => ({ rpc: vi.fn(async () => answer) });
 
@@ -14,6 +15,25 @@ const tableClient = (tables) => ({
     chain.then = (resolve) => resolve(answer);
     return chain;
   }),
+});
+
+describe('the coins one booking may use, for the customer to read', () => {
+  const settings = (answer) => tableClient({ price_settings: answer });
+
+  it('reads the bands an admin saved', async () => {
+    const bands = [{ from: 0, usd: 2 }, { from: 300, usd: 6 }];
+    expect(await flightCoinBands(settings({ data: { settings: { flight_coin_bands: bands } }, error: null }))).toEqual(bands);
+  });
+
+  it('reads the default bands until an admin saves some', async () => {
+    expect(await flightCoinBands(settings({ data: { settings: { flight_taxes_fees: 1 } }, error: null }))).toBe(DEFAULT_COIN_BANDS);
+  });
+
+  it('knows nothing, rather than guessing, when the settings cannot be read', async () => {
+    expect(await flightCoinBands(settings({ data: null, error: { message: 'down' } }))).toBeNull();
+    expect(await flightCoinBands(settings({ data: null, error: null }))).toBeNull();
+    expect(await flightCoinBands({ from: () => { throw new Error('down'); } })).toBeNull();
+  });
 });
 
 describe('the wallet service', () => {

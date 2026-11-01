@@ -8,7 +8,7 @@ import withPageElements from "../PageWrapper";
 // Every amount on this page is what the card is charged, in US dollars; the
 // visitor's own currency appears only as a labelled estimate, from live rates.
 import ChargeAmount from "../../../Components/ChargeAmount";
-import { CHARGE_CURRENCY, describeServiceFee, formatUsd } from "../../../utils/chargeDisplay";
+import { CHARGE_CURRENCY, formatUsd } from "../../../utils/chargeDisplay";
 import { useSupabaseAuth } from "../../../contexts/SupabaseAuthContext";
 import { clearFlightReview, readFlightReview, saveFlightReview } from "../../../utils/flightReviewResume";
 import { clearTravellerDraft, readTravellerDraft, saveTravellerDraft } from "../../../utils/flightTravellerDraft";
@@ -21,7 +21,7 @@ import PricingService from '../../../Services/PricingService';
 import { useCancelPolicy, useGuestFlightBooking, usePriceConfig } from '../../../hooks/queries';
 import CouponInput from '../../../components/CouponInput';
 import { checkTripVoucher } from '../../../utils/tripVoucher';
-import JetCoinsToggle from '../../../components/JetCoinsToggle';
+import JetCoinsToggle, { JetCoinsLoginPrompt } from '../../../components/JetCoinsToggle';
 import { apiGet } from '../../../utils/apiHelper';
 import FlightFareRules from './FlightFareRules';
 import CancellationPolicyNote from './CancellationPolicyNote';
@@ -29,6 +29,9 @@ import { formatCalendarDate } from '../../../utils/dateUtils';
 import { clearStaleStoredBookings } from '../../../utils/bookingStorage';
 import { formatCheckedBag } from '../../../utils/baggage';
 import FlightCancellationPolicy from './FlightCancellationPolicy';
+import FareInclusionList from './FareInclusionList';
+import BagSizeLimits, { carrierOf } from './BagSizeLimits';
+import { STATES as FARE_STATES, alignedFareInclusions, fareInclusions } from '../../../../../shared/fareInclusions';
 import { searchToQuery } from './searchQuery';
 import { airportClockLabel, minutesBetweenAirportTimes, seatsLeftLabel } from './searchResults';
 import apiConfig from '@/config/api';
@@ -36,7 +39,7 @@ import { handedFareCheck } from '../../../utils/fareCheckHandoff';
 // The same formula checkout verifies the charge with, so this page can never
 // quote a total the server will not accept.
 import { computeFlightCharge, PASSENGER_TYPES, travellerTypesOf } from '../../../../../shared/flightCharge';
-import { formatCoins, maxWalletCoinsFor } from '../../../../../shared/jetCoins';
+import { coinBandFareOf, coinLimitFor, earnedCoinsFor, formatCoins, maxWalletCoinsFor } from '../../../../../shared/jetCoins';
 import { describeGroup, groupFromOffer, travellerGroupProblem } from '../../../../../shared/travellerGroup';
 import { lastFlightDepartureDate, needsDateOfBirth, tripDates } from '../../../../../shared/travellerDetails';
 import { CALLING_CODES, COUNTRIES, callingCodeDigits } from '../../../../../shared/countries';
@@ -66,6 +69,15 @@ const isInternationalRoute = (depCode, arrCode) => {
 /** A US airport, where Secure Flight needs every traveller's date of birth (shared/travellerDetails.js). */
 const isUnitedStatesAirport = (code) => IATA_TO_COUNTRY.get((code || '').toUpperCase()) === 'United States';
 
+
+const hasFareTerms = (flight) => Boolean((flight?.fareServices || []).length || (flight?.amenities || []).length);
+
+/** The airline's own cancellation terms for the chosen fare, when it states them. */
+const statedCancelOf = (flight) => {
+  if (!hasFareTerms(flight)) return null;
+  const cancel = fareInclusions(flight).rows.cancel;
+  return cancel && cancel.state !== FARE_STATES.UNKNOWN ? cancel : null;
+};
 
 function FlightBookingConfirmation() {
   const routerLocation = useLocation();
@@ -272,6 +284,7 @@ function FlightBookingConfirmation() {
   // What the page needs to tell the customer, in the site's own dialog.
   const [notice, setNotice] = useState(null);
   const [calculatedFare, setCalculatedFare] = useState({
+    fare: 0,
     baseFare: 0,
     totalTax: 0,
     serviceFee: 0,
@@ -452,6 +465,8 @@ function FlightBookingConfirmation() {
         brandedFare: match.brandedFare ?? reviewState.flightData.brandedFare,
         brandedFareLabel: match.brandedFareLabel ?? reviewState.flightData.brandedFareLabel,
         cabin: match.cabin ?? reviewState.flightData.cabin,
+        amenities: match.amenities ?? [],
+        fareServices: match.fareServices ?? [],
       };
       setPassengerData((current) => rebuildTravellers(current, match.originalOffer.travelerPricings, blankTraveller));
       setExpandedPassengerId(null);
@@ -806,7 +821,6 @@ function FlightBookingConfirmation() {
       },
       passengers: [],
       contact: {
-        email: "",
         phone: ""
       },
       // International if any leg crosses a border, not only the two ends: a
@@ -1058,13 +1072,10 @@ function FlightBookingConfirmation() {
     });
 
     setCalculatedFare({
+      fare: charge.fare,
       baseFare: base,
       totalTax: Math.max(0, Math.round((fareTotal - base) * 100) / 100),
       serviceFee: charge.serviceFee,
-      // What the service fee is made of, from the same computation as the charge.
-      fixedFeeByType: charge.fixedFeeByType,
-      percentage: charge.percentage,
-      percentageFee: charge.percentageFee,
       totalAmount: charge.total,
       passengers: charge.passengers,
       currency: pricedFare?.currency || searched.currency || 'USD'
@@ -1222,7 +1233,7 @@ function FlightBookingConfirmation() {
           ...prev,
           contact: {
             ...prev?.contact,
-            [field === 'mobile' ? 'phone' : 'email']: value
+            [field === 'mobile' ? 'phone' : 'email']: field === 'email' ? (value || undefined) : value
           }
         }));
       }
@@ -1266,11 +1277,14 @@ function FlightBookingConfirmation() {
 
   // What the card will be charged, in US dollars: the summary total, the Pay
   // buttons and the mobile bar all show this one figure. Worked out as checkout
-  // does - the coupon first, then the coins the balance and the $1.00 minimum
-  // allow - because checkout refuses an amount that differs from its own.
+  // does - the coupon first, then the coins the balance, the base fare's band and
+  // the $1.00 minimum allow - because checkout refuses an amount that differs
+  // from its own.
   const afterCoupon = appliedCoupon ? appliedCoupon.finalTotal : calculatedFare.totalAmount;
-  const coinsToUse = useCoins ? maxWalletCoinsFor(afterCoupon, wallet.balance) : 0;
+  const coinLimit = coinLimitFor(coinBandFareOf(calculatedFare.fare, calculatedFare.baseFare), priceConfig?.flight_coin_bands);
+  const coinsToUse = useCoins ? maxWalletCoinsFor(afterCoupon, wallet.balance, coinLimit) : 0;
   const amountDue = Math.round((afterCoupon - coinsToUse / 100) * 100) / 100;
+  const coinsEarned = earnedCoinsFor(amountDue);
 
   // Handle proceeding to payment - DIRECT to ARC Pay (bypass FlightPayment.jsx)
   const handleProceedToPayment = async () => {
@@ -1964,7 +1978,7 @@ function FlightBookingConfirmation() {
                     </span>
                   </div>
                   <span className="inline-flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs font-semibold text-[#055B75]">
-                    <span className="inline-flex items-center gap-1.5"><ShieldCheck className="h-4 w-4" />{bookingDetails?.flight?.refundable === true ? 'Refundable (fees may apply)' : bookingDetails?.flight?.refundable === false ? 'Non-refundable' : 'Refunds: see fare rules'}</span>
+                    <span className="inline-flex items-center gap-1.5"><ShieldCheck className="h-4 w-4" />{statedCancelOf(reviewState?.flightData)?.label || (bookingDetails?.flight?.refundable === true ? 'Refundable (fees may apply)' : bookingDetails?.flight?.refundable === false ? 'Non-refundable' : 'Refunds: see fare rules')}</span>
                     {/* Amadeus reports at most 9 seats, so 9 is "9+" (searchResults.js). */}
                     {seatsLeftLabel(bookingDetails?.flight?.numberOfBookableSeats) && (
                       <span className={seatsLeftLabel(bookingDetails.flight.numberOfBookableSeats).urgent ? 'text-red-600' : 'text-gray-500 font-normal'}>
@@ -1979,6 +1993,24 @@ function FlightBookingConfirmation() {
                     )}
                   </span>
                 </div>
+
+                {(() => {
+                  const chosen = reviewState?.flightData;
+                  if (!hasFareTerms(chosen)) return null;
+                  const [{ rows, extras }] = alignedFareInclusions([chosen]);
+                  const stated = rows.filter((row) => row.state !== FARE_STATES.UNKNOWN);
+                  if (!stated.length && !extras.length) return null;
+                  const fareName = String(bookingDetails?.flight?.brandedFareLabel || '').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+                  return (
+                    <div className="mt-3 px-4 py-3 rounded-lg border border-gray-100" data-testid="review-fare-inclusions">
+                      <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">
+                        {fareName ? `${fareName} fare includes` : 'Your fare includes'}
+                      </div>
+                      <FareInclusionList rows={stated} extras={extras} className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 text-sm" />
+                    </div>
+                  );
+                })()}
+                <BagSizeLimits carrier={carrierOf(reviewState?.flightData)} cabin={reviewState?.flightData?.cabin} aircraft={reviewState?.flightData?.aircraft} />
               </div>
             </div>
 
@@ -2361,26 +2393,50 @@ function FlightBookingConfirmation() {
                       carries the reference and the e-ticket. */}
                   Your booking reference is emailed to you after payment, and your e-ticket once it is issued. The airline uses the mobile number if it needs to reach you about the flight.
                 </p>
-                {/* The first traveller's number and code, filled in above. A
-                    second country-code selector sat here, changed nothing
-                    that was sent, and could disagree with the one above. */}
+                {/* The number and code are the first traveller's, edited here or
+                    above: a second number of its own could disagree with the
+                    one the airline gets. */}
                 <div className="form-grid">
                   <div className="form-group">
                     <label>Mobile Number</label>
-                    <input
-                      type="text"
-                      className="form-input bg-gray-50"
-                      value={bookingDetails?.contact?.phone ? `${passengerData?.[0]?.countryCode || ''} ${bookingDetails.contact.phone}`.trim() : ""}
-                      readOnly
-                    />
+                    <div style={{ display: 'flex', gap: '0' }}>
+                      <select
+                        className="form-input"
+                        style={{ width: '90px', minWidth: '90px', borderRadius: '6px 0 0 6px', borderRight: 'none', padding: '10px 4px', fontSize: '14px', appearance: 'none', backgroundImage: 'url("data:image/svg+xml,%3csvg xmlns=%27http://www.w3.org/2000/svg%27 fill=%27none%27 viewBox=%270 0 20 20%27%3e%3cpath stroke=%27%236b7280%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27 stroke-width=%271.5%27 d=%27M6 8l4 4 4-4%27/%3e%3c/svg%3e")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 2px center', backgroundSize: '16px' }}
+                        value={passengerData?.[0]?.countryCode || ''}
+                        onChange={(e) => handlePassengerChange(passengerData[0].id, 'countryCode', e.target.value)}
+                        aria-label="Contact country code"
+                      >
+                        <option value="">Code</option>
+                        {CALLING_CODES.map((code) => (
+                          <option key={code} value={code}>{code}</option>
+                        ))}
+                      </select>
+                      <input
+                        type="tel"
+                        className="form-input"
+                        style={{ borderRadius: '0 6px 6px 0', flex: 1 }}
+                        placeholder="9876543210"
+                        value={passengerData?.[0]?.mobile || ''}
+                        onChange={(e) => handlePassengerChange(passengerData[0].id, 'mobile', e.target.value.replace(/[^0-9]/g, ''))}
+                        aria-label="Contact mobile number"
+                      />
+                    </div>
                   </div>
                   <div className="form-group">
                     <label>Email Address</label>
+                    {/* Blank means the account's address, which checkout uses
+                        for a blank one; leaving it blank shows that again. */}
                     <input
-                      type="text"
-                      className="form-input bg-gray-50"
-                      value={bookingDetails?.contact?.email || user?.email || ""}
-                      readOnly
+                      type="email"
+                      className="form-input"
+                      placeholder="email@example.com"
+                      value={bookingDetails?.contact?.email ?? user?.email ?? ''}
+                      onChange={(e) => setBookingDetails((prev) => ({ ...prev, contact: { ...prev?.contact, email: e.target.value } }))}
+                      onBlur={(e) => {
+                        if (!e.target.value.trim()) setBookingDetails((prev) => ({ ...prev, contact: { ...prev?.contact, email: undefined } }));
+                      }}
+                      aria-label="Contact email address"
                     />
                   </div>
                 </div>
@@ -2512,21 +2568,11 @@ function FlightBookingConfirmation() {
                   </div>
                 )}
 
-                {/* Service Fee (Jetsetters convenience fee), line by line as it is
-                    charged: the fixed fee per traveller type - none for a lap
-                    infant - and the percentage of the fare. One line "for 3
-                    travellers" never said which of them paid it. */}
                 {calculatedFare.serviceFee > 0 && (
-                  <div className="flex items-start gap-3 py-3 border-b border-gray-100">
+                  <div className="flex items-start gap-3 py-3 border-b border-gray-100" data-platform-fee="">
                     <span className="mt-2 h-1.5 w-1.5 rounded-full bg-[#65B3CF] flex-shrink-0" />
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm font-bold text-gray-800">Service Fee</div>
-                      <div className="text-xs text-gray-400 mt-0.5">Jetsetters convenience fee · not refundable</div>
-                      <ul className="mt-1 space-y-0.5 text-xs text-gray-500" data-service-fee-lines="">
-                        {describeServiceFee(calculatedFare).map((line) => (
-                          <li key={line}>{line}</li>
-                        ))}
-                      </ul>
+                      <div className="text-sm font-bold text-gray-800">Platform Fee</div>
                     </div>
                     <div className="text-sm font-semibold text-gray-800 whitespace-nowrap"><ChargeAmount amount={calculatedFare.serviceFee} /></div>
                   </div>
@@ -2603,7 +2649,11 @@ function FlightBookingConfirmation() {
                   )}
                 </div>
 
-                <JetCoinsToggle balance={wallet.balance} held={wallet.held} afterCoupon={afterCoupon} useCoins={useCoins} onChange={(next) => { setWalletProblem(null); setUseCoins(next); }} />
+                {bookingAsGuest ? (
+                  <JetCoinsLoginPrompt earn={coinsEarned} onLogin={() => sendToLogin()} />
+                ) : (
+                  <JetCoinsToggle balance={wallet.balance} held={wallet.held} afterCoupon={afterCoupon} limit={coinLimit} useCoins={useCoins} earn={user ? coinsEarned : 0} onChange={(next) => { setWalletProblem(null); setUseCoins(next); }} />
+                )}
                 {walletProblem && <p ref={walletProblemRef} className="mt-1.5 text-xs text-red-600" role="alert">{walletProblem}</p>}
 
                 <div className="fare-row total">

@@ -182,7 +182,7 @@ const readPricingMessages = (paxFareProduct) => {
   }));
 
   const ltd = messages.find((m) => m.qualifier === 'LTD');
-  const penalty = messages.filter((m) => m.qualifier === 'PEN').map((m) => m.text).join(' ');
+  const penalty = messages.filter((m) => m.qualifier === 'PEN').map((m) => m.text);
 
   // 'LAST TKT DTE 05SEP26 - SEE ADV PURCHASE'
   const match = ltd?.text.match(/\b(\d{2})([A-Z]{3})(\d{2})\b/);
@@ -207,13 +207,30 @@ const readPricingMessages = (paxFareProduct) => {
  * "TICKETS ARE NON REFUNDABLE AFTER DEPARTURE" - the space defeated the pattern
  * - all put a green Refundable badge on the card. A penalty is not a refund, so
  * only explicit refund wording counts, and any refusal wins over it.
+ *
+ * Amadeus's own summary line - "TICKETS ARE NON-REFUNDABLE" on a search,
+ * "NON-REFUNDABLE" on a pricing - is not the airline's word on cancelling.
+ * Air India Eco Value, Classic and Flex carry both (31 Oct, PDT and
+ * production) while the airline files a refund before departure for INR 5000,
+ * 3500 and 999 (cat 16, MiniRules cat 33, airindia.com). Every booking was
+ * saved non-refundable, and its e-ticket said so.
+ *
+ * @param {string|string[]} texts penalty and endorsement texts
  */
-export const readRefundable = (penalty) => {
-  if (!penalty) return null;
-  if (/NON[\s-]?REFUNDABLE|NOT\s+REFUNDABLE|\bNO\s+REFUNDS?\b|\bREFUNDS?\s+NOT\s+(ALLOWED|PERMITTED)/i.test(penalty)) {
+const AMADEUS_SUMMARY = /^(TICKETS ARE )?NON-REFUNDABLE\.?$/;
+
+export const readRefundable = (texts) => {
+  const all = [].concat(texts ?? []).map((text) => String(text ?? '').trim().toUpperCase()).filter(Boolean);
+  const said = all.filter((text) => !AMADEUS_SUMMARY.test(text)).join(' ');
+  if (!said) return null;
+  if (/NON[\s-]?REFUNDABLE|\bNON[\s-]?REF\b|NOT\s+REFUNDABLE|\bNO\s+REFUNDS?\b|\bREFUNDS?\s+NOT\s+(ALLOWED|PERMITTED)/.test(said)) {
     return false;
   }
-  if (/\bREFUNDABLE\b|\bREFUNDS?\s+(ALLOWED|PERMITTED)\b/i.test(penalty)) return true;
+  // Never "refundable" beside Amadeus saying otherwise: a booking saved
+  // refundable is refunded at once on an admin cancel past the void window.
+  if (/\bREFUNDABLE\b|\bREFUNDS?\s+(ALLOWED|PERMITTED)\b/.test(said)) {
+    return all.some((text) => AMADEUS_SUMMARY.test(text)) ? null : true;
+  }
   return null;
 };
 

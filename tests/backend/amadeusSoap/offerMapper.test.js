@@ -314,7 +314,6 @@ describe('refundability from the penalty text', () => {
   };
 
   it.each([
-    'TICKETS ARE NON-REFUNDABLE',
     'TICKETS ARE NON REFUNDABLE AFTER DEPARTURE',
     'NONREFUNDABLE',
     'TICKETS ARE NOT REFUNDABLE',
@@ -322,9 +321,12 @@ describe('refundability from the penalty text', () => {
     expect(refundableWhen(text)).toBe(false);
   });
 
+  // Amadeus's summary line: Air India Eco fares carry it and refund for a fee
+  // (airlineRefundRule.test.js).
   it.each([
     'PENALTY APPLIES',
     'SUBJ TO CANCELLATION/CHANGE PENALTY',
+    'TICKETS ARE NON-REFUNDABLE',
   ])('reads "%s" as unknown, not refundable', (text) => {
     expect(refundableWhen(text)).toBeNull();
   });

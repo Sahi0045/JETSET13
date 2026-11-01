@@ -10,6 +10,7 @@ import {
     isPaid,
     documentState,
     pnrOf,
+    bookingCodeOf,
     liveTickets,
     voidedTicketDigits,
     isVoidedTicket,
@@ -115,6 +116,7 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
         bookingId: bookingDetails?.bookingId || bookingData.orderId || bookingData.bookingReference || 'N/A',
         status: bookingDetails?.status || bookingData.status || 'PENDING',
         pnr: pnrOf(bookingData) || 'Not yet assigned',
+        code: bookingCodeOf(bookingData),
         // Never an invented allowance on a travel document.
         baggage: bookingDetails?.baggage || null
     };
@@ -211,7 +213,10 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
                                 <Plane className="w-5 h-5 text-[#055B75]" />
                                 <span className="font-bold text-gray-700">Flight Details</span>
                             </div>
-                            <span className="text-sm text-gray-500 font-mono">PNR: {safeBookingDetails.pnr}</span>
+                            <span className="text-sm text-gray-500 font-mono">
+                                {safeBookingDetails.code ? `${safeBookingDetails.code.label}: ${safeBookingDetails.code.value}` : `PNR: ${safeBookingDetails.pnr}`}
+                                {safeBookingDetails.code?.amadeusReference ? ` · GDS PNR: ${safeBookingDetails.code.amadeusReference}` : ''}
+                            </span>
                         </div>
 
                         <div className="p-6">

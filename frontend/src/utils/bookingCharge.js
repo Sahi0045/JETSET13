@@ -26,7 +26,7 @@ function chargeLines({ fare, serviceFee = 0, discount = 0, walletAmount = 0, wal
     total: t / 100,
     lines: [
       { label: 'Airline fare (incl. taxes)', amount: f / 100 },
-      ...(s > 0 ? [{ label: 'Service fee', amount: s / 100 }] : []),
+      ...(s > 0 ? [{ label: 'Platform fee', amount: s / 100 }] : []),
       ...(d > 0 ? [{ label: couponCode ? `Discount (${couponCode})` : 'Discount', amount: -d / 100 }] : []),
       ...(w > 0 ? [{ label: `Jet Coins (${new Intl.NumberFormat('en-US').format(coins)})`, amount: -w / 100 }] : []),
     ],

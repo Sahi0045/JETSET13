@@ -2,14 +2,14 @@ import React, { useState } from 'react';
 import { ArrowRight, Pencil, ChevronUp } from 'lucide-react';
 import { parseISO, isValid, format } from 'date-fns';
 import FlightSearchForm from './flight-search-form';
-import { isMultiCity } from './searchQuery';
+import { airportListLabel, isMultiCity } from './searchQuery';
 
 const extractCode = (str) => {
   if (!str) return '';
   const match = str.match(/\(([A-Z]{3})\)$/);
   if (match) return match[1];
   // already a bare code like "DEL"
-  if (/^[A-Z]{3}$/.test(str.trim())) return str.trim();
+  if (/^[A-Z]{3}(\s*,\s*[A-Z]{3})*$/.test(String(str).trim())) return String(str).trim().replace(/\s+/g, '');
   return str;
 };
 
@@ -55,7 +55,9 @@ function FlightModifyBar({ searchParams = {}, cityMap = {}, onSearch, openTravel
       const code = extractCode(place) || place;
       return { code, city: cityMap[code] || String(place || '').replace(/\s*\([A-Z]{3}\)$/, '') };
     })
-    : [{ code: fromCode, city: fromCity }, { code: toCode, city: toCity }];
+    : [{ code: fromCode, city: fromCity }, { code: toCode, city: toCity }].map((stop) => (airportListLabel(stop.code)
+      ? { code: airportListLabel(stop.code), city: `${stop.code.split(',').length} airports` }
+      : stop));
 
   const handleSearch = (formData) => {
     setExpanded(false);

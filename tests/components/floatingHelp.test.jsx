@@ -112,6 +112,22 @@ describe('the help buttons', () => {
     expect(document.documentElement.style.getPropertyValue('--floating-lift')).toBe('0px');
   });
 
+  // The phone menu slides in with a CSS transition, which changes no attribute:
+  // read when its class flipped, it was still off screen, and the buttons
+  // stayed on top of it (seen on jetsetterss.com, 27 Oct).
+  it('look again when a menu or sheet finishes sliding in', async () => {
+    render(<Page />);
+    const menu = fixedBox({ top: 64, height: 780 });
+    await inTheCorner();
+    document.elementsFromPoint = vi.fn(() => [menu]);
+    await act(async () => {
+      menu.dispatchEvent(new Event('transitionend', { bubbles: true }));
+      await nextFrame();
+    });
+    const contact = screen.getByRole('button', { name: 'Contact us' });
+    expect(contact.closest('[data-covered="true"]')).not.toBeNull();
+  });
+
   it('do not count their own buttons, chat window or contact form', async () => {
     render(<Page />);
     const own = screen.getByRole('button', { name: 'Contact us' });
@@ -119,6 +135,21 @@ describe('the help buttons', () => {
     own.getBoundingClientRect = () => ({ top: 0, height: 844, bottom: 844 });
     await inTheCorner(own);
     expect(own.closest('[data-covered="true"]')).toBeNull();
+  });
+
+  // The box around the three buttons, and the gaps between them, took the
+  // clicks meant for what lay under them: the footer's Facebook and Instagram,
+  // Terms & Conditions on a narrow laptop, Select flight and Fare breakup.
+  it('take clicks only on the buttons themselves', () => {
+    const css = readFileSync(path.join(process.cwd(), 'frontend/src/Pages/Common/FloatingHelp.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+    const pointer = (selector) => [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+      .filter(([, selectors]) => selectors.split(',').map((s) => s.trim()).includes(selector))
+      .map(([, , body]) => body.match(/pointer-events\s*:\s*([a-z]+)/)?.[1])
+      .find(Boolean);
+
+    expect(pointer('.floating-help')).toBe('none');
+    expect(pointer('.floating-help__action')).toBe('auto');
+    expect(pointer('.floating-help__launcher')).toBe('auto');
   });
 
   it('use the brand teal, not a generic blue', () => {

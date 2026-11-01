@@ -17,7 +17,7 @@ describe('the message after a customer cancel', () => {
     for (const policy of ['not_ticketed', 'free_window']) {
       const message = cancellationMessage({ cancellation: refunded(policy) });
       expect(message).toMatch(/A refund of \$287\.50 is on its way/);
-      expect(message).toMatch(/the \$12\.50 service fee is not refundable/);
+      expect(message).toMatch(/the \$12\.50 platform fee is not refundable/);
       expect(message).not.toMatch(/cancellation fee/);
     }
   });
@@ -34,7 +34,7 @@ describe('the message after a customer cancel', () => {
     );
     expect(cancellationMessage({ cancellation: reviewed('refundable') })).toBe(
       "Your booking is cancelled. This fare is refundable. You get back $287.50 less the airline's cancellation penalty of $150.00 per adult "
-      + 'and our $50.00 cancellation fee. The $12.50 service fee is not refundable. '
+      + 'and our $50.00 cancellation fee. The $12.50 platform fee is not refundable. '
       + 'Our team confirms the amount with the airline and emails you within 2 business days.',
     );
     expect(cancellationMessage({ cancellation: reviewed('rules_unknown') })).toBe(
@@ -42,7 +42,7 @@ describe('the message after a customer cancel', () => {
       + 'Our team checks them with the airline and emails you within 2 business days to confirm what is returned.',
     );
     expect(cancellationMessage({ cancellation: reviewed('not_voided') })).toBe(
-      'Your booking is cancelled. You cancelled within the free cancellation time, so you get back $287.50; the $12.50 service fee is not refundable. '
+      'Your booking is cancelled. You cancelled within the free cancellation time, so you get back $287.50; the $12.50 platform fee is not refundable. '
       + 'The airline could not void the ticket, so our team processes this refund and emails you within 2 business days.',
     );
   });
@@ -59,7 +59,7 @@ describe('the cancellation email after a customer cancel', () => {
     const html = generateCancellationTemplate({
       customerName: 'Jane', bookingReference: 'JTS-1234', ...refunded('free_window'),
     });
-    expect(html).toContain('Service fee (not refundable)');
+    expect(html).toContain('Platform fee (not refundable)');
     expect(html).toContain('$12.50');
     expect(html).not.toContain('Cancellation fee');
   });

@@ -92,6 +92,23 @@ export const arrivalDayOffset = (departureDate, arrivalDate) => {
 };
 
 /** The seven dates the strip shows: three either side of `centerIso`. */
+/**
+ * The strip's days whose fare, as shown, is the week's lowest: every one of
+ * them, the searched day too. The server marked one day by its exact dollar
+ * fare, so a day cents dearer read the same and went unmarked. None when every
+ * priced day shows the same fare.
+ */
+export const cheapestDays = (days, shown) => {
+  const priced = days
+    .filter((day) => Number(day.price) > 0)
+    .map((day) => [day.isoDate, shown(day)])
+    .filter(([, amount]) => Number.isFinite(amount));
+  const amounts = priced.map(([, amount]) => amount);
+  if (amounts.length < 2 || Math.max(...amounts) === Math.min(...amounts)) return new Set();
+  const lowest = Math.min(...amounts);
+  return new Set(priced.filter(([, amount]) => amount === lowest).map(([isoDate]) => isoDate));
+};
+
 export const stripDates = (centerIso) => [-3, -2, -1, 0, 1, 2, 3]
   .map((offset) => addDays(centerIso || getTodayDate(), offset));
 
@@ -103,7 +120,6 @@ const stripDay = (isoDate, selectedIso, today) => {
     isoDate,
     price: null,
     currency: null,
-    isLowestPrice: false,
     selected: Boolean(selectedIso) && isoDate === selectedIso,
     isWeekend: [0, 6].includes(date.getDay()),
     isPast: isoDate < today,

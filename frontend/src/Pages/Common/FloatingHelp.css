@@ -8,6 +8,14 @@
   align-items: flex-end;
   gap: 10px;
   transition: bottom 0.2s ease;
+  /* Only the buttons take clicks. The box around them, and the gaps between
+     them, sat on footer links and on Select flight and Fare breakup. */
+  pointer-events: none;
+}
+
+.floating-help__action,
+.floating-help__launcher {
+  pointer-events: auto;
 }
 
 /* Hidden under a menu, drawer or sheet (useCornerClearance), and under an open

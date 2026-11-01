@@ -40,12 +40,19 @@ const cardFor = async (rows) => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('the booking code on a My Trips card', () => {
-  it("shows the airline's own code, and our Amadeus reference beside it", async () => {
+  it("shows the airline's own code, as the airline PNR, and ours as the GDS PNR", async () => {
     const card = await cardFor([trip({ airlineLocators: [{ carrierCode: 'UA', locator: 'H8KQ2P' }] })]);
 
-    expect(card.getByText('Airline booking code')).toBeTruthy();
+    expect(card.getByText('Airline PNR')).toBeTruthy();
     expect(card.getByText('H8KQ2P')).toBeTruthy();
-    expect(card.getByText('Amadeus reference Q7XK2M')).toBeTruthy();
+    expect(card.getByText('GDS PNR Q7XK2M')).toBeTruthy();
+  });
+
+  it('prints the ticket number as one run of digits', async () => {
+    const card = await cardFor([trip()]);
+
+    expect(card.getByText('0161000000001')).toBeTruthy();
+    expect(card.queryByText(/016-1000000001/)).toBeNull();
   });
 
   it('calls our code a PNR while the airline has not sent its own', async () => {

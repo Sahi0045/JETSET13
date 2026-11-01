@@ -21,13 +21,15 @@ const readAmounts = (fare) => {
   return amounts;
 };
 
+const WEIGHT_UNIT = Object.freeze({ K: 'KG', L: 'LB' });
+
 const readCheckedBags = (segment) => {
   const allowance = at(segment, 'bagAllowanceInformation.bagAllowanceDetails');
   if (!allowance) return undefined;
   const quantity = num(allowance.baggageQuantity);
   const weight = num(allowance.baggageWeight);
   if (txt(allowance.baggageType) === 'N') return quantity === null ? undefined : { quantity };
-  if (weight !== null) return { weight, ...(txt(allowance.measureUnit) ? { weightUnit: txt(allowance.measureUnit) } : {}) };
+  if (weight !== null) return { weight, ...(txt(allowance.measureUnit) ? { weightUnit: WEIGHT_UNIT[txt(allowance.measureUnit)] ?? txt(allowance.measureUnit) } : {}) };
   return quantity === null ? undefined : { quantity };
 };
 
@@ -291,6 +293,7 @@ export const describeOption = (option, descriptions) => {
         ...detail,
         brandedFareLabel: description.label,
         amenities,
+        fareServices: description.services,
         ...(cabinBags ? { includedCabinBags: cabinBags } : {}),
       })),
     })),

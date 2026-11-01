@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { VISA_SERVICES_VISIBLE } from '../../shared/siteSections';
 import LoadingSpinner from './Components/LoadingSpinner';
 import { LocationProvider } from './Context/LocationContext';
 import RouteSeo from './seo/RouteSeo';
@@ -733,18 +734,27 @@ const App = () => {
           <Route path="/packages/itinerary" element={<ItineraryPackage />} />
           <Route path="/packages/booking-summary" element={<PackageBookingSummary />} />
 
-          {/* Visa & Document Services Routes (Stitch MCP: Customer Visa Application Portal) */}
-          <Route path="/visa" element={<VisaLanding />} />
-          <Route path="/visa/documents" element={<DocumentServices />} />
-          <Route path="/visa/apply" element={<VisaApplication />} />
-          <Route path="/visa/success" element={<VisaApplicationSuccess />} />
-          <Route path="/visa/track" element={<VisaApplicationTracker />} />
-          <Route path="/visa/status" element={<CustomerStatusDashboard />} />
-          <Route path="/visa/booking" element={<ConsultationBooking />} />
-          <Route path="/visa/refund-policy" element={<VisaPolicies tab="refund" />} />
-          <Route path="/visa/terms" element={<VisaPolicies tab="terms" />} />
-          <Route path="/visa/privacy" element={<VisaPolicies tab="privacy" />} />
-          <Route path="/visa/consultation/:id" element={<VideoConsultation />} />
+          {/* Visa & Document Services Routes (Stitch MCP: Customer Visa Application Portal).
+              Hidden from customers for now (shared/siteSections.js): every
+              customer visa page goes home; the agent and admin panels below
+              are more specific routes, so they still match. */}
+          {VISA_SERVICES_VISIBLE ? (
+            <>
+              <Route path="/visa" element={<VisaLanding />} />
+              <Route path="/visa/documents" element={<DocumentServices />} />
+              <Route path="/visa/apply" element={<VisaApplication />} />
+              <Route path="/visa/success" element={<VisaApplicationSuccess />} />
+              <Route path="/visa/track" element={<VisaApplicationTracker />} />
+              <Route path="/visa/status" element={<CustomerStatusDashboard />} />
+              <Route path="/visa/booking" element={<ConsultationBooking />} />
+              <Route path="/visa/refund-policy" element={<VisaPolicies tab="refund" />} />
+              <Route path="/visa/terms" element={<VisaPolicies tab="terms" />} />
+              <Route path="/visa/privacy" element={<VisaPolicies tab="privacy" />} />
+              <Route path="/visa/consultation/:id" element={<VideoConsultation />} />
+            </>
+          ) : (
+            <Route path="/visa/*" element={<Navigate to="/" replace />} />
+          )}
           <Route path="/visa/agent/set-password" element={<VisaAgentSetPassword />} />
           {/* Agents get their own portal URL; it reuses the same (base-path-aware) panel. */}
           <Route path="/visa/agent/*" element={<VisaAdminPanel />} />

@@ -112,7 +112,7 @@ function FlightFilterSidebar({
   return (
     <aside
       aria-label="Filters"
-      className={isMobile ? 'w-full' : 'hidden lg:block w-[280px] flex-shrink-0'}
+      className={isMobile ? 'w-full' : 'hidden xl:block w-[280px] flex-shrink-0'}
     >
       <div className={isMobile
         ? 'bg-white'

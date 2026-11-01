@@ -89,3 +89,37 @@ describe('a round trip read back from the URL', () => {
     expect(screen.getByText('21')).toBeTruthy();
   });
 });
+
+// Each click flipped the calendar open or shut, so a double click - a habit on
+// a laptop, or a worn touchpad button - opened it and shut it in the same
+// moment, and the calendar seemed not to open (jetsetterss.com, 27 Oct).
+describe('a double click on a date field', () => {
+  const doubleClick = (field) => {
+    fireEvent.click(field, { detail: 1 });
+    fireEvent.click(field, { detail: 2 });
+  };
+
+  it('leaves the departure calendar open', () => {
+    renderForm({ initialData: { from: '', to: '', departDate: '2026-10-01', tripType: 'oneWay', returnDate: '' } });
+    doubleClick(screen.getByRole('button', { name: 'Select departure date' }));
+
+    expect(screen.getByRole('dialog', { name: 'Choose a date' })).toBeTruthy();
+  });
+
+  it('leaves the return calendar open', () => {
+    renderForm({ initialData: { from: '', to: '', departDate: '2026-10-01', tripType: 'roundTrip', returnDate: '2026-10-08' } });
+    doubleClick(screen.getByRole('button', { name: 'Select return date' }));
+
+    expect(screen.getByRole('dialog', { name: 'Choose a date' })).toBeTruthy();
+  });
+
+  it('still lets Enter open and shut it', () => {
+    renderForm({ initialData: { from: '', to: '', departDate: '2026-10-01', tripType: 'oneWay', returnDate: '' } });
+    const field = screen.getByRole('button', { name: 'Select departure date' });
+
+    fireEvent.keyDown(field, { key: 'Enter' });
+    expect(screen.getByRole('dialog', { name: 'Choose a date' })).toBeTruthy();
+    fireEvent.keyDown(field, { key: 'Enter' });
+    expect(screen.queryByRole('dialog', { name: 'Choose a date' })).toBeNull();
+  });
+});

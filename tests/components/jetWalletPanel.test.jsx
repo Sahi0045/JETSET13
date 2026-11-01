@@ -168,6 +168,35 @@ describe('the Jet Wallet tab', () => {
     expect(await screen.findByText('The voucher could not be redeemed just now. Please try again.')).toBeTruthy();
   });
 
+  it('shows how many coins a flight booking can use, by its base fare', async () => {
+    apiGet.mockResolvedValue(wallet({ balance: 5000, coinBands: [{ from: 0, usd: 1 }, { from: 50, usd: 2 }, { from: 250, usd: 5 }] }));
+    render(<JetWalletPanel />);
+    const table = await screen.findByRole('table', { name: 'Jet Coins you can use on one flight booking' });
+    expect([...table.querySelectorAll('tbody tr')].map((row) => row.textContent)).toEqual([
+      'Base fare under $50Up to $1.00',
+      'Base fare $50 to $249.99Up to $2.00',
+      'Base fare $250 and overUp to $5.00',
+    ]);
+    expect(screen.getByText(/The rest stay in your wallet for your next trip/)).toBeTruthy();
+  });
+
+  it('shows no table when the limits could not be read', async () => {
+    apiGet.mockResolvedValue(wallet({ balance: 5000 }));
+    render(<JetWalletPanel />);
+    await screen.findByText('5,000');
+    expect(screen.queryByRole('table')).toBeNull();
+  });
+
+  it('says how much of a redeemed voucher one booking can use', async () => {
+    const bands = [{ from: 0, usd: 1 }, { from: 250, usd: 5 }];
+    apiGet.mockResolvedValue(wallet({ balance: 5000, coinBands: bands }));
+    apiPost.mockResolvedValue(answer({ success: true, data: { coins: 5000, balance: 10000, code: 'SHUBHAM' } }));
+    render(<JetWalletPanel />);
+    fireEvent.change(await screen.findByLabelText('Voucher code'), { target: { value: 'SHUBHAM' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Redeem' }));
+    expect(await screen.findByText('5,000 Jet Coins added to your wallet. A flight booking can use up to $5.00 of your coins.')).toBeTruthy();
+  });
+
   it('does not post an empty code', async () => {
     apiGet.mockResolvedValue(wallet({}));
     render(<JetWalletPanel />);

@@ -79,7 +79,7 @@ export const toDisplayFlights = (data, { cityMap = {}, airlineNames: dynamicAirl
   const tripLegsOf = (itineraries = []) => {
     const type = tripTypeOf(itineraries.map((itin) => ({
       origin: itin?.segments?.[0]?.departure?.iataCode,
-      destination: itin?.segments?.at(-1)?.arrival?.iataCode,
+      destination: itin?.segments?.slice(-1)[0]?.arrival?.iataCode,
     })));
     return {
       isRoundTrip: type === 'roundTrip',
@@ -240,6 +240,7 @@ export const toDisplayFlights = (data, { cityMap = {}, airlineNames: dynamicAirl
         flightNumber: flight.flightNumber,
         refundable: flight.refundable ?? null,
         amenities: flight.amenities || flight.originalOffer?.travelerPricings?.[0]?.fareDetailsBySegment?.[0]?.amenities || [],
+        fareServices: flight.fareServices || flight.originalOffer?.travelerPricings?.[0]?.fareDetailsBySegment?.[0]?.fareServices || [],
         fareBasis: flight.fareBasis || null,
         bookingClass: flight.bookingClass || null,
         validatingAirlineCodes: flight.validatingAirlineCodes || [],

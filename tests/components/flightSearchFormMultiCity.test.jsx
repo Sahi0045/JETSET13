@@ -69,6 +69,16 @@ describe('the multi-city search form', () => {
     expect(buildSearchPayload(searched).adults).toBe(2);
   });
 
+  it("keeps a flight's calendar open on a double click", () => {
+    renderForm({ initialData: { tripType: 'multiCity', legs: legs() } });
+    const field = screen.getByRole('button', { name: 'Select date of flight 2' });
+
+    fireEvent.click(field, { detail: 1 });
+    fireEvent.click(field, { detail: 2 });
+
+    expect(screen.getByRole('dialog', { name: 'Choose a date' })).toBeTruthy();
+  });
+
   it('a date picked on a flight is kept for that flight only', () => {
     const { container } = renderForm({ initialData: { tripType: 'multiCity', legs: [legs()[0], { ...legs()[1], departDate: '' }] } });
 

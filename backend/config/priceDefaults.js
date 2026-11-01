@@ -1,3 +1,5 @@
+import { DEFAULT_COIN_BANDS } from '../../shared/jetCoins.js';
+
 /**
  * Price settings used for any key the stored `price_settings` row does not set.
  *
@@ -19,6 +21,7 @@ export const DEFAULT_PRICE_SETTINGS = Object.freeze({
   cancellation_fee: 50.00,
   flight_cancellation_fee: 50.00,
   flight_cancellation_fee_percent: null,
+  flight_coin_bands: DEFAULT_COIN_BANDS,
 });
 
 const usableFee = (raw) => {
@@ -37,20 +40,24 @@ export function flightCancellationFeeFrom(settings) {
 }
 
 /**
- * The share of what a customer paid that a flight cancel keeps, 0-100, or null
- * until an admin saves one. While null the fixed fee above still applies, so
- * nothing changed for customers the day the percentage appeared.
+ * The share of what a customer paid that a flight cancel keeps on top of the
+ * flat fee, 0-100, or null until an admin saves one.
  */
 export function flightCancellationPercentFrom(settings) {
   const percent = usableFee(settings?.flight_cancellation_fee_percent);
   return percent !== null && percent <= 100 ? percent : null;
 }
 
-/** The fee a flight cancel keeps for a booking that cost `paid`; null when a percentage is set and `paid` is unknown. */
+/**
+ * The fee a flight cancel keeps for a booking that cost `paid`: the flat fee
+ * plus the percentage of `paid`, either of which can be 0. Null when a
+ * percentage is set and `paid` is unknown, so the cancel goes to review.
+ */
 export function flightCancellationFeeFor(settings, paid) {
+  const flat = flightCancellationFeeFrom(settings);
   const percent = flightCancellationPercentFrom(settings);
-  if (percent === null) return flightCancellationFeeFrom(settings);
+  if (!percent) return flat;
   const amount = paid === null || paid === undefined || paid === '' ? NaN : Number(paid);
   if (!Number.isFinite(amount)) return null;
-  return Math.round(Math.round(amount * 100) * percent / 100) / 100;
+  return (Math.round(flat * 100) + Math.round(Math.round(amount * 100) * percent / 100)) / 100;
 }

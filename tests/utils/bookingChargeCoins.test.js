@@ -5,7 +5,7 @@ describe('a receipt with Jet Coins', () => {
   it('shows the coins line and still adds up', () => {
     const result = bookingChargeLines({ chargeBreakdown: { fare: 120, serviceFee: 2.2, discount: 0, walletAmount: 50, walletCoins: 5000, total: 72.2 } });
     expect(result.total).toBe(72.2);
-    expect(result.lines.map((line) => line.label)).toEqual(['Airline fare (incl. taxes)', 'Service fee', 'Jet Coins (5,000)']);
+    expect(result.lines.map((line) => line.label)).toEqual(['Airline fare (incl. taxes)', 'Platform fee', 'Jet Coins (5,000)']);
     expect(result.lines[2].amount).toBe(-50);
   });
 
@@ -13,7 +13,7 @@ describe('a receipt with Jet Coins', () => {
     const result = bookingChargeLines({ chargeBreakdown: { fare: 120, serviceFee: 2.2, discount: 10, walletAmount: 40, walletCoins: 4000, total: 72.2, couponCode: 'SAVE' } });
     expect(result.lines).toEqual([
       { label: 'Airline fare (incl. taxes)', amount: 120 },
-      { label: 'Service fee', amount: 2.2 },
+      { label: 'Platform fee', amount: 2.2 },
       { label: 'Discount (SAVE)', amount: -10 },
       { label: 'Jet Coins (4,000)', amount: -40 },
     ]);
@@ -31,7 +31,7 @@ describe('a receipt with Jet Coins', () => {
     expect(result.total).toBe(72.2);
     expect(result.lines).toEqual([
       { label: 'Airline fare (incl. taxes)', amount: 120 },
-      { label: 'Service fee', amount: 2.2 },
+      { label: 'Platform fee', amount: 2.2 },
       { label: 'Jet Coins (5,000)', amount: -50 },
     ]);
   });
@@ -44,7 +44,7 @@ describe('a receipt with Jet Coins', () => {
     });
     expect(result.lines.map((line) => [line.label, line.amount])).toEqual([
       ['Airline fare (incl. taxes)', 120],
-      ['Service fee', 2.2],
+      ['Platform fee', 2.2],
       ['Discount (SAVE)', -10],
       ['Jet Coins (5,000)', -50],
     ]);

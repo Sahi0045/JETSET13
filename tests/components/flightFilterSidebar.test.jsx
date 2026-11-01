@@ -113,6 +113,17 @@ describe('the sliders', () => {
 });
 
 describe('the rest of the column', () => {
+  // Beside this 280 px column a card had about 680 px from 1024 px up, and its
+  // fare and Select flight ran out past its right edge (jetsetterss.com,
+  // 27 Oct). Below 1280 px the filters open from the Filters button instead.
+  it('stands beside the results only from 1280 px up', () => {
+    renderColumn();
+    const column = screen.getByRole('complementary', { name: 'Filters' }).className.split(/\s+/);
+
+    expect(column).toEqual(expect.arrayContaining(['hidden', 'xl:block']));
+    expect(column).not.toContain('lg:block');
+  });
+
   it('turns refundable-only on and off', () => {
     const { onFilterChange } = renderColumn();
     fireEvent.click(screen.getByRole('switch'));

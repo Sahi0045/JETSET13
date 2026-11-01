@@ -193,7 +193,7 @@ function header(t, booking, { title, issued }) {
   });
   if (code?.amadeusReference) {
     t.font(7, 'normal', COLOR.sky);
-    t.text(`Amadeus reference ${code.amadeusReference}`, PAGE.margin + 5 + columnWidth, t.y + 18.5);
+    t.text(`GDS PNR ${code.amadeusReference}`, PAGE.margin + 5 + columnWidth, t.y + 18.5);
   }
   t.y += boxHeight + 3;
 }
@@ -308,7 +308,7 @@ function payment(t, booking) {
   const rows = charge
     ? [
       ['Airline fare, including taxes and airline charges', money(charge.fare)],
-      ['Jetsetters service fee', money(charge.serviceFee)],
+      ['Jetsetters platform fee', money(charge.serviceFee)],
       ...(Number(charge.discount) > 0 ? [['Discount', `- ${money(charge.discount)}`]] : []),
       ...(Number(charge.walletAmount) > 0 ? [['Paid with Jet Coins', `- ${money(charge.walletAmount)}`]] : []),
     ]
@@ -336,13 +336,13 @@ function fareRules(t, booking) {
   const fare = [booking.brandedFareLabel || booking.brandedFare, String(booking.cabinClass || '').replace(/_/g, ' ').toLowerCase()]
     .filter(Boolean).join(', ');
   t.wrapped(`${fare ? `${fare.replace(/^\w/, (c) => c.toUpperCase())}  ·  ` : ''}${refundable}`, PAGE.margin, CONTENT_WIDTH, 9, 'bold');
-  t.wrapped('Changes and cancellations follow the airline\'s fare rules. To change or cancel, open Manage Booking or call us. The Jetsetters service fee is not refundable.', PAGE.margin, CONTENT_WIDTH, 8.5, 'normal', COLOR.ink);
+  t.wrapped('Changes and cancellations follow the airline\'s fare rules. To change or cancel, open Manage Booking or call us. The Jetsetters platform fee is not refundable.', PAGE.margin, CONTENT_WIDTH, 8.5, 'normal', COLOR.ink);
 }
 
 const checkInNotice = (checkIn) => {
   const opens = checkInOpensText(checkIn);
   return `Check in online with ${checkIn.airline} at ${checkIn.url.replace(/^https:\/\/(www\.)?/, '')}, `
-    + `using ${checkIn.codeIsAirlines ? 'airline booking code' : 'booking code'} ${checkIn.code} and your last name.`
+    + `using ${checkIn.codeIsAirlines ? 'airline PNR' : 'booking code'} ${checkIn.code} and your last name.`
     + (opens ? ` ${opens}.` : '');
 };
 

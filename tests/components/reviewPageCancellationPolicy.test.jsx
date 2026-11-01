@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { airline, offer, renderReviewPage, reviewFlight, segment } from './reviewPageHarness.jsx';
 
@@ -37,9 +37,22 @@ describe('the review page', () => {
     renderReviewPage(FlightBookingConfirmation, { state: { flightData: reviewFlight(fare), searchData: { from: 'DEL', to: 'BOM', departDate: '2026-11-15' } } });
 
     expect(await screen.findByText('Review your Booking')).toBeTruthy();
-    expect(screen.getByText('Jetsetters convenience fee · not refundable')).toBeTruthy();
     expect(screen.getByText('Cancellation policy')).toBeTruthy();
     expect(screen.getByText(/our \$40\.00 cancellation fee/)).toBeTruthy();
     expect(screen.getByText(/^Book now and you can cancel free until /)).toBeTruthy();
+  });
+
+  // The owner asked for the fee to be called a platform fee and shown as one
+  // line, without what it is made of (28 Oct).
+  it('shows the platform fee as one line, with no breakdown under it', async () => {
+    vi.stubGlobal('fetch', airline());
+    const fare = offer({ id: '1', itineraries: [{ segments: [segment('DEL', 'BOM', '2026-11-15T08:00:00', '2026-11-15T10:00:00')] }] });
+
+    renderReviewPage(FlightBookingConfirmation, { state: { flightData: reviewFlight(fare), searchData: { from: 'DEL', to: 'BOM', departDate: '2026-11-15' } } });
+
+    const line = (await screen.findByText('Platform Fee')).closest('[data-platform-fee]');
+    expect(line.textContent).toBe('Platform FeeUS$10.00');
+    expect(within(line).queryByRole('list')).toBeNull();
+    expect(screen.queryByText(/Service Fee|convenience fee/)).toBeNull();
   });
 });

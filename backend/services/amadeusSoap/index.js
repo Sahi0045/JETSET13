@@ -1,6 +1,6 @@
 import logger from '../logger.js';
 import { reportError } from '../monitoring.js';
-import { isCityCode, resolveToIata, searchLocations as searchAirports } from '../airportsIndex.js';
+import { isCityCode, resolvePlaces, resolveToIata, searchLocations as searchAirports } from '../airportsIndex.js';
 import { getWsConfig } from './config.js';
 import { AmadeusSoapError, inspectReply } from './errors.js';
 import { mapMasterPricerReply } from './mappers/offer.js';
@@ -23,6 +23,7 @@ import {
 } from './ticketingCarriers.js';
 import { travellerGroupProblem } from '../../../shared/travellerGroup.js';
 import { SCHEDULE_CHANGED_REVIEW_REASON } from '../../../shared/reviewQueue.js';
+import { farePerTraveller } from '../../../shared/farePerTraveller.js';
 
 const log = logger.child({ svc: 'amadeus-ws' });
 // MiniRules is advisory and answered in ~0.2 s on PDT; the results page gives
@@ -94,9 +95,14 @@ export const searchRequestFor = (params, { currency } = {}) => {
       return { from, to, departDate: leg.departDate, fromIsCity: isCityCode(from), toIsCity: isCityCode(to) };
     })
     : null;
-  const from = legs ? legs[0].from : resolveToIata(params.from ?? params.originLocationCode);
-  const to = legs ? legs[legs.length - 1].to : resolveToIata(params.to ?? params.destinationLocationCode);
-  if (!from || !to) throw unknownPlace(!from ? params.from : params.to);
+  // One side of a trip may name several airports ("JFK,EWR"): Master Pricer
+  // searches them all at once (depMultiCity, up to 50).
+  const fromCodes = legs ? [legs[0].from] : resolvePlaces(params.from ?? params.originLocationCode);
+  const toCodes = legs ? [legs[legs.length - 1].to] : resolvePlaces(params.to ?? params.destinationLocationCode);
+  if (!fromCodes || !toCodes) throw unknownPlace(!fromCodes ? params.from : params.to);
+  const from = fromCodes.join(',');
+  const to = toCodes.join(',');
+  const placesOf = (codes) => codes.map((code) => ({ code, isCity: isCityCode(code) }));
 
   // A group Amadeus cannot book together is refused here, in words the customer
   // can act on, rather than sent and answered with a bare 955 or 926.
@@ -114,6 +120,8 @@ export const searchRequestFor = (params, { currency } = {}) => {
     to,
     fromIsCity: isCityCode(from),
     toIsCity: isCityCode(to),
+    fromPlaces: placesOf(fromCodes),
+    toPlaces: placesOf(toCodes),
     departDate: legs ? legs[0].departDate : (params.departDate ?? params.departureDate),
     returnDate: legs ? undefined : (params.returnDate || undefined),
     ...(legs ? { legs } : {}),
@@ -570,14 +578,19 @@ const sampleDates = (dates, cap = MAX_CALENDAR_DATES) => {
 const priceDates = async (params, dates) => {
   const wanted = sampleDates(dates);
   const prices = {};
+  const pricesEach = {};
+  const cheapestOf = (values) => {
+    const finite = values.filter(Number.isFinite);
+    return finite.length > 0 ? Math.min(...finite) : null;
+  };
 
   const results = await Promise.allSettled(wanted.map(async (date) => {
     const result = await searchFlights({ ...params, departDate: date, returnDate: undefined, max: 5 });
-    const cheapest = result.data.reduce(
-      (min, offer) => Math.min(min, Number(offer.price?.total) || Infinity),
-      Infinity,
-    );
-    return { date, price: Number.isFinite(cheapest) ? cheapest : null };
+    return {
+      date,
+      price: cheapestOf(result.data.map((offer) => Number(offer.price?.total) || NaN)),
+      each: cheapestOf(result.data.map((offer) => farePerTraveller(offer).each ?? NaN)),
+    };
   }));
 
   for (const outcome of results) {
@@ -585,10 +598,11 @@ const priceDates = async (params, dates) => {
     // shows no price for it.
     if (outcome.status === 'fulfilled' && outcome.value.price !== null) {
       prices[outcome.value.date] = outcome.value.price;
+      if (outcome.value.each !== null) pricesEach[outcome.value.date] = outcome.value.each;
     }
   }
 
-  return { prices, requested: wanted.length, capped: wanted.length < [...new Set(dates)].filter(Boolean).length };
+  return { prices, pricesEach, requested: wanted.length, capped: wanted.length < [...new Set(dates)].filter(Boolean).length };
 };
 
 /** Backs /flights/date-prices and /flights/calendar-prices. */
@@ -598,8 +612,9 @@ const getCalendarPrices = async ({ dates = [], ...params }) => {
   }
 
   try {
-    const { prices, capped, requested } = await priceDates(params, dates);
+    const { prices, pricesEach, capped, requested } = await priceDates(params, dates);
     const values = Object.values(prices);
+    const valuesEach = Object.values(pricesEach);
 
     // Nothing priced is not a result worth keeping. Each date is priced under
     // Promise.allSettled, so a total WSAP outage looks like "every date came
@@ -614,6 +629,8 @@ const getCalendarPrices = async ({ dates = [], ...params }) => {
       prices,
       dateWisePrices: prices,
       lowestPrice: values.length > 0 ? Math.min(...values) : null,
+      pricesEach,
+      lowestPriceEach: valuesEach.length > 0 ? Math.min(...valuesEach) : null,
       currency: getWsConfig().currency,
       capped,
     };

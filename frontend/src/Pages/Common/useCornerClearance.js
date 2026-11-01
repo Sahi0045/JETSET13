@@ -40,11 +40,17 @@ export default function useCornerClearance() {
     observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style', 'hidden', 'open'] });
     window.addEventListener('scroll', measure, { passive: true });
     window.addEventListener('resize', measure);
+    // A menu or sheet that slides in changes no attribute while it moves, so it
+    // is read again once its transition or animation ends.
+    document.addEventListener('transitionend', measure, true);
+    document.addEventListener('animationend', measure, true);
     return () => {
       cancelAnimationFrame(frame);
       observer.disconnect();
       window.removeEventListener('scroll', measure);
       window.removeEventListener('resize', measure);
+      document.removeEventListener('transitionend', measure, true);
+      document.removeEventListener('animationend', measure, true);
     };
   }, []);
 

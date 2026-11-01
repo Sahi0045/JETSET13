@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Plus, X } from 'lucide-react';
 import { format, isValid, parseISO } from 'date-fns';
-import { PlaceSuggestions, comboboxProps, makeRoomBelow, usePlaceSearch } from './PlaceSuggestions';
+import { PlaceSuggestions, comboboxProps, usePlaceSearch } from './PlaceSuggestions';
 import CustomFlightCalendar from './CustomFlightCalendar';
 
 export const MAX_LEGS = 6;
@@ -34,14 +34,14 @@ function PlaceField({ id, label, name, value, subtitle, error, onType, onPick })
         onChange={(e) => { onType(e.target.value); place.search(e.target.value); }}
         onBlur={place.close}
         onKeyDown={place.onKeyDown}
-        onFocus={(e) => makeRoomBelow(e.currentTarget)}
+        onFocus={place.onFocus}
         {...comboboxProps(id, place)}
         placeholder="City or airport"
         autoComplete="off" autoCorrect="off" spellCheck={false}
         className="w-full border-0 p-0 bg-transparent outline-none focus:ring-0 font-grotesk text-[18px] leading-tight font-semibold text-ink placeholder:text-gray-300 placeholder:font-normal placeholder:text-[15px]"
       />
       <span className="block text-xs text-gray-500 mt-1 truncate">{subtitle || ' '}</span>
-      <PlaceSuggestions id={id} place={place} />
+      <PlaceSuggestions id={id} place={place} title={label} value={value} onType={(text) => { onType(text); place.search(text); }} />
       {error && <span className="block text-red-500 text-xs mt-1">{error}</span>}
     </label>
   );
@@ -66,7 +66,9 @@ function DateField({ number, value, minDate, error, onPick }) {
         aria-label={`Select date of flight ${number}`}
         aria-haspopup="dialog"
         aria-expanded={open}
-        onClick={() => setOpen((current) => !current)}
+        // Enter and Space click with detail 0 and open or shut it; a mouse
+        // click only opens, as a double click shut it again.
+        onClick={(event) => setOpen((current) => (event.detail === 0 ? !current : true))}
         className="w-full text-left"
       >
         <span className="block text-[10.5px] font-bold uppercase tracking-[0.14em] text-gray-400 mb-1">Date</span>

@@ -59,7 +59,8 @@ describe('the e-ticket PDF', () => {
     const pdf = await textOf(ticketed());
 
     expect(pdf).toContain('TEST TRAVELLER');
-    expect(pdf).toContain('057-7513754072-73');
+    expect(pdf).toContain('0577513754072/73');
+    expect(pdf).not.toContain('057-7513754072');
   });
 
   it('lists every flight, the operating airline and the connections', async () => {

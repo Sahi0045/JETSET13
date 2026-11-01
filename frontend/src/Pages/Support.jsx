@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { FaHeadset, FaPhone, FaEnvelope, FaWhatsapp, FaClock, FaMapMarkerAlt, FaSearch, FaQuestionCircle, FaTicketAlt, FaBook, FaUserTie, FaGlobe } from 'react-icons/fa';
 import Navbar from './Common/Navbar';
 import Footer from './Common/Footer';
+import { VISA_SERVICES_VISIBLE } from '../../../shared/siteSections';
 import Breadcrumb from '../components/Breadcrumb';
 
 const Support = () => {
@@ -39,7 +40,7 @@ const Support = () => {
       category: 'flights',
       description: "Essential travel documents and requirements for international flights.",
       solution: "Typically you'll need a valid passport, visa (if required), and any COVID-19 related documents.",
-      link: "/visa"
+      link: "/faqs"
     },
     {
       id: 3,
@@ -304,8 +305,12 @@ const Support = () => {
               <Link to="/hotels" className="text-primary-500 hover:text-primary-600 font-medium">Find Hotels</Link>
               <span className="text-gray-300">|</span>
               <Link to="/cruise" className="text-primary-500 hover:text-primary-600 font-medium">Explore Cruises</Link>
-              <span className="text-gray-300">|</span>
-              <Link to="/visa" className="text-primary-500 hover:text-primary-600 font-medium">Visa Services</Link>
+              {VISA_SERVICES_VISIBLE && (
+                <>
+                  <span className="text-gray-300">|</span>
+                  <Link to="/visa" className="text-primary-500 hover:text-primary-600 font-medium">Visa Services</Link>
+                </>
+              )}
             </div>
           </section>
         </div>

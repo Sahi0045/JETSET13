@@ -13,6 +13,9 @@ vi.mock('../../frontend/src/config/api.config', () => ({
 vi.mock('../../frontend/src/utils/authHeaders', () => ({
   authHeaders: async (extra = {}) => ({ ...extra }),
 }));
+vi.mock('../../frontend/src/contexts/SupabaseAuthContext', () => ({
+  useSupabaseAuth: () => ({ user: null, loading: false }),
+}));
 
 const reply = (status, body) => ({ status, ok: status < 400, json: async () => body });
 
