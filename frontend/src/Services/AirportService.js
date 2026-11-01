@@ -46,7 +46,8 @@ const shortAirportName = (name) => String(name || '').replace(/\s+(International
  * booking.com lays it: the code, the place, and under it the country - or,
  * for an airport listed under its city (`parentName`), how far it is from the
  * centre. `name` is what picking it puts in the box: the city, or the airport
- * for one listed under its city.
+ * for one listed under its city. A row found by its state or island (`area`)
+ * names it: "Honolulu, Hawaii, United States".
  */
 export const toPlace = (row, parentName) => {
     const country = countryName(row.countryCode || row.country);
@@ -59,7 +60,8 @@ export const toPlace = (row, parentName) => {
         const subtitle = Number.isFinite(row.distanceKm) ? `${row.distanceKm} km from downtown` : `${parentName || city}, ${country}`;
         return { ...base, parent: row.parent, name: shortAirportName(row.name), title: row.name, subtitle };
     }
-    return { ...base, name: city, title: row.name, subtitle: `${city}, ${country}` };
+    const place = row.area && row.area !== city ? `${city}, ${row.area}` : city;
+    return { ...base, name: city, title: row.name, subtitle: `${place}, ${country}` };
 };
 
 const toPlaces = (rows) => rows.map((row) => toPlace(

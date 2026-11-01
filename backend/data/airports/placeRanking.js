@@ -21,7 +21,7 @@ export const PASSENGERS = Object.freeze({
   OGG: 8, PBI: 7, JAX: 7, BDL: 7, ONT: 7, BUR: 6, CHS: 6, MKE: 6, ANC: 5, OMA: 5,
   ABQ: 5, BUF: 5, BOI: 5, RNO: 4, MEM: 4, OKC: 4, SDF: 4, RIC: 4, SAV: 4, SRQ: 4,
   ELP: 4, TUS: 4, GEG: 4, ORF: 4, PVD: 4, KOA: 4, GRR: 4, LGB: 3, SFB: 3, ALB: 3,
-  TUL: 3, PSP: 3, LIH: 3, MYR: 3, DSM: 3, PIE: 2, EYW: 1, ASE: 1, EGE: 1, JAC: 1,
+  TUL: 3, PSP: 3, LIH: 3, MYR: 3, DSM: 3, PIE: 2, EYW: 1, ASE: 1, EGE: 1, JAC: 1, ITO: 1,
   // Canada
   YYZ: 45, YVR: 26, YUL: 21, YYC: 18, YEG: 8, YOW: 5, YWG: 4, YHZ: 4, YTZ: 2, YQB: 2,
   // Mexico, Central and South America, the Caribbean
@@ -125,6 +125,33 @@ export const CITY_NAMES = Object.freeze({
   NGO: 'Nagoya',
   CTS: 'Sapporo',
   TZL: 'Tuzla',
+  FLR: 'Florence',
+});
+
+/**
+ * Places travellers fly to that are neither a city nor a state or country in
+ * OurAirports, by the airports that serve them.
+ */
+export const AREA_NAMES = Object.freeze({
+  'Big Island': ['KOA', 'ITO', 'MUE'],
+  Tahiti: ['PPT'],
+  Darjeeling: ['IXB'],
+});
+
+/** Names travellers type for a country that its English name does not start with, by ISO code. */
+export const COUNTRY_ALIASES = Object.freeze({
+  US: ['USA'],
+  AE: ['UAE'],
+  TR: ['Turkey'],
+  CZ: ['Czech Republic'],
+  NL: ['Holland'],
+  CI: ['Ivory Coast'],
+  SX: ['St Maarten'],
+  BL: ['St Barts'],
+  MO: ['Macau'],
+  CV: ['Cabo Verde'],
+  SZ: ['Swaziland'],
+  VI: ['US Virgin Islands'],
 });
 
 /** City centres of the metros, [latitude, longitude], for "23 km from downtown" under each of their airports. */
