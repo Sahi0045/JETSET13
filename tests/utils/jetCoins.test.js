@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { computeFlightCharge, MIN_CARD_CHARGE } from '../../shared/flightCharge.js';
 import {
-  coinBandsProblem, coinLimitFor, coinsBackOnCancel, coinsToUsd, DEFAULT_COIN_BANDS, earnedCoinsFor, formatCoins,
+  coinBandFareOf, coinBandsProblem, coinLimitFor, coinsBackOnCancel, coinsToUsd, DEFAULT_COIN_BANDS, earnedCoinsFor, formatCoins,
   grossPaidOf, maxCoinLimitOf, maxWalletCoinsFor, usableCoinBands,
 } from '../../shared/jetCoins.js';
 import { cancelTermsLines, customerCancelTerms } from '../../shared/flightCancelPolicy.js';
@@ -88,6 +88,19 @@ describe('coins one booking may use', () => {
   it('goes by the price band, $1 to $5', () => {
     expect([10, 49.99, 50, 94.67, 99.99, 100, 149.99, 150, 249.99, 250, 1100].map((price) => coinLimitFor(price, DEFAULT_COIN_BANDS)))
       .toEqual([100, 100, 200, 200, 200, 300, 300, 400, 400, 500, 500]);
+  });
+
+  it('reads the band from the base fare, not the fare with taxes', () => {
+    expect(coinBandFareOf(170.36, 141)).toBe(141);
+    expect(coinLimitFor(coinBandFareOf(170.36, 141), DEFAULT_COIN_BANDS)).toBe(300);
+    expect(coinLimitFor(coinBandFareOf('170.36', '141.00'), DEFAULT_COIN_BANDS)).toBe(300);
+  });
+
+  it('reads the band from the whole fare when the base is unknown or impossible', () => {
+    for (const base of [undefined, null, 0, -1, 'abc', 180]) {
+      expect(coinBandFareOf(170.36, base)).toBe(170.36);
+    }
+    expect(coinBandFareOf(170.36, 170.36)).toBe(170.36);
   });
 
   it('allows nothing on a price of nothing', () => {

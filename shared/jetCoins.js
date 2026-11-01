@@ -10,9 +10,9 @@ export const WALLET_CHANGED_MESSAGE = 'Your Jet Coins changed while you were che
 export const coinsToUsd = (coins) => roundMoney(Math.floor(Number(coins) || 0) / 100);
 
 /**
- * The dollars of coins one flight booking may use, by its airline fare for all
- * travellers, before our fee and any coupon: the last band whose `from` is at
- * or below that fare.
+ * The dollars of coins one flight booking may use, by its base fare for all
+ * travellers - the airline's fare before taxes, our fee and any coupon: the
+ * last band whose `from` is at or below that base fare.
  */
 export const DEFAULT_COIN_BANDS = Object.freeze([
   Object.freeze({ from: 0, usd: 1 }),
@@ -42,7 +42,18 @@ export function coinBandsProblem(bands) {
 
 export const usableCoinBands = (bands) => (coinBandsProblem(bands) ? DEFAULT_COIN_BANDS : bands);
 
-/** The coins one flight booking may use, from its airline fare. */
+/**
+ * The price a booking's band is read from: the base fare, or the whole airline
+ * fare when the base is unknown. Checkout refuses a card amount that differs
+ * from its own, so the page and checkout must both read the band this way.
+ */
+export function coinBandFareOf(fareTotal, baseFare) {
+  const total = roundMoney(fareTotal);
+  const base = roundMoney(baseFare);
+  return base > 0 && base <= total ? base : total;
+}
+
+/** The coins one flight booking may use, from its base fare (coinBandFareOf). */
 export function coinLimitFor(fare, bands) {
   const price = toCents(fare);
   if (!Number.isFinite(price) || price <= 0) return 0;

@@ -39,7 +39,7 @@ import { handedFareCheck } from '../../../utils/fareCheckHandoff';
 // The same formula checkout verifies the charge with, so this page can never
 // quote a total the server will not accept.
 import { computeFlightCharge, PASSENGER_TYPES, travellerTypesOf } from '../../../../../shared/flightCharge';
-import { coinLimitFor, formatCoins, maxWalletCoinsFor } from '../../../../../shared/jetCoins';
+import { coinBandFareOf, coinLimitFor, formatCoins, maxWalletCoinsFor } from '../../../../../shared/jetCoins';
 import { describeGroup, groupFromOffer, travellerGroupProblem } from '../../../../../shared/travellerGroup';
 import { lastFlightDepartureDate, needsDateOfBirth, tripDates } from '../../../../../shared/travellerDetails';
 import { CALLING_CODES, COUNTRIES, callingCodeDigits } from '../../../../../shared/countries';
@@ -1277,11 +1277,11 @@ function FlightBookingConfirmation() {
 
   // What the card will be charged, in US dollars: the summary total, the Pay
   // buttons and the mobile bar all show this one figure. Worked out as checkout
-  // does - the coupon first, then the coins the balance, the fare's band and
+  // does - the coupon first, then the coins the balance, the base fare's band and
   // the $1.00 minimum allow - because checkout refuses an amount that differs
   // from its own.
   const afterCoupon = appliedCoupon ? appliedCoupon.finalTotal : calculatedFare.totalAmount;
-  const coinLimit = coinLimitFor(calculatedFare.fare, priceConfig?.flight_coin_bands);
+  const coinLimit = coinLimitFor(coinBandFareOf(calculatedFare.fare, calculatedFare.baseFare), priceConfig?.flight_coin_bands);
   const coinsToUse = useCoins ? maxWalletCoinsFor(afterCoupon, wallet.balance, coinLimit) : 0;
   const amountDue = Math.round((afterCoupon - coinsToUse / 100) * 100) / 100;
 

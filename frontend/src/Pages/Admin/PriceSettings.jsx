@@ -318,12 +318,12 @@ const PriceSettings = () => {
             <div style={{ marginTop: '32px', padding: '20px', backgroundColor: '#F1FBFD', border: '1px solid #65B3CF', borderRadius: '8px' }}>
               <h3 style={{ margin: '0 0 6px', fontSize: '16px', color: '#034457' }}>Jet Coins per booking</h3>
               <p style={{ margin: '0 0 12px', fontSize: '12px', color: '#4b5563', lineHeight: '1.5' }}>
-                The most Jet Coins one flight booking can use, by its airline fare for all travellers, before our fee and any coupon. The same in every country. Customers see this table in their Jet Wallet.
+                The most Jet Coins one flight booking can use, by its base fare for all travellers: the airline's fare before taxes, our fee and any coupon. The same in every country. Customers see this table in their Jet Wallet.
               </p>
               <table aria-label="Jet Coins per flight booking" style={{ width: '100%', maxWidth: '520px', borderCollapse: 'collapse', fontSize: '14px' }}>
                 <thead>
                   <tr style={{ textAlign: 'left', color: '#034457' }}>
-                    <th scope="col" style={{ padding: '4px 8px 4px 0' }}>Fare from (USD)</th>
+                    <th scope="col" style={{ padding: '4px 8px 4px 0' }}>Base fare from (USD)</th>
                     <th scope="col" style={{ padding: '4px 8px' }}>Coins up to (USD)</th>
                     <th scope="col"><span style={visuallyHidden}>Remove</span></th>
                   </tr>
@@ -333,7 +333,7 @@ const PriceSettings = () => {
                     <tr key={i}>
                       <td style={{ padding: '4px 8px 4px 0' }}>
                         <input
-                          aria-label={`Band ${i + 1} fare from`}
+                          aria-label={`Band ${i + 1} base fare from`}
                           type="number"
                           min="0"
                           step="0.01"
@@ -379,7 +379,7 @@ const PriceSettings = () => {
                 Add band
               </button>
               <p style={{ margin: '12px 0 0', fontSize: '13px', color: bandsProblem ? '#dc2626' : '#034457' }}>
-                {bandsProblem || `Example: a $120 fare can use up to ${formatCurrency(coinLimitFor(120, parsedBands) / 100)} of coins.`}
+                {bandsProblem || `Example: a $120 base fare can use up to ${formatCurrency(coinLimitFor(120, parsedBands) / 100)} of coins.`}
               </p>
             </div>
           </div>

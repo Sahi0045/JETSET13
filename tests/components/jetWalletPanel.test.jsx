@@ -168,14 +168,14 @@ describe('the Jet Wallet tab', () => {
     expect(await screen.findByText('The voucher could not be redeemed just now. Please try again.')).toBeTruthy();
   });
 
-  it('shows how many coins a flight booking can use, by its fare', async () => {
+  it('shows how many coins a flight booking can use, by its base fare', async () => {
     apiGet.mockResolvedValue(wallet({ balance: 5000, coinBands: [{ from: 0, usd: 1 }, { from: 50, usd: 2 }, { from: 250, usd: 5 }] }));
     render(<JetWalletPanel />);
     const table = await screen.findByRole('table', { name: 'Jet Coins you can use on one flight booking' });
     expect([...table.querySelectorAll('tbody tr')].map((row) => row.textContent)).toEqual([
-      'Fare under $50Up to $1.00',
-      'Fare $50 to $249.99Up to $2.00',
-      'Fare $250 and overUp to $5.00',
+      'Base fare under $50Up to $1.00',
+      'Base fare $50 to $249.99Up to $2.00',
+      'Base fare $250 and overUp to $5.00',
     ]);
     expect(screen.getByText(/The rest stay in your wallet for your next trip/)).toBeTruthy();
   });
