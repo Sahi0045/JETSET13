@@ -396,7 +396,7 @@ describe('policy, offers and prices shown as they are', () => {
  * total was labelled "Per adult".
  */
 describe('search results show what the fare says', () => {
-  const search = page('flightsearchpage.jsx');
+  const search = page('flightsearchpage.jsx') + page('flightOffers.js');
   const card = page('FlightCard.jsx');
   const options = page('FlightFareOptions.jsx');
   const review = page('FlightBookingConfirmation.jsx');

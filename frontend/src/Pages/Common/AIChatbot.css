@@ -241,3 +241,19 @@ body.date-picker-open .ai-chatbot-container {
     right: 12px;
   }
 }
+
+.chatbot-input button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.chat-search-link {
+  display: inline-block;
+  margin-top: 6px;
+  font-weight: 600;
+  color: #0890BC;
+}
+
+.chat-search-link:hover {
+  color: #055B75;
+}

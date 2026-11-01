@@ -73,6 +73,10 @@ router.get("/history/:sessionId", optionalProtect, (req, res) =>
   chatController.getHistory(req, res),
 );
 
+router.post("/event", optionalProtect, messageLimiter, (req, res) =>
+  chatController.logEvent(req, res),
+);
+
 // POST /api/chat/feedback
 // Submit a thumbs-up / thumbs-down (or 1–5 star) rating for an AI message.
 router.post("/feedback", optionalProtect, (req, res) =>
