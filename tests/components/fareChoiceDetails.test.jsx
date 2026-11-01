@@ -70,7 +70,7 @@ const row = (fare, key) => fareInclusions(fare).rows[key];
 describe('what a fare includes', () => {
   it('says what Air India said: refund and date change at a fee, seat and bag included', () => {
     expect(row(ecoValue, 'checkedBag')).toEqual({ state: STATES.INCLUDED, label: '15 kg checked bag' });
-    expect(row(ecoValue, 'cancel')).toEqual({ state: STATES.FEE, label: 'Cancellation for a fee' });
+    expect(row(ecoValue, 'cancel')).toEqual({ state: STATES.FEE, label: 'Refundable, minus a cancellation fee' });
     expect(row(ecoValue, 'change')).toEqual({ state: STATES.FEE, label: 'Date change for a fee' });
     expect(row(ecoValue, 'seat')).toEqual({ state: STATES.INCLUDED, label: 'Free seat selection' });
     expect(row(ecoFlex, 'change')).toEqual({ state: STATES.INCLUDED, label: 'Date change included' });
@@ -149,7 +149,7 @@ describe('the choose-your-fare window', () => {
 
     const [value, flex] = screen.getAllByTestId('fare-option');
     expect(within(value).getByText('15 kg checked bag')).toBeTruthy();
-    expect(within(value).getByText('Cancellation for a fee')).toBeTruthy();
+    expect(within(value).getByText('Refundable, minus a cancellation fee')).toBeTruthy();
     expect(within(value).getByText('Date change for a fee')).toBeTruthy();
     expect(within(flex).getByText('Date change included')).toBeTruthy();
     expect(within(flex).getByText('25 kg checked bag')).toBeTruthy();
