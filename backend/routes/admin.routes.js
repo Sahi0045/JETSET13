@@ -7,6 +7,7 @@ const router = express.Router();
 // Default price settings - one copy, shared with checkout's charge verification
 // so the page's quote and the server's check merge the stored row identically.
 import { DEFAULT_PRICE_SETTINGS as DEFAULT_SETTINGS, flightCancellationFeeFrom, flightCancellationPercentFrom } from '../config/priceDefaults.js';
+import { coinBandsProblem } from '../../shared/jetCoins.js';
 
 // Get current price settings
 router.get('/price-settings', async (req, res) => {
@@ -97,8 +98,15 @@ router.put('/price-settings', protect, admin, async (req, res) => {
     // saved anything unreadable as 0, so a typo removed a fee without a word.
     const validatedSettings = {};
     const invalid = [];
+    let bandsProblem = null;
     for (const [key, value] of Object.entries(newSettings)) {
       if (!Object.prototype.hasOwnProperty.call(DEFAULT_SETTINGS, key)) continue;
+      if (key === 'flight_coin_bands') {
+        bandsProblem = coinBandsProblem(value);
+        if (bandsProblem) invalid.push(key);
+        else validatedSettings[key] = value.map(({ from, usd }) => ({ from, usd }));
+        continue;
+      }
       const isPercentLeftEmpty = key === 'flight_cancellation_fee_percent' && (value === null || value === '');
       if (isPercentLeftEmpty) continue;
       const number = typeof value === 'number'
@@ -112,7 +120,9 @@ router.put('/price-settings', protect, admin, async (req, res) => {
       return res.status(400).json({
         success: false,
         code: 'INVALID_PRICE_SETTINGS',
-        error: `Each setting must be a number of zero or more. Check: ${invalid.join(', ')}. Nothing was saved.`,
+        error: bandsProblem && invalid.length === 1
+          ? `Jet Coins per booking: ${bandsProblem} Nothing was saved.`
+          : `Each setting must be a number of zero or more. Check: ${invalid.join(', ')}.${bandsProblem ? ` Jet Coins per booking: ${bandsProblem}` : ''} Nothing was saved.`,
         fields: invalid
       });
     }

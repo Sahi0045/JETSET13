@@ -39,7 +39,7 @@ import { handedFareCheck } from '../../../utils/fareCheckHandoff';
 // The same formula checkout verifies the charge with, so this page can never
 // quote a total the server will not accept.
 import { computeFlightCharge, PASSENGER_TYPES, travellerTypesOf } from '../../../../../shared/flightCharge';
-import { formatCoins, maxWalletCoinsFor } from '../../../../../shared/jetCoins';
+import { coinLimitFor, formatCoins, maxWalletCoinsFor } from '../../../../../shared/jetCoins';
 import { describeGroup, groupFromOffer, travellerGroupProblem } from '../../../../../shared/travellerGroup';
 import { lastFlightDepartureDate, needsDateOfBirth, tripDates } from '../../../../../shared/travellerDetails';
 import { CALLING_CODES, COUNTRIES, callingCodeDigits } from '../../../../../shared/countries';
@@ -284,6 +284,7 @@ function FlightBookingConfirmation() {
   // What the page needs to tell the customer, in the site's own dialog.
   const [notice, setNotice] = useState(null);
   const [calculatedFare, setCalculatedFare] = useState({
+    fare: 0,
     baseFare: 0,
     totalTax: 0,
     serviceFee: 0,
@@ -1071,6 +1072,7 @@ function FlightBookingConfirmation() {
     });
 
     setCalculatedFare({
+      fare: charge.fare,
       baseFare: base,
       totalTax: Math.max(0, Math.round((fareTotal - base) * 100) / 100),
       serviceFee: charge.serviceFee,
@@ -1275,10 +1277,12 @@ function FlightBookingConfirmation() {
 
   // What the card will be charged, in US dollars: the summary total, the Pay
   // buttons and the mobile bar all show this one figure. Worked out as checkout
-  // does - the coupon first, then the coins the balance and the $1.00 minimum
-  // allow - because checkout refuses an amount that differs from its own.
+  // does - the coupon first, then the coins the balance, the fare's band and
+  // the $1.00 minimum allow - because checkout refuses an amount that differs
+  // from its own.
   const afterCoupon = appliedCoupon ? appliedCoupon.finalTotal : calculatedFare.totalAmount;
-  const coinsToUse = useCoins ? maxWalletCoinsFor(afterCoupon, wallet.balance) : 0;
+  const coinLimit = coinLimitFor(calculatedFare.fare, priceConfig?.flight_coin_bands);
+  const coinsToUse = useCoins ? maxWalletCoinsFor(afterCoupon, wallet.balance, coinLimit) : 0;
   const amountDue = Math.round((afterCoupon - coinsToUse / 100) * 100) / 100;
 
   // Handle proceeding to payment - DIRECT to ARC Pay (bypass FlightPayment.jsx)
@@ -2644,7 +2648,7 @@ function FlightBookingConfirmation() {
                   )}
                 </div>
 
-                <JetCoinsToggle balance={wallet.balance} held={wallet.held} afterCoupon={afterCoupon} useCoins={useCoins} onChange={(next) => { setWalletProblem(null); setUseCoins(next); }} />
+                <JetCoinsToggle balance={wallet.balance} held={wallet.held} afterCoupon={afterCoupon} limit={coinLimit} useCoins={useCoins} onChange={(next) => { setWalletProblem(null); setUseCoins(next); }} />
                 {walletProblem && <p ref={walletProblemRef} className="mt-1.5 text-xs text-red-600" role="alert">{walletProblem}</p>}
 
                 <div className="fare-row total">

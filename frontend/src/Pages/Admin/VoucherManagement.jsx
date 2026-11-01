@@ -139,7 +139,7 @@ export default function VoucherManagement() {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm text-gray-600">
-          A voucher gives Jet Coins once to each customer. Instant vouchers are redeemed in Profile → Jet Wallet; trip rewards are typed at flight checkout and pay out after the trip. 100 coins = $1.
+          A voucher gives Jet Coins once to each customer. Instant vouchers are redeemed in Profile → Jet Wallet; trip rewards are typed at flight checkout and pay out after the trip. 100 coins = $1. One flight booking can use only part of a customer's coins, set by its fare in Price settings → Flights → Jet Coins per booking.
         </p>
         <button type="button" onClick={() => openForm({ ...EMPTY })} className="shrink-0 rounded-lg bg-[#055B75] px-4 py-2 text-sm font-semibold text-white hover:bg-[#034457]">
           New voucher

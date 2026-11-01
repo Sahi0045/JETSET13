@@ -1,3 +1,5 @@
+import { DEFAULT_COIN_BANDS } from '../../shared/jetCoins.js';
+
 /**
  * Price settings used for any key the stored `price_settings` row does not set.
  *
@@ -19,6 +21,7 @@ export const DEFAULT_PRICE_SETTINGS = Object.freeze({
   cancellation_fee: 50.00,
   flight_cancellation_fee: 50.00,
   flight_cancellation_fee_percent: null,
+  flight_coin_bands: DEFAULT_COIN_BANDS,
 });
 
 const usableFee = (raw) => {

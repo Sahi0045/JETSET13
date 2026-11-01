@@ -91,11 +91,11 @@ describe('a trip-reward voucher at checkout', () => {
   });
 
   it('works beside Jet Coins', async () => {
-    const verdict = await verify({ amount: 72.2, walletCoins: 5000, voucherCode: 'SHUBHAM' });
+    const verdict = await verify({ amount: 119.2, walletCoins: 5000, voucherCode: 'SHUBHAM' });
     expect(verdict.ok).toBe(true);
-    expect(verdict.wallet).toEqual({ coins: 5000, amount: 50 });
+    expect(verdict.wallet).toEqual({ coins: 300, amount: 3 });
     expect(verdict.voucher.code).toBe('SHUBHAM');
-    expect(verdict.charge.total).toBe(72.2);
+    expect(verdict.charge.total).toBe(119.2);
   });
 });
 

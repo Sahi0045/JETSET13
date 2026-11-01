@@ -42,10 +42,56 @@ const verify = (over = {}) => verifyFlightCharge({
 
 beforeEach(() => {
   for (const key of Object.keys(rows)) delete rows[key];
-  rows.price_settings = { settings: { flight_taxes_fees: 1, flight_taxes_fees_percentage: 1 } };
+  rows.price_settings = { settings: { flight_taxes_fees: 1, flight_taxes_fees_percentage: 1, flight_coin_bands: [{ from: 0, usd: 1000 }] } };
   rows.wallets = { balance: 5000 };
   walletReads = 0;
   walletError = null;
+});
+
+describe('the coins one booking may use', () => {
+  beforeEach(() => {
+    rows.price_settings = { settings: { flight_taxes_fees: 1, flight_taxes_fees_percentage: 1 } };
+  });
+
+  it('uses only $3 of a 5,000-coin balance on a $120 fare when no bands are saved', async () => {
+    const verdict = await verify({ amount: 119.2, walletCoins: 5000 });
+
+    expect(verdict.ok).toBe(true);
+    expect(verdict.wallet).toEqual({ coins: 300, amount: 3 });
+    expect(verdict.charge).toMatchObject({ walletCoins: 300, total: 119.2 });
+  });
+
+  it('cuts a page that asks for more than the band allows to the band, and asks for the new price', async () => {
+    const verdict = await verify({ amount: 72.2, walletCoins: 5000 });
+
+    expect(verdict).toMatchObject({ ok: false, status: 409, code: 'PRICE_CHANGED' });
+    expect(verdict.charge).toMatchObject({ walletCoins: 300, total: 119.2 });
+  });
+
+  it('follows the bands an admin saved', async () => {
+    rows.price_settings.settings.flight_coin_bands = [{ from: 0, usd: 0.5 }, { from: 100, usd: 7 }];
+    const verdict = await verify({ amount: 115.2, walletCoins: 5000 });
+
+    expect(verdict.ok).toBe(true);
+    expect(verdict.wallet).toEqual({ coins: 700, amount: 7 });
+  });
+
+  it('picks the band from the airline fare, not the fare with our fee', async () => {
+    rows.price_settings.settings.flight_coin_bands = [{ from: 0, usd: 1 }, { from: 121, usd: 9 }];
+    const verdict = await verify({ amount: 121.2, walletCoins: 5000 });
+
+    expect(verdict.ok).toBe(true);
+    expect(verdict.wallet).toEqual({ coins: 100, amount: 1 });
+  });
+
+  it('picks the band from the fare, before the coupon', async () => {
+    rows.coupons = { id: 'c1', code: 'FLY30', discount_type: 'fixed', discount_value: 30, min_order_value: 0, max_uses: null, applicable_to: 'all', is_active: true };
+    const verdict = await verify({ amount: 89.2, couponCode: 'FLY30', walletCoins: 5000 });
+
+    expect(verdict.ok).toBe(true);
+    expect(verdict.wallet).toEqual({ coins: 300, amount: 3 });
+    expect(verdict.charge.total).toBe(89.2);
+  });
 });
 
 describe('coins at checkout', () => {

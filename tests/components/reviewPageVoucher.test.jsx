@@ -134,7 +134,7 @@ describe('a trip-reward voucher on the review page', () => {
     await waitFor(() => expect(page()).toMatch(/Voucher SHUBHAM: 5,000 Jet Coins after your trip/));
     fireEvent.click(await screen.findByRole('switch'));
 
-    fireEvent.click(await payButton('140.00'));
+    fireEvent.click(await payButton('186.00'));
 
     const message = await screen.findByText(checkout.answer.error);
     await waitFor(() => expect(scrolled).toEqual([message]));
@@ -143,11 +143,11 @@ describe('a trip-reward voucher on the review page', () => {
     expect(screen.getByRole('switch').checked).toBe(true);
     expect(checkout.calls).toHaveLength(1);
 
-    fireEvent.click(await payButton('140.00'));
+    fireEvent.click(await payButton('186.00'));
 
     await waitFor(() => expect(scrolled).toEqual([message, message]));
     expect(checkout.calls).toHaveLength(2);
-    expect(checkout.calls[1]).toMatchObject({ amount: 140, walletCoins: 5000, couponCode: 'SAVE20', voucherCode: 'SHUBHAM' });
+    expect(checkout.calls[1]).toMatchObject({ amount: 186, walletCoins: 400, couponCode: 'SAVE20', voucherCode: 'SHUBHAM' });
   });
 
   it('keeps a coupon and a voucher on one booking, each on its own line, the price taking only the coupon', async () => {

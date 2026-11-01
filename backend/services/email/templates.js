@@ -1166,7 +1166,7 @@ export function generateLogoutNotificationTemplate(data) {
  * ──────────────────────────────────────────────────────────────────────────── */
 
 /** A trip-reward voucher paid out. The coins lead: they are the news. */
-export function generateTripRewardTemplate({ customerName, coins, code, bookingReference, origin, destination } = {}) {
+export function generateTripRewardTemplate({ customerName, coins, code, bookingReference, origin, destination, perBookingCoins } = {}) {
   const count = Math.max(0, Math.floor(Number(coins) || 0));
   const coinsText = new Intl.NumberFormat('en-US').format(count);
   const named = code ? `voucher <strong>${code}</strong>` : 'trip reward';
@@ -1181,7 +1181,7 @@ export function generateTripRewardTemplate({ customerName, coins, code, bookingR
       ${paragraph(`Hi <strong>${firstNameOf(customerName)}</strong>,`)}
       ${figureBlock([{ label: 'Added to your Jet Wallet', value: `${coinsText} Jet Coins`, note: `Worth ${money(count / 100)}` }])}
       ${paragraph(paidOut)}
-      ${highlightBox('Use them on your next flight: switch on <strong>Use my Jet Coins</strong> at checkout. 100 Jet Coins = $1.', { bg: '#F1FBFD', border: '#0890BC', color: '#034457' })}
+      ${highlightBox(`Use them on your next flight: switch on <strong>Use my Jet Coins</strong> at checkout. 100 Jet Coins = $1.${perBookingCoins > 0 ? ` Each flight booking can use up to ${money(perBookingCoins / 100)} of them, depending on its fare.` : ''}`, { bg: '#F1FBFD', border: '#0890BC', color: '#034457' })}
     `,
     cta: { text: 'Open my Jet Wallet', url: `${BRAND.site}/profiledashboard?tab=wallet` },
   });
