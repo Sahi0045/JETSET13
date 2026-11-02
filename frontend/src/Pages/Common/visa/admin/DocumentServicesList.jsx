@@ -245,14 +245,14 @@ const DocumentServicesList = () => {
 
           <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
             <div className="relative flex-1 sm:w-80 group">
-              <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-lg transition-colors group-focus-within:text-[#1152d4]">
+              <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-lg transition-colors group-focus-within:text-[#055B75]">
                 search
               </span>
               <input
                 type="text"
                 value={searchInput}
                 onChange={handleSearchInput}
-                className="w-full rounded-xl border border-slate-200 bg-white h-11 pl-10 pr-10 text-sm font-medium focus:outline-none focus:ring-4 focus:ring-[#1152d4]/10 focus:border-[#1152d4]/50 transition-all shadow-sm placeholder:text-slate-400"
+                className="w-full rounded-xl border border-slate-200 bg-white h-11 pl-10 pr-10 text-sm font-medium focus:outline-none focus:ring-4 focus:ring-[#055B75]/10 focus:border-[#055B75]/50 transition-all shadow-sm placeholder:text-slate-400"
                 placeholder="Search by customer, email, or service..."
               />
               {searchInput && (
@@ -671,7 +671,7 @@ const DocumentServicesList = () => {
                 <select
                   value={newStatus}
                   onChange={(e) => setNewStatus(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 h-12 px-4 text-sm font-bold text-slate-800 focus:outline-none focus:ring-4 focus:ring-[#1152d4]/10 focus:border-[#1152d4]/50 transition-all"
+                  className="w-full rounded-xl border border-slate-200 h-12 px-4 text-sm font-bold text-slate-800 focus:outline-none focus:ring-4 focus:ring-[#055B75]/10 focus:border-[#055B75]/50 transition-all"
                 >
                   {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
                     <option key={key} value={key}>

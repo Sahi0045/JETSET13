@@ -244,7 +244,7 @@ const VisaApplicationTracker = () => {
                     setError("");
                   }}
                   onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                  className="w-full rounded-lg border border-slate-300 h-12 pl-12 pr-4 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#1152d4] placeholder:font-sans"
+                  className="w-full rounded-lg border border-slate-300 h-12 pl-12 pr-4 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#055B75] placeholder:font-sans"
                   placeholder="Reference number (e.g. VISA-2026-00001)"
                 />
               </div>
@@ -260,7 +260,7 @@ const VisaApplicationTracker = () => {
                     setError("");
                   }}
                   onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                  className="w-full rounded-lg border border-slate-300 h-12 pl-12 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#1152d4]"
+                  className="w-full rounded-lg border border-slate-300 h-12 pl-12 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#055B75]"
                   placeholder="Or search by email address"
                 />
               </div>

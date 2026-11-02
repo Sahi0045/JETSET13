@@ -201,14 +201,14 @@ Booking Date: ${new Date(bookingDetails.bookingDate).toLocaleDateString()}
           <div className="flex flex-wrap justify-center gap-4 mb-8">
             <button
               onClick={handleDownloadConfirmation}
-              className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#055B75]"
             >
               <Download className="h-5 w-5 mr-2" />
               Download Confirmation
             </button>
             <button
               onClick={handleShare}
-              className="inline-flex items-center px-6 py-3 border border-gray-300 text-base font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              className="inline-flex items-center px-6 py-3 border border-gray-300 text-base font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#055B75]"
             >
               <Share className="h-5 w-5 mr-2" />
               Share
@@ -341,7 +341,7 @@ Booking Date: ${new Date(bookingDetails.bookingDate).toLocaleDateString()}
           <div className="text-center mt-8">
             <button
               onClick={() => navigate('/hotels')}
-              className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-blue-600 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-blue-600 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#055B75]"
             >
               Book Another Hotel
             </button>

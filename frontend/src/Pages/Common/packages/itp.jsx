@@ -577,7 +577,7 @@ const ItineraryPackage = () => {
                   type="checkbox"
                   checked={formData.isRobot}
                   onChange={handleInputChange}
-                  className="w-5 h-5 border border-gray-300 rounded text-blue-600 focus:ring-blue-500"
+                  className="w-5 h-5 border border-gray-300 rounded text-blue-600 focus:ring-[#055B75]"
                 />
               </div>
               <label htmlFor="robot" className="ml-2 text-sm text-gray-600">
@@ -718,7 +718,7 @@ const ItineraryPackage = () => {
                             placeholder="Full Name"
                             value={formData.name}
                             onChange={handleInputChange}
-                            className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-gray-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-100"
+                            className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-gray-200 focus:border-[#055B75] focus:ring-1 focus:ring-[#055B75]/20"
                           />
                           <div className="absolute left-3 top-2.5 text-gray-400">
                             <Users size={15} />
@@ -733,7 +733,7 @@ const ItineraryPackage = () => {
                             placeholder="Email Address"
                             value={formData.email}
                             onChange={handleInputChange}
-                            className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-gray-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-100"
+                            className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-gray-200 focus:border-[#055B75] focus:ring-1 focus:ring-[#055B75]/20"
                           />
                           <div className="absolute left-3 top-2.5 text-gray-400">
                             <FaEnvelope size={14} />
@@ -748,7 +748,7 @@ const ItineraryPackage = () => {
                             placeholder="Enter your 10 digit number"
                             value={formData.phone}
                             onChange={handleInputChange}
-                            className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-gray-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-100"
+                            className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-gray-200 focus:border-[#055B75] focus:ring-1 focus:ring-[#055B75]/20"
                           />
                           <div className="absolute left-3 top-2.5 text-gray-400">
                             <FaPhoneAlt size={14} />
@@ -765,7 +765,7 @@ const ItineraryPackage = () => {
                             name="travelDate"
                             value={formData.travelDate || ""}
                             onChange={handleInputChange}
-                            className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-gray-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-100"
+                            className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-gray-200 focus:border-[#055B75] focus:ring-1 focus:ring-[#055B75]/20"
                           />
                           <div className="absolute left-3 top-2.5 text-gray-400">
                             <Calendar size={15} />
@@ -778,7 +778,7 @@ const ItineraryPackage = () => {
                             name="guests"
                             value={formData.guests || "2"}
                             onChange={handleInputChange}
-                            className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-gray-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-100 appearance-none"
+                            className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-gray-200 focus:border-[#055B75] focus:ring-1 focus:ring-[#055B75]/20 appearance-none"
                           >
                             <option value="1">1 Person</option>
                             <option value="2">2 People</option>
@@ -803,7 +803,7 @@ const ItineraryPackage = () => {
                           placeholder="Special requests or questions"
                           value={formData.request}
                           onChange={handleInputChange}
-                          className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-gray-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-100 resize-none"
+                          className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-gray-200 focus:border-[#055B75] focus:ring-1 focus:ring-[#055B75]/20 resize-none"
                         />
                         <div className="absolute left-3 top-2.5 text-gray-400">
                           <FaShieldAlt size={14} />
@@ -819,7 +819,7 @@ const ItineraryPackage = () => {
                         type="checkbox"
                         checked={formData.terms || false}
                         onChange={handleInputChange}
-                        className="mt-0.5 w-4 h-4 rounded text-blue-600 focus:ring-blue-500"
+                        className="mt-0.5 w-4 h-4 rounded text-blue-600 focus:ring-[#055B75]"
                       />
                       <label htmlFor="terms" className="text-xs text-gray-500 flex-1">
                         I agree to receive promotional emails about special offers from Jetsetters

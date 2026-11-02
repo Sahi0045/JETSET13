@@ -344,7 +344,7 @@ const VideoConsultation = () => {
                                 </div>
                             </div>
                             <div className="p-4 bg-slate-50 border-t border-slate-100">
-                                <div className="relative bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm transition-all focus-within:ring-4 focus-within:ring-[#1152d4]/5">
+                                <div className="relative bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm transition-all focus-within:ring-4 focus-within:ring-[#055B75]/5">
                                     <input
                                         className="w-full bg-transparent border-none focus:ring-0 text-[11px] font-medium py-3 pl-5 pr-12 outline-none"
                                         placeholder="Type message..."

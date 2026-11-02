@@ -36,7 +36,7 @@ const InputField = ({ label, name, type = "text", required = false, placeholder,
       onChange={onChange}
       placeholder={placeholder}
       min={min}
-      className={`w-full px-4 py-3 rounded-lg border bg-white focus:ring-2 focus:ring-[#0066b2] focus:border-[#0066b2] transition-colors outline-none
+      className={`w-full px-4 py-3 rounded-lg border bg-white focus:ring-2 focus:ring-[#055B75] focus:border-[#055B75] transition-colors outline-none
         ${error ? 'border-red-500 ring-1 ring-red-500' : 'border-gray-200'}`}
     />
     {error && <span className="text-sm text-red-500 font-medium">{error}</span>}
@@ -463,7 +463,7 @@ const RequestPage = () => {
             value={formData.flight_return_date}
             onChange={handleChange}
             min={formData.flight_departure_date || getTodayDate()}
-            className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#0066b2] focus:border-[#0066b2] transition-colors outline-none"
+            className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#055B75] focus:border-[#055B75] transition-colors outline-none"
           />
         </div>
       </div>
@@ -475,7 +475,7 @@ const RequestPage = () => {
             name="flight_passengers"
             value={formData.flight_passengers}
             onChange={handleChange}
-            className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#0066b2] focus:border-[#0066b2] outline-none"
+            className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#055B75] focus:border-[#055B75] outline-none"
           >
             {[...Array(10)].map((_, i) => (
               <option key={i + 1} value={i + 1}>{i + 1} Passenger{i !== 0 ? 's' : ''}</option>
@@ -488,7 +488,7 @@ const RequestPage = () => {
             name="flight_class"
             value={formData.flight_class}
             onChange={handleChange}
-            className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#0066b2] focus:border-[#0066b2] outline-none"
+            className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#055B75] focus:border-[#055B75] outline-none"
           >
             <option value="economy">Economy</option>
             <option value="premium_economy">Premium Economy</option>
@@ -519,7 +519,7 @@ const RequestPage = () => {
             value={formData.hotel_checkout_date}
             onChange={handleChange}
             min={formData.hotel_checkin_date || getTodayDate()}
-            className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#0066b2] focus:border-[#0066b2] outline-none"
+            className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#055B75] focus:border-[#055B75] outline-none"
           />
           {errors.hotel_checkout_date && <span className="text-sm text-red-500 font-medium">{errors.hotel_checkout_date}</span>}
         </div>
@@ -532,7 +532,7 @@ const RequestPage = () => {
             name="hotel_rooms"
             value={formData.hotel_rooms}
             onChange={handleChange}
-            className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#0066b2] focus:border-[#0066b2] outline-none"
+            className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#055B75] focus:border-[#055B75] outline-none"
           >
             {[...Array(5)].map((_, i) => (
               <option key={i + 1} value={i + 1}>{i + 1} Room{i !== 0 ? 's' : ''}</option>
@@ -545,7 +545,7 @@ const RequestPage = () => {
             name="hotel_guests"
             value={formData.hotel_guests}
             onChange={handleChange}
-            className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#0066b2] focus:border-[#0066b2] outline-none"
+            className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#055B75] focus:border-[#055B75] outline-none"
           >
             {[...Array(10)].map((_, i) => (
               <option key={i + 1} value={i + 1}>{i + 1} Guest{i !== 0 ? 's' : ''}</option>
@@ -558,7 +558,7 @@ const RequestPage = () => {
             name="hotel_room_type"
             value={formData.hotel_room_type}
             onChange={handleChange}
-            className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#0066b2] focus:border-[#0066b2] outline-none"
+            className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#055B75] focus:border-[#055B75] outline-none"
           >
             <option value="">Any Room Type</option>
             <option value="standard">Standard Room</option>
@@ -588,7 +588,7 @@ const RequestPage = () => {
             name="cruise_duration"
             value={formData.cruise_duration}
             onChange={handleChange}
-            className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#0066b2] focus:border-[#0066b2] outline-none"
+            className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#055B75] focus:border-[#055B75] outline-none"
           >
             {[3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 21].map(d => (
               <option key={d} value={d}>{d} Days</option>
@@ -604,7 +604,7 @@ const RequestPage = () => {
             name="cruise_passengers"
             value={formData.cruise_passengers}
             onChange={handleChange}
-            className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#0066b2] focus:border-[#0066b2] outline-none"
+            className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#055B75] focus:border-[#055B75] outline-none"
           >
             {[...Array(6)].map((_, i) => (
               <option key={i + 1} value={i + 1}>{i + 1} Passenger{i !== 0 ? 's' : ''}</option>
@@ -617,7 +617,7 @@ const RequestPage = () => {
             name="cruise_cabin_type"
             value={formData.cruise_cabin_type}
             onChange={handleChange}
-            className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#0066b2] focus:border-[#0066b2] outline-none"
+            className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#055B75] focus:border-[#055B75] outline-none"
           >
             <option value="">Any Cabin Type</option>
             <option value="inside">Inside Cabin</option>
@@ -649,7 +649,7 @@ const RequestPage = () => {
             value={formData.package_end_date}
             onChange={handleChange}
             min={formData.package_start_date || getTodayDate()}
-            className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#0066b2] focus:border-[#0066b2] outline-none"
+            className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#055B75] focus:border-[#055B75] outline-none"
           />
           {errors.package_end_date && <span className="text-sm text-red-500 font-medium">{errors.package_end_date}</span>}
         </div>
@@ -662,7 +662,7 @@ const RequestPage = () => {
             name="package_travelers"
             value={formData.package_travelers}
             onChange={handleChange}
-            className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#0066b2] focus:border-[#0066b2] outline-none"
+            className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#055B75] focus:border-[#055B75] outline-none"
           >
             {[...Array(10)].map((_, i) => (
               <option key={i + 1} value={i + 1}>{i + 1} Traveler{i !== 0 ? 's' : ''}</option>
@@ -675,7 +675,7 @@ const RequestPage = () => {
             name="package_budget_range"
             value={formData.package_budget_range}
             onChange={handleChange}
-            className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#0066b2] focus:border-[#0066b2] outline-none"
+            className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#055B75] focus:border-[#055B75] outline-none"
           >
             <option value="">Select Range</option>
             <option value="budget">{currencyService.getCurrencySymbol()}1,000 - {currencyService.getCurrencySymbol()}2,500</option>
@@ -726,7 +726,7 @@ const RequestPage = () => {
           onChange={handleChange}
           placeholder="How can we help you?"
           rows="6"
-          className={`w-full px-4 py-3 rounded-lg border bg-white focus:ring-2 focus:ring-[#0066b2] focus:border-[#0066b2] transition-colors outline-none resize-none
+          className={`w-full px-4 py-3 rounded-lg border bg-white focus:ring-2 focus:ring-[#055B75] focus:border-[#055B75] transition-colors outline-none resize-none
              ${errors.inquiry_message ? 'border-red-500' : 'border-gray-200'}`}
         />
         {errors.inquiry_message && <span className="text-sm text-red-500 font-medium">{errors.inquiry_message}</span>}
@@ -744,7 +744,7 @@ const RequestPage = () => {
             name="budget_range"
             value={formData.budget_range}
             onChange={handleChange}
-            className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#0066b2] focus:border-[#0066b2] outline-none"
+            className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#055B75] focus:border-[#055B75] outline-none"
           >
             <option value="">Select Budget Range</option>
             <option value="budget">{currencyService.getCurrencySymbol()}1,000 - {currencyService.getCurrencySymbol()}2,500</option>
@@ -765,7 +765,7 @@ const RequestPage = () => {
                   value={method}
                   checked={formData.preferred_contact_method === method}
                   onChange={handleChange}
-                  className="w-4 h-4 text-[#0066b2] border-gray-300 focus:ring-[#0066b2]"
+                  className="w-4 h-4 text-[#0066b2] border-gray-300 focus:ring-[#055B75]"
                 />
                 <span className="ml-2 text-sm capitalize">{method}</span>
               </label>
@@ -782,7 +782,7 @@ const RequestPage = () => {
           onChange={handleChange}
           placeholder="Any dietary restrictions, accessibility needs, etc."
           rows="3"
-          className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#0066b2] focus:border-[#0066b2] outline-none resize-none"
+          className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#055B75] focus:border-[#055B75] outline-none resize-none"
         />
       </div>
     </div>
@@ -933,7 +933,7 @@ const RequestPage = () => {
                       onChange={(e) => setCancelRef(e.target.value)}
                       placeholder="e.g. eJzTd9f3... or BK-12345"
                       required
-                      className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-[#055B75] focus:border-[#055B75]"
                     />
                   </div>
 
@@ -944,7 +944,7 @@ const RequestPage = () => {
                       value={cancelEmail}
                       onChange={(e) => setCancelEmail(e.target.value)}
                       placeholder="Email used when booking (for verification)"
-                      className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-[#055B75] focus:border-[#055B75]"
                     />
                   </div>
 
@@ -953,7 +953,7 @@ const RequestPage = () => {
                     <select
                       value={cancelReason}
                       onChange={(e) => setCancelReason(e.target.value)}
-                      className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-[#055B75] focus:border-[#055B75]"
                     >
                       <option>Change of plans</option>
                       <option>Found a better deal</option>

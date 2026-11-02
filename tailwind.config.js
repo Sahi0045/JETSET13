@@ -1,6 +1,17 @@
 import defaultTheme from 'tailwindcss/defaultTheme';
 import forms from '@tailwindcss/forms';
 
+const brandTeal = '#055B75';
+
+// The forms plugin takes no colour option: it paints every field's focus ring
+// and border, and every ticked checkbox and radio, in colors.blue.600.
+const brandForms = {
+    handler: (api) => forms().handler({
+        ...api,
+        theme: (key, fallback) => (key === 'colors.blue.600' ? brandTeal : api.theme(key, fallback)),
+    }),
+};
+
 /** @type {import('tailwindcss').Config} */
 export default {
     content: [
@@ -185,6 +196,9 @@ export default {
             backdropBlur: {
                 xs: '2px',
             },
+            ringColor: {
+                DEFAULT: brandTeal,
+            },
             typography: {
                 DEFAULT: {
                     css: {
@@ -197,7 +211,7 @@ export default {
     },
 
     plugins: [
-        forms,
+        brandForms,
         function ({ addUtilities }) {
             const newUtilities = {
                 '.glass': {

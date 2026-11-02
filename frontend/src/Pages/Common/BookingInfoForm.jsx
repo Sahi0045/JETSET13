@@ -229,7 +229,7 @@ const BookingInfoForm = ({ quoteId, inquiryType, onComplete, onClose }) => {
                   value={formData.full_name}
                   onChange={handleInputChange}
                   required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#055B75]"
                   placeholder="Enter your full name"
                 />
               </div>
@@ -243,7 +243,7 @@ const BookingInfoForm = ({ quoteId, inquiryType, onComplete, onClose }) => {
                   value={formData.email}
                   onChange={handleInputChange}
                   required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#055B75]"
                   placeholder="Enter your email"
                 />
               </div>
@@ -257,7 +257,7 @@ const BookingInfoForm = ({ quoteId, inquiryType, onComplete, onClose }) => {
                   value={formData.phone}
                   onChange={handleInputChange}
                   required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#055B75]"
                   placeholder="Enter your phone number"
                 />
               </div>
@@ -270,7 +270,7 @@ const BookingInfoForm = ({ quoteId, inquiryType, onComplete, onClose }) => {
                   name="date_of_birth"
                   value={formData.date_of_birth}
                   onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#055B75]"
                 />
               </div>
               <div className="md:col-span-2">
@@ -282,7 +282,7 @@ const BookingInfoForm = ({ quoteId, inquiryType, onComplete, onClose }) => {
                   name="nationality"
                   value={formData.nationality}
                   onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#055B75]"
                   placeholder="Enter your nationality"
                 />
               </div>
@@ -304,7 +304,7 @@ const BookingInfoForm = ({ quoteId, inquiryType, onComplete, onClose }) => {
                   value={formData.govt_id_type}
                   onChange={handleInputChange}
                   required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#055B75]"
                 >
                   <option value="">Select ID Type</option>
                   <option value="drivers_license">Driver's License</option>
@@ -323,7 +323,7 @@ const BookingInfoForm = ({ quoteId, inquiryType, onComplete, onClose }) => {
                   value={formData.govt_id_number}
                   onChange={handleInputChange}
                   required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#055B75]"
                   placeholder="Enter government ID number"
                 />
               </div>
@@ -336,7 +336,7 @@ const BookingInfoForm = ({ quoteId, inquiryType, onComplete, onClose }) => {
                   name="govt_id_issue_date"
                   value={formData.govt_id_issue_date}
                   onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#055B75]"
                 />
               </div>
               <div>
@@ -348,7 +348,7 @@ const BookingInfoForm = ({ quoteId, inquiryType, onComplete, onClose }) => {
                   name="govt_id_expiry_date"
                   value={formData.govt_id_expiry_date}
                   onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#055B75]"
                 />
               </div>
               <div>
@@ -360,7 +360,7 @@ const BookingInfoForm = ({ quoteId, inquiryType, onComplete, onClose }) => {
                   name="govt_id_issuing_authority"
                   value={formData.govt_id_issuing_authority}
                   onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#055B75]"
                   placeholder="e.g., DMV, Passport Office"
                 />
               </div>
@@ -373,7 +373,7 @@ const BookingInfoForm = ({ quoteId, inquiryType, onComplete, onClose }) => {
                   name="govt_id_issuing_country"
                   value={formData.govt_id_issuing_country}
                   onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#055B75]"
                   placeholder="Enter issuing country"
                 />
               </div>
@@ -397,7 +397,7 @@ const BookingInfoForm = ({ quoteId, inquiryType, onComplete, onClose }) => {
                     value={formData.passport_number}
                     onChange={handleInputChange}
                     required={isFlightBooking}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#055B75]"
                     placeholder="Enter passport number"
                   />
                 </div>
@@ -411,7 +411,7 @@ const BookingInfoForm = ({ quoteId, inquiryType, onComplete, onClose }) => {
                     value={formData.passport_expiry_date}
                     onChange={handleInputChange}
                     required={isFlightBooking}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#055B75]"
                   />
                 </div>
                 <div>
@@ -423,7 +423,7 @@ const BookingInfoForm = ({ quoteId, inquiryType, onComplete, onClose }) => {
                     name="passport_issue_date"
                     value={formData.passport_issue_date}
                     onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#055B75]"
                   />
                 </div>
                 <div>
@@ -435,7 +435,7 @@ const BookingInfoForm = ({ quoteId, inquiryType, onComplete, onClose }) => {
                     name="passport_issuing_country"
                     value={formData.passport_issuing_country}
                     onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#055B75]"
                     placeholder="Enter issuing country"
                   />
                 </div>
@@ -456,7 +456,7 @@ const BookingInfoForm = ({ quoteId, inquiryType, onComplete, onClose }) => {
                   name="emergency_contact_name"
                   value={formData.emergency_contact_name}
                   onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#055B75]"
                   placeholder="Enter emergency contact name"
                 />
               </div>
@@ -469,7 +469,7 @@ const BookingInfoForm = ({ quoteId, inquiryType, onComplete, onClose }) => {
                   name="emergency_contact_phone"
                   value={formData.emergency_contact_phone}
                   onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#055B75]"
                   placeholder="Enter emergency contact phone"
                 />
               </div>
@@ -482,7 +482,7 @@ const BookingInfoForm = ({ quoteId, inquiryType, onComplete, onClose }) => {
                   name="emergency_contact_relationship"
                   value={formData.emergency_contact_relationship}
                   onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#055B75]"
                   placeholder="e.g., Spouse, Parent, Friend"
                 />
               </div>
@@ -499,7 +499,7 @@ const BookingInfoForm = ({ quoteId, inquiryType, onComplete, onClose }) => {
                   name="terms_accepted"
                   checked={formData.terms_accepted}
                   onChange={handleInputChange}
-                  className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  className="mt-1 h-4 w-4 text-blue-600 focus:ring-[#055B75] border-gray-300 rounded"
                 />
                 <div className="ml-3">
                   <label className="text-sm font-medium text-gray-700">
@@ -516,7 +516,7 @@ const BookingInfoForm = ({ quoteId, inquiryType, onComplete, onClose }) => {
                   name="privacy_policy_accepted"
                   checked={formData.privacy_policy_accepted}
                   onChange={handleInputChange}
-                  className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  className="mt-1 h-4 w-4 text-blue-600 focus:ring-[#055B75] border-gray-300 rounded"
                 />
                 <div className="ml-3">
                   <label className="text-sm font-medium text-gray-700">

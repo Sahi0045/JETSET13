@@ -906,7 +906,7 @@ const VisaApplicationDetail = () => {
                       value={app.assigned_agent || ""}
                       disabled={assigning}
                       onChange={(e) => assignAgent(e.target.value)}
-                      className="text-xs font-bold rounded-lg border border-slate-200 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-[#1152d4]/30 disabled:opacity-50 max-w-[160px]"
+                      className="text-xs font-bold rounded-lg border border-slate-200 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-[#055B75]/30 disabled:opacity-50 max-w-[160px]"
                     >
                       <option value="">Unassigned</option>
                       {assignableAgents.map((a) => (
@@ -938,7 +938,7 @@ const VisaApplicationDetail = () => {
                   setNotesSaved(false);
                 }}
                 rows={4}
-                className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#1152d4] resize-none"
+                className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#055B75] resize-none"
                 placeholder="Add internal notes visible only to admin team..."
               />
               <button
@@ -1225,7 +1225,7 @@ const VisaApplicationDetail = () => {
                 <select
                   value={newStatus}
                   onChange={(e) => setNewStatus(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 h-11 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#1152d4]"
+                  className="w-full rounded-lg border border-slate-300 h-11 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#055B75]"
                 >
                   {STATUS_OPTIONS.map((s) => (
                     <option key={s.value} value={s.value}>
@@ -1246,7 +1246,7 @@ const VisaApplicationDetail = () => {
                   value={statusNote}
                   onChange={(e) => setStatusNote(e.target.value)}
                   rows={3}
-                  className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#1152d4] resize-none"
+                  className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#055B75] resize-none"
                   placeholder="Add note about this status change..."
                 />
               </div>

@@ -610,7 +610,7 @@
 
 /* Focus States */
 .input-with-icon input:focus,
-.login-btn:focus {
+.login-btn:focus-visible {
   outline: 2px solid var(--primary-color);
   outline-offset: 2px;
 }

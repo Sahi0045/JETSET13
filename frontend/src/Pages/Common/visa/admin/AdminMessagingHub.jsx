@@ -206,7 +206,7 @@ const AdminMessagingHub = () => {
                     </div>
 
                     <div className="p-4 lg:p-10 bg-white border-t border-slate-100 lg:bg-transparent z-20">
-                        <form onSubmit={handleSendMessage} className="bg-white rounded-[2.5rem] p-3 lg:p-4 border border-slate-200/60 shadow-[0_40px_100px_-20px_rgba(0,0,0,0.1)] transition-all focus-within:ring-8 focus-within:ring-[#1152d4]/5 focus-within:border-[#1152d4]/40 max-w-4xl mx-auto w-full">
+                        <form onSubmit={handleSendMessage} className="bg-white rounded-[2.5rem] p-3 lg:p-4 border border-slate-200/60 shadow-[0_40px_100px_-20px_rgba(0,0,0,0.1)] transition-all focus-within:ring-8 focus-within:ring-[#055B75]/5 focus-within:border-[#055B75]/40 max-w-4xl mx-auto w-full">
                             <textarea
                                 className="w-full bg-transparent border-none focus:ring-0 text-sm font-bold py-3 px-6 min-h-[50px] lg:min-h-[80px] resize-none placeholder:text-slate-300 custom-scrollbar tracking-tight text-slate-900"
                                 placeholder={`Drafting intelligence report for ${activeThread?.customer_name?.split(' ')[0] || 'Applicant'}...`}

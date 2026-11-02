@@ -217,7 +217,7 @@
 
 .search-input:focus {
   border-color: var(--admin-primary);
-  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
+  box-shadow: 0 0 0 3px rgba(5, 91, 117, 0.1);
 }
 
 .search-clear {
@@ -340,7 +340,7 @@
 
 .filter-item select:focus {
   border-color: var(--admin-primary);
-  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
+  box-shadow: 0 0 0 3px rgba(5, 91, 117, 0.1);
 }
 
 .filter-actions {
@@ -3750,7 +3750,7 @@ input:disabled+.toggle-slider {
 .form-field select:focus,
 .form-field textarea:focus {
   border-color: var(--admin-primary);
-  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
+  box-shadow: 0 0 0 3px rgba(5, 91, 117, 0.1);
 }
 
 .form-field.full-width {

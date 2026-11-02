@@ -317,7 +317,7 @@ const VisaApplication = () => {
   const completionPercent = ((currentStep - 1) / (STEPS.length - 1)) * 100;
 
   const inputClass = (field) =>
-    `w-full rounded-lg border ${fieldErrors[field] ? "border-red-400 bg-red-50" : "border-slate-300"} h-11 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#1152d4]`;
+    `w-full rounded-lg border ${fieldErrors[field] ? "border-red-400 bg-red-50" : "border-slate-300"} h-11 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#055B75]`;
 
   return (
     <div className="min-h-screen bg-[#f6f6f8] font-sans text-slate-900">
@@ -653,7 +653,7 @@ const VisaApplication = () => {
                             visaType: e.target.value,
                           })
                         }
-                        className="w-full rounded-lg border border-slate-300 h-11 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#1152d4]"
+                        className="w-full rounded-lg border border-slate-300 h-11 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#055B75]"
                       >
                         <option value="tourist">Tourist / Visitor</option>
                         <option value="business">Business</option>
@@ -735,7 +735,7 @@ const VisaApplication = () => {
                             accommodation: e.target.value,
                           })
                         }
-                        className="w-full rounded-lg border border-slate-300 h-11 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#1152d4]"
+                        className="w-full rounded-lg border border-slate-300 h-11 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#055B75]"
                         placeholder="Hotel name or address in destination country"
                       />
                     </div>
@@ -752,7 +752,7 @@ const VisaApplication = () => {
                           })
                         }
                         rows={3}
-                        className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#1152d4] resize-none"
+                        className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#055B75] resize-none"
                         placeholder="Brief description of your travel purpose..."
                       />
                     </div>

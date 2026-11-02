@@ -106,10 +106,10 @@ const TravelAgentSetPassword = () => {
             )}
             <label className="block text-xs font-bold text-slate-500 mb-1.5">New password</label>
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="At least 8 characters"
-              className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-[#1152d4]/30" />
+              className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-[#055B75]/30" />
             <label className="block text-xs font-bold text-slate-500 mb-1.5">Confirm password</label>
             <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder="Re-enter password"
-              className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm mb-6 focus:outline-none focus:ring-2 focus:ring-[#1152d4]/30" />
+              className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm mb-6 focus:outline-none focus:ring-2 focus:ring-[#055B75]/30" />
             <button type="submit" disabled={submitting}
               className="w-full flex items-center justify-center gap-2 py-3 bg-[#1152d4] text-white rounded-xl font-bold text-sm hover:bg-[#0e42b0] transition-all disabled:opacity-60">
               <span className="material-symbols-outlined text-lg">{submitting ? "hourglass_empty" : "lock"}</span>

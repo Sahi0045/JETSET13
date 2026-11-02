@@ -246,7 +246,7 @@ const ResetPassword = () => {
               <div className="space-y-2">
                 <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 ml-1">New Password</label>
                 <div className="relative group">
-                  <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 text-lg group-focus-within:text-[#3b82f6]">lock</span>
+                  <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 text-lg group-focus-within:text-[#65B3CF]">lock</span>
                   <input
                     type="password"
                     name="newPassword"
@@ -254,7 +254,7 @@ const ResetPassword = () => {
                     value={formData.newPassword}
                     onChange={handleChange}
                     placeholder="••••••••••••"
-                    className="w-full bg-white/[0.05] border border-white/[0.1] rounded-2xl py-4 pl-12 pr-4 text-sm font-medium text-white placeholder:text-slate-600 focus:outline-none focus:border-[#3b82f6]/50 focus:ring-4 focus:ring-[#3b82f6]/10 transition-all"
+                    className="w-full bg-white/[0.05] border border-white/[0.1] rounded-2xl py-4 pl-12 pr-4 text-sm font-medium text-white placeholder:text-slate-600 focus:outline-none focus:border-[#65B3CF]/50 focus:ring-4 focus:ring-[#65B3CF]/10 transition-all"
                   />
                 </div>
               </div>
@@ -262,7 +262,7 @@ const ResetPassword = () => {
               <div className="space-y-2">
                 <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 ml-1">Confirm New Password</label>
                 <div className="relative group">
-                  <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 text-lg group-focus-within:text-[#3b82f6]">lock_check</span>
+                  <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 text-lg group-focus-within:text-[#65B3CF]">lock_check</span>
                   <input
                     type="password"
                     name="confirmPassword"
@@ -270,7 +270,7 @@ const ResetPassword = () => {
                     value={formData.confirmPassword}
                     onChange={handleChange}
                     placeholder="••••••••••••"
-                    className="w-full bg-white/[0.05] border border-white/[0.1] rounded-2xl py-4 pl-12 pr-4 text-sm font-medium text-white placeholder:text-slate-600 focus:outline-none focus:border-[#3b82f6]/50 focus:ring-4 focus:ring-[#3b82f6]/10 transition-all"
+                    className="w-full bg-white/[0.05] border border-white/[0.1] rounded-2xl py-4 pl-12 pr-4 text-sm font-medium text-white placeholder:text-slate-600 focus:outline-none focus:border-[#65B3CF]/50 focus:ring-4 focus:ring-[#65B3CF]/10 transition-all"
                   />
                 </div>
               </div>

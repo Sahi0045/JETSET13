@@ -240,14 +240,14 @@ useEffect(() => {
 
           <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
             <div className="relative flex-1 lg:w-96 group">
-              <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-lg transition-colors group-focus-within:text-[#1152d4]">
+              <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-lg transition-colors group-focus-within:text-[#055B75]">
                 search
               </span>
               <input
                 type="text"
                 value={searchInput}
                 onChange={handleSearchInput}
-                className="w-full rounded-xl border border-slate-200 bg-white h-10 lg:h-11 pl-10 pr-4 text-sm font-medium focus:outline-none focus:ring-4 focus:ring-[#1152d4]/10 focus:border-[#1152d4]/50 transition-all shadow-sm placeholder:text-slate-400"
+                className="w-full rounded-xl border border-slate-200 bg-white h-10 lg:h-11 pl-10 pr-4 text-sm font-medium focus:outline-none focus:ring-4 focus:ring-[#055B75]/10 focus:border-[#055B75]/50 transition-all shadow-sm placeholder:text-slate-400"
                 placeholder="Search by destination, name, or email..."
               />
               {searchInput && (
@@ -382,7 +382,7 @@ useEffect(() => {
                         selectedApps.length === applications.length
                       }
                       onChange={toggleSelectAll}
-                      className="rounded border-slate-300 text-[#1152d4] focus:ring-[#1152d4]/20"
+                      className="rounded border-slate-300 text-[#1152d4] focus:ring-[#055B75]/20"
                       disabled={loading}
                     />
                   </th>
@@ -484,7 +484,7 @@ useEffect(() => {
                             type="checkbox"
                             checked={isSelected}
                             onChange={() => toggleSelect(app.id)}
-                            className="rounded border-slate-300 text-[#1152d4] focus:ring-[#1152d4]/20"
+                            className="rounded border-slate-300 text-[#1152d4] focus:ring-[#055B75]/20"
                           />
                         </td>
 

@@ -90,11 +90,11 @@ export default function TravelAgentLogin() {
           <label htmlFor="agent-email" className="block text-xs font-bold text-slate-500 mb-1.5">Email</label>
           <input id="agent-email" type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)}
             placeholder="you@example.com"
-            className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-[#1152d4]/30" />
+            className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-[#055B75]/30" />
           <label htmlFor="agent-password" className="block text-xs font-bold text-slate-500 mb-1.5">Password</label>
           <input id="agent-password" type="password" required autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)}
             placeholder="Your password"
-            className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm mb-6 focus:outline-none focus:ring-2 focus:ring-[#1152d4]/30" />
+            className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm mb-6 focus:outline-none focus:ring-2 focus:ring-[#055B75]/30" />
           <button type="submit" disabled={submitting}
             className="w-full flex items-center justify-center gap-2 py-3 bg-[#1152d4] text-white rounded-xl font-bold text-sm hover:bg-[#0e42b0] transition-all disabled:opacity-60">
             <span className="material-symbols-outlined text-lg">{submitting ? "hourglass_empty" : "login"}</span>

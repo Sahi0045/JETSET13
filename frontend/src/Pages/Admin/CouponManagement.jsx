@@ -144,7 +144,7 @@ const CouponManagement = () => {
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1 uppercase tracking-wider">Code *</label>
               <input required value={form.code} onChange={e => setForm({ ...form, code: e.target.value.toUpperCase() })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-[#055B75] focus:outline-none"
                 placeholder="SAVE20" />
             </div>
 
@@ -152,7 +152,7 @@ const CouponManagement = () => {
             <div className="md:col-span-2">
               <label className="block text-xs font-semibold text-gray-600 mb-1 uppercase tracking-wider">Description</label>
               <input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#055B75] focus:outline-none"
                 placeholder="20% off all flights" />
             </div>
 
@@ -160,7 +160,7 @@ const CouponManagement = () => {
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1 uppercase tracking-wider">Discount Type *</label>
               <select value={form.discountType} onChange={e => setForm({ ...form, discountType: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#055B75] focus:outline-none">
                 <option value="percentage">Percentage (%)</option>
                 <option value="fixed">Fixed Amount ($)</option>
               </select>
@@ -170,7 +170,7 @@ const CouponManagement = () => {
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1 uppercase tracking-wider">Discount Value *</label>
               <input required type="number" min="0" step="0.01" value={form.discountValue} onChange={e => setForm({ ...form, discountValue: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#055B75] focus:outline-none"
                 placeholder={form.discountType === 'percentage' ? '20' : '15.00'} />
             </div>
 
@@ -178,7 +178,7 @@ const CouponManagement = () => {
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1 uppercase tracking-wider">Applicable To</label>
               <select value={form.applicableTo} onChange={e => setForm({ ...form, applicableTo: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#055B75] focus:outline-none">
                 <option value="all">All Bookings</option>
                 <option value="flights">Flights only</option>
                 <option value="hotels">Hotels only</option>
@@ -191,7 +191,7 @@ const CouponManagement = () => {
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1 uppercase tracking-wider">Min Order ($)</label>
               <input type="number" min="0" step="0.01" value={form.minOrderValue} onChange={e => setForm({ ...form, minOrderValue: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#055B75] focus:outline-none"
                 placeholder="0 = no minimum" />
             </div>
 
@@ -199,7 +199,7 @@ const CouponManagement = () => {
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1 uppercase tracking-wider">Max Discount ($)</label>
               <input type="number" min="0" step="0.01" value={form.maxDiscountAmount} onChange={e => setForm({ ...form, maxDiscountAmount: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#055B75] focus:outline-none"
                 placeholder="Blank = no cap" />
               {form.discountType === 'percentage' && (
                 <p className="mt-1 text-[11px] leading-snug text-gray-500">
@@ -214,7 +214,7 @@ const CouponManagement = () => {
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1 uppercase tracking-wider">Max Uses</label>
               <input type="number" min="1" step="1" value={form.maxUses} onChange={e => setForm({ ...form, maxUses: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#055B75] focus:outline-none"
                 placeholder="Leave blank = unlimited" />
             </div>
 
@@ -222,14 +222,14 @@ const CouponManagement = () => {
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1 uppercase tracking-wider">Valid From</label>
               <input type="datetime-local" value={form.validFrom} onChange={e => setForm({ ...form, validFrom: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#055B75] focus:outline-none" />
             </div>
 
             {/* Valid Until */}
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1 uppercase tracking-wider">Valid Until</label>
               <input type="datetime-local" value={form.validUntil} onChange={e => setForm({ ...form, validUntil: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#055B75] focus:outline-none" />
             </div>
 
             {/* Submit */}
