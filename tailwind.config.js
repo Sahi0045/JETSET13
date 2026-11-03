@@ -147,6 +147,7 @@ export default {
                 'bounce-gentle': 'bounceGentle 2s infinite',
                 'pulse-gentle': 'pulseGentle 2s infinite',
                 'float': 'float 3s ease-in-out infinite',
+                'sheet-up': 'sheetUp 0.3s cubic-bezier(0.32, 0.72, 0, 1)',
             },
             keyframes: {
                 fadeIn: {
@@ -180,6 +181,10 @@ export default {
                 float: {
                     '0%, 100%': { transform: 'translateY(0px)' },
                     '50%': { transform: 'translateY(-10px)' },
+                },
+                sheetUp: {
+                    '0%': { transform: 'translateY(100%)' },
+                    '100%': { transform: 'translateY(0)' },
                 },
             },
             backdropBlur: {
