@@ -175,12 +175,12 @@ useEffect(() => {
                     </div>
                     <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
                         <div className="relative flex-1 sm:w-80 group">
-                            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-lg transition-colors group-focus-within:text-[#1152d4]">search</span>
+                            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-lg transition-colors group-focus-within:text-[#055B75]">search</span>
                             <input
                                 type="text"
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full rounded-xl border border-slate-200 bg-white h-11 pl-10 pr-4 text-sm font-medium focus:outline-none focus:ring-4 focus:ring-[#1152d4]/10 focus:border-[#1152d4]/50 transition-all shadow-sm placeholder:text-slate-400"
+                                className="w-full rounded-xl border border-slate-200 bg-white h-11 pl-10 pr-4 text-sm font-medium focus:outline-none focus:ring-4 focus:ring-[#055B75]/10 focus:border-[#055B75]/50 transition-all shadow-sm placeholder:text-slate-400"
                                 placeholder="Search countries or visa types..."
                             />
                         </div>
@@ -271,24 +271,24 @@ useEffect(() => {
                                 <div>
                                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 ml-1">Nationality</label>
                                     <input type="text" value={formData.nationality} onChange={(e) => setFormData({ ...formData, nationality: e.target.value })}
-                                        className="w-full rounded-xl border border-slate-200 h-12 px-4 text-sm font-bold text-slate-800 focus:outline-none focus:ring-4 focus:ring-[#1152d4]/10 focus:border-[#1152d4]/50 transition-all placeholder:text-slate-300" placeholder="e.g. India" />
+                                        className="w-full rounded-xl border border-slate-200 h-12 px-4 text-sm font-bold text-slate-800 focus:outline-none focus:ring-4 focus:ring-[#055B75]/10 focus:border-[#055B75]/50 transition-all placeholder:text-slate-300" placeholder="e.g. India" />
                                 </div>
                                 <div>
                                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 ml-1">Destination</label>
                                     <input type="text" value={formData.destination} onChange={(e) => setFormData({ ...formData, destination: e.target.value })}
-                                        className="w-full rounded-xl border border-slate-200 h-12 px-4 text-sm font-bold text-slate-800 focus:outline-none focus:ring-4 focus:ring-[#1152d4]/10 focus:border-[#1152d4]/50 transition-all placeholder:text-slate-300" placeholder="e.g. United States" />
+                                        className="w-full rounded-xl border border-slate-200 h-12 px-4 text-sm font-bold text-slate-800 focus:outline-none focus:ring-4 focus:ring-[#055B75]/10 focus:border-[#055B75]/50 transition-all placeholder:text-slate-300" placeholder="e.g. United States" />
                                 </div>
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                                 <div>
                                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 ml-1">Visa Type</label>
                                     <input type="text" value={formData.visa_type} onChange={(e) => setFormData({ ...formData, visa_type: e.target.value })}
-                                        className="w-full rounded-xl border border-slate-200 h-12 px-4 text-sm font-bold text-slate-800 focus:outline-none focus:ring-4 focus:ring-[#1152d4]/10 focus:border-[#1152d4]/50 transition-all placeholder:text-slate-300" placeholder="e.g. B1/B2 Tourist" />
+                                        className="w-full rounded-xl border border-slate-200 h-12 px-4 text-sm font-bold text-slate-800 focus:outline-none focus:ring-4 focus:ring-[#055B75]/10 focus:border-[#055B75]/50 transition-all placeholder:text-slate-300" placeholder="e.g. B1/B2 Tourist" />
                                 </div>
                                 <div>
                                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 ml-1">Visa Required</label>
                                     <select value={formData.visa_required} onChange={(e) => setFormData({ ...formData, visa_required: e.target.value === 'true' })}
-                                        className="w-full rounded-xl border border-slate-200 h-12 px-4 text-sm font-bold text-slate-800 focus:outline-none focus:ring-4 focus:ring-[#1152d4]/10 focus:border-[#1152d4]/50 transition-all">
+                                        className="w-full rounded-xl border border-slate-200 h-12 px-4 text-sm font-bold text-slate-800 focus:outline-none focus:ring-4 focus:ring-[#055B75]/10 focus:border-[#055B75]/50 transition-all">
                                         <option value="true">Yes, Required</option>
                                         <option value="false">No / Visa-Free</option>
                                     </select>
@@ -298,36 +298,36 @@ useEffect(() => {
                                 <div>
                                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 ml-1">Proc. Time</label>
                                     <input type="text" value={formData.processing_time} onChange={(e) => setFormData({ ...formData, processing_time: e.target.value })}
-                                        className="w-full rounded-xl border border-slate-200 h-12 px-4 text-sm font-bold text-slate-800 focus:outline-none focus:ring-4 focus:ring-[#1152d4]/10 focus:border-[#1152d4]/50 transition-all placeholder:text-slate-300" placeholder="3-5 weeks" />
+                                        className="w-full rounded-xl border border-slate-200 h-12 px-4 text-sm font-bold text-slate-800 focus:outline-none focus:ring-4 focus:ring-[#055B75]/10 focus:border-[#055B75]/50 transition-all placeholder:text-slate-300" placeholder="3-5 weeks" />
                                 </div>
                                 <div>
                                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 ml-1">Validity</label>
                                     <input type="text" value={formData.validity} onChange={(e) => setFormData({ ...formData, validity: e.target.value })}
-                                        className="w-full rounded-xl border border-slate-200 h-12 px-4 text-sm font-bold text-slate-800 focus:outline-none focus:ring-4 focus:ring-[#1152d4]/10 focus:border-[#1152d4]/50 transition-all placeholder:text-slate-300" placeholder="10 years" />
+                                        className="w-full rounded-xl border border-slate-200 h-12 px-4 text-sm font-bold text-slate-800 focus:outline-none focus:ring-4 focus:ring-[#055B75]/10 focus:border-[#055B75]/50 transition-all placeholder:text-slate-300" placeholder="10 years" />
                                 </div>
                                 <div>
                                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 ml-1">Max Stay</label>
                                     <input type="text" value={formData.max_stay} onChange={(e) => setFormData({ ...formData, max_stay: e.target.value })}
-                                        className="w-full rounded-xl border border-slate-200 h-12 px-4 text-sm font-bold text-slate-800 focus:outline-none focus:ring-4 focus:ring-[#1152d4]/10 focus:border-[#1152d4]/50 transition-all placeholder:text-slate-300" placeholder="180 days" />
+                                        className="w-full rounded-xl border border-slate-200 h-12 px-4 text-sm font-bold text-slate-800 focus:outline-none focus:ring-4 focus:ring-[#055B75]/10 focus:border-[#055B75]/50 transition-all placeholder:text-slate-300" placeholder="180 days" />
                                 </div>
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
                                 <div>
                                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 ml-1">Entry Type</label>
                                     <select value={formData.entry_type} onChange={(e) => setFormData({ ...formData, entry_type: e.target.value })}
-                                        className="w-full rounded-xl border border-slate-200 h-12 px-4 text-sm font-bold text-slate-800 focus:outline-none focus:ring-4 focus:ring-[#1152d4]/10 focus:border-[#1152d4]/50 transition-all">
+                                        className="w-full rounded-xl border border-slate-200 h-12 px-4 text-sm font-bold text-slate-800 focus:outline-none focus:ring-4 focus:ring-[#055B75]/10 focus:border-[#055B75]/50 transition-all">
                                         <option>Single</option><option>Double</option><option>Multiple</option><option>N/A</option>
                                     </select>
                                 </div>
                                 <div>
                                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 ml-1">Fee (USD)</label>
                                     <input type="number" value={formData.fee} onChange={(e) => setFormData({ ...formData, fee: Number(e.target.value) })}
-                                        className="w-full rounded-xl border border-slate-200 h-12 px-4 text-sm font-bold text-slate-800 focus:outline-none focus:ring-4 focus:ring-[#1152d4]/10 focus:border-[#1152d4]/50 transition-all" />
+                                        className="w-full rounded-xl border border-slate-200 h-12 px-4 text-sm font-bold text-slate-800 focus:outline-none focus:ring-4 focus:ring-[#055B75]/10 focus:border-[#055B75]/50 transition-all" />
                                 </div>
                                 <div>
                                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 ml-1">State</label>
                                     <select value={formData.active} onChange={(e) => setFormData({ ...formData, active: e.target.value === 'true' })}
-                                        className="w-full rounded-xl border border-slate-200 h-12 px-4 text-sm font-bold text-slate-800 focus:outline-none focus:ring-4 focus:ring-[#1152d4]/10 focus:border-[#1152d4]/50 transition-all">
+                                        className="w-full rounded-xl border border-slate-200 h-12 px-4 text-sm font-bold text-slate-800 focus:outline-none focus:ring-4 focus:ring-[#055B75]/10 focus:border-[#055B75]/50 transition-all">
                                         <option value="true">Active</option><option value="false">Hidden</option>
                                     </select>
                                 </div>
@@ -335,7 +335,7 @@ useEffect(() => {
                             <div>
                                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 ml-1">Official URL</label>
                                 <input type="url" value={formData.official_url} onChange={(e) => setFormData({ ...formData, official_url: e.target.value })}
-                                    className="w-full rounded-xl border border-slate-200 h-12 px-4 text-sm font-bold text-slate-800 focus:outline-none focus:ring-4 focus:ring-[#1152d4]/10 focus:border-[#1152d4]/50 transition-all" placeholder="https://..." />
+                                    className="w-full rounded-xl border border-slate-200 h-12 px-4 text-sm font-bold text-slate-800 focus:outline-none focus:ring-4 focus:ring-[#055B75]/10 focus:border-[#055B75]/50 transition-all" placeholder="https://..." />
                             </div>
                             <div className="flex flex-col sm:flex-row gap-3 pt-4">
                                 <button onClick={() => setShowAddModal(false)} className="flex-1 py-4 bg-slate-50 text-slate-400 hover:bg-slate-100 hover:text-slate-600 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all">Back</button>

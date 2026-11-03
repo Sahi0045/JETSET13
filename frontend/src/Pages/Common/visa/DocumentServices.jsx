@@ -470,7 +470,7 @@ const DocumentServices = () => {
                           if (fieldErrors.fullName)
                             setFieldErrors((p) => ({ ...p, fullName: "" }));
                         }}
-                        className={`w-full rounded-lg border ${fieldErrors.fullName ? "border-red-400 bg-red-50" : "border-slate-300"} h-11 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#1152d4]`}
+                        className={`w-full rounded-lg border ${fieldErrors.fullName ? "border-red-400 bg-red-50" : "border-slate-300"} h-11 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#055B75]`}
                         placeholder="As shown on passport"
                       />
                       {fieldErrors.fullName && (
@@ -495,7 +495,7 @@ const DocumentServices = () => {
                           if (fieldErrors.email)
                             setFieldErrors((p) => ({ ...p, email: "" }));
                         }}
-                        className={`w-full rounded-lg border ${fieldErrors.email ? "border-red-400 bg-red-50" : "border-slate-300"} h-11 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#1152d4]`}
+                        className={`w-full rounded-lg border ${fieldErrors.email ? "border-red-400 bg-red-50" : "border-slate-300"} h-11 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#055B75]`}
                         placeholder="your@email.com"
                       />
                       {fieldErrors.email && (
@@ -517,7 +517,7 @@ const DocumentServices = () => {
                         onChange={(e) =>
                           setFormData({ ...formData, phone: e.target.value })
                         }
-                        className="w-full rounded-lg border border-slate-300 h-11 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#1152d4]"
+                        className="w-full rounded-lg border border-slate-300 h-11 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#055B75]"
                         placeholder="+1 (555) 000-0000"
                       />
                     </div>
@@ -537,7 +537,7 @@ const DocumentServices = () => {
                               passportExpiry: e.target.value,
                             })
                           }
-                          className="w-full rounded-lg border border-slate-300 h-11 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#1152d4]"
+                          className="w-full rounded-lg border border-slate-300 h-11 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#055B75]"
                         />
                       </div>
                     )}
@@ -555,7 +555,7 @@ const DocumentServices = () => {
                               travelDateFrom: e.target.value,
                             })
                           }
-                          className="w-full rounded-lg border border-slate-300 h-11 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#1152d4]"
+                          className="w-full rounded-lg border border-slate-300 h-11 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#055B75]"
                         />
                       </div>
                     )}
@@ -573,7 +573,7 @@ const DocumentServices = () => {
                               travelDateTo: e.target.value,
                             })
                           }
-                          className="w-full rounded-lg border border-slate-300 h-11 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#1152d4]"
+                          className="w-full rounded-lg border border-slate-300 h-11 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#055B75]"
                         />
                       </div>
                     )}
@@ -589,7 +589,7 @@ const DocumentServices = () => {
                         setFormData({ ...formData, notes: e.target.value })
                       }
                       rows={3}
-                      className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#1152d4] resize-none"
+                      className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#055B75] resize-none"
                       placeholder="Any special requirements or additional information..."
                     />
                   </div>

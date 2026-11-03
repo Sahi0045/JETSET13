@@ -155,7 +155,7 @@ const SearchPackages = () => {
                   className={`transition-all duration-300 ${
                     isSearching 
                       ? 'text-blue-500 animate-spin' 
-                      : 'text-gray-400 group-hover:text-blue-500 group-focus-within:text-blue-500'
+                      : 'text-gray-400 group-hover:text-[#055B75] group-focus-within:text-[#055B75]'
                   }`}
                   size={20} 
                 />
@@ -166,7 +166,7 @@ const SearchPackages = () => {
                 value={searchQuery}
                 onChange={handleSearchInput}
                 className="w-full pl-12 pr-12 py-3.5 rounded-lg border border-gray-200 
-                  focus:ring-2 focus:ring-blue-500 focus:border-blue-500 
+                  focus:ring-2 focus:ring-[#055B75] focus:border-[#055B75] 
                   hover:border-blue-300 transition-all duration-300
                   placeholder-gray-400 text-gray-700 text-base"
               />
@@ -200,8 +200,8 @@ const SearchPackages = () => {
                   value={selectedPackageType}
                   onChange={(e) => setSelectedPackageType(e.target.value)}
                   className="w-full px-4 py-3.5 rounded-lg border border-gray-200 bg-white pr-10 
-                    cursor-pointer hover:border-blue-500 focus:ring-2 focus:ring-blue-500 
-                    focus:border-blue-500 transition-all appearance-none text-base"
+                    cursor-pointer hover:border-blue-500 focus:ring-2 focus:ring-[#055B75] 
+                    focus:border-[#055B75] transition-all appearance-none text-base"
                 >
                   {packageTypes.map((type) => (
                     <option key={type} value={type}>{type}</option>
@@ -220,8 +220,8 @@ const SearchPackages = () => {
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value)}
                   className="w-full px-4 py-3.5 rounded-lg border border-gray-200 bg-white pr-10 
-                    cursor-pointer hover:border-blue-500 focus:ring-2 focus:ring-blue-500 
-                    focus:border-blue-500 transition-all appearance-none text-base"
+                    cursor-pointer hover:border-blue-500 focus:ring-2 focus:ring-[#055B75] 
+                    focus:border-[#055B75] transition-all appearance-none text-base"
                 >
                   {sortOptions.map((option) => (
                     <option key={option.value} value={option.value}>{option.label}</option>

@@ -202,8 +202,8 @@
 
 .form-input:focus {
   outline: none;
-  border-color: #0284c7;
-  box-shadow: 0 0 0 4px rgba(2, 132, 199, 0.1);
+  border-color: #055B75;
+  box-shadow: 0 0 0 4px rgba(5, 91, 117, 0.1);
   background-color: #ffffff;
 }
 
@@ -246,8 +246,8 @@
   background: #f1f5f9;
 }
 
-.password-toggle:focus {
-  outline: 2px solid #0284c7;
+.password-toggle:focus-visible {
+  outline: 2px solid #055B75;
   outline-offset: 2px;
 }
 
@@ -326,8 +326,8 @@
   text-decoration: underline;
 }
 
-.forgot-password-link:focus {
-  outline: 2px solid #0284c7;
+.forgot-password-link:focus-visible {
+  outline: 2px solid #055B75;
   outline-offset: 2px;
 }
 
@@ -368,8 +368,8 @@
   transform: none;
 }
 
-.login-button:focus {
-  outline: 2px solid #0284c7;
+.login-button:focus-visible {
+  outline: 2px solid #055B75;
   outline-offset: 2px;
 }
 
@@ -457,8 +457,8 @@
   transform: none;
 }
 
-.social-button:focus {
-  outline: 2px solid #0284c7;
+.social-button:focus-visible {
+  outline: 2px solid #055B75;
   outline-offset: 2px;
 }
 
@@ -549,8 +549,8 @@
   text-decoration: underline;
 }
 
-.signup-link:focus {
-  outline: 2px solid #0284c7;
+.signup-link:focus-visible {
+  outline: 2px solid #055B75;
   outline-offset: 2px;
 }
 
@@ -642,8 +642,8 @@
   background: #f1f5f9;
 }
 
-.close-button:focus {
-  outline: 2px solid #0284c7;
+.close-button:focus-visible {
+  outline: 2px solid #055B75;
   outline-offset: 2px;
 }
 
@@ -680,8 +680,8 @@
   box-shadow: 0 4px 12px rgba(2, 132, 199, 0.3);
 }
 
-.primary-button:focus {
-  outline: 2px solid #0284c7;
+.primary-button:focus-visible {
+  outline: 2px solid #055B75;
   outline-offset: 2px;
 }
 
@@ -705,8 +705,8 @@
   transform: translateY(-1px);
 }
 
-.secondary-button:focus {
-  outline: 2px solid #0284c7;
+.secondary-button:focus-visible {
+  outline: 2px solid #055B75;
   outline-offset: 2px;
 }
 
@@ -812,14 +812,14 @@
 }
 
 /* Focus States for Accessibility */
-.social-button:focus,
-.login-button:focus,
-.forgot-password-link:focus,
-.signup-link:focus,
-.close-button:focus,
-.primary-button:focus,
-.secondary-button:focus {
-  outline: 2px solid #0284c7;
+.social-button:focus-visible,
+.login-button:focus-visible,
+.forgot-password-link:focus-visible,
+.signup-link:focus-visible,
+.close-button:focus-visible,
+.primary-button:focus-visible,
+.secondary-button:focus-visible {
+  outline: 2px solid #055B75;
   outline-offset: 2px;
 }
 

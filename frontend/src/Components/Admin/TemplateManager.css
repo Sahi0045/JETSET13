@@ -247,8 +247,8 @@
 .template-manager .form-group select:focus,
 .template-manager .form-group textarea:focus {
   outline: none;
-  border-color: #4f46e5;
-  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+  border-color: #055B75;
+  box-shadow: 0 0 0 3px rgba(5, 91, 117, 0.1);
 }
 
 .template-manager .form-group input:disabled,

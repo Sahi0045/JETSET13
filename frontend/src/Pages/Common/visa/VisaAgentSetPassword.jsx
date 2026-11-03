@@ -130,7 +130,7 @@ const VisaAgentSetPassword = () => {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="At least 8 characters"
-              className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-[#1152d4]/30"
+              className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-[#055B75]/30"
             />
 
             <label className="block text-xs font-bold text-slate-500 mb-1.5">Confirm password</label>
@@ -139,7 +139,7 @@ const VisaAgentSetPassword = () => {
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
               placeholder="Re-enter password"
-              className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm mb-6 focus:outline-none focus:ring-2 focus:ring-[#1152d4]/30"
+              className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm mb-6 focus:outline-none focus:ring-2 focus:ring-[#055B75]/30"
             />
 
             <button

@@ -281,9 +281,9 @@ const AppointmentDetail = () => {
                             </div>
                             <div className="space-y-8">
                                 <div className="flex flex-col gap-3 group">
-                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1 ml-2 transition-colors group-focus-within:text-[#1152d4]">Consultation Minutes & Observations</label>
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1 ml-2 transition-colors group-focus-within:text-[#055B75]">Consultation Minutes & Observations</label>
                                     <textarea
-                                        className="w-full h-48 rounded-3xl border-slate-100 bg-slate-50/50 p-6 text-sm font-medium focus:ring-4 focus:ring-[#1152d4]/5 focus:border-[#1152d4]/20 focus:bg-white resize-none transition-all shadow-inner placeholder:text-slate-300"
+                                        className="w-full h-48 rounded-3xl border-slate-100 bg-slate-50/50 p-6 text-sm font-medium focus:ring-4 focus:ring-[#055B75]/5 focus:border-[#055B75]/20 focus:bg-white resize-none transition-all shadow-inner placeholder:text-slate-300"
                                         placeholder="Outline key breakthroughs and pending applicant requirements..."
                                         value={notes}
                                         onChange={(e) => setNotes(e.target.value)}

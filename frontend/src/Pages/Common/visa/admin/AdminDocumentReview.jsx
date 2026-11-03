@@ -263,7 +263,7 @@ const AdminDocumentReview = () => {
                                 <span className="material-symbols-outlined text-slate-200 text-lg">edit_note</span>
                             </div>
                             <textarea
-                                className="w-full h-40 rounded-[1.5rem] border-slate-100 bg-slate-50/80 text-[11px] font-black p-5 focus:ring-4 focus:ring-[#1152d4]/5 focus:border-[#1152d4]/20 focus:bg-white transition-all shadow-inner placeholder:text-slate-300 resize-none tracking-tight"
+                                className="w-full h-40 rounded-[1.5rem] border-slate-100 bg-slate-50/80 text-[11px] font-black p-5 focus:ring-4 focus:ring-[#055B75]/5 focus:border-[#055B75]/20 focus:bg-white transition-all shadow-inner placeholder:text-slate-300 resize-none tracking-tight"
                                 placeholder="Start annotating discrepancies..."
                                 value={rejectionComment}
                                 onChange={(e) => setRejectionComment(e.target.value)}

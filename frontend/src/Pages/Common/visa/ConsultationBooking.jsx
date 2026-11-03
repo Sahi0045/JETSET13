@@ -615,7 +615,7 @@ const ConsultationBooking = () => {
                       fieldErrors.customerName
                         ? "border-red-400 bg-red-50"
                         : "border-slate-200"
-                    } h-12 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#1152d4]/30 focus:border-[#1152d4] transition-all`}
+                    } h-12 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#055B75]/30 focus:border-[#055B75] transition-all`}
                     placeholder="As shown on passport"
                   />
                   {fieldErrors.customerName && (
@@ -644,7 +644,7 @@ const ConsultationBooking = () => {
                       fieldErrors.customerEmail
                         ? "border-red-400 bg-red-50"
                         : "border-slate-200"
-                    } h-12 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#1152d4]/30 focus:border-[#1152d4] transition-all`}
+                    } h-12 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#055B75]/30 focus:border-[#055B75] transition-all`}
                     placeholder="Confirmation will be sent here"
                   />
                   {fieldErrors.customerEmail && (
@@ -668,7 +668,7 @@ const ConsultationBooking = () => {
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
                     rows={3}
-                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#1152d4]/30 focus:border-[#1152d4] resize-none transition-all"
+                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#055B75]/30 focus:border-[#055B75] resize-none transition-all"
                     placeholder="E.g. I need help with a US B-2 tourist visa application..."
                   />
                 </div>

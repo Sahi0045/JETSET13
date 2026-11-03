@@ -579,7 +579,7 @@ const TravelPackages = () => {
                     selectsRange
                     minDate={new Date()}
                     placeholderText="Select dates"
-                    className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base bg-white"
+                    className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#055B75] focus:border-[#055B75] text-base bg-white"
                     wrapperClassName="w-full"
                     popperClassName="z-[100]"
                   />
@@ -643,7 +643,7 @@ const TravelPackages = () => {
                     value={searchQuery}
                     onChange={(e) => setLocalSearchParams(prev => ({ ...prev, to: e.target.value }))}
                     onFocus={() => setShowSuggestions(true)}
-                    className="w-full p-3 pl-10 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-base"
+                    className="w-full p-3 pl-10 border rounded-md focus:ring-2 focus:ring-[#055B75] focus:border-[#055B75] transition-all text-base"
                   />
                   <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
 
