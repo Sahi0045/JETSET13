@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { postAuthDestination } from '../../../utils/postAuthRedirect';
-import { FaGoogle, FaApple, FaEye, FaEyeSlash, FaSpinner, FaUserPlus } from 'react-icons/fa';
+import { FaGoogle, FaApple, FaEye, FaEyeSlash, FaSpinner } from 'react-icons/fa';
 import { useSupabaseAuth } from '../../../contexts/SupabaseAuthContext';
-import './login.css';
+import AuthShell from './AuthShell';
 
 export default function SupabaseSignup() {
     const navigate = useNavigate();
@@ -185,197 +185,193 @@ export default function SupabaseSignup() {
         }
     };
 
+    const isBusy = processing || authLoading;
+
     return (
-        <div className="login-container">
-            <div className="login-card">
-                {/* Image Section */}
-                <div
-                    className="login-image"
-                    style={{
-                        backgroundImage: `image-set(url('/images/Rectangle 1434 (1).webp') type('image/webp'), url('/images/Rectangle 1434 (1).png') type('image/png'))`,
-                    }}
-                ></div>
+        <AuthShell>
+            <header className="jsl-form-head">
+                <h2 className="jsl-form-title">Create your account</h2>
+                <p className="jsl-form-sub">Book faster and keep every trip in one place.</p>
+            </header>
 
-                {/* Signup Form Section */}
-                <div className="login-content">
-                    <h1 className="login-title">
-                        <FaUserPlus className="inline mr-2" />
-                        Sign Up with Supabase
-                    </h1>
+            {authError && (
+                <div className="jsl-alert" role="alert">{authError}</div>
+            )}
+            {errors.signup && (
+                <div className="jsl-alert" role="alert">{errors.signup}</div>
+            )}
+            {successMessage && (
+                <div className="jsl-alert is-success" role="status">{successMessage}</div>
+            )}
 
-                    {authError && (
-                        <div className="error-message mb-4">
-                            {authError}
-                        </div>
-                    )}
+            <form className="jsl-form" onSubmit={submit} noValidate>
+                <div className="jsl-row">
+                    <div className="jsl-field">
+                        <label htmlFor="firstName">First name</label>
+                        <input
+                            value={data.firstName}
+                            type="text"
+                            name="firstName"
+                            onChange={handleChange}
+                            id="firstName"
+                            autoComplete="given-name"
+                            placeholder="First name"
+                            className={`jsl-input ${errors.firstName ? 'has-error' : ''}`}
+                            disabled={isBusy}
+                        />
+                        {errors.firstName && <span className="jsl-field-error">{errors.firstName}</span>}
+                    </div>
 
-                    {successMessage && (
-                        <div className="success-message mb-4">
-                            {successMessage}
-                        </div>
-                    )}
-
-                    <form className="login-form" onSubmit={submit}>
-                        <div className="form-group">
-                            <label htmlFor="firstName">First Name</label>
-                            <input
-                                value={data.firstName}
-                                type="text"
-                                name="firstName"
-                                onChange={handleChange}
-                                id="firstName"
-                                placeholder="First Name"
-                                className={`form-input ${errors.firstName ? 'error' : ''}`}
-                                disabled={processing || authLoading}
-                            />
-                            {errors.firstName && <div className="error-message">{errors.firstName}</div>}
-                        </div>
-
-                        <div className="form-group">
-                            <label htmlFor="lastName">Last Name</label>
-                            <input
-                                value={data.lastName}
-                                type="text"
-                                name="lastName"
-                                onChange={handleChange}
-                                id="lastName"
-                                placeholder="Last Name"
-                                className={`form-input ${errors.lastName ? 'error' : ''}`}
-                                disabled={processing || authLoading}
-                            />
-                            {errors.lastName && <div className="error-message">{errors.lastName}</div>}
-                        </div>
-
-                        <div className="form-group">
-                            <label htmlFor="email">Email</label>
-                            <input
-                                value={data.email}
-                                type="email"
-                                name="email"
-                                onChange={handleChange}
-                                id="email"
-                                placeholder="username@gmail.com"
-                                className={`form-input ${errors.email ? 'error' : ''}`}
-                                disabled={processing || authLoading}
-                            />
-                            {errors.email && <div className="error-message">{errors.email}</div>}
-                        </div>
-
-                        <div className="form-group">
-                            <label htmlFor="password">Password</label>
-                            <div className="password-input-wrapper">
-                                <input
-                                    type={showPassword ? "text" : "password"}
-                                    name="password"
-                                    value={data.password}
-                                    onChange={handleChange}
-                                    id="password"
-                                    placeholder="Password"
-                                    className={`form-input ${errors.password ? 'error' : ''}`}
-                                    disabled={processing || authLoading}
-                                />
-                                <button
-                                    type="button"
-                                    className="password-toggle"
-                                    onClick={() => setShowPassword(!showPassword)}
-                                    disabled={processing || authLoading}
-                                >
-                                    {showPassword ? <FaEyeSlash /> : <FaEye />}
-                                </button>
-                            </div>
-                            {errors.password && <div className="error-message">{errors.password}</div>}
-                        </div>
-
-                        <div className="form-group">
-                            <label htmlFor="confirmPassword">Confirm Password</label>
-                            <div className="password-input-wrapper">
-                                <input
-                                    type={showConfirmPassword ? "text" : "password"}
-                                    name="confirmPassword"
-                                    value={data.confirmPassword}
-                                    onChange={handleChange}
-                                    id="confirmPassword"
-                                    placeholder="Confirm Password"
-                                    className={`form-input ${errors.confirmPassword ? 'error' : ''}`}
-                                    disabled={processing || authLoading}
-                                />
-                                <button
-                                    type="button"
-                                    className="password-toggle"
-                                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                                    disabled={processing || authLoading}
-                                >
-                                    {showConfirmPassword ? <FaEyeSlash /> : <FaEye />}
-                                </button>
-                            </div>
-                            {errors.confirmPassword && <div className="error-message">{errors.confirmPassword}</div>}
-                        </div>
-
-                        <div className="form-options">
-                            <label className="remember-me">
-                                <input
-                                    type="checkbox"
-                                    name="agreeToTerms"
-                                    checked={data.agreeToTerms}
-                                    onChange={handleChange}
-                                    disabled={processing || authLoading}
-                                />
-                                I agree to the <Link to="/terms-conditions" className="text-link">Terms of Service</Link> and <Link to="/privacy-policy" className="text-link">Privacy Policy</Link>
-                            </label>
-                        </div>
-                        {errors.agreeToTerms && <div className="error-message">{errors.agreeToTerms}</div>}
-
-                        <button
-                            className="login-button"
-                            disabled={processing || authLoading}
-                        >
-                            {processing || authLoading ? (
-                                <>
-                                    <FaSpinner className="animate-spin inline mr-2" />
-                                    Creating Account...
-                                </>
-                            ) : (
-                                'Create Account'
-                            )}
-                        </button>
-
-                        {errors.signup && <div className="error-message">{errors.signup}</div>}
-
-                        <div className="login-divider">or continue with</div>
-
-                        <div className="social-login">
-                            <button
-                                type="button"
-                                className="social-button google"
-                                onClick={handleGoogleSignUp}
-                                disabled={processing || authLoading}
-                                title="Sign up with Google"
-                            >
-                                <FaGoogle size={22} color="#DB4437" />
-                                <span>Google</span>
-                            </button>
-                            <button
-                                type="button"
-                                className="social-button apple"
-                                onClick={handleAppleSignUp}
-                                disabled={processing || authLoading}
-                                title="Sign up with Apple"
-                            >
-                                <FaApple size={22} color="#000000" />
-                                <span>Apple</span>
-                            </button>
-                        </div>
-
-                        <div className="signup-link">
-                            Already have an account? <Link to="/supabase-login" state={location.state} className="text-link">Login</Link>
-                        </div>
-                    </form>
-
-                    <p className="login-footer">
-                        By proceeding, you agree to our <Link to="/privacy-policy" className="text-link">Privacy Policy</Link> and <Link to="/terms-conditions" className="text-link">Terms of Service</Link>.
-                    </p>
+                    <div className="jsl-field">
+                        <label htmlFor="lastName">Last name</label>
+                        <input
+                            value={data.lastName}
+                            type="text"
+                            name="lastName"
+                            onChange={handleChange}
+                            id="lastName"
+                            autoComplete="family-name"
+                            placeholder="Last name"
+                            className={`jsl-input ${errors.lastName ? 'has-error' : ''}`}
+                            disabled={isBusy}
+                        />
+                        {errors.lastName && <span className="jsl-field-error">{errors.lastName}</span>}
+                    </div>
                 </div>
-            </div>
-        </div>
+
+                <div className="jsl-field">
+                    <label htmlFor="email">Email address</label>
+                    <input
+                        value={data.email}
+                        type="email"
+                        name="email"
+                        onChange={handleChange}
+                        id="email"
+                        autoComplete="email"
+                        placeholder="you@example.com"
+                        className={`jsl-input ${errors.email ? 'has-error' : ''}`}
+                        disabled={isBusy}
+                    />
+                    {errors.email && <span className="jsl-field-error">{errors.email}</span>}
+                </div>
+
+                <div className="jsl-field">
+                    <label htmlFor="password">Password</label>
+                    <div className="jsl-password">
+                        <input
+                            type={showPassword ? 'text' : 'password'}
+                            name="password"
+                            value={data.password}
+                            onChange={handleChange}
+                            id="password"
+                            autoComplete="new-password"
+                            placeholder="At least 8 characters"
+                            className={`jsl-input ${errors.password ? 'has-error' : ''}`}
+                            disabled={isBusy}
+                        />
+                        <button
+                            type="button"
+                            className="jsl-password-toggle"
+                            onClick={() => setShowPassword(!showPassword)}
+                            disabled={isBusy}
+                            aria-label={showPassword ? 'Hide password' : 'Show password'}
+                        >
+                            {showPassword ? <FaEyeSlash /> : <FaEye />}
+                        </button>
+                    </div>
+                    {errors.password && <span className="jsl-field-error">{errors.password}</span>}
+                </div>
+
+                <div className="jsl-field">
+                    <label htmlFor="confirmPassword">Confirm password</label>
+                    <div className="jsl-password">
+                        <input
+                            type={showConfirmPassword ? 'text' : 'password'}
+                            name="confirmPassword"
+                            value={data.confirmPassword}
+                            onChange={handleChange}
+                            id="confirmPassword"
+                            autoComplete="new-password"
+                            placeholder="Type it again"
+                            className={`jsl-input ${errors.confirmPassword ? 'has-error' : ''}`}
+                            disabled={isBusy}
+                        />
+                        <button
+                            type="button"
+                            className="jsl-password-toggle"
+                            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                            disabled={isBusy}
+                            aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                        >
+                            {showConfirmPassword ? <FaEyeSlash /> : <FaEye />}
+                        </button>
+                    </div>
+                    {errors.confirmPassword && <span className="jsl-field-error">{errors.confirmPassword}</span>}
+                </div>
+
+                <div className="jsl-field">
+                    <label className="jsl-checkbox">
+                        <input
+                            type="checkbox"
+                            name="agreeToTerms"
+                            checked={data.agreeToTerms}
+                            onChange={handleChange}
+                            disabled={isBusy}
+                        />
+                        <span className="jsl-checkbox-box" aria-hidden="true" />
+                        <span>
+                            I agree to the <Link to="/terms-conditions" className="jsl-link">Terms of Service</Link> and{' '}
+                            <Link to="/privacy-policy" className="jsl-link">Privacy Policy</Link>
+                        </span>
+                    </label>
+                    {errors.agreeToTerms && <span className="jsl-field-error">{errors.agreeToTerms}</span>}
+                </div>
+
+                <button type="submit" className="jsl-submit" disabled={isBusy}>
+                    {isBusy ? (
+                        <>
+                            <FaSpinner className="jsl-spin" />
+                            Creating account…
+                        </>
+                    ) : (
+                        'Create account'
+                    )}
+                </button>
+
+                <div className="jsl-divider"><span>or continue with</span></div>
+
+                <div className="jsl-social">
+                    <button
+                        type="button"
+                        className="jsl-social-btn"
+                        onClick={handleGoogleSignUp}
+                        disabled={isBusy}
+                    >
+                        <FaGoogle color="#DB4437" />
+                        <span>Sign up with Google</span>
+                    </button>
+                    <button
+                        type="button"
+                        className="jsl-social-btn"
+                        onClick={handleAppleSignUp}
+                        disabled={isBusy}
+                    >
+                        <FaApple color="#000000" size={18} />
+                        <span>Sign up with Apple</span>
+                    </button>
+                </div>
+
+                <p className="jsl-signup">
+                    Already have an account?{' '}
+                    <Link to="/supabase-login" state={location.state} className="jsl-link strong">Sign in</Link>
+                </p>
+            </form>
+
+            <p className="jsl-legal">
+                By continuing, you agree to our{' '}
+                <Link to="/privacy-policy" className="jsl-link">Privacy Policy</Link> and{' '}
+                <Link to="/terms-conditions" className="jsl-link">Terms of Service</Link>.
+            </p>
+        </AuthShell>
     );
 }

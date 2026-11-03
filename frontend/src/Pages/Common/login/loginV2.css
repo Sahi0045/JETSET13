@@ -397,6 +397,39 @@
 
 .jsl-mobile-hero { display: none; }
 
+/* ---------- Sign-up and password pages ---------- */
+.jsl-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.jsl-alert.is-success {
+  background: #F1FBFD;
+  border-color: #b9dfeb;
+  color: #034457;
+}
+
+.jsl-checkbox-box { flex-shrink: 0; }
+
+.jsl-field label.jsl-checkbox {
+  font-size: 0.85rem;
+  font-weight: 400;
+  color: #46606b;
+}
+
+a.jsl-submit { text-decoration: none; }
+
+.jsl-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  padding: 0.75rem 0;
+  font-size: 0.9rem;
+  color: #5a7884;
+}
+
 /* ---------- Responsive ---------- */
 @media (max-width: 880px) {
   .jsl-card {
@@ -464,4 +497,5 @@
     margin-right: 1.25rem;
   }
   .jsl-social { grid-template-columns: 1fr; }
+  .jsl-row { grid-template-columns: 1fr; }
 }
