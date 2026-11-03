@@ -550,6 +550,7 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
                   {/* One-way fares, so none on a round trip: they are not what
                       the trip being searched costs. */}
                   <CustomFlightCalendar
+                    title="Departure date"
                     selectedDate={formData.departDate} minDate={new Date()}
                     showPrices={formData.tripType !== 'roundTrip'}
                     originCode={calendarCode(formData.from, formData.fromCode)}
@@ -584,6 +585,7 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
               {showReturnCalendar && (
                 <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
                   <CustomFlightCalendar
+                    title="Return date"
                     selectedDate={formData.returnDate} minDate={formData.departDate ? parseISO(formData.departDate) : new Date()}
                     showPrices={false}
                     onSelect={(date) => { handleInputChange({ target: { name: 'returnDate', value: date } }); setShowReturnCalendar(false); }}

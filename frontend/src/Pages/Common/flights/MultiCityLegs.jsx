@@ -82,6 +82,7 @@ function DateField({ number, value, minDate, error, onPick }) {
       {open && (
         <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
           <CustomFlightCalendar
+            title={`Date of flight ${number}`}
             selectedDate={value}
             minDate={minDate}
             showPrices={false}

@@ -1,13 +1,18 @@
 "use client"
 
-import React, { useState, useEffect, useLayoutEffect, useMemo, useRef } from "react"
+import React, { useState, useEffect, useId, useLayoutEffect, useMemo, useRef } from "react"
+import { createPortal } from "react-dom"
 import { format, addMonths, startOfMonth, isBefore, isToday } from "date-fns"
-import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react"
+import { ChevronLeft, ChevronRight, Loader2, X } from "lucide-react"
 import apiConfig from '@/config/api'
 import Price from '../../../Components/Price'
 import { getTodayDate } from '../../../utils/dateUtils'
 import { moveDayFocus } from './calendarKeys'
 import { fareWeeks, monthDatesFrom, priceFareWeeks } from './fareWeeks'
+import SwipeMonths, { monthsFrom, usePhoneWidth } from './SwipeMonths'
+
+const MONTHS_ON_A_PHONE = 12
+const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
 /**
  * The search form's date picker.
@@ -27,6 +32,10 @@ import { fareWeeks, monthDatesFrom, priceFareWeeks } from './fareWeeks'
  *
  * `showPrices` is off for the return date: these are one-way fares from the
  * origin, and printing them on return days would price the wrong journey.
+ *
+ * On a phone it rises from the foot of the screen, titled `title`, and its
+ * months are swiped through sideways, from the first month a date can be
+ * chosen in to a year on.
  */
 export default function CustomFlightCalendar({
     selectedDate,
@@ -40,7 +49,10 @@ export default function CustomFlightCalendar({
     infants = 0,
     travelClass = 'ECONOMY',
     showPrices = true,
+    title = 'Choose a date',
 }) {
+    const isPhone = usePhoneWidth()
+    const titleId = useId()
     const [currentMonth, setCurrentMonth] = useState(() => {
         const firstDay = [getTodayDate(), format(minDate, 'yyyy-MM-dd')].sort().pop()
         const opening = selectedDate && selectedDate >= firstDay ? selectedDate : firstDay
@@ -66,6 +78,7 @@ export default function CustomFlightCalendar({
     // On a laptop 730 px tall it opened wholly below the screen, so the page
     // scrolls up until it fits, never past its top.
     useLayoutEffect(() => {
+        if (isPhone) return
         const el = calendarRef.current
         const width = el?.offsetWidth
         if (!width) return
@@ -86,6 +99,14 @@ export default function CustomFlightCalendar({
         document.body.classList.add('date-picker-open')
         return () => document.body.classList.remove('date-picker-open')
     }, [])
+
+    useEffect(() => {
+        if (!isPhone) return undefined
+        const { overflow } = document.body.style
+        document.body.style.overflow = 'hidden'
+        calendarRef.current?.focus({ preventScroll: true })
+        return () => { document.body.style.overflow = overflow }
+    }, [isPhone])
 
     const nextMonth = addMonths(currentMonth, 1)
 
@@ -117,6 +138,16 @@ export default function CustomFlightCalendar({
         : null
     const shownMonth = format(currentMonth, 'yyyy-MM')
     const firstPriced = [today, format(minDate, 'yyyy-MM-dd')].sort().pop()
+
+    const firstMonth = firstPriced.slice(0, 7)
+    const chosenMonth = (selectedDate || '').slice(0, 7)
+    const months = useMemo(() => {
+        const [year, month] = firstMonth.split('-').map(Number)
+        const [chosenYear, chosenMonthNumber] = chosenMonth ? chosenMonth.split('-').map(Number) : [year, month]
+        const toChosen = (chosenYear - year) * 12 + chosenMonthNumber - month + 1
+        return monthsFrom(new Date(year, month - 1, 1), Math.max(MONTHS_ON_A_PHONE, toChosen))
+    }, [firstMonth, chosenMonth])
+    const slide = Math.max(0, months.findIndex((month) => format(month, 'yyyy-MM') === shownMonth))
 
     useEffect(() => {
         if (!search) {
@@ -192,7 +223,7 @@ export default function CustomFlightCalendar({
         };
     }, [isDragging, dragStart]);
 
-    const renderMonth = (month) => {
+    const renderDays = (month) => {
         const monthStart = startOfMonth(month);
         const startDay = (monthStart.getDay() + 6) % 7; // Mon=0, Tue=1, ... Sun=6
         const daysInMonth = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
@@ -271,21 +302,114 @@ export default function CustomFlightCalendar({
         }
 
         return (
-            <div className="flex-1 min-w-0">
-                <div className="text-center py-2.5 font-bold text-gray-800 text-sm border-b border-gray-100 bg-gray-50/30">
-                    {format(month, 'MMMM yyyy')}
-                </div>
-                <div className="grid grid-cols-7 text-center border-b border-gray-200 bg-gray-50/50">
-                    {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => (
-                        <div key={d} className="text-[9px] sm:text-[10px] font-semibold text-gray-500 py-2 uppercase tracking-wider">{d}</div>
-                    ))}
-                </div>
-                <div className="select-none p-1">
-                    {rows}
-                </div>
+            <div className="select-none p-1">
+                {rows}
             </div>
         );
     };
+
+    const weekdays = (
+        <div className="grid grid-cols-7 text-center border-b border-gray-200 bg-gray-50/50">
+            {WEEKDAYS.map(d => (
+                <div key={d} className="text-[9px] sm:text-[10px] font-semibold text-gray-500 py-2 uppercase tracking-wider">{d}</div>
+            ))}
+        </div>
+    );
+
+    const renderMonth = (month) => (
+        <div className="flex-1 min-w-0">
+            <div className="text-center py-2.5 font-bold text-gray-800 text-sm border-b border-gray-100 bg-gray-50/30">
+                {format(month, 'MMMM yyyy')}
+            </div>
+            {weekdays}
+            {renderDays(month)}
+        </div>
+    );
+
+    const footer = (
+        <div className="bg-gray-50 px-4 py-3 flex justify-between items-center border-t border-gray-200">
+            <div className="flex gap-5 items-center">
+                <div className="flex items-center gap-1.5">
+                    <div className="w-3 h-3 bg-[#055B75] rounded-sm"></div>
+                    <span className="text-[10px] font-medium text-gray-500">Selected</span>
+                </div>
+                {lowestPrice !== null && (
+                    <div className="flex items-center gap-1.5">
+                        <div className="w-3 h-3 bg-green-100 border border-green-300 rounded-sm"></div>
+                        <span className="text-[10px] font-medium text-gray-500">Lowest fare shown</span>
+                    </div>
+                )}
+            </div>
+            <button
+                type="button"
+                onClick={onClose}
+                className="px-5 py-1.5 text-xs font-bold text-white bg-[#055B75] hover:bg-[#034457] rounded-lg transition-all shadow-md active:scale-95"
+            >
+                Done
+            </button>
+        </div>
+    );
+
+    if (isPhone) {
+        return createPortal(
+            // The date fields shut their calendar on a mousedown outside them,
+            // and this sheet is not inside them: a tap on a day would shut it
+            // before the day was chosen.
+            <div className="fixed inset-0 z-[1200] flex items-end" onMouseDown={(e) => e.stopPropagation()}>
+                <div aria-hidden="true" onClick={onClose} className="absolute inset-0 bg-black/40" />
+                <div
+                    ref={calendarRef}
+                    data-calendar-grid=""
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby={titleId}
+                    tabIndex={-1}
+                    onKeyDown={(e) => { if (e.key === 'Escape') onClose?.() }}
+                    className="relative w-full max-h-[92vh] overflow-y-auto bg-white rounded-t-2xl shadow-2xl animate-sheet-up motion-reduce:animate-none focus:outline-none"
+                >
+                    <div aria-hidden="true" className="mx-auto mt-2 h-1 w-10 rounded-full bg-gray-300" />
+                    <div className="flex items-center justify-between pl-5 pr-3 pt-2">
+                        <h2 id={titleId} className="text-base font-bold text-gray-900">{title}</h2>
+                        <button type="button" aria-label="Close" onClick={onClose} className="p-2 rounded-full text-gray-500 hover:bg-gray-100">
+                            <X className="h-5 w-5" />
+                        </button>
+                    </div>
+                    <div className="flex items-center justify-between px-3 py-2">
+                        <button
+                            type="button"
+                            aria-label="Previous month"
+                            disabled={slide === 0}
+                            onClick={() => setCurrentMonth(months[slide - 1])}
+                            className="p-2 rounded-full border border-gray-200 text-[#055B75] disabled:opacity-30"
+                        >
+                            <ChevronLeft className="h-4 w-4" />
+                        </button>
+                        <span className="flex items-center gap-2 font-bold text-gray-800">
+                            {format(currentMonth, 'MMMM yyyy')}
+                            {pending.size > 0 && <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin text-[#055B75]" />}
+                        </span>
+                        <button
+                            type="button"
+                            aria-label="Next month"
+                            disabled={slide === months.length - 1}
+                            onClick={() => setCurrentMonth(months[slide + 1])}
+                            className="p-2 rounded-full border border-gray-200 text-[#055B75] disabled:opacity-30"
+                        >
+                            <ChevronRight className="h-4 w-4" />
+                        </button>
+                    </div>
+                    <SwipeMonths
+                        months={months}
+                        index={slide}
+                        onIndexChange={(i) => setCurrentMonth(months[i])}
+                        renderMonth={(month) => <>{weekdays}{renderDays(month)}</>}
+                    />
+                    <div className="pb-[env(safe-area-inset-bottom)] bg-gray-50">{footer}</div>
+                </div>
+            </div>,
+            document.body,
+        );
+    }
 
     return (
         <div
@@ -334,27 +458,7 @@ export default function CustomFlightCalendar({
                 </div>
             </div>
 
-            <div className="bg-gray-50 px-4 py-3 flex justify-between items-center border-t border-gray-200">
-                <div className="flex gap-5 items-center">
-                    <div className="flex items-center gap-1.5">
-                        <div className="w-3 h-3 bg-[#055B75] rounded-sm"></div>
-                        <span className="text-[10px] font-medium text-gray-500">Selected</span>
-                    </div>
-                    {lowestPrice !== null && (
-                        <div className="flex items-center gap-1.5">
-                            <div className="w-3 h-3 bg-green-100 border border-green-300 rounded-sm"></div>
-                            <span className="text-[10px] font-medium text-gray-500">Lowest fare shown</span>
-                        </div>
-                    )}
-                </div>
-                <button
-                    type="button"
-                    onClick={onClose}
-                    className="px-5 py-1.5 text-xs font-bold text-white bg-[#055B75] hover:bg-[#034457] rounded-lg transition-all shadow-md active:scale-95"
-                >
-                    Done
-                </button>
-            </div>
+            {footer}
         </div>
     );
 }
