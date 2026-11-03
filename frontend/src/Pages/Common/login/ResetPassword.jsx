@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
+import { FaSpinner } from "react-icons/fa";
 import supabase from "../../../lib/supabase";
+import AuthShell from "./AuthShell";
 
 /**
  * Set a new password from a recovery link.
@@ -180,129 +182,91 @@ const ResetPassword = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#0a0f1e] text-white font-sans flex items-center justify-center px-4 py-12 relative overflow-hidden">
-      <link
-        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200"
-        rel="stylesheet"
-      />
+    <AuthShell>
+      <header className="jsl-form-head">
+        <h2 className="jsl-form-title">Set a new password</h2>
+        <p className="jsl-form-sub">Choose a new password for your account.</p>
+      </header>
 
-      {/* Background blobs */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -left-40 w-[600px] h-[600px] bg-[#1152d4]/10 rounded-full blur-3xl" />
-        <div className="absolute -bottom-40 -right-40 w-[500px] h-[500px] bg-indigo-600/10 rounded-full blur-3xl" />
-      </div>
+      {error && <div className="jsl-alert" role="alert">{error}</div>}
+      {success && (
+        <div className="jsl-alert is-success" role="status">Password reset successfully! Redirecting to sign in…</div>
+      )}
 
-      <div className="relative z-10 w-full max-w-md">
-        <div className="text-center mb-10">
-          <Link to="/" className="inline-flex items-center gap-3 text-white no-underline group mb-6">
-            <div className="w-12 h-12 bg-[#1152d4] rounded-2xl flex items-center justify-center shadow-xl shadow-[#1152d4]/30 group-hover:scale-105 transition-transform">
-              <span className="material-symbols-outlined text-2xl text-white">lock_reset</span>
-            </div>
-            <div className="text-left">
-              <p className="text-lg font-black tracking-tight leading-none">Jetsetters</p>
-              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 leading-none mt-1">Reset Password</p>
-            </div>
-          </Link>
-
-          <h1 className="text-3xl font-black tracking-tight mb-2">Set New Password</h1>
-          <p className="text-slate-400 text-sm font-medium">Please choose a secure new password for your account.</p>
+      {/* Verifying the link is a real wait - the token exchange is a network
+          round trip - so say so rather than showing an empty card. */}
+      {!success && linkState === "checking" && (
+        <div className="jsl-form">
+          <p className="jsl-status">
+            <FaSpinner className="jsl-spin" />
+            Checking your reset link…
+          </p>
         </div>
+      )}
 
-        <div className="bg-white/[0.04] backdrop-blur-xl border border-white/[0.08] shadow-2xl shadow-black/40 rounded-[2rem] p-8 md:p-10">
-          {error && (
-            <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-start gap-3">
-              <span className="material-symbols-outlined text-red-400 text-sm shrink-0 mt-0.5">error</span>
-              <p className="text-red-400 text-sm font-medium leading-relaxed">{error}</p>
-            </div>
-          )}
+      {!success && linkState === "invalid" && (
+        <div className="jsl-form">
+          <Link to="/forgot-password" className="jsl-submit">Request a new reset link</Link>
+        </div>
+      )}
 
-          {success && (
-            <div className="mb-6 p-4 bg-green-500/10 border border-green-500/20 rounded-xl flex items-start gap-3">
-              <span className="material-symbols-outlined text-green-400 text-sm shrink-0 mt-0.5">check_circle</span>
-              <p className="text-green-400 text-sm font-medium leading-relaxed">Password reset successfully! Redirecting to login...</p>
-            </div>
-          )}
-
-          {/* Verifying the link is a real wait - the token exchange is a network
-              round trip - so say so rather than showing an empty card. */}
-          {!success && linkState === "checking" && (
-            <div className="py-6 flex items-center justify-center gap-3">
-              <span className="w-5 h-5 border-2 border-white/20 border-t-white/80 rounded-full animate-spin" />
-              <p className="text-slate-400 text-sm font-medium">Checking your reset link…</p>
-            </div>
-          )}
-
-          {!success && linkState === "invalid" && (
-            <Link
-              to="/forgot-password"
-              className="block w-full text-center bg-[#1152d4] hover:bg-[#0d47b1] text-white font-bold text-sm py-4 rounded-2xl no-underline transition-colors"
-            >
-              Request a new reset link
-            </Link>
-          )}
-
-          {!success && linkState === "ready" && (
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 ml-1">New Password</label>
-                <div className="relative group">
-                  <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 text-lg group-focus-within:text-[#65B3CF]">lock</span>
-                  <input
-                    type="password"
-                    name="newPassword"
-                    required
-                    value={formData.newPassword}
-                    onChange={handleChange}
-                    placeholder="••••••••••••"
-                    className="w-full bg-white/[0.05] border border-white/[0.1] rounded-2xl py-4 pl-12 pr-4 text-sm font-medium text-white placeholder:text-slate-600 focus:outline-none focus:border-[#65B3CF]/50 focus:ring-4 focus:ring-[#65B3CF]/10 transition-all"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 ml-1">Confirm New Password</label>
-                <div className="relative group">
-                  <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 text-lg group-focus-within:text-[#65B3CF]">lock_check</span>
-                  <input
-                    type="password"
-                    name="confirmPassword"
-                    required
-                    value={formData.confirmPassword}
-                    onChange={handleChange}
-                    placeholder="••••••••••••"
-                    className="w-full bg-white/[0.05] border border-white/[0.1] rounded-2xl py-4 pl-12 pr-4 text-sm font-medium text-white placeholder:text-slate-600 focus:outline-none focus:border-[#65B3CF]/50 focus:ring-4 focus:ring-[#65B3CF]/10 transition-all"
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full py-4 bg-[#1152d4] hover:bg-[#0e42b0] text-white rounded-2xl font-black text-sm uppercase tracking-[0.15em] shadow-xl shadow-[#1152d4]/30 transition-all hover:scale-[1.01] active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-3"
-              >
-                {isLoading ? "Updating Password…" : "Update Password"}
-              </button>
-            </form>
-          )}
-
-          {error.includes("missing reset link") && (
-            <Link
-              to="/forgot-password"
-              className="w-full py-4 bg-[#1152d4] text-white rounded-2xl font-black text-sm uppercase tracking-[0.15em] transition-all flex items-center justify-center gap-3 no-underline"
-            >
-              Request New Link
-            </Link>
-          )}
-
-          <div className="mt-8 text-center">
-            <Link to="/login" className="text-xs font-bold text-slate-500 hover:text-white no-underline transition-colors uppercase tracking-widest flex items-center justify-center gap-2">
-              <span className="material-symbols-outlined text-sm">arrow_back</span>
-              Back to Login
-            </Link>
+      {!success && linkState === "ready" && (
+        <form className="jsl-form" onSubmit={handleSubmit}>
+          <div className="jsl-field">
+            <label htmlFor="newPassword">New password</label>
+            <input
+              id="newPassword"
+              type="password"
+              name="newPassword"
+              required
+              autoComplete="new-password"
+              value={formData.newPassword}
+              onChange={handleChange}
+              placeholder="At least 8 characters"
+              className="jsl-input"
+              disabled={isLoading}
+            />
           </div>
+
+          <div className="jsl-field">
+            <label htmlFor="confirmPassword">Confirm new password</label>
+            <input
+              id="confirmPassword"
+              type="password"
+              name="confirmPassword"
+              required
+              autoComplete="new-password"
+              value={formData.confirmPassword}
+              onChange={handleChange}
+              placeholder="Type it again"
+              className="jsl-input"
+              disabled={isLoading}
+            />
+          </div>
+
+          <button type="submit" className="jsl-submit" disabled={isLoading}>
+            {isLoading ? (
+              <>
+                <FaSpinner className="jsl-spin" />
+                Updating password…
+              </>
+            ) : (
+              "Update password"
+            )}
+          </button>
+        </form>
+      )}
+
+      {error.includes("missing reset link") && (
+        <div className="jsl-form">
+          <Link to="/forgot-password" className="jsl-submit">Request a new link</Link>
         </div>
-      </div>
-    </div>
+      )}
+
+      <p className="jsl-signup">
+        <Link to="/login" className="jsl-link strong">Back to sign in</Link>
+      </p>
+    </AuthShell>
   );
 };
 
