@@ -110,8 +110,8 @@ describe('the search form calendar on a phone', () => {
     open({ selectedDate: '' });
     const sheet = screen.getByRole('dialog', { name: 'Departure date' });
 
-    expect(screen.getByRole('button', { name: 'Previous month' }).disabled).toBe(true);
-    fireEvent.click(screen.getByRole('button', { name: 'Next month' }));
+    expect(screen.getByLabelText('Previous month').disabled).toBe(true);
+    fireEvent.click(screen.getByLabelText('Next month'));
 
     expect(HTMLElement.prototype.scrollTo).toHaveBeenLastCalledWith({ left: WIDTH, behavior: 'smooth' });
     expect(within(sheet).getByText(label(1))).toBeTruthy();
@@ -130,7 +130,7 @@ describe('the search form calendar on a phone', () => {
     open({ selectedDate: '' });
     const sheet = screen.getByRole('dialog', { name: 'Departure date' });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Next month' }));
+    fireEvent.click(screen.getByLabelText('Next month'));
     await new Promise((resolve) => setTimeout(resolve, 200));
 
     expect(within(sheet).getByText(label(1))).toBeTruthy();
