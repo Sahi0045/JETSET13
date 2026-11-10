@@ -21,10 +21,16 @@ const getApiUrl = () => {
     return apiConfig.baseUrl || '';
 };
 
+const isBlank = (value) => value === undefined || value === null || String(value).trim() === '';
+
 /**
- * Generic fetch with caching
+ * Generic fetch with caching. A call missing one of its `required` params is
+ * not sent: the server refuses it with a 400, and the page has nothing to show
+ * for it either way (a visitor whose city has no airport code has no origin).
  */
-const fetchWithCache = async (endpoint, params, cacheKey) => {
+const fetchWithCache = async (endpoint, params, cacheKey, required = []) => {
+    if (required.some((key) => isBlank(params[key]))) return [];
+
     // Check cache (includes both success and failure entries)
     if (cache.data.has(cacheKey)) {
         const cached = cache.data.get(cacheKey);
@@ -99,7 +105,8 @@ export const getMostBookedDestinations = async (origin, period) => {
     return fetchWithCache(
         '/flights/analytics/booked',
         { origin, period },
-        `booked_${origin}${period ? '_' + period : ''}`
+        `booked_${origin}${period ? '_' + period : ''}`,
+        ['origin']
     );
 };
 
@@ -110,7 +117,8 @@ export const getMostTraveledDestinations = async (origin, period) => {
     return fetchWithCache(
         '/flights/analytics/traveled',
         { origin, period },
-        `traveled_${origin}${period ? '_' + period : ''}`
+        `traveled_${origin}${period ? '_' + period : ''}`,
+        ['origin']
     );
 };
 
@@ -124,7 +132,8 @@ export const getBusiestTravelPeriod = async (origin, year, direction = 'DEPARTIN
     return fetchWithCache(
         '/flights/analytics/busiest',
         { origin, year, direction },
-        `busiest_${origin}_${year}_${direction}`
+        `busiest_${origin}_${year}_${direction}`,
+        ['origin']
     );
 };
 
@@ -138,7 +147,8 @@ export const getCheapestFlightDates = async (origin, destination, options = {}) 
     return fetchWithCache(
         '/flights/cheapest-dates',
         { origin, destination, ...options },
-        `cheapest_${origin}_${destination}_${JSON.stringify(options)}`
+        `cheapest_${origin}_${destination}_${JSON.stringify(options)}`,
+        ['origin', 'destination']
     );
 };
 
@@ -152,7 +162,8 @@ export const getFlightStatus = async (carrier, flightNumber, date) => {
     return fetchWithCache(
         '/flights/status',
         { carrier, flightNumber, date },
-        `status_${carrier}${flightNumber}_${date}`
+        `status_${carrier}${flightNumber}_${date}`,
+        ['carrier', 'flightNumber', 'date']
     );
 };
 
@@ -166,7 +177,8 @@ export const getFlightAvailabilities = async (origin, destination, departureDate
     return fetchWithCache(
         '/flights/availabilities',
         { origin, destination, departureDate },
-        `avail_${origin}_${destination}_${departureDate}`
+        `avail_${origin}_${destination}_${departureDate}`,
+        ['origin', 'destination', 'departureDate']
     );
 };
 
