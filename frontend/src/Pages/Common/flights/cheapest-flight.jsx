@@ -190,6 +190,10 @@ export default function CheapestFlights({ onBookFlight }) {
     .filter((f) => f.isApiData && f.price != null)
     .sort((a, b) => a.price - b.price)[0]?.id;
 
+  // "Cheapest fares from" needs a from. Without one the block said
+  // "Checking prices…" over no fares, for as long as the page was open.
+  if (!locationLoading && !cityCode) return null;
+
   // Loading skeleton
   if (loading) {
     return (

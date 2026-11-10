@@ -128,8 +128,13 @@ export default function PopularDestinations({ onSelectDestination }) {
       if (locationLoading) return;
 
       try {
-        // Get user location from shared LocationContext
-        const originCode = cityCode || '';
+        // No airport for the visitor's city: show the standard destinations
+        // rather than asking for the most booked from nowhere.
+        if (!cityCode) {
+          if (isMounted) setDisplayDestinations(destinations.map(d => ({ ...d, image: getCityImage(d.name) })));
+          return;
+        }
+        const originCode = cityCode;
 
         console.log(`📊 Fetching most booked destinations from ${originCode}`);
 
