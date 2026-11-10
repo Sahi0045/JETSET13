@@ -1,5 +1,6 @@
 import express from 'express';
 import FlightProvider from '../services/flightProvider.js';
+import { airportsNear } from '../services/airportsIndex.js';
 
 const router = express.Router();
 
@@ -115,15 +116,8 @@ router.get('/nearby', async (req, res) => {
             });
         }
 
-        // Not implemented. The bundled airports dataset carries a geoCode for
-        // every entry (backend/services/airportsIndex.js), so this could be a
-        // real radius search without any supplier call - nothing consumes it
-        // yet, so it stays an honest empty answer rather than a guess.
-        return res.json({
-            success: true,
-            data: [],
-            message: 'Nearby airport search is not available'
-        });
+        const data = airportsNear(latitude, longitude, radius).map(({ popularity, ...airport }) => airport);
+        return res.json({ success: true, data });
 
     } catch (error) {
         console.error('❌ Error in nearby airports route:', error);

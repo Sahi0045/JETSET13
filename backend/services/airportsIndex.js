@@ -355,3 +355,53 @@ export const datasetInfo = () => {
   const raw = require('../data/airports/airports.min.json');
   return { source: raw.source, generatedAt: raw.generatedAt, count: raw.count };
 };
+
+const EARTH_RADIUS_KM = 6371;
+const toRadians = (degrees) => (degrees * Math.PI) / 180;
+const distanceKm = (aLat, aLon, bLat, bLon) => {
+  const dLat = toRadians(bLat - aLat);
+  const dLon = toRadians(bLon - aLon);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(toRadians(aLat)) * Math.cos(toRadians(bLat)) * Math.sin(dLon / 2) ** 2;
+  return 2 * EARTH_RADIUS_KM * Math.asin(Math.sqrt(h));
+};
+
+export const NEARBY_RADIUS_KM = 300;
+// A million passengers a year: an airport with scheduled flights to more than
+// one or two places. The nearest strip to a small town is rarely where its
+// people fly from (Fatehpur's is Kanpur, with a handful of flights; they use
+// Lucknow).
+const MAJOR_AIRPORT_PASSENGERS = 1;
+// Airports this close to the nearest one serve the same city, and the busiest
+// of them is the one to start from: Houston is IAH, not Hobby.
+const SAME_CITY_KM = 40;
+
+/** Major airports within `radiusKm` of a point, nearest first. */
+export const airportsNear = (latitude, longitude, radiusKm = NEARBY_RADIUS_KM) => {
+  const lat = Number(latitude);
+  const lon = Number(longitude);
+  if (latitude === null || latitude === '' || longitude === null || longitude === ''
+    || !Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) return [];
+  load();
+  const radius = Math.min(Math.max(Number(radiusKm) || NEARBY_RADIUS_KM, 1), 1000);
+  return dataset
+    .filter((r) => r.type === 'AIRPORT' && r.geoCode && r.popularity >= MAJOR_AIRPORT_PASSENGERS)
+    .map((r) => ({
+      code: r.code,
+      name: r.name,
+      cityName: r.cityName,
+      countryCode: r.countryCode,
+      popularity: r.popularity,
+      distanceKm: Math.round(distanceKm(lat, lon, r.geoCode.latitude, r.geoCode.longitude)),
+    }))
+    .filter((airport) => airport.distanceKm <= radius)
+    .sort((a, b) => a.distanceKm - b.distanceKm);
+};
+
+/** The airport a visitor at this point would most likely fly from, or null. */
+export const nearestAirport = (latitude, longitude) => {
+  const near = airportsNear(latitude, longitude);
+  if (near.length === 0) return null;
+  const sameCity = near.filter((airport) => airport.distanceKm - near[0].distanceKm <= SAME_CITY_KM);
+  const { popularity, ...airport } = sameCity.sort((a, b) => b.popularity - a.popularity)[0];
+  return airport;
+};
