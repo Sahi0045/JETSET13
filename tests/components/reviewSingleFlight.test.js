@@ -27,7 +27,7 @@ describe('the review page opens one payment page at a time', () => {
   it('keeps Pay disabled while the browser is on its way to the payment page', () => {
     expect(review).toMatch(/redirecting = true;\s*setOpeningPayment\(true\);\s*window\.location\.href = checkoutResponse\.checkoutUrl;/);
     expect(review).toMatch(/if \(!redirecting\) paymentStarting\.current = false;/);
-    expect(review.match(/disabled=\{checkingOut \|\| openingPayment\}/g)).toHaveLength(2);
+    expect(review.match(/disabled=\{(?:!fareReady \|\| )?checkingOut \|\| openingPayment\}/g)).toHaveLength(2);
     expect(review).toMatch(/openingPayment \? 'Opening secure payment…'/);
   });
 

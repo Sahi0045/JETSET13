@@ -24,6 +24,8 @@ export const priceConfig = { flight_taxes_fees: 10, flight_taxes_fees_percentage
 const auth = { user: signedInUser, loading: false, renewServerSession: async () => true };
 const location = { country: 'US', callingCode: '+1', currency: 'USD' };
 const priceConfigQuery = { data: priceConfig, error: null, refetch: () => {} };
+/** What usePriceConfig answers; a test may swap it for a pending or failed read and put it back. */
+export const priceConfigRead = { current: priceConfigQuery, settled: priceConfigQuery };
 const guestSwitch = { isSuccess: true, data: false, isPending: false };
 const cancelPolicyQuery = { data: { freeUntil: '2026-10-13T04:00:00.000Z', timeZone: 'America/New_York' } };
 const savedTravellers = { data: null };
@@ -34,7 +36,7 @@ export const pageMocks = {
   footer: { default: () => null },
   pageWrapper: { default: (Component) => Component },
   auth: { useSupabaseAuth: () => auth },
-  queries: { useGuestFlightBooking: () => guestSwitch, usePriceConfig: () => priceConfigQuery, useCancelPolicy: () => cancelPolicyQuery },
+  queries: { useGuestFlightBooking: () => guestSwitch, usePriceConfig: () => priceConfigRead.current, useCancelPolicy: () => cancelPolicyQuery },
   savedTravellers: { useSavedTravellers: () => savedTravellers, useSaveTravellers: () => saveTravellers },
   location: { useLocationContext: () => location },
   nothing: { default: () => null },

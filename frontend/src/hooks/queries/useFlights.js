@@ -4,6 +4,7 @@ import { getApiUrl } from '../../utils/apiHelper';
 import { authHeaders } from '../../utils/authHeaders';
 import { bookedFeeRulesStaleTime } from '../../utils/bookedFeeRules';
 import { useSupabaseAuth } from '../../contexts/SupabaseAuthContext';
+import { cancelPolicyQuery } from './flightReviewQueries';
 
 /**
  * Open one booking. `email` lets a guest open their own. Exported for the
@@ -77,20 +78,10 @@ export async function fetchBookedFeeRules(bookingId, email) {
   return data?.success ? data.penalties ?? null : null;
 }
 
-export async function fetchCancelPolicy() {
-  const res = await fetch(getApiUrl('flights/cancel-policy'), { credentials: 'include' });
-  const data = await res.json().catch(() => null);
-  if (!res.ok || !data?.success) throw new Error(data?.error || `Cancel policy failed (${res.status})`);
-  return { freeUntil: data.freeUntil ?? null, timeZone: data.timeZone ?? null };
-}
+export { fetchCancelPolicy } from './flightReviewQueries';
 
 export function useCancelPolicy() {
-  return useQuery({
-    queryKey: ['flights', 'cancel-policy'],
-    queryFn: fetchCancelPolicy,
-    staleTime: 60 * 1000,
-    retry: false,
-  });
+  return useQuery(cancelPolicyQuery());
 }
 
 export async function fetchCancelQuote(bookingId, email) {

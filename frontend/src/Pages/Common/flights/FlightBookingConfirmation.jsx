@@ -684,10 +684,12 @@ function FlightBookingConfirmation() {
     // The platform fee, from the formula checkout verifies. `fareTotal` is the
     // offer's all-passenger total, priced for exactly these travellers, and the
     // offer says which of them is a lap infant (no fixed fee).
-    const fee = computeFlightCharge({ fareTotal, travellerTypes: travellerTypesOf(flightData.originalOffer), config });
-    const fixedFee = fee.fixedFee;
-    const percentageFee = fee.percentageFee;
-    const serviceFee = fee.serviceFee;
+    // Without the price settings there is no fee to state: computeFlightCharge
+    // reads a missing config as a zero fee, so it is not asked until it exists.
+    const fee = config ? computeFlightCharge({ fareTotal, travellerTypes: travellerTypesOf(flightData.originalOffer), config }) : null;
+    const fixedFee = fee ? fee.fixedFee : null;
+    const percentageFee = fee ? fee.percentageFee : null;
+    const serviceFee = fee ? fee.serviceFee : null;
 
     // One segment as the page draws it, for the flights out and the flights home.
     const toReviewSegment = (segment) => ({
@@ -777,7 +779,7 @@ function FlightBookingConfirmation() {
         serviceFee: serviceFee,
         fixedFee: fixedFee,
         percentageFee: percentageFee,
-        totalPrice: baseFareReal + airlineTaxes + serviceFee,
+        totalPrice: fee ? baseFareReal + airlineTaxes + serviceFee : null,
         departureAirport: flightData.departure.terminal
           ? `${flightData.departure.airport} Terminal ${flightData.departure.terminal}`
           : flightData.departure.airport,
@@ -811,7 +813,7 @@ function FlightBookingConfirmation() {
           fixedFee: fixedFee,
           percentageFee: percentageFee,
           totalTaxes: airlineTaxes,     // backward-compat alias = real airline taxes
-          total: baseFareReal + airlineTaxes + serviceFee,
+          total: fee ? baseFareReal + airlineTaxes + serviceFee : null,
           currency: flightData.price?.currency || flightData.originalOffer?.price?.currency || 'USD'
         }
       },
@@ -846,33 +848,17 @@ function FlightBookingConfirmation() {
   useEffect(() => {
     let cancelled = false;
 
-    // Nothing on this page can be quoted before the real pricing configuration
-    // arrives. The hardcoded defaults are $25 + 5% against a configured $1 + 0%,
-    // and this figure is what gets charged - quoting from them bills a fee
-    // nobody set.
-    //
-    // The gate lives OUTSIDE the try below on purpose: returning from inside it
-    // ran the `finally`, which cleared `loading` on the very first render and
-    // left the page showing an empty shell - Rs 0 fare, "undefined Stop",
-    // no flight number - for as long as the config took to load, or forever if
-    // it failed. Stay in the loading state while it is pending, and say so
-    // plainly when it cannot be loaded at all.
-    if (priceConfigError) {
-      setError("We couldn't load current pricing, so we can't show your fare. Please refresh, or call (877) 538-7380 and we'll complete the booking for you.");
-      setLoading(false);
-      return;
-    }
-    if (!priceConfig) {
-      setLoading(true);
-      return;
-    }
-
+    // The flight and the traveller forms do not wait for the price settings;
+    // only the charge does. Until they arrive the details carry no fee, the fare
+    // summary says it is still loading and Pay stays off (`fareReady`): quoting
+    // from the hardcoded defaults ($25 + 5% against a configured $1 + 0%) would
+    // bill a fee nobody set. When they arrive this runs again and the fee is added.
     setLoading(true);
 
     const getBookingDetails = async () => {
       try {
         const hasSearchState = !!reviewState?.flightData;
-        const config = priceConfig;
+        const config = priceConfig ?? null;
         if (cancelled) return;
 
         let bookingData;
@@ -905,7 +891,7 @@ function FlightBookingConfirmation() {
 
     getBookingDetails();
     return () => { cancelled = true; };
-  }, [reviewState, bookingId, priceConfig, priceConfigError]);
+  }, [reviewState, bookingId, priceConfig]);
 
   // Recompute when the airline's checked price arrives or the fee config changes.
   useEffect(() => {
@@ -1284,10 +1270,12 @@ function FlightBookingConfirmation() {
   const coinLimit = coinLimitFor(coinBandFareOf(calculatedFare.fare, calculatedFare.baseFare), priceConfig?.flight_coin_bands);
   const coinsToUse = useCoins ? maxWalletCoinsFor(afterCoupon, wallet.balance, coinLimit) : 0;
   const amountDue = Math.round((afterCoupon - coinsToUse / 100) * 100) / 100;
+  const fareReady = Boolean(priceConfig) && calculatedFare.totalAmount > 0;
   const coinsEarned = earnedCoinsFor(amountDue);
 
   // Handle proceeding to payment - DIRECT to ARC Pay (bypass FlightPayment.jsx)
   const handleProceedToPayment = async () => {
+    if (!fareReady) return;
     // Not while the group is being re-priced: the fare on the page is about to change.
     if (checkingOut || groupChange.busy) return;
     // Not while a payment page is already opening for this trip.
@@ -1808,7 +1796,7 @@ function FlightBookingConfirmation() {
             {/* The airline withdrew this fare. Rather than sending the customer
                 back to the results and losing everything typed, the fares on
                 sale now are offered here. */}
-            {fareGone && (
+            {fareGone && priceConfig && (
               <FlightFareGoneAlternatives
                 state={alternatives}
                 priceConfig={priceConfig}
@@ -2479,7 +2467,7 @@ function FlightBookingConfirmation() {
                     flightOffer={reviewState.flightData.originalOffer}
                     rules={fareRulesCheck}
                   />
-                  <CancellationPolicyNote cancellationFee={priceConfig?.flight_cancellation_fee ?? priceConfig?.cancellation_fee} cancellationFeePercent={priceConfig?.flight_cancellation_fee_percent} freeUntil={cancelPolicy?.freeUntil} />
+                  {priceConfig && <CancellationPolicyNote cancellationFee={priceConfig?.flight_cancellation_fee ?? priceConfig?.cancellation_fee} cancellationFeePercent={priceConfig?.flight_cancellation_fee_percent} freeUntil={cancelPolicy?.freeUntil} />}
                 </div>
               </div>
             )}
@@ -2544,6 +2532,29 @@ function FlightBookingConfirmation() {
                     )}
                   </div>
                 )}
+                {!fareReady ? (
+                  <div className="py-4" role="status" aria-live="polite" data-fare-pending="">
+                    {priceConfigError ? (
+                      <>
+                        <p className="text-sm text-gray-700">We couldn't load the platform fee, so we can't show your total yet. Everything you typed stays here.</p>
+                        <button type="button" onClick={() => refetchPriceConfig()} className="mt-3 text-sm font-semibold text-[#055B75] underline">
+                          Try again
+                        </button>
+                        <p className="mt-2 text-xs text-gray-500">Or call (877) 538-7380 and we'll complete the booking for you.</p>
+                      </>
+                    ) : (
+                      <>
+                        <div className="space-y-3 animate-pulse" aria-hidden="true">
+                          <div className="h-4 rounded bg-gray-100" />
+                          <div className="h-4 w-5/6 rounded bg-gray-100" />
+                          <div className="h-4 w-2/3 rounded bg-gray-100" />
+                          <div className="mt-4 h-11 rounded-lg bg-gray-100" />
+                        </div>
+                        <p className="mt-3 text-xs text-gray-500">Adding the platform fee to your total…</p>
+                      </>
+                    )}
+                  </div>
+                ) : (<>
                 {/* Base Fare */}
                 <div className="flex items-start gap-3 py-3 border-b border-gray-100">
                   <span className="mt-2 h-1.5 w-1.5 rounded-full bg-[#65B3CF] flex-shrink-0" />
@@ -2682,6 +2693,7 @@ function FlightBookingConfirmation() {
                     The airline is taking longer than usual to confirm the fare. Please keep this page open.
                   </p>
                 )}
+                </>)}
 
                 {/* Renders into a portal, so it covers both this button and the mobile bar's. */}
                 <NoticeDialog
@@ -2717,20 +2729,23 @@ function FlightBookingConfirmation() {
           boxShadow: '0 -6px 24px rgba(0,0,0,0.10)', padding: '10px 16px',
         }}
       >
-        <div style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.15 }}>
-            <span style={{ fontSize: 11, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.03em' }}>Total, charged in USD</span>
-            <span style={{ fontSize: 20, fontWeight: 800, color: '#055B75' }}>
-              <ChargeAmount amount={amountDue} approximate approximateClassName="block text-[11px] font-medium text-gray-500" />
+        <div style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.15, minWidth: 0 }}>
+            <span style={{ fontSize: 11, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.03em', whiteSpace: 'nowrap' }}>Total in USD</span>
+            <span style={{ fontSize: 20, fontWeight: 800, color: '#055B75', whiteSpace: 'nowrap' }}>
+              {fareReady
+                ? <ChargeAmount amount={amountDue} approximate approximateClassName="block text-[11px] font-medium text-gray-500" />
+                : <span className="mt-1 block h-5 w-24 animate-pulse rounded bg-gray-100" aria-label="Total loading" />}
             </span>
           </div>
           <button
             onClick={handleProceedToPayment}
-            disabled={checkingOut || openingPayment}
+            disabled={!fareReady || checkingOut || openingPayment}
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 8, background: '#055B75', color: '#fff',
-              fontWeight: 700, fontSize: 15, padding: '13px 26px', borderRadius: 10, border: 'none',
-              cursor: 'pointer', boxShadow: '0 6px 16px rgba(5,91,117,0.3)', whiteSpace: 'nowrap',
+              fontWeight: 700, fontSize: 15, padding: '13px 20px', borderRadius: 10, border: 'none',
+              cursor: fareReady ? 'pointer' : 'default', opacity: fareReady ? 1 : 0.6,
+              boxShadow: '0 6px 16px rgba(5,91,117,0.3)', whiteSpace: 'nowrap', flexShrink: 0,
             }}
           >
             {openingPayment ? 'Opening secure payment…' : checkingOut ? (slowCheckout ? 'Still checking…' : 'Checking the fare…') : 'Proceed to Payment'} <CheckCircle className="h-5 w-5" />

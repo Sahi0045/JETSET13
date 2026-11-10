@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { endpoints } from '../../config/api-src';
+import { guestFlightBookingQuery } from './flightReviewQueries';
 
 /**
  * Whether a flight can be booked without an account: the admin panel's switch
@@ -15,16 +15,8 @@ import { endpoints } from '../../config/api-src';
  */
 export function useGuestFlightBooking(options = {}) {
   return useQuery({
-    queryKey: ['featureFlags', 'guestFlightBooking'],
-    queryFn: async () => {
-      const res = await fetch(endpoints.featureFlags.guestFlightBooking, { credentials: 'include' });
-      if (!res.ok) throw new Error(`Guest booking switch unavailable (${res.status})`);
-      const body = await res.json();
-      return body?.data?.enabled === true;
-    },
     // A visitor waits on this before the page appears: ask fresh, fail fast.
-    staleTime: 0,
-    retry: 1,
+    ...guestFlightBookingQuery(),
     ...options,
   });
 }

@@ -54,6 +54,15 @@
  */
 export const DEFAULT_TIMEOUT_MS = 45_000;
 
+/**
+ * The deadline for a small configuration read: price settings, a feature
+ * switch, the cancel policy. These answer in about a second, so a request
+ * still open after eight has stalled, and the caller retries it. Waiting the
+ * flight deadline instead kept the review page on its spinner for up to a
+ * minute (10 Nov 2026).
+ */
+export const CONFIG_READ_TIMEOUT_MS = 8_000;
+
 /** Whether a rejection is our deadline rather than a caller's own cancel. */
 export const isTimeout = (error) => error?.name === 'TimeoutError'
   || (error?.name === 'AbortError' && /timed? ?out/i.test(String(error?.message ?? '')));
