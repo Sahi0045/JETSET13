@@ -1,4 +1,16 @@
 import axios from 'axios';
+import { nearestAirport } from '../services/airportsIndex.js';
+
+/**
+ * The reply with the airport the visitor would fly from added. A town the
+ * client's own city list does not know (Fatehpur, Houston) had no origin, so
+ * the home page could offer it no fares.
+ */
+const withNearestAirport = (data, latitude, longitude) => {
+    let airport = null;
+    try { airport = nearestAirport(latitude, longitude); } catch { airport = null; }
+    return { ...data, nearest_airport: airport };
+};
 
 /**
  * Get user location from ipapi.co
@@ -25,7 +37,7 @@ export const getGeoLocation = async (req, res) => {
             const response = await axios.get(url, {
                 headers: { 'User-Agent': 'JetSetGo/1.0' }
             });
-            return res.status(200).json(response.data);
+            return res.status(200).json(withNearestAirport(response.data, response.data?.latitude, response.data?.longitude));
         } catch (primaryError) {
             console.warn('Primary geo service (ipapi.co) failed:', primaryError.message);
             // Fallback to ip-api.com — pass client IP explicitly
@@ -35,7 +47,7 @@ export const getGeoLocation = async (req, res) => {
             const fallbackResponse = await axios.get(fallbackUrl);
             // Map ip-api.com response to match ipapi.co structure roughly
             const data = fallbackResponse.data;
-            return res.status(200).json({
+            return res.status(200).json(withNearestAirport({
                 country_name: data.country,
                 country_code: data.countryCode,
                 city: data.city,
@@ -43,7 +55,7 @@ export const getGeoLocation = async (req, res) => {
                 ip: data.query,
                 currency: data.countryCode === 'IN' ? 'INR' : 'USD',
                 country_calling_code: data.countryCode === 'IN' ? '+91' : ''
-            });
+            }, data.lat, data.lon));
         }
     } catch (error) {
         console.error('All geo services failed:', error.message);

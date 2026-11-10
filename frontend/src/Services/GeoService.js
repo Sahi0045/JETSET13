@@ -53,16 +53,20 @@ const airportCodeToCity = {
 /**
  * Resolve a city name to its nearest airport code and major city name
  */
-const resolveAirport = (city) => {
+const resolveAirport = (city, nearest = null) => {
     // No code for a city this list does not know. Every unknown city - Houston,
     // Denver, anywhere not listed - came back as New Delhi, so a visitor in the
     // US clicking "London" searched DEL-LHR and the cheapest fares were priced
     // from Delhi. An unknown origin makes the page ask for one instead.
-    if (!city) return { cityCode: '', airportCity: '' };
-    const key = city.toLowerCase().trim();
-    const code = cityToAirportCode[key] || '';
-    const airportCity = code ? (airportCodeToCity[code] || city) : city;
-    return { cityCode: code, airportCity };
+    //
+    // `nearest` is the airport the server found from the visitor's position
+    // (GET /api/geo/location, `nearest_airport`): a real answer for the towns
+    // this list does not know, where a guess used to be.
+    const key = (city || '').toLowerCase().trim();
+    const listed = cityToAirportCode[key] || '';
+    if (listed) return { cityCode: listed, airportCity: airportCodeToCity[listed] || city };
+    if (nearest?.code) return { cityCode: nearest.code, airportCity: airportCodeToCity[nearest.code] || nearest.cityName || city || '' };
+    return { cityCode: '', airportCity: city || '' };
 };
 
 const GeoService = {
@@ -76,7 +80,7 @@ const GeoService = {
             const response = await fetch('/api/geo/location');
             if (response.ok) {
                 const data = await response.json();
-                const { cityCode, airportCity } = resolveAirport(data.city);
+                const { cityCode, airportCity } = resolveAirport(data.city, data.nearest_airport);
                 return {
                     country: data.country_name,
                     countryCode: data.country_code,
