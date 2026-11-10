@@ -31,7 +31,7 @@ describe('the review page quotes the charge in US dollars', () => {
   it('adds an estimate only beside the totals, and says the card is charged in dollars', () => {
     expect(review.match(/<ChargeAmount amount=\{amountDue\} approximate/g)).toHaveLength(2);
     expect(review).toMatch(/Your card is charged in US dollars \(USD\)\. An amount shown in another currency is an estimate/);
-    expect(review).toMatch(/Total, charged in USD/);
+    expect(review).toMatch(/Total in USD/);
   });
 
   it('puts the dollar amount on the Pay button', () => {

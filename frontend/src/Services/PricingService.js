@@ -1,4 +1,5 @@
 import { getApiUrl } from '../utils/apiHelper';
+import { CONFIG_READ_TIMEOUT_MS } from '../utils/fetchTimeout';
 
 class PricingService {
   constructor() {
@@ -20,7 +21,7 @@ class PricingService {
 
     try {
       const endpoint = service === 'all' ? 'admin/price-settings' : `admin/price-config/${service}`;
-      const response = await fetch(getApiUrl(endpoint));
+      const response = await fetch(getApiUrl(endpoint), { timeoutMs: CONFIG_READ_TIMEOUT_MS });
       const result = await response.json();
 
       if (result.success) {

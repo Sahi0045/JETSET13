@@ -3,6 +3,8 @@ import { X, ArrowRight, Loader2 } from 'lucide-react';
 import Price from '../../../Components/Price';
 import apiConfig from '@/config/api';
 import { fareCheckFor } from '../../../utils/fareCheckHandoff';
+import { queryClient } from '../../../lib/queryClient';
+import { prefetchFlightReview } from '../../../hooks/queries/flightReviewQueries';
 import { fareOf, fareTotalParts, legsOf, tripAirlineNames, tripAirlines } from './flightSort';
 import { STATES, alignedFareInclusions } from '../../../../../shared/fareInclusions';
 import FareInclusionList, { FareInclusionLegend } from './FareInclusionList';
@@ -43,6 +45,10 @@ function FlightFareOptions({ flight, onClose, onSelect }) {
   // The fare being checked with the airline, and the ones it would not sell.
   const [checkingKey, setCheckingKey] = useState(null);
   const [withdrawn, setWithdrawn] = useState(() => new Set());
+
+  useEffect(() => {
+    if (flight) prefetchFlightReview(queryClient);
+  }, [flight]);
 
   useEffect(() => {
     if (!flight) return;

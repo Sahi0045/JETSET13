@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '../../lib/queryKeys';
 import PricingService from '../../Services/PricingService';
+import { priceConfigQuery } from './flightReviewQueries';
 
 /**
  * Admin-configured price settings (taxes/fees) via PricingService.
@@ -13,9 +14,7 @@ import PricingService from '../../Services/PricingService';
  */
 export function usePriceConfig(service = 'all', options = {}) {
   return useQuery({
-    queryKey: queryKeys.pricing.config(service),
-    queryFn: () => PricingService.getPriceConfig(service),
-    staleTime: 1000 * 60 * 10,
+    ...priceConfigQuery(service),
     ...options,
   });
 }
