@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import { crmIdentify, crmSignedOut } from '../lib/crm';
 import supabase from '../lib/supabase';
 import { getApiUrl } from '../utils/apiHelper';
 import { authHeaders } from '../utils/authHeaders';
@@ -58,6 +59,11 @@ export const useSupabaseAuth = () => {
 // Supabase Auth Provider Component
 export const SupabaseAuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
+
+  useEffect(() => {
+    if (user?.id) crmIdentify(user.id, { email: user.email, name: user.user_metadata?.full_name || user.user_metadata?.name });
+    else crmSignedOut();
+  }, [user?.id]);
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);

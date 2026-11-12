@@ -159,6 +159,10 @@ export default defineConfig(({ mode }) => {
                             // made the identical cycle; the build guard caught it
                             // before it could reach anyone.
                             id.includes('/frontend/src/utils/flightTravellerDraft') ||
+                            // The CRM reporter, called from the app shell (page views, the
+                            // signed-in customer) and from the flight pages. Unpinned it
+                            // went to booking-flights and made the same cycle.
+                            id.includes('/frontend/src/lib/crm') ||
                             // Vite's dynamic-import helper. The shell's route prefetch uses
                             // import(), and unpinned the helper was folded into
                             // booking-cruise, so common-shell imported booking-cruise while

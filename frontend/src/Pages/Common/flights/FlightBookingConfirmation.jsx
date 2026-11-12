@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { crmIdentify, crmTrack } from '../../../lib/crm';
 import { makeOrderRef } from '../../../utils/orderRef';
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { Check, Printer, Download, Share2, ChevronDown, ChevronUp, CheckCircle, UserCircle, Plus, Edit, Save, Briefcase, Luggage, Info, ShieldCheck, Clock, PlusCircle } from "lucide-react";
@@ -1271,6 +1272,12 @@ function FlightBookingConfirmation() {
   const coinsToUse = useCoins ? maxWalletCoinsFor(afterCoupon, wallet.balance, coinLimit) : 0;
   const amountDue = Math.round((afterCoupon - coinsToUse / 100) * 100) / 100;
   const fareReady = Boolean(priceConfig) && calculatedFare.totalAmount > 0;
+  const reviewReported = React.useRef(false);
+  useEffect(() => {
+    if (!fareReady || reviewReported.current) return;
+    reviewReported.current = true;
+    crmTrack('Review Opened', { totalUsd: amountDue, route: `${bookingDetails?.flight?.departureCode}-${bookingDetails?.flight?.arrivalCode}`, airline: bookingDetails?.flight?.airline });
+  }, [fareReady]);
   const coinsEarned = earnedCoinsFor(amountDue);
 
   // Handle proceeding to payment - DIRECT to ARC Pay (bypass FlightPayment.jsx)
@@ -1326,6 +1333,8 @@ function FlightBookingConfirmation() {
       saveTravellersMutation.mutate(passengerData.map(toSavedTraveller));
     }
 
+    crmIdentify(user?.id || null, { email: bookingDetails?.contact?.email || passengerData?.[0]?.email || user?.email });
+    crmTrack('Payment Started', { totalUsd: amountDue, route: `${bookingDetails?.flight?.departureCode}-${bookingDetails?.flight?.arrivalCode}`, guest: !user });
     paymentStarting.current = true;
     setCheckingOut(true);
     // Set once the browser is on its way to the payment page: from then on
