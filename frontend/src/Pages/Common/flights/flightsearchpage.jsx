@@ -1,4 +1,5 @@
  
+import { crmTrack } from '../../../lib/crm';
 import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Plane, Calendar, Users, ArrowRight, X, Search, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Clock, ArrowUpDown, MapPin, Luggage, Sun, Sunrise, Sunset, Moon, ShieldCheck, RefreshCw, Briefcase, AlertTriangle } from "lucide-react";
@@ -43,6 +44,16 @@ const extractRouteCode = (str) => {
   if (match) return match[1];
   if (/^[A-Z]{3}(\s*,\s*[A-Z]{3})*$/.test(String(str).trim())) return String(str).trim().replace(/\s+/g, '');
   return str;
+};
+
+
+const reportSearch = (payload, flights) => {
+  const route = payload.legs ? payload.legs.map((leg) => `${leg.from}-${leg.to}`).join(', ') : `${payload.from}-${payload.to}`;
+  const search = { route, date: payload.legs ? payload.legs[0]?.departDate : payload.departDate, returnDate: payload.returnDate || undefined, travellers: Number(payload.travelers || payload.adults) || undefined, cabin: payload.travelClass || undefined };
+  crmTrack('Flight Searched', search);
+  if (flights.length === 0) { crmTrack('No Results', { route }); return; }
+  const cheapest = Math.min(...flights.map((flight) => Number(flight.price?.amount)).filter(Number.isFinite));
+  crmTrack('Results Shown', { route, flights: flights.length, cheapestUsd: Number.isFinite(cheapest) ? cheapest : undefined });
 };
 
 function FlightSearchPage() {
@@ -223,6 +234,7 @@ function FlightSearchPage() {
 
         const flightData = toDisplayFlights(body.data || [], { cityMap, airlineNames: dynamicAirlineMap, aircraftNames: dynamicAircraftMap });
         setFlights(flightData);
+        reportSearch(payload, flightData);
 
         // Build dynamic airline map from results
         const newAirlineMap = {};
@@ -538,11 +550,13 @@ function FlightSearchPage() {
 
   // Handle booking a flight
   const handleBookFlight = useCallback((flight, fareCheck = null) => {
+    crmTrack('Fare Chosen', { airline: flight?.airline?.name, flight: flight?.flightNumber, fare: flight?.brandedFareLabel || flight?.brandedFare, priceUsd: Number(flight?.price?.amount) || undefined });
     navigate('/flights/booking-confirmation', { state: bookingHandoffState(flight, searchParams, fareCheck) });
   }, [navigate, searchParams]);
 
   // Open the branded-fare options modal for a flight
   const handleViewPrices = useCallback((flight) => {
+    crmTrack('Flight Selected', { airline: flight?.airline?.name, flight: flight?.flightNumber, priceUsd: Number(flight?.price?.amount) || undefined });
     setFareFlight(flight);
   }, []);
 

@@ -1,5 +1,6 @@
 // CSS imports moved to main.jsx entry point
 
+import { crmPage } from './lib/crm';
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { VISA_SERVICES_VISIBLE } from '../../shared/siteSections';
@@ -654,6 +655,7 @@ const ScrollToTop = () => {
   const { pathname } = useLocation();
   React.useEffect(() => {
     window.scrollTo(0, 0);
+    crmPage(pathname);
   }, [pathname]);
   return null;
 };

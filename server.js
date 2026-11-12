@@ -52,6 +52,7 @@ import { startWalletEarnJob } from "./backend/jobs/walletEarn.job.js";
 import { startNeedsReviewAlertJob } from "./backend/jobs/needsReviewAlert.job.js";
 import { startPaymentFailureAlertJob } from "./backend/jobs/paymentFailureAlert.job.js";
 import { startBookingFeedJob } from "./backend/jobs/bookingFeed.job.js";
+import { startCrmFeedJob } from "./backend/jobs/crmFeed.job.js";
 import { startAbandonedCheckoutJob } from "./backend/jobs/abandonedCheckout.job.js";
 import {
   apiLimiter,
@@ -350,6 +351,7 @@ if (process.env.NODE_ENV !== "test") {
     startPaymentFailureAlertJob();
     // Posts every new booking, failed booking and cancellation to the same channel.
     startBookingFeedJob();
+    startCrmFeedJob();
     // Finishes a paid flight checkout whose customer closed the tab before the
     // booking step: books it or refunds it, as the browser would have.
     startAbandonedCheckoutJob({ port: PORT });
