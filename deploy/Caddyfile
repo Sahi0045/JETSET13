@@ -85,6 +85,22 @@ api.jetsetterss.com {
 	import access_log
 }
 
+# JetCRM, our own customer record. A separate container (/opt/jetcrm, its own
+# compose project) on this stack's network. Reached directly, not through the
+# load balancer: `crm` is an A record to this box, and Caddy holds its
+# certificate. If the container is down this site answers 502 and nothing else
+# is affected.
+crm.jetsetterss.com {
+	encode zstd gzip
+	reverse_proxy jetcrm:5010
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Robots-Tag "noindex, nofollow"
+		-Server
+	}
+	import access_log
+}
+
 :80 {
 	# The LB's health check: plain HTTP from the LB itself.
 	@lbHealth {
