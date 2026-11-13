@@ -11,6 +11,7 @@ import currencyService from '../../../Services/CurrencyService'
 import DatePicker from "react-datepicker"
 import "react-datepicker/dist/react-datepicker.css"
 import supabase from '../../../lib/supabase'
+import { crmSubscribed } from '../../../lib/crm'
 
 const TravelPackages = () => {
   const [selectedPackageType, setSelectedPackageType] = useState("All Inclusive")
@@ -46,6 +47,7 @@ const TravelPackages = () => {
           { email: subscriptionEmail, status: 'active' }
         ])
 
+      if (!error || error.code === '23505') crmSubscribed(subscriptionEmail, 'packages')
       if (error) {
         if (error.code === '23505') {
           setSubscriptionError('This email is already subscribed.')

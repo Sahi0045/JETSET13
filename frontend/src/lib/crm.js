@@ -75,6 +75,15 @@ export function crmIdentify(id, traits = {}) {
   push({ type: 'identify', traits: known });
 }
 
+/**
+ * A visitor asked for offers by email. The CRM emails only people it has this
+ * event for, so call it only where the visitor typed the address themselves.
+ */
+export function crmSubscribed(email, source) {
+  crmIdentify(null, { email });
+  crmTrack('Newsletter Subscribed', { source });
+}
+
 export function crmSignedOut() {
   userId = null;
 }

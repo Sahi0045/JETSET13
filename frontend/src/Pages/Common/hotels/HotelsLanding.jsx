@@ -9,6 +9,7 @@ import Footer from '../Footer';
 import withPageElements from '../PageWrapper';
 import hotelService from '../../../Services/HotelService';
 import supabase from '../../../lib/supabase';
+import { crmSubscribed } from '../../../lib/crm';
 import { formatDateToISO } from '../../../utils/dateUtils';
 import { useLocationContext } from '../../../Context/LocationContext';
 
@@ -165,6 +166,7 @@ const HotelsLanding = () => {
                     { email: subscriptionEmail, status: 'active' }
                 ]);
 
+            if (!error || error.code === '23505') crmSubscribed(subscriptionEmail, 'hotels');
             if (error) {
                 if (error.code === '23505') { // Unique violation
                     setSubscriptionError('This email is already subscribed.');

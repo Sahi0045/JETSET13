@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Facebook, Instagram, Mail, Check } from 'lucide-react';
 import supabase from '../../lib/supabase';
+import { crmSubscribed } from '../../lib/crm';
 import { isShownToCustomers } from '../../../../shared/siteSections';
 import { clearOfHelpButtons } from './helpButtonsLane';
 
@@ -75,6 +76,7 @@ const Footer = () => {
     setStatus({ loading: true, success: false, error: '' });
     try {
       const { error } = await supabase.from('subscriptions').insert([{ email, status: 'active' }]);
+      if (!error || error.code === '23505') crmSubscribed(email, 'footer');
       if (error) {
         setStatus({
           loading: false,
