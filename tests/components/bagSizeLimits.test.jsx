@@ -37,6 +37,18 @@ describe('an airline\'s bag size limits', () => {
     expect(bagSizesOf('OS', 'FIRST').cabinBag).toEqual({ cm: [55, 40, 23], in: undefined });
   });
 
+  // Hanoi to Phu Quoc, 14 Nov 2026: the fare card showed "1 checked bag" and nothing about the cabin bag.
+  it.each([
+    ['9G', 'Sun PhuQuoc Airways size limits', 'Cabin bag: 56 × 36 × 23 cm · 7 kg in total, with the personal item', 'Checked bag: 158 cm in total'],
+    ['VJ', 'VietJet Air size limits', 'Cabin bag: 56 × 36 × 23 cm · 7 kg in total, with the personal item', 'Personal item: 30 × 20 × 10 cm'],
+  ])('tells a %s traveller what cabin bag they may bring', (carrier, heading, cabinBag, other) => {
+    card(carrier, 'ECONOMY');
+    const text = screen.getByTestId('bag-size-limits').textContent;
+    expect(text).toContain(heading);
+    expect(text).toContain(cabinBag);
+    expect(text).toContain(other);
+  });
+
   it('shows nothing for an airline it has not read, rather than a guess', () => {
     const { container } = card('XX', 'ECONOMY');
     expect(container.textContent).toBe('');

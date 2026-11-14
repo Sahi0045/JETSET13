@@ -38,6 +38,23 @@ const AIR_FRANCE_KLM = {
 };
 
 export const AIRLINE_BAG_SIZES = Object.freeze({
+  VJ: {
+    airline: 'VietJet Air',
+    sources: ['https://www.vietjetair.com/en/pages/regulations-policies-1791345381865/baggage-service-1608369253127'],
+    cabinBag: { economy: { cm: [56, 36, 23], kg: 7, kgTotal: true } },
+    personalItem: { cm: [30, 20, 10] },
+    checkedBag: { cm: [119, 119, 81] },
+  },
+  '9G': {
+    airline: 'Sun PhuQuoc Airways',
+    sources: ['https://www.sunphuquocairways.com/en/travel-info/baggage/carry-on-baggage', 'https://www.sunphuquocairways.com/en/travel-info/baggage/baggage-allowance'],
+    cabinBag: {
+      economy: { cm: [56, 36, 23], kg: 7, kgTotal: true },
+      premiumEconomy: { kg: 7, kgTotal: true },
+      business: { kg: 14, kgTotal: true },
+    },
+    checkedBag: { linearCm: 158 },
+  },
   AI: {
     airline: 'Air India',
     sources: ['https://www.airindia.com/in/en/travel-information/baggage-guidelines/cabin-baggage.html', 'https://www.airindia.com/in/en/travel-information/baggage-guidelines/checked-baggage-allowance.html'],
@@ -230,6 +247,7 @@ export const AIRLINE_BAG_SIZES = Object.freeze({
   },
 });
 
+// VJ and 9G were read on 14 Nov 2026.
 export const BAG_SIZES_CHECKED_ON = '2026-10-31';
 
 /**
