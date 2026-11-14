@@ -31,7 +31,10 @@ describe('Jet Coins in the charge', () => {
   });
 
   it('applies no coins when a coupon leaves less than $1', () => {
-    const charge = computeFlightCharge({ fareTotal: 120, travellerTypes: ['ADULT'], config, discount: 121.5, walletAmount: 50 });
+    // A coupon stops at the fare, so what is left is the service fee: here, 70 cents.
+    const smallFee = { flight_taxes_fees: 0.7, flight_taxes_fees_percentage: 0 };
+    const charge = computeFlightCharge({ fareTotal: 120, travellerTypes: ['ADULT'], config: smallFee, discount: 121.5, walletAmount: 50 });
+    expect(charge.discount).toBe(120);
     expect(charge.walletAmount).toBe(0);
     expect(charge.total).toBe(0.7);
   });

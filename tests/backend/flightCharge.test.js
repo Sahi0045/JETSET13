@@ -100,8 +100,10 @@ describe('computeFlightCharge', () => {
     expect(charge.total).toBe(420);
   });
 
-  it('never discounts below zero or beyond the subtotal', () => {
-    expect(computeFlightCharge({ fareTotal: 100, passengers: 1, config, discount: 500 }).total).toBe(0);
+  // The owner's rule of 14 Nov 2026: a coupon takes nothing off our service fee.
+  it('never discounts below zero or beyond the fare, so the service fee is always paid', () => {
+    const covered = computeFlightCharge({ fareTotal: 100, passengers: 1, config, discount: 500 });
+    expect(covered).toMatchObject({ discount: 100, serviceFee: 1, total: 1 });
     expect(computeFlightCharge({ fareTotal: 100, passengers: 1, config, discount: -20 }).total).toBe(101);
   });
 

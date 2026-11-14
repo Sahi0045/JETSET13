@@ -327,11 +327,31 @@ describe('verifyFlightCharge', () => {
   it('applies a coupon it evaluated itself', async () => {
     rows.coupons = { id: 'c1', code: 'FLY10', discount_type: 'percentage', discount_value: 10, min_order_value: 0, max_uses: null, applicable_to: 'all', is_active: true };
 
-    const result = await verify({ amount: 361.8, bookingData: bookingFor(2), couponCode: 'FLY10', priceOffer: pricedAt(400) });
+    const result = await verify({ amount: 362, bookingData: bookingFor(2), couponCode: 'FLY10', priceOffer: pricedAt(400) });
 
     expect(result.ok).toBe(true);
-    expect(result.charge.discount).toBe(40.2);
+    expect(result.charge.discount).toBe(40);
     expect(result.coupon.code).toBe('FLY10');
+  });
+
+  // 14 Nov 2026: 10% came off fare and fee together ($40.20 of $402). The fee is ours, and is not discounted.
+  it('takes a coupon off the airline fare only, never off the service fee', async () => {
+    rows.coupons = { id: 'c1', code: 'FLY10', discount_type: 'percentage', discount_value: 10, min_order_value: 0, max_uses: null, applicable_to: 'all', is_active: true };
+    rows.price_settings = { settings: { flight_taxes_fees: 5, flight_taxes_fees_percentage: 2.5 } };
+
+    const result = await verify({ amount: 380, bookingData: bookingFor(2), couponCode: 'FLY10', priceOffer: pricedAt(400) });
+
+    expect(result.ok).toBe(true);
+    expect(result.charge).toMatchObject({ fare: 400, serviceFee: 20, discount: 40, total: 380 });
+  });
+
+  it('charges the service fee even when a coupon is worth the whole fare', async () => {
+    rows.coupons = { id: 'c1', code: 'FREE', discount_type: 'percentage', discount_value: 100, min_order_value: 0, max_uses: null, applicable_to: 'all', is_active: true };
+
+    const result = await verify({ amount: 1, bookingData: bookingFor(1), couponCode: 'FREE', priceOffer: pricedAt(400) });
+
+    expect(result.ok).toBe(true);
+    expect(result.charge).toMatchObject({ discount: 400, serviceFee: 1, total: 1 });
   });
 
   // A coupon that cannot be read is not a coupon that does not apply, and not
@@ -376,6 +396,7 @@ describe('verifyFlightCharge', () => {
   // "Missing required fields: amount and orderId are required".
   it('refuses a coupon that leaves nothing to charge, and says why', async () => {
     rows.coupons = { id: 'c1', code: 'FREE', discount_type: 'percentage', discount_value: 100, min_order_value: 0, max_uses: null, applicable_to: 'all', is_active: true };
+    rows.price_settings = { settings: { flight_taxes_fees: 0, flight_taxes_fees_percentage: 0 } };
 
     const result = await verify({ amount: 0, bookingData: bookingFor(1), couponCode: 'FREE', priceOffer: pricedAt(400) });
 
@@ -458,10 +479,10 @@ describe('verifyFlightCharge', () => {
     it('takes a coupon off the total without the infant fee', async () => {
       rows.coupons = { id: 'c1', code: 'FLY10', discount_type: 'percentage', discount_value: 10, min_order_value: 0, max_uses: null, applicable_to: 'all', is_active: true };
 
-      const result = await verify({ amount: 361.8, bookingData: withLapInfant(), couponCode: 'FLY10', priceOffer: pricedAt(400) });
+      const result = await verify({ amount: 362, bookingData: withLapInfant(), couponCode: 'FLY10', priceOffer: pricedAt(400) });
 
       expect(result.ok).toBe(true);
-      expect(result.charge.discount).toBe(40.2);
+      expect(result.charge.discount).toBe(40);
     });
   });
 

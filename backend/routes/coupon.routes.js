@@ -35,11 +35,11 @@ async function answeredVoucherClash(res, code) {
 // ─────────────────────────────────────────────
 // PUBLIC: Validate a coupon code
 // POST /api/coupons/validate
-// body: { code, orderTotal, bookingType, userId }
+// body: { code, orderTotal, discountableTotal, bookingType, userId }
 // ─────────────────────────────────────────────
 router.post('/validate', async (req, res) => {
     try {
-        const { code, orderTotal = 0, bookingType = 'all', userId } = req.body;
+        const { code, orderTotal = 0, discountableTotal, bookingType = 'all', userId } = req.body;
 
         // The same evaluation checkout runs on the total it computes itself.
         // `max_discount_amount` caps what one booking may give away - see
@@ -49,7 +49,7 @@ router.post('/validate', async (req, res) => {
         // pages do not refuse the coupon here. After cancelling at ARC they did,
         // for 15 minutes, because of the page just left. Checkout asks again
         // with the trip and enforces the rule; nothing is granted here.
-        const result = await evaluateCoupon(supabase, { code, orderTotal, bookingType, userId, preview: true });
+        const result = await evaluateCoupon(supabase, { code, orderTotal, discountableTotal, bookingType, userId, preview: true });
         if (!result.ok) {
             return res.status(result.status).json({ success: false, message: result.message });
         }
