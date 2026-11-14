@@ -21,6 +21,7 @@ import { getTodayDate } from '../../utils/dateUtils';
 import currencyService from '../../Services/CurrencyService';
 import { useLocationContext } from '../../Context/LocationContext';
 import ArcPayService from '../../Services/ArcPayService';
+import { crmLead } from '../../lib/crm';
 
 // Reusable Input Component - MUST be outside the main component to prevent re-mounting on every state change
 const InputField = ({ label, name, type = "text", required = false, placeholder, error, className = "", value, onChange, min }) => (
@@ -303,6 +304,13 @@ const RequestPage = () => {
       if (!result.success) {
         throw new Error(result.message || 'Failed to submit inquiry');
       }
+
+      crmLead('Quote Requested', { name: inquiryData.customer_name, email: inquiryData.customer_email, phone: inquiryData.customer_phone }, {
+        product: inquiryData.inquiry_type,
+        destination: inquiryData.flight_destination || inquiryData.hotel_destination || inquiryData.cruise_destination || inquiryData.package_destination,
+        date: inquiryData.flight_departure_date || inquiryData.hotel_checkin_date || inquiryData.cruise_departure_date || inquiryData.package_start_date,
+        message: inquiryData.special_requirements || inquiryData.inquiry_message,
+      });
 
       alert(result.message || 'Your inquiry has been submitted successfully! Our travel experts will get back to you within 24 hours.');
       handleClear();

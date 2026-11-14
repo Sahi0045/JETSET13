@@ -1,5 +1,6 @@
 import { API_BASE_URL } from '@/config/api';
 import supabase from '../lib/supabase';
+import { crmLead } from '../lib/crm';
 
 /**
  * Service for handling callback request operations with Supabase
@@ -50,6 +51,7 @@ const callbackService = {
       }
       
       console.log('Callback request successfully created!');
+      crmLead('Callback Requested', callbackData, { product: 'cruise', message: requestData.message });
       
       // Send confirmation email using direct endpoint
       try {
