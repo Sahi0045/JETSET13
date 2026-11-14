@@ -19,6 +19,13 @@ describe('the airline names search results show', () => {
     ['XY', 'flynas'],
     ['TR', 'Scoot'],
     ['OD', 'Batik Air Malaysia'],
+    ['VJ', 'VietJet Air'],
+    ['9G', 'Sun PhuQuoc Airways'],
+    ['QH', 'Bamboo Airways'],
+    ['VU', 'Vietravel Airlines'],
+    ['W2', 'FlexFlight'],
+    ['A1', 'APG Distribution System'],
+    ['W1', 'WorldTicket'],
   ])('names %s %s', (code, name) => {
     expect(carriers[code]).toBe(name);
   });
