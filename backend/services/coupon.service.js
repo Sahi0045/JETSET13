@@ -15,10 +15,13 @@ import { flightsKey, travellerNamesKey } from '../utils/tripMatch.js';
  * both. Without it a customer who cancelled at ARC was refused their own
  * coupon for 15 minutes, because of the page they had just left.
  *
+ * `discountableTotal` is the part of `orderTotal` a coupon may reduce; left out,
+ * the whole order is.
+ *
  * @param {object} client  a Supabase client
  * @returns {Promise<{ok: true, coupon, discountAmount, finalTotal} | {ok: false, status, message}>}
  */
-export async function evaluateCoupon(client, { code, orderTotal = 0, bookingType = 'all', userId, email, trip = null, preview = false } = {}) {
+export async function evaluateCoupon(client, { code, orderTotal = 0, discountableTotal, bookingType = 'all', userId, email, trip = null, preview = false } = {}) {
   if (!code) return { ok: false, status: 400, message: 'Coupon code is required.' };
 
   const { data: coupon, error } = await client
@@ -117,7 +120,12 @@ export async function evaluateCoupon(client, { code, orderTotal = 0, bookingType
   // in money terms: 20% off a $1,200 international ticket is $240, against a
   // service fee of ~2.5% - and the airline is still paid the full fare through
   // ARC, so the difference comes straight out of the agency's margin.
-  const discountAmount = computeCouponDiscount(coupon, orderTotal);
+  // A coupon takes nothing off our service fee (the owner's rule of
+  // 2026-11-14): the discount is worked out on, and capped by, the part of the
+  // order the caller says may be discounted - for a flight, the airline fare.
+  const discountable = Number(discountableTotal);
+  const base = Number.isFinite(discountable) && discountable > 0 ? Math.min(discountable, Number(orderTotal)) : orderTotal;
+  const discountAmount = computeCouponDiscount(coupon, base);
   return {
     ok: true,
     coupon,

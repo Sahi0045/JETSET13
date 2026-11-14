@@ -400,6 +400,7 @@ export async function verifyFlightCharge({
       evaluated = await evaluateCoupon(client, {
         code: couponCode,
         orderTotal: beforeDiscount.total,
+        discountableTotal: beforeDiscount.fare,
         bookingType: 'flights',
         userId,
         email,

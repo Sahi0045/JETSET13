@@ -7,6 +7,7 @@ import Price from '../Components/Price';
  * CouponInput - A reusable coupon input component
  * Props:
  *   orderTotal (number) - the current order total
+ *   discountableTotal (number, optional) - the part of it a coupon may reduce (a flight's fare, not our fee)
  *   bookingType (string) - 'flights', 'hotels', 'cruises', 'packages', 'all'
  *   onApply (fn) - callback({ couponId, code, discountAmount, finalTotal })
  *   onRemove (fn) - callback when coupon is removed
@@ -28,7 +29,7 @@ import Price from '../Components/Price';
 const coinsText = (coins) => new Intl.NumberFormat('en-US').format(Math.floor(Number(coins) || 0));
 
 const CouponInput = ({
-    orderTotal, bookingType = 'all', onApply, onRemove, onRefused, formatAmount, initialCode = '',
+    orderTotal, discountableTotal, bookingType = 'all', onApply, onRemove, onRefused, formatAmount, initialCode = '',
     checkVoucher, voucher = null, onVoucherApply, onVoucherRemove,
 }) => {
     const acceptsVouchers = typeof checkVoucher === 'function';
@@ -88,6 +89,7 @@ const CouponInput = ({
             const resp = await axios.post(`${getApiBase()}/validate`, {
                 code: typed,
                 orderTotal,
+                discountableTotal,
                 bookingType,
                 userId: user?.id
             });

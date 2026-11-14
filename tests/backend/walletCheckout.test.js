@@ -196,6 +196,7 @@ describe('coins at checkout', () => {
 
   it('still refuses a coupon that covers the whole fare, coins or not', async () => {
     rows.coupons = { id: 'c1', code: 'FREE', discount_type: 'percentage', discount_value: 100, min_order_value: 0, max_uses: null, applicable_to: 'all', is_active: true };
+    rows.price_settings = { settings: { flight_taxes_fees: 0, flight_taxes_fees_percentage: 0, flight_coin_bands: [{ from: 0, usd: 1000 }] } };
     const verdict = await verify({ amount: 0, couponCode: 'FREE', walletCoins: 5000 });
 
     expect(verdict).toMatchObject({ ok: false, status: 409, code: 'COUPON_INVALID' });

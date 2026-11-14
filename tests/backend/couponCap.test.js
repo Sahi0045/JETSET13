@@ -112,3 +112,29 @@ describe('the per-booking discount cap', () => {
     expect(res.body.coupon.maxDiscountAmount).toBe(25);
   });
 });
+
+// The owner's rule of 14 Nov 2026: a coupon takes nothing off our service fee.
+describe('a coupon and the service fee', () => {
+  const preview = async (body) => request(await makeApp()).post('/api/coupons/validate').send({ code: 'FLY20', ...body });
+
+  it('works a percentage out on the fare, not on the fare plus the fee', async () => {
+    await useCoupon();
+    const res = await preview({ orderTotal: 420, discountableTotal: 400 });
+
+    expect(res.body).toMatchObject({ success: true, discountAmount: 80, finalTotal: 340 });
+  });
+
+  it('never lets a fixed coupon reach into the fee', async () => {
+    await useCoupon({ discount_type: 'fixed', discount_value: 500 });
+    const res = await preview({ orderTotal: 420, discountableTotal: 400 });
+
+    expect(res.body).toMatchObject({ success: true, discountAmount: 400, finalTotal: 20 });
+  });
+
+  it('discounts the whole order where the caller names no fee, as hotels and packages do', async () => {
+    await useCoupon();
+    const res = await preview({ orderTotal: 420 });
+
+    expect(res.body).toMatchObject({ success: true, discountAmount: 84, finalTotal: 336 });
+  });
+});

@@ -2639,6 +2639,7 @@ function FlightBookingConfirmation() {
                   <CouponInput
                     key={`${calculatedFare.totalAmount}-${couponInputRound}`}
                     orderTotal={calculatedFare.totalAmount}
+                    discountableTotal={calculatedFare.fare}
                     bookingType="flights"
                     formatAmount={formatUsd}
                     initialCode={couponToRestore || undefined}
