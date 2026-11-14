@@ -84,6 +84,15 @@ export function crmSubscribed(email, source) {
   crmTrack('Newsletter Subscribed', { source });
 }
 
+/**
+ * A visitor asked to be contacted: a callback, a quote or a message. The CRM
+ * opens a lead for staff from these, so call it only once the request is saved.
+ */
+export function crmLead(event, person = {}, properties = {}) {
+  crmIdentify(null, { email: person.email, name: person.name, phone: person.phone });
+  crmTrack(event, Object.fromEntries(Object.entries(properties).filter(([, value]) => value !== null && value !== undefined && value !== '')));
+}
+
 export function crmSignedOut() {
   userId = null;
 }

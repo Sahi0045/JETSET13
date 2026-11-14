@@ -11,6 +11,7 @@ import pricingService from '../../../Services/PricingService';
 import Price from '../../../Components/Price';
 import { useSupabaseAuth } from '../../../contexts/SupabaseAuthContext';
 import { useHotelRates } from '../../../hooks/queries';
+import { crmLead } from '../../../lib/crm';
 
 // Map a 0-5 rating to a MakeMyTrip-style word label
 const ratingWord = (r) => {
@@ -178,6 +179,7 @@ const HotelDetailsPage = () => {
             }
 
             console.log('✅ Hotel quote saved to Supabase');
+            crmLead('Quote Requested', formData, { product: 'hotel', destination: hotel?.name, date: formData.checkIn, message: formData.specialRequests });
 
             // Send email notifications via Resend
             try {

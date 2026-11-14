@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import './ContactPopup.css';
 import supabase from '../../lib/supabase';
+import { crmLead } from '../../lib/crm';
 
 const ContactPopup = ({ onClose }) => {
   const [name, setName] = useState('');
@@ -35,6 +36,8 @@ const ContactPopup = ({ onClose }) => {
         setError('Failed to submit. Please try again.');
         return;
       }
+
+      crmLead('Support Contacted', { name, email }, { source: 'contact form', message });
 
       // Send email notifications via Resend
       try {
