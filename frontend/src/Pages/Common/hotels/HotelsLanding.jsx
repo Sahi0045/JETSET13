@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, MapPin, Calendar, Users, Star, ArrowRight, Sparkles, Shield, Clock, Award, Loader2, CheckCircle, Ticket } from 'lucide-react';
+import { Search, MapPin, Calendar, Users, Star, ArrowRight, Sparkles, Shield, Clock, Award, Loader2, CheckCircle } from 'lucide-react';
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
 import Navbar from '../Navbar';
@@ -205,23 +205,6 @@ const HotelsLanding = () => {
     return (
         <div className="bg-white min-h-screen font-sans text-gray-800">
             <Navbar />
-
-            {/* Special Offer Banner */}
-            <div className="relative">
-                <div className="w-full text-center bg-gradient-to-r from-[#055B75] to-[#034457] py-2 backdrop-blur-sm z-20 border-y border-white/10 px-3 md:px-0">
-                    <div className="container mx-auto px-4 py-1 flex flex-wrap justify-center items-center gap-x-2 gap-y-2 text-center">
-                        <Sparkles className="h-4 w-4 text-yellow-300 flex-shrink-0" />
-                        <span className="text-white text-[11px] md:text-sm font-medium tracking-wide leading-relaxed">
-                            <span className="font-bold">Self-Service Portal Coming Soon!</span> For bookings, call <span className="text-yellow-300 font-bold">(877) 538-7380</span> or email <a href="mailto:support@jetsetterss.com" className="underline text-yellow-300 font-bold">support@jetsetterss.com</a>
-                        </span>
-                        <span className="bg-[#0890BC] px-3.5 py-1 rounded-md inline-flex items-center gap-1.5 ring-2 ring-yellow-300/80 shadow-[0_0_14px_rgba(255,221,51,0.6)]">
-                            <Ticket className="w-3.5 h-3.5 md:w-4 md:h-4 text-white flex-shrink-0" />
-                            <span className="text-sm md:text-base font-black text-white tracking-wide">$50 OFF</span>
-                        </span>
-                        <span className="text-white text-[11px] md:text-sm font-medium tracking-wide">Grab your exclusive travel voucher — today only!</span>
-                    </div>
-                </div>
-            </div>
 
             {/* Hero Section */}
             <div className="relative min-h-[75vh] flex items-center justify-center py-12 md:py-0">
