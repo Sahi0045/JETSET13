@@ -3,7 +3,7 @@
 import { crmPage } from './lib/crm';
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { VISA_SERVICES_VISIBLE } from '../../shared/siteSections';
+import { COMING_SOON_SECTIONS, VISA_SERVICES_VISIBLE } from '../../shared/siteSections';
 import LoadingSpinner from './Components/LoadingSpinner';
 import { LocationProvider } from './Context/LocationContext';
 import RouteSeo from './seo/RouteSeo';
@@ -350,6 +350,13 @@ const FlightCreateOrders = React.lazy(() =>
   import('./Pages/Common/flights/FlightCreateOrders')
     .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Creating Orders..." /> }))
 );
+
+const ComingSoon = React.lazy(() =>
+  import('./Pages/Common/ComingSoon')
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading..." /> }))
+);
+
+const unlessComingSoon = (section, page) => (COMING_SOON_SECTIONS[section] ? <ComingSoon section={section} /> : page);
 
 const Packages = React.lazy(() =>
   import('./Pages/Common/packages/planding')
@@ -705,9 +712,9 @@ const App = () => {
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/booking-confirmation" element={<BookingConfirmation />} />
-          <Route path="/cruise" element={<CruiseHomepage />} />
-          <Route path="/cruises" element={<CruiseCards />} />
-          <Route path="/itinerary" element={<Itinerary />} />
+          <Route path="/cruise" element={unlessComingSoon('cruise', <CruiseHomepage />)} />
+          <Route path="/cruises" element={unlessComingSoon('cruise', <CruiseCards />)} />
+          <Route path="/itinerary" element={unlessComingSoon('cruise', <Itinerary />)} />
           <Route path="/cruise-booking-summary" element={<Navigate to="/cruises" replace />} />
           <Route path="/cruise-booking-success" element={<Navigate to="/cruises" replace />} />
           <Route path="/flight" element={<Flights />} />
@@ -716,14 +723,14 @@ const App = () => {
           <Route path="/flights/booking/:bookingId" element={<FlightBookingConfirmation />} />
           <Route path="/flights/booking-confirmation" element={<FlightBookingConfirmation />} />
           <Route path="/flight-create-orders" element={<FlightCreateOrders />} />
-          <Route path="/packages" element={<Packages />} />
+          <Route path="/packages" element={unlessComingSoon('packages', <Packages />)} />
 
           {/* Hotels Routes - Primary */}
-          <Route path="/hotels" element={<Hotels />} />
-          <Route path="/hotels/search" element={<SearchHotels />} />
-          <Route path="/hotels/details" element={<HotelDetailsPage />} />
-          <Route path="/hotels/booking-summary" element={<HotelBookingSummary />} />
-          <Route path="/hotel-booking-success" element={<HotelBookingSuccess />} />
+          <Route path="/hotels" element={unlessComingSoon('hotels', <Hotels />)} />
+          <Route path="/hotels/search" element={unlessComingSoon('hotels', <SearchHotels />)} />
+          <Route path="/hotels/details" element={unlessComingSoon('hotels', <HotelDetailsPage />)} />
+          <Route path="/hotels/booking-summary" element={unlessComingSoon('hotels', <HotelBookingSummary />)} />
+          <Route path="/hotel-booking-success" element={unlessComingSoon('hotels', <HotelBookingSuccess />)} />
 
           {/* Legacy hotel routes - redirect to new system */}
           <Route path="/rental" element={<Navigate to="/hotels" />} />
@@ -733,8 +740,8 @@ const App = () => {
           <Route path="/hotel-search-results" element={<Navigate to="/hotels/search" />} />
 
           {/* Package Routes */}
-          <Route path="/packages/itinerary" element={<ItineraryPackage />} />
-          <Route path="/packages/booking-summary" element={<PackageBookingSummary />} />
+          <Route path="/packages/itinerary" element={unlessComingSoon('packages', <ItineraryPackage />)} />
+          <Route path="/packages/booking-summary" element={unlessComingSoon('packages', <PackageBookingSummary />)} />
 
           {/* Visa & Document Services Routes (Stitch MCP: Customer Visa Application Portal).
               Hidden from customers for now (shared/siteSections.js): every

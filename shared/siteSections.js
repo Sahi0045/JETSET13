@@ -18,3 +18,10 @@ export const isCustomerVisaPath = (pathname) => /^\/visa(\/|$)/.test(String(path
 
 /** Whether a link or route to `pathname` is shown to customers. */
 export const isShownToCustomers = (pathname) => VISA_SERVICES_VISIBLE || !isCustomerVisaPath(pathname);
+
+/**
+ * Sections that show a "Coming soon" page instead of their pages (owner,
+ * 18 Nov 2026). Every address in the section, including deep links, shows it.
+ * Set a section false to bring its pages back.
+ */
+export const COMING_SOON_SECTIONS = Object.freeze({ cruise: true, hotels: true, packages: true });

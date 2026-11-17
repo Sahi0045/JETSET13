@@ -308,8 +308,9 @@ describe('calendar endpoints', () => {
     axios.post.mockResolvedValue(reply(fixture('mptbs-oneway-jfk-lhr')));
     const app = await makeApp();
 
+    const daysAhead = (days) => new Date(Date.now() + days * 86400000).toISOString().slice(0, 10);
     const res = await request(app).post('/api/flights/date-prices')
-      .send({ from: 'JFK', to: 'LHR', dates: ['2026-11-15', '2026-11-16'], adults: 1 });
+      .send({ from: 'JFK', to: 'LHR', dates: [daysAhead(30), daysAhead(31)], adults: 1 });
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
