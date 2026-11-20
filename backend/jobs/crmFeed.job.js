@@ -15,6 +15,7 @@ import { queueEnvironment } from '../utils/queueEnvironment.js';
 import { bookingItineraries } from '../../shared/bookingItineraries.js';
 import { isTicketed, ticketsOf } from '../../shared/reviewQueue.js';
 import { crmConfig, sendCrmEvents } from '../services/crmClient.js';
+import { phoneWithCallingCode } from '../../shared/countries.js';
 
 const DEFAULT_INTERVAL_MS = 2 * 60 * 1000;
 const FIRST_RUN_DELAY_MS = 90 * 1000;
@@ -40,9 +41,12 @@ const compact = (object) => Object.fromEntries(Object.entries(object).filter(([,
  */
 export function crmEventsOf(booking) {
   const details = booking?.booking_details || {};
+  const lead = Array.isArray(booking?.passenger_details) ? booking.passenger_details[0] || {} : {};
+  const phone = phoneWithCallingCode(lead.mobile, lead.countryCode)
+    || phoneWithCallingCode(details.contact?.phone, details.contact?.countryCode);
   const who = compact({
     userId: booking?.user_id ? String(booking.user_id) : null,
-    traits: compact({ email: details.customer_email, name: details.customer_name }),
+    traits: compact({ email: details.customer_email, name: details.customer_name, phone }),
   });
   if (!who.userId && !who.traits?.email) return [];
 

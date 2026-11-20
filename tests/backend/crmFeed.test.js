@@ -37,6 +37,16 @@ describe('a booking row as CRM events', () => {
     expect(first.traits.email).toBe('asha@example.com');
   });
 
+  it('carries the mobile the lead traveller gave, with its calling code', () => {
+    const [first] = crmEventsOf(booked({ passenger_details: [{ firstName: 'Asha', mobile: '8824013820', countryCode: '+91' }] }));
+    expect(first.traits.phone).toBe('+91 8824013820');
+  });
+
+  it('carries the mobile on its own when the booking has no calling code for it', () => {
+    const [first] = crmEventsOf(booked({ passenger_details: [{ firstName: 'Asha', mobile: '8824013820' }] }));
+    expect(first.traits.phone).toBe('8824013820');
+  });
+
   it('is nothing for an unpaid booking, or one with nobody to attach it to', () => {
     expect(crmEventsOf(booked({ payment_status: 'pending' }))).toEqual([]);
     expect(crmEventsOf(booked({ user_id: null, booking_details: { pnr: 'ABC123', gds_chain: { state: 'finished' } } }))).toEqual([]);

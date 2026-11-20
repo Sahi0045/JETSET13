@@ -43,7 +43,7 @@ import { computeFlightCharge, PASSENGER_TYPES, travellerTypesOf } from '../../..
 import { coinBandFareOf, coinLimitFor, earnedCoinsFor, formatCoins, maxWalletCoinsFor } from '../../../../../shared/jetCoins';
 import { describeGroup, groupFromOffer, travellerGroupProblem } from '../../../../../shared/travellerGroup';
 import { lastFlightDepartureDate, needsDateOfBirth, tripDates } from '../../../../../shared/travellerDetails';
-import { CALLING_CODES, COUNTRIES, callingCodeDigits } from '../../../../../shared/countries';
+import { CALLING_CODES, COUNTRIES, callingCodeDigits, phoneWithCallingCode } from '../../../../../shared/countries';
 import { arcItineraries, laterLegsOf, returnLegOf } from '../../../utils/reviewTrip';
 import { fareIdentity, findSameFare, rebuildTravellers, searchForGroup } from '../../../utils/travellerGroupChange';
 import { reviewFlightFromSearch } from '../../../utils/reviewFlightFromSearch';
@@ -1333,7 +1333,10 @@ function FlightBookingConfirmation() {
       saveTravellersMutation.mutate(passengerData.map(toSavedTraveller));
     }
 
-    crmIdentify(user?.id || null, { email: bookingDetails?.contact?.email || passengerData?.[0]?.email || user?.email });
+    crmIdentify(user?.id || null, {
+      email: bookingDetails?.contact?.email || passengerData?.[0]?.email || user?.email,
+      phone: phoneWithCallingCode(bookingDetails?.contact?.phone || passengerData?.[0]?.mobile, passengerData?.[0]?.countryCode),
+    });
     crmTrack('Payment Started', { totalUsd: amountDue, route: `${bookingDetails?.flight?.departureCode}-${bookingDetails?.flight?.arrivalCode}`, guest: !user });
     paymentStarting.current = true;
     setCheckingOut(true);
