@@ -283,6 +283,13 @@ export const CALLING_CODES = Object.freeze([...new Set(COUNTRIES.map((country) =
 /** "+91", "91", "0091" -> "91": the digits a phone number's country code is sent as. */
 export const callingCodeDigits = (value) => String(value ?? '').replace(/\D/g, '').replace(/^00/, '');
 
+export const phoneWithCallingCode = (number, callingCode) => {
+  const digits = String(number ?? '').replace(/\D/g, '');
+  if (!digits) return null;
+  const code = callingCodeDigits(callingCode);
+  return code ? `+${code} ${digits}` : digits;
+};
+
 const BY_CODE = new Map(COUNTRIES.map((country) => [country.code, country]));
 const ALPHA3 = new Set(COUNTRIES.map((country) => country.alpha3));
 
