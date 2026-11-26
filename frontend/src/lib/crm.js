@@ -35,6 +35,53 @@ function anonymousId() {
   }
 }
 
+const SEARCH_ENGINES = [[/(^|\.)google\./, 'Google search'], [/(^|\.)bing\.com$/, 'Bing search'], [/(^|\.)duckduckgo\.com$/, 'DuckDuckGo search'], [/(^|\.)yahoo\./, 'Yahoo search']];
+const SOCIAL = [[/(^|\.)(facebook|fb)\.com$|^l\.facebook\.com$/, 'Facebook'], [/(^|\.)instagram\.com$/, 'Instagram'], [/(^|\.)(twitter|x)\.com$|^t\.co$/, 'X (Twitter)'],
+  [/(^|\.)linkedin\.com$|^lnkd\.in$/, 'LinkedIn'], [/(^|\.)youtube\.com$|^youtu\.be$/, 'YouTube'], [/(^|\.)whatsapp\.com$|^wa\.me$/, 'WhatsApp']];
+
+const hostOf = (url) => { try { return new URL(url).hostname.toLowerCase().replace(/^www\./, ''); } catch { return ''; } };
+const short = (value) => String(value || '').trim().slice(0, 60);
+
+/**
+ * Where a visit came from, as the CRM's report names it: a campaign's own
+ * utm_source, an ad click, a search engine, a social site, another website's
+ * host, or "Direct". Only the referring host is kept, never its path or query.
+ */
+export function visitSource({ search = '', referrer = '', host = '' } = {}) {
+  const params = new URLSearchParams(search);
+  const tagged = short(params.get('utm_source'));
+  const extra = { ...(short(params.get('utm_medium')) ? { medium: short(params.get('utm_medium')) } : {}), ...(short(params.get('utm_campaign')) ? { campaign: short(params.get('utm_campaign')) } : {}) };
+  if (tagged) return { source: tagged, ...extra };
+  if (params.get('gclid')) return { source: 'Google Ads', ...extra };
+  if (params.get('fbclid')) return { source: 'Facebook', ...extra };
+  const from = hostOf(referrer);
+  const own = String(host || '').toLowerCase().replace(/^www\./, '');
+  if (!from || from === own) return { source: 'Direct', ...extra };
+  const known = [...SEARCH_ENGINES, ...SOCIAL].find(([pattern]) => pattern.test(from));
+  return { source: known ? known[1] : from, ...extra };
+}
+
+export const deviceOf = (width) => (width < 768 ? 'phone' : width < 1024 ? 'tablet' : 'desktop');
+
+const CONTEXT_KEY = 'jetcrm.visit';
+let visit = null;
+
+/** The first source of this browser session, so a later page of the same visit does not turn it into "Direct". */
+function visitContext() {
+  if (visit) return visit;
+  try {
+    const stored = sessionStorage.getItem(CONTEXT_KEY);
+    if (stored) { visit = JSON.parse(stored); return visit; }
+  } catch { /* worked out again below */ }
+  visit = {
+    ...visitSource({ search: window.location.search, referrer: document.referrer, host: window.location.hostname }),
+    device: deviceOf(window.innerWidth),
+    landing: short(window.location.pathname),
+  };
+  try { sessionStorage.setItem(CONTEXT_KEY, JSON.stringify(visit)); } catch { /* kept in memory for this page */ }
+  return visit;
+}
+
 function flush(leaving = false) {
   if (queue.length === 0) return;
   const batch = queue.splice(0, MAX_BATCH);
@@ -57,7 +104,7 @@ function push(item) {
       listening = true;
       window.addEventListener('pagehide', () => flush(true));
     }
-    queue.push({ ...item, messageId: newId(), anonymousId: anonymousId(), timestamp: new Date().toISOString(), ...(userId ? { userId } : {}) });
+    queue.push({ ...item, messageId: newId(), anonymousId: anonymousId(), timestamp: new Date().toISOString(), context: visitContext(), ...(userId ? { userId } : {}) });
     clearTimeout(timer);
     timer = setTimeout(flush, FLUSH_MS);
   } catch { /* reporting must never break the page */ }
